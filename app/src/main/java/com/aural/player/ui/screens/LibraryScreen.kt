@@ -269,7 +269,7 @@ private fun SongsTab(
         AlphabetFastScroller(
             keys = songs.map { it.title },
             onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -305,7 +305,7 @@ private fun ArtistsTab(
         AlphabetFastScroller(
             keys = artists.map { it.name },
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -341,7 +341,7 @@ private fun AlbumsTab(
         AlphabetFastScroller(
             keys = albums.map { it.title },
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
