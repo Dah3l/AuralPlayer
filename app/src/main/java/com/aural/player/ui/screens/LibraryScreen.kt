@@ -66,14 +66,18 @@ fun LibraryScreen(
     onOpenAlbum: (albumTitle: String) -> Unit,
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
-    onSongMenu: (song: Song) -> Unit
+    onSongMenu: (song: Song) -> Unit,
+    songsListState: androidx.compose.foundation.lazy.LazyListState,
+    albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
     var showSearch by remember { mutableStateOf(false) }
     var showNewPlaylist by remember { mutableStateOf(false) }
 
@@ -125,7 +129,7 @@ fun LibraryScreen(
             tabs.forEachIndexed { i, label ->
                 Tab(
                     selected = selectedTab == i,
-                    onClick = { selectedTab = i },
+                    onClick = { onTabSelected(i) },
                     text = {
                         Text(
                             text = label,
