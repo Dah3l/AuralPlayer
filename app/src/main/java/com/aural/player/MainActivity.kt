@@ -155,6 +155,10 @@ private fun AuralApp(viewModel: AuralViewModel) {
             androidx.activity.compose.BackHandler(enabled = screen != Screen.Library) {
                 screen = Screen.Library
             }
+            // Atrás en Now Playing -> vuelve a la pantalla anterior
+            androidx.activity.compose.BackHandler(enabled = showNowPlaying) {
+                showNowPlaying = false
+            }
             when (val s = screen) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
