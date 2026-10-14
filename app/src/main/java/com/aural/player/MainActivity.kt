@@ -47,6 +47,7 @@ import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.components.SplashScreen
+import com.aural.player.telegram.TelegramManager
 
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
