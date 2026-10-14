@@ -192,18 +192,6 @@ fun DetailScreen(
                     },
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { viewModel.toggleFavorite(song.id) }) {
-                                Icon(
-                                    imageVector = if (favorites.contains(song.id))
-                                        Icons.Rounded.Favorite
-                                    else Icons.Rounded.FavoriteBorder,
-                                    contentDescription = "Favorito",
-                                    tint = if (favorites.contains(song.id))
-                                        MaterialTheme.colorScheme.error
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
                             if (removableFromPlaylistId != null) {
                                 // Opción de quitar de la playlist actual
                                 TextButton(onClick = {
