@@ -29,7 +29,7 @@ class TelegramManager(private val context: Context) {
 
     companion object {
         private const val API_ID = 35445093
-        private const val API_HASH = "a5f0365ad39624d63c70f9322b4df5d0"""
+        private const val API_HASH = "a5f0365ad39624d63c70f9322b4df5d0"
         private const val BOT_USERNAME = "musicleo23_bot"
     }
 
