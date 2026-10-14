@@ -89,11 +89,23 @@ class TelegramManager(private val context: Context) {
     }
 
     fun sendPhoneNumber(phone: String) {
-        client?.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) {}
+        android.util.Log.d("TelegramManager", "Enviando teléfono: $phone, estado: ${_authState.value}")
+        client?.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { obj ->
+            android.util.Log.d("TelegramManager", "Respuesta a SetPhoneNumber: $obj")
+            if (obj is TdApi.Error) {
+                _authState.value = TelegramAuthState.Error("Error: ${obj.message}")
+            }
+        } ?: run {
+            _authState.value = TelegramAuthState.Error("Cliente no inicializado")
+        }
     }
 
     fun sendCode(code: String) {
-        client?.send(TdApi.CheckAuthenticationCode(code)) {}
+        client?.send(TdApi.CheckAuthenticationCode(code)) { obj ->
+            if (obj is TdApi.Error) {
+                _authState.value = TelegramAuthState.Error("Código incorrecto: ${obj.message}")
+            }
+        }
     }
 
     fun sendPassword(password: String) {
