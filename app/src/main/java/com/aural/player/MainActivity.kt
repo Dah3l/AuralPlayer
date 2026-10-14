@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AuralTheme {
-                AuralApp(viewModel, telegramManager = telegramManager)
+                AuralApp(viewModel, telegramManager = telegramManager, youTubeManager = youTubeManager)
             }
         }
     }
@@ -121,7 +121,8 @@ class MainActivity : ComponentActivity() {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager) {
+private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager,
+    youTubeManager: com.aural.player.youtube.YouTubeManager?) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga)
