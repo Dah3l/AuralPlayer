@@ -44,6 +44,9 @@ class TelegramManager(private val context: Context) {
     private val _botResponses = MutableStateFlow<List<BotSong>>(emptyList())
     val botResponses: StateFlow<List<BotSong>> = _botResponses.asStateFlow()
 
+    private val _botButtons = MutableStateFlow<List<BotButton>>(emptyList())
+    val botButtons: StateFlow<List<BotButton>> = _botButtons.asStateFlow()
+
     private var botChatId: Long = 0L
 
     fun initialize() {
@@ -153,6 +156,21 @@ class TelegramManager(private val context: Context) {
     /**
      * Envía el nombre de una canción al bot y espera respuestas.
      */
+    /**
+     * "Pulsa" un botón inline del bot para que mande el audio.
+     */
+    fun pressButton(button: BotButton) {
+        _botButtons.value = emptyList()
+        val payload = TdApi.CallbackQueryPayloadData(button.callbackData)
+        client?.send(TdApi.GetCallbackQueryAnswer(button.chatId, button.messageId, payload)) { obj ->
+            android.util.Log.d("TelegramManager", "Callback enviado: $obj")
+        }
+    }
+
+    fun clearButtons() {
+        _botButtons.value = emptyList()
+    }
+
     fun searchSong(query: String) {
         if (botChatId == 0L) {
             android.util.Log.w("TelegramManager", "botChatId es 0, buscando de nuevo...")
@@ -164,6 +182,7 @@ class TelegramManager(private val context: Context) {
             return
         }
         _botResponses.value = emptyList()
+        _botButtons.value = emptyList()
         android.util.Log.d("TelegramManager", "Buscando '$query' en chat $botChatId")
         val content = TdApi.InputMessageText(
             TdApi.FormattedText(query, null), null, false
@@ -204,6 +223,32 @@ class TelegramManager(private val context: Context) {
                     )
                     _botResponses.value = _botResponses.value + song
                     android.util.Log.d("TelegramManager", "Documento agregado: $fileName")
+                }
+            }
+            is TdApi.MessageText -> {
+                // Puede traer botones inline (lista de resultados)
+                val markup = message.replyMarkup
+                if (markup is TdApi.ReplyMarkupInlineKeyboard) {
+                    val buttons = mutableListOf<BotButton>()
+                    for (row in markup.rows) {
+                        for (btn in row) {
+                            val btnType = btn.type
+                            if (btnType is TdApi.InlineKeyboardButtonTypeCallback) {
+                                buttons.add(
+                                    BotButton(
+                                        messageId = message.id,
+                                        chatId = message.chatId,
+                                        label = btn.text,
+                                        callbackData = btnType.data
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    if (buttons.isNotEmpty()) {
+                        _botButtons.value = buttons
+                        android.util.Log.d("TelegramManager", "${buttons.size} botones inline detectados")
+                    }
                 }
             }
             else -> {
@@ -258,4 +303,14 @@ data class BotSong(
     val performer: String,
     val durationSec: Int,
     val fileId: Int
+)
+
+/**
+ * Botón inline del bot (lista de resultados antes de mandar el audio).
+ */
+data class BotButton(
+    val messageId: Long,
+    val chatId: Long,
+    val label: String,
+    val callbackData: ByteArray
 )
