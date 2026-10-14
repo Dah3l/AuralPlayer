@@ -51,6 +51,7 @@ fun DownloadsScreen(
     val results by telegramManager.botResponses.collectAsState()
     val buttons by telegramManager.botButtons.collectAsState()
     val isSearching by telegramManager.isSearching.collectAsState()
+    val botStatus by telegramManager.botStatus.collectAsState()
 
     var query by remember { mutableStateOf("") }
     var downloading by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -79,6 +80,10 @@ fun DownloadsScreen(
             }
             return@Column
         }
+
+        Text(botStatus, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 4.dp))
 
         // Buscador
         OutlinedTextField(
