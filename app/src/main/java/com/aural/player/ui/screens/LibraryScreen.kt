@@ -219,7 +219,10 @@ private fun SongsTab(
         EmptyState("Sin resultados para tu búsqueda")
         return
     }
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 90.dp)
+        ) {
         items(songs, key = { it.id }) { song ->
             SongRow(
                 title = song.title,
@@ -260,7 +263,7 @@ private fun ArtistsTab(artists: List<com.aural.player.data.Artist>, onOpen: (Str
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
-        contentPadding = PaddingValues(10.dp),
+        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(artists, key = { it.name }) { artist ->
@@ -283,7 +286,7 @@ private fun AlbumsTab(albums: List<com.aural.player.data.Album>, onOpen: (String
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(10.dp),
+        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(albums, key = { it.id }) { album ->
@@ -308,7 +311,10 @@ private fun PlaylistsTab(
     hasFavorites: Boolean,
     onOpenFavorites: () -> Unit
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 90.dp)
+        ) {
         item {
             SectionHeader("Tuyas")
         }
