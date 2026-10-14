@@ -227,7 +227,8 @@ fun LibraryScreen(
                 } else {
                     DownloadsScreen(
                         telegramManager = tm,
-                        onAuthNeeded = { showAuth = true }
+                        onAuthNeeded = { showAuth = true },
+                        onDownloadComplete = { viewModel.rescan() }
                     )
                 }
             }
