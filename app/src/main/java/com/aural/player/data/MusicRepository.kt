@@ -36,7 +36,7 @@ class MusicRepository(private val context: Context) {
 
         // Solo pistas musicales reales, con duración mínima razonable
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE LOCALIZED ASC"
+        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
         context.contentResolver.query(collection, projection, selection, null, sortOrder)
             ?.use { cursor ->
