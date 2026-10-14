@@ -164,7 +164,7 @@ fun LibraryScreen(
                     isPlaying = playerState.isPlaying,
                     onPlay = { song -> onPlayList(library.filteredSongs, library.filteredSongs.indexOf(song)) },
                     onFavorite = viewModel::toggleFavorite,
-                    onMenu = onSongMenu
+                    onMenu = onSongMenu,
                     listState = songsListState
                 )
 
