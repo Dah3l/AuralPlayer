@@ -7,12 +7,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -111,7 +123,8 @@ fun DetailScreen(
     coverUri: String?,
     onBack: () -> Unit,
     onSongMenu: (Song) -> Unit,
-    removableFromPlaylistId: String? = null
+    removableFromPlaylistId: String? = null,
+    onMoveSong: ((fromIndex: Int, toIndex: Int) -> Unit)? = null
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -151,9 +164,20 @@ fun DetailScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // ---- Lista de canciones ----
-        LazyColumn(Modifier.fillMaxSize()) {
-            items(songs, key = { it.id }) { song ->
+        // ---- Lista de canciones (reordenable en playlists) ----
+        val listState = rememberLazyListState()
+        var draggedIndex by remember { mutableStateOf<Int?>(null) }
+        var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+        val density = LocalDensity.current
+        val reorderable = onMoveSong != null
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 90.dp)
+        ) {
+            itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                val isDragged = reorderable && index == draggedIndex
                 SongRow(
                     title = song.title,
                     subtitle = song.artist,
@@ -161,8 +185,13 @@ fun DetailScreen(
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
                     onClick = { viewModel.playSongs(songs, songs.indexOf(song)) },
+                    modifier = Modifier.graphicsLayer {
+                        translationY = if (isDragged) dragOffsetPx else 0f
+                        scaleX = if (isDragged) 1.03f else 1f
+                        scaleY = if (isDragged) 1.03f else 1f
+                    },
                     trailing = {
-                        Row {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { viewModel.toggleFavorite(song.id) }) {
                                 Icon(
                                     imageVector = if (favorites.contains(song.id))
@@ -186,6 +215,48 @@ fun DetailScreen(
                                 TextButton(onClick = { onSongMenu(song) }) {
                                     Text("···", style = MaterialTheme.typography.titleMedium)
                                 }
+                            }
+                            // Agarradera para reordenar (solo en playlists)
+                            if (reorderable) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DragHandle,
+                                    contentDescription = "Arrastrar para reordenar",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .pointerInput(index) {
+                                            detectVerticalDragGestures(
+                                                onDragStart = {
+                                                    draggedIndex = index
+                                                    dragOffsetPx = 0f
+                                                },
+                                                onDragEnd = {
+                                                    draggedIndex = null
+                                                    dragOffsetPx = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggedIndex = null
+                                                    dragOffsetPx = 0f
+                                                },
+                                                onVerticalDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    val from = draggedIndex ?: return@detectVerticalDragGestures
+                                                    dragOffsetPx += dragAmount
+                                                    with(density) { val threshold = 48.dp.toPx() }
+                                                    val threshold = with(density) { 48.dp.toPx() }
+                                                    if (dragOffsetPx > threshold && from < songs.lastIndex) {
+                                                        onMoveSong?.invoke(from, from + 1)
+                                                        draggedIndex = from + 1
+                                                        dragOffsetPx -= threshold
+                                                    } else if (dragOffsetPx < -threshold && from > 0) {
+                                                        onMoveSong?.invoke(from, from - 1)
+                                                        draggedIndex = from - 1
+                                                        dragOffsetPx += threshold
+                                                    }
+                                                }
+                                            )
+                                        }
+                                )
                             }
                         }
                     }
