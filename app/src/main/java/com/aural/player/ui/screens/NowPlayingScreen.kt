@@ -68,6 +68,7 @@ import com.aural.player.ui.components.formatDuration
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material.icons.rounded.MoreVert
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -76,6 +77,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
+    viewModel: com.aural.player.AuralViewModel,
     state: PlayerUiState,
     isFavorite: Boolean,
     onDismiss: () -> Unit,
@@ -89,6 +91,7 @@ fun NowPlayingScreen(
     onPlayQueueItem: (Int) -> Unit,
     onRemoveFromQueue: (Int) -> Unit
 ) {
+    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -148,7 +151,20 @@ fun NowPlayingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.weight(1f))
-                Spacer(Modifier.size(48.dp))
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = "Opciones",
+                            tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    NowPlayingMenu(
+                        expanded = showMenu,
+                        onDismiss = { showMenu = false },
+                        song = song,
+                        viewModel = viewModel,
+                        state = state,
+                        onRemoveFromQueue = onRemoveFromQueue
+                    )
+                }
             }
 
             if (song == null) {
