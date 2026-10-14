@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AuralTheme {
-                AuralApp(viewModel)
+                AuralApp(viewModel, telegramManager = telegramManager)
             }
         }
     }
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun AuralApp(viewModel: AuralViewModel) {
+private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga)
