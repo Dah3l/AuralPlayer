@@ -147,11 +147,10 @@ fun NowPlayingScreen(
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .padding(vertical = 8.dp),
+                    .padding(top = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val artSize = (maxWidth * 0.85f).coerceAtMost(340.dp).coerceAtLeast(200.dp)
+                val artSize = (maxWidth * 0.88f).coerceAtMost(380.dp).coerceAtLeast(200.dp)
                 CoverArt(
                     uri = song.albumArtUri,
                     size = artSize,
@@ -159,7 +158,8 @@ fun NowPlayingScreen(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            // Empuja el bloque inferior (título/controles) hacia abajo
+            Spacer(Modifier.weight(1f))
 
             // ---- Título + artista + estrella ----
             Row(
@@ -285,7 +285,7 @@ fun NowPlayingScreen(
 
             Spacer(
                 Modifier
-                    .height(16.dp)
+                    .height(28.dp)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             )
         }
