@@ -253,6 +253,10 @@ private fun AuralApp(viewModel: AuralViewModel) {
             onRemoveFromQueue = viewModel.playback::removeFromQueue
         )
     }
+    // ---- Splash de bienvenida ----
+    if (showSplash) {
+        SplashScreen()
+    }
 
     // ---- Menú contextual de canción: añadir a playlist / favoritos ----
     songMenuTarget?.let { song ->
@@ -374,9 +378,4 @@ private fun SongMenuSheet(
         }
         Box(Modifier.padding(bottom = 24.dp)) {}
     }
-    // ---- Splash de bienvenida ----
-    if (showSplash) {
-        com.aural.player.ui.components.SplashScreen()
-    }
-
 }
