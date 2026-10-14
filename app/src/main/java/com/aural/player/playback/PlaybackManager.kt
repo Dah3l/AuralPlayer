@@ -154,7 +154,7 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        controller.setPlaybackSpeed(speed)
+        controller?.setPlaybackSpeed(speed)
     }
 
     fun toggleShuffle() {
