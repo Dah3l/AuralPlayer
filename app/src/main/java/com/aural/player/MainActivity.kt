@@ -30,6 +30,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import android.app.Application
 import com.aural.player.data.Song
 import com.aural.player.ui.components.MiniPlayer
 import com.aural.player.ui.screens.DetailScreen
@@ -238,6 +247,50 @@ private fun AuralApp(viewModel: AuralViewModel) {
             }
         )
     }
+
+    // ---- Diálogo de reporte de crash (diagnóstico temporal) ----
+    val appCtx = LocalContext.current.applicationContext as Application
+    var crashReport by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        crashReport = com.aural.player.AuralApp.readCrashReport(appCtx)
+    }
+    crashReport?.let { report ->
+        CrashReportDialog(
+            report = report,
+            onDismiss = {
+                com.aural.player.AuralApp.clearCrashReport(appCtx)
+                crashReport = null
+            }
+        )
+    }
+}
+
+/** Muestra el último crash para diagnóstico. Temporal. */
+@Composable
+private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("La app se cerró antes") },
+        text = {
+            Text(
+                text = "Copia este error y mándalo para arreglarlo:\n\n" + report.take(3000),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(report))
+                onDismiss()
+            }) { Text("Copiar error") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
 }
 
 /** Hoja inferior con acciones para una canción concreta. */
