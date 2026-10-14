@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -268,7 +269,11 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(
+                Modifier
+                    .height(8.dp)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+            )
         }
     }
 
