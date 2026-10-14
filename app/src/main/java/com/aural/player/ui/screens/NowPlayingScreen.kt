@@ -69,6 +69,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -403,3 +413,175 @@ fun NowPlayingScreen(
     }
     }
 }
+
+/**
+ * Menú de opciones del Now Playing: agregar a playlist, temporizador,
+ * velocidad, compartir y eliminar de la cola.
+ */
+@Composable
+private fun NowPlayingMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    song: com.aural.player.data.Song?,
+    viewModel: com.aural.player.AuralViewModel,
+    state: com.aural.player.playback.PlayerUiState,
+    onRemoveFromQueue: (Int) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val sleepMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
+
+    var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
+        DropdownMenuItem(
+            text = { Text("Agregar a la lista de reproducción") },
+            leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) },
+            onClick = { onDismiss(); showPlaylists = true }
+        )
+        DropdownMenuItem(
+            text = { Text(if (sleepMinutes != null) "Temporizador: ${sleepMinutes} min" else "Temporizador de suspensión") },
+            leadingIcon = { Icon(Icons.Rounded.Timer, null) },
+            onClick = { onDismiss(); showTimer = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Velocidad de reproducción") },
+            leadingIcon = { Icon(Icons.Rounded.Speed, null) },
+            onClick = { onDismiss(); showSpeed = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Compartir") },
+            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+            onClick = {
+                onDismiss()
+                song?.let {
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "audio/*"
+                        putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(it.uri))
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(shareIntent, "Compartir canción")
+                    )
+                }
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Eliminar de la cola") },
+            leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
+            onClick = {
+                onDismiss()
+                song?.let { s ->
+                    val idx = state.queue.indexOfFirst { it.id == s.id }
+                    if (idx >= 0) onRemoveFromQueue(idx)
+                }
+            }
+        )
+    }
+
+    // Diálogo: elegir playlist
+    if (showPlaylists && song != null) {
+        AlertDialog(
+            onDismissRequest = { showPlaylists = false },
+            title = { Text("Agregar a playlist") },
+            text = {
+                Column {
+                    playlists.forEach { pl ->
+                        TextButton(
+                            onClick = {
+                                viewModel.addToPlaylist(pl.id, song.id)
+                                showPlaylists = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(pl.name, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    if (playlists.isEmpty()) {
+                        Text("No tienes playlists. Créalas en la pestaña Playlists.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPlaylists = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Diálogo: temporizador
+    if (showTimer) {
+        AlertDialog(
+            onDismissRequest = { showTimer = false },
+            title = { Text("Temporizador de suspensión") },
+            text = {
+                Column {
+                    listOf(15, 30, 60, 90).forEach { mins ->
+                        TextButton(
+                            onClick = {
+                                viewModel.startSleepTimer(mins)
+                                showTimer = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("$mins minutos", modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    if (sleepMinutes != null) {
+                        TextButton(
+                            onClick = {
+                                viewModel.cancelSleepTimer()
+                                showTimer = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancelar temporizador",
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showTimer = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // Diálogo: velocidad
+    if (showSpeed) {
+        AlertDialog(
+            onDismissRequest = { showSpeed = false },
+            title = { Text("Velocidad de reproducción") },
+            text = {
+                Column {
+                    listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                        TextButton(
+                            onClick = {
+                                viewModel.playback.setPlaybackSpeed(speed)
+                                showSpeed = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val label = if (speed == 1f) "1x (Normal)" else "${speed}x"
+                            Text(label, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSpeed = false }) { Text("Cerrar") }
+            }
+        )
+    }
+}
+
