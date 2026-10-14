@@ -2,7 +2,7 @@
 package com.aural.player
 
 import android.app.Application
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aural.player.data.Album
 import com.aural.player.data.Artist
@@ -37,7 +37,7 @@ data class LibraryUiState(
  * ViewModel único de la aplicación. Combina el repositorio MediaStore,
  * el almacén DataStore y el gestor de reproducción.
  */
-class AuralViewModel(app: Application) : ViewModel() {
+class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     private val auralApp = app as AuralApp
     private val repository = auralApp.repository
