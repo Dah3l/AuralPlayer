@@ -80,5 +80,5 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // ---- NewPipe Extractor (búsqueda y descarga de YouTube) ----
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.5")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
 }
