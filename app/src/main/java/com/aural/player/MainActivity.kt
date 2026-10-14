@@ -47,7 +47,6 @@ import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.components.SplashScreen
-import com.aural.player.telegram.TelegramManager
 
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
@@ -60,7 +59,6 @@ private sealed class Screen {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuralViewModel by viewModels()
-    private lateinit var telegramManager: com.aural.player.telegram.TelegramManager
     private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager
 
     /** Launcher de permisos: audio + notificaciones según la versión. */
@@ -72,7 +70,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        telegramManager = TelegramManager(this)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         Thread { telegramManager.initialize() }.start()
         enableEdgeToEdge()
@@ -80,7 +77,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AuralTheme {
-                AuralApp(viewModel, telegramManager = telegramManager, youTubeManager = youTubeManager)
+                AuralApp(viewModel, youTubeManager = youTubeManager)
             }
         }
     }
