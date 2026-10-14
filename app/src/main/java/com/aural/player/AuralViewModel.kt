@@ -123,4 +123,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFromPlaylist(playlistId: String, songId: Long) {
         viewModelScope.launch { settings.removeFromPlaylist(playlistId, songId) }
     }
+
+    fun moveSongInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch { settings.moveSongInPlaylist(playlistId, fromIndex, toIndex) }
+    }
 }
