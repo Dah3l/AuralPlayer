@@ -47,6 +47,15 @@ class YouTubeManager(private val context: Context) {
     private val _downloading = MutableStateFlow<Set<String>>(emptySet())
     val downloading: StateFlow<Set<String>> = _downloading.asStateFlow()
 
+    // Progreso por videoId: 0.0 a 1.0
+    private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun clearError() { _error.value = null }
+
     init {
         // Inicializar NewPipe con el downloader por defecto
         try {
@@ -105,28 +114,51 @@ class YouTubeManager(private val context: Context) {
     fun download(result: YTResult, onComplete: (Boolean) -> Unit) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
+        _progress.value = _progress.value + (result.videoId to 0f)
+        _error.value = null
         scope.launch {
             var success = false
+            var errorMsg: String? = null
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
                 val streamInfo = StreamInfo.getInfo(
                     service,
                     "https://www.youtube.com/watch?v=${result.videoId}"
                 )
-                // Buscar el mejor stream de audio
+                android.util.Log.d("YouTubeManager",
+                    "Audios: ${streamInfo.audioStreams.size}, Videos: ${streamInfo.videoStreams.size}")
+
+                // Buscar el mejor stream de audio (priorizar m4a/webm)
                 val audioStream = streamInfo.audioStreams
-                    .maxByOrNull { it.averageBitrate }
-                    ?: streamInfo.videoStreams.maxByOrNull { it.bitrate }
+                    .sortedByDescending { it.averageBitrate }
+                    .firstOrNull()
+                    ?: streamInfo.videoStreams
+                        .filter { it.isVideoOnly == false }
+                        .maxByOrNull { it.bitrate }
 
                 if (audioStream != null) {
-                    val fileName = sanitize("${result.artist} - ${result.title}.m4a")
-                    success = downloadToMusic(audioStream.content, fileName, result)
+                    val ext = when {
+                        audioStream.content.contains("mime=audio/mp4") -> "m4a"
+                        audioStream.content.contains("mime=audio/webm") -> "webm"
+                        else -> "m4a"
+                    }
+                    val fileName = sanitize("${result.artist} - ${result.title}.$ext")
+                    success = downloadToMusic(audioStream.content, fileName, result) { pct ->
+                        _progress.value = _progress.value + (result.videoId to pct)
+                    }
+                    if (!success) errorMsg = "No se pudo guardar el archivo"
+                } else {
+                    errorMsg = "No se encontró stream de audio"
+                    android.util.Log.e("YouTubeManager", errorMsg)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("YouTubeManager", "Error descargando: ${e.message}")
+                errorMsg = "Error: ${e.message?.take(100)}"
+                android.util.Log.e("YouTubeManager", "Error descargando: ${e.message}", e)
             }
             withContext(Dispatchers.Main) {
                 _downloading.value = _downloading.value - result.videoId
+                _progress.value = _progress.value - result.videoId
+                _error.value = errorMsg
                 onComplete(success)
             }
         }
@@ -139,7 +171,12 @@ class YouTubeManager(private val context: Context) {
             .take(100)
     }
 
-    private fun downloadToMusic(url: String, fileName: String, result: YTResult): Boolean {
+    private fun downloadToMusic(
+        url: String,
+        fileName: String,
+        result: YTResult,
+        onProgress: (Float) -> Unit
+    ): Boolean {
         return try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 val values = android.content.ContentValues().apply {
@@ -153,7 +190,7 @@ class YouTubeManager(private val context: Context) {
                     android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
                 ) ?: return false
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    URL(url).openStream().use { it.copyTo(out) }
+                    downloadWithProgress(url, out, onProgress)
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -163,8 +200,8 @@ class YouTubeManager(private val context: Context) {
                 val auralDir = File(musicDir, "Aural")
                 auralDir.mkdirs()
                 val destFile = File(auralDir, fileName)
-                URL(url).openStream().use { input ->
-                    destFile.outputStream().use { input.copyTo(it) }
+                destFile.outputStream().use { out ->
+                    downloadWithProgress(url, out, onProgress)
                 }
                 android.media.MediaScannerConnection.scanFile(
                     context, arrayOf(destFile.absolutePath), arrayOf("audio/mp4"), null
@@ -176,6 +213,24 @@ class YouTubeManager(private val context: Context) {
             android.util.Log.e("YouTubeManager", "Error guardando: ${e.message}")
             false
         }
+    }
+
+    private fun downloadWithProgress(url: String, out: java.io.OutputStream, onProgress: (Float) -> Unit) {
+        val connection = URL(url).openConnection()
+        connection.connect()
+        val total = connection.contentLengthLong
+        var downloaded = 0L
+        val buffer = ByteArray(8192)
+        connection.getInputStream().use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                out.write(buffer, 0, read)
+                downloaded += read
+                if (total > 0) onProgress(downloaded.toFloat() / total)
+            }
+        }
+        onProgress(1f)
     }
 
     fun clearResults() {
