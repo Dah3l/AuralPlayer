@@ -242,7 +242,6 @@ fun DetailScreen(
                                                     change.consume()
                                                     val from = draggedIndex ?: return@detectVerticalDragGestures
                                                     dragOffsetPx += dragAmount
-                                                    with(density) { val threshold = 48.dp.toPx() }
                                                     val threshold = with(density) { 48.dp.toPx() }
                                                     if (dragOffsetPx > threshold && from < songs.lastIndex) {
                                                         onMoveSong?.invoke(from, from + 1)
