@@ -128,13 +128,17 @@ class YouTubeManager(private val context: Context) {
                 android.util.Log.d("YouTubeManager",
                     "Audios: ${streamInfo.audioStreams.size}, Videos: ${streamInfo.videoStreams.size}")
 
-                // Buscar el mejor stream de audio (priorizar m4a/webm)
+                // SOLO audio puro — sin fallback a video
+                // Priorizar m4a (mejor compatibilidad), luego el de menor bitrate decente
                 val audioStream = streamInfo.audioStreams
-                    .sortedByDescending { it.averageBitrate }
-                    .firstOrNull()
-                    ?: streamInfo.videoStreams
-                        .filter { it.isVideoOnly == false }
-                        .maxByOrNull { it.bitrate }
+                    .sortedWith(
+                        compareBy(
+                            { !it.content.contains("mime=audio/mp4") }, // m4a primero
+                            { it.averageBitrate } // luego menor bitrate = descarga rápida
+                        )
+                    )
+                    .firstOrNull { it.averageBitrate >= 48000 } // mínimo 48kbps
+                    ?: streamInfo.audioStreams.minByOrNull { it.averageBitrate }
 
                 if (audioStream != null) {
                     val ext = when {
@@ -148,7 +152,7 @@ class YouTubeManager(private val context: Context) {
                     }
                     if (!success) errorMsg = "No se pudo guardar el archivo"
                 } else {
-                    errorMsg = "No se encontró stream de audio"
+                    errorMsg = "Sin audio disponible para este video"
                     android.util.Log.e("YouTubeManager", errorMsg)
                 }
             } catch (e: Exception) {
