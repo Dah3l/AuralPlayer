@@ -59,6 +59,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ScrollableTabRow
+import com.aural.player.youtube.YouTubeManager
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
