@@ -199,7 +199,10 @@ private fun AuralApp(viewModel: AuralViewModel) {
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         onBack = { screen = Screen.Library },
                         onSongMenu = { songMenuTarget = it },
-                        removableFromPlaylistId = if (isFavorites) null else s.id
+                        removableFromPlaylistId = if (isFavorites) null else s.id,
+                        onMoveSong = if (isFavorites || playlist == null) null else { from, to ->
+                            viewModel.moveSongInPlaylist(playlist.id, from, to)
+                        }
                     )
                 }
             }
