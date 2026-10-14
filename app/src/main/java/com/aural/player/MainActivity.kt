@@ -171,7 +171,9 @@ private fun AuralApp(viewModel: AuralViewModel) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
                     onPlayList = { songs, index ->
-                        viewModel.playSongs(songs, index)
+                        viewModel.playSongs(songs, index,
+            telegramManager = telegramManager
+        )
                         showNowPlaying = true
                     },
                     onOpenAlbum = { screen = Screen.Album(it) },
