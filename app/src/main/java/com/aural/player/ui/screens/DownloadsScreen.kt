@@ -48,6 +48,7 @@ fun DownloadsScreen(
 ) {
     val authState by telegramManager.authState.collectAsState()
     val results by telegramManager.botResponses.collectAsState()
+    val buttons by telegramManager.botButtons.collectAsState()
 
     var query by remember { mutableStateOf("") }
     var downloading by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -106,7 +107,34 @@ fun DownloadsScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Resultados
+        // Botones del bot (resultados para elegir)
+        if (buttons.isNotEmpty()) {
+            Text(
+                "Toca una canción para descargarla:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            items(buttons, key = { it.label + it.messageId }) { button ->
+                TextButton(
+                    onClick = { telegramManager.pressButton(button) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        button.label,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 2
+                    )
+                }
+            }
+        }
+
+        // Resultados (audios recibidos)
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxSize()
