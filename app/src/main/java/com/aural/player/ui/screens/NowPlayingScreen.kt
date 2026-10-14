@@ -65,6 +65,9 @@ import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.formatDuration
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -110,6 +113,16 @@ fun NowPlayingScreen(
                     )
                 )
             )
+            // Bloquea toques para que no lleguen a la lista detrás
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown().consume()
+                    do {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
     ) {
         Column(
             Modifier
