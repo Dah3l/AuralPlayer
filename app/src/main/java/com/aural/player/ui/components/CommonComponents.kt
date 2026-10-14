@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.layout.fillMaxHeight
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -233,7 +234,8 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Barra lateral A-Z para salto rápido alfabético.
+ * Barra lateral A-Z para salto rápido alfabético (ocupa 70% de la altura).
+ * Muestra un indicador grande con la letra actual mientras se arrastra.
  * [keys] son las claves de ordenamiento (una por elemento de la lista).
  * [onJumpToIndex] recibe el índice del primer elemento con la letra elegida.
  */
@@ -243,7 +245,6 @@ fun AlphabetFastScroller(
     onJumpToIndex: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Mapa letra -> primer índice con esa inicial
     val letterMap = remember(keys) {
         val map = mutableMapOf<Char, Int>()
         keys.forEachIndexed { index, key ->
@@ -257,12 +258,13 @@ fun AlphabetFastScroller(
 
     var barHeightPx by remember { mutableStateOf(0) }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
+    var isDragging by remember { mutableStateOf(false) }
+    val letters = ('A'..'Z').toList() + '#'
 
     fun letterAtY(y: Float): Char? {
         if (barHeightPx <= 0) return null
-        val index = ((y / barHeightPx) * 27).toInt().coerceIn(0, 26)
-        val all = ('A'..'Z').toList() + '#'
-        return all[index]
+        val index = ((y / barHeightPx) * letters.size).toInt().coerceIn(0, letters.size - 1)
+        return letters[index]
     }
 
     fun jumpTo(letter: Char) {
@@ -271,42 +273,79 @@ fun AlphabetFastScroller(
         onJumpToIndex(idx)
     }
 
-    val letters = ('A'..'Z').toList() + '#'
-    Column(
-        modifier = modifier
-            .onGloballyPositioned { barHeightPx = it.size.height }
-            .pointerInput(letterMap) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        letterAtY(offset.y)?.let { jumpTo(it) }
+    Box(modifier = modifier) {
+        // ---- Barra de letras (derecha, 70% altura) ----
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight(0.7f)
+                .onGloballyPositioned { barHeightPx = it.size.height }
+                .pointerInput(letterMap) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            letterAtY(offset.y)?.let { jumpTo(it) }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            activeLetter = null
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            activeLetter = null
+                        },
+                        onVerticalDrag = { change, _ ->
+                            change.consume()
+                            letterAtY(change.position.y)?.let { jumpTo(it) }
+                        }
+                    )
+                }
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    RoundedCornerShape(16.dp)
+                )
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            letters.forEach { letter ->
+                val enabled = letter in letterMap
+                val isActive = letter == activeLetter
+                Text(
+                    text = if (letter == '#') "•" else letter.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    color = when {
+                        isActive -> MaterialTheme.colorScheme.primary
+                        enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     },
-                    onDragEnd = { activeLetter = null },
-                    onDragCancel = { activeLetter = null },
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        letterAtY(change.position.y)?.let { jumpTo(it) }
-                    }
+                    modifier = Modifier
+                        .clickable(enabled = enabled) { jumpTo(letter) }
+                        .padding(horizontal = 10.dp, vertical = 1.dp)
                 )
             }
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        letters.forEach { letter ->
-            val enabled = letter in letterMap
-            val isActive = letter == activeLetter
-            Text(
-                text = if (letter == '#') "•" else letter.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                color = when {
-                    isActive -> MaterialTheme.colorScheme.primary
-                    enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                },
+        }
+
+        // ---- Indicador grande de la letra actual ----
+        if (isDragging && activeLetter != null) {
+            Box(
                 modifier = Modifier
-                    .clickable(enabled = enabled) { jumpTo(letter) }
-                    .padding(horizontal = 6.dp, vertical = 1.dp)
-            )
+                    .align(Alignment.Center)
+                    .size(110.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.75f),
+                        androidx.compose.foundation.shape.CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (activeLetter == '#') "•" else activeLetter.toString(),
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
