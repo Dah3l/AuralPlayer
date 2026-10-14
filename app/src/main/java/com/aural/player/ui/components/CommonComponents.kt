@@ -33,6 +33,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.util.Locale
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -225,3 +232,81 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Barra lateral A-Z para salto rápido alfabético.
+ * [keys] son las claves de ordenamiento (una por elemento de la lista).
+ * [onJumpToIndex] recibe el índice del primer elemento con la letra elegida.
+ */
+@Composable
+fun AlphabetFastScroller(
+    keys: List<String>,
+    onJumpToIndex: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Mapa letra -> primer índice con esa inicial
+    val letterMap = remember(keys) {
+        val map = mutableMapOf<Char, Int>()
+        keys.forEachIndexed { index, key ->
+            val first = key.trim().firstOrNull()?.uppercaseChar() ?: return@forEachIndexed
+            val letter = if (first in 'A'..'Z') first else '#'
+            if (letter !in map) map[letter] = index
+        }
+        map
+    }
+    if (letterMap.isEmpty()) return
+
+    var barHeightPx by remember { mutableStateOf(0) }
+    var activeLetter by remember { mutableStateOf<Char?>(null) }
+
+    fun letterAtY(y: Float): Char? {
+        if (barHeightPx <= 0) return null
+        val index = ((y / barHeightPx) * 27).toInt().coerceIn(0, 26)
+        val all = ('A'..'Z').toList() + '#'
+        return all[index]
+    }
+
+    fun jumpTo(letter: Char) {
+        val idx = letterMap[letter] ?: return
+        activeLetter = letter
+        onJumpToIndex(idx)
+    }
+
+    val letters = ('A'..'Z').toList() + '#'
+    Column(
+        modifier = modifier
+            .onGloballyPositioned { barHeightPx = it.size.height }
+            .pointerInput(letterMap) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        letterAtY(offset.y)?.let { jumpTo(it) }
+                    },
+                    onDragEnd = { activeLetter = null },
+                    onDragCancel = { activeLetter = null },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        letterAtY(change.position.y)?.let { jumpTo(it) }
+                    }
+                )
+            }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        letters.forEach { letter ->
+            val enabled = letter in letterMap
+            val isActive = letter == activeLetter
+            Text(
+                text = if (letter == '#') "•" else letter.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                color = when {
+                    isActive -> MaterialTheme.colorScheme.primary
+                    enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                },
+                modifier = Modifier
+                    .clickable(enabled = enabled) { jumpTo(letter) }
+                    .padding(horizontal = 6.dp, vertical = 1.dp)
+            )
+        }
+    }
+}
