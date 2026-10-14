@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -133,16 +134,17 @@ fun NowPlayingScreen(
                 return@Column
             }
 
-            // ---- Carátula grande ----
-            Box(
+            // ---- Carátula grande (responsiva, sin desbordar) ----
+            BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
+                val artSize = (maxWidth * 0.8f).coerceAtMost(320.dp).coerceAtLeast(180.dp)
                 CoverArt(
                     uri = song.albumArtUri,
-                    size = 300.dp,
+                    size = artSize,
                     cornerRadius = 20.dp
                 )
             }
