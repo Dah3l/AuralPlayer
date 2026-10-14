@@ -142,17 +142,18 @@ fun NowPlayingScreen(
                 return@Column
             }
 
-            // ---- Carátula grande ----
-            Box(
+            // ---- Carátula grande (responsiva) ----
+            BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val artSize = (maxWidth * 0.85f).coerceAtMost(340.dp).coerceAtLeast(200.dp)
                 CoverArt(
                     uri = song.albumArtUri,
-                    size = 320.dp,
+                    size = artSize,
                     cornerRadius = 16.dp
                 )
             }
