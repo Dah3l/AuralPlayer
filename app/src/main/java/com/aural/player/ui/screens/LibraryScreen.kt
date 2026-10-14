@@ -58,6 +58,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.ScrollableTabRow
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
@@ -150,7 +151,8 @@ fun LibraryScreen(
         }
 
         // ---- Pestañas ----
-        TabRow(
+        ScrollableTabRow(
+                edgePadding = 0.dp,
             selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.primary
