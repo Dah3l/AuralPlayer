@@ -49,12 +49,8 @@ class MusicService : MediaSessionService() {
             )
         mediaSession = sessionBuilder.build()
 
-        // Notificación personalizada con el icono de la app
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .build()
-        )
+        // Notificación multimedia de Media3 (usa el icono de la app del manifest)
+        setMediaNotificationProvider(DefaultMediaNotificationProvider(this))
     }
 
     /** El sistema llama a este método para entregar la sesión a los clientes. */
