@@ -165,16 +165,19 @@ fun LibraryScreen(
                     onPlay = { song -> onPlayList(library.filteredSongs, library.filteredSongs.indexOf(song)) },
                     onFavorite = viewModel::toggleFavorite,
                     onMenu = onSongMenu
+                    listState = songsListState
                 )
 
                 1 -> ArtistsTab(
                     artists = viewModel.artists(),
-                    onOpen = { name -> onOpenArtist(name) }
+                    onOpen = { name -> onOpenArtist(name) },
+                    gridState = artistsGridState
                 )
 
                 2 -> AlbumsTab(
                     albums = viewModel.albums(),
-                    onOpen = { title -> onOpenAlbum(title) }
+                    onOpen = { title -> onOpenAlbum(title) },
+                    gridState = albumsGridState
                 )
 
                 3 -> PlaylistsTab(
@@ -274,46 +277,72 @@ private fun SongsTab(
 // --------------------------- Pestaña: Artistas ---------------------------
 
 @Composable
-private fun ArtistsTab(artists: List<com.aural.player.data.Artist>, onOpen: (String) -> Unit) {
+private fun ArtistsTab(
+    artists: List<com.aural.player.data.Artist>,
+    onOpen: (String) -> Unit,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+) {
     if (artists.isEmpty()) {
         EmptyState("Sin resultados"); return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 110.dp),
-        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(artists, key = { it.name }) { artist ->
-            MediaGridCard(
-                coverUri = artist.representativeSong.albumArtUri,
-                title = artist.name,
-                subtitle = "${artist.songs.size} canciones",
-                onClick = { onOpen(artist.name) }
-            )
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 110.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(artists, key = { it.name }) { artist ->
+                MediaGridCard(
+                    coverUri = artist.representativeSong.albumArtUri,
+                    title = artist.name,
+                    subtitle = "${artist.songs.size} canciones",
+                    onClick = { onOpen(artist.name) }
+                )
+            }
         }
+        AlphabetFastScroller(
+            keys = artists.map { it.name },
+            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
 // --------------------------- Pestaña: Álbumes ---------------------------
 
 @Composable
-private fun AlbumsTab(albums: List<com.aural.player.data.Album>, onOpen: (String) -> Unit) {
+private fun AlbumsTab(
+    albums: List<com.aural.player.data.Album>,
+    onOpen: (String) -> Unit,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+) {
     if (albums.isEmpty()) {
         EmptyState("Sin resultados"); return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(albums, key = { it.id }) { album ->
-            MediaGridCard(
-                coverUri = album.songs.firstOrNull()?.albumArtUri,
-                title = album.title,
-                subtitle = album.artist,
-                onClick = { onOpen(album.title) }
-            )
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(albums, key = { it.id }) { album ->
+                MediaGridCard(
+                    coverUri = album.songs.firstOrNull()?.albumArtUri,
+                    title = album.title,
+                    subtitle = album.artist,
+                    onClick = { onOpen(album.title) }
+                )
+            }
         }
+        AlphabetFastScroller(
+            keys = albums.map { it.title },
+            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
