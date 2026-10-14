@@ -26,6 +26,8 @@ fun DownloadsScreen(
     val results by youTubeManager.results.collectAsState()
     val isSearching by youTubeManager.isSearching.collectAsState()
     val downloading by youTubeManager.downloading.collectAsState()
+    val progress by youTubeManager.progress.collectAsState()
+    val error by youTubeManager.error.collectAsState()
 
     Column(
         modifier = modifier
@@ -91,6 +93,32 @@ fun DownloadsScreen(
 
         Spacer(Modifier.height(8.dp))
 
+        // Error
+        error?.let { msg ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { youTubeManager.clearError() }) {
+                        Text("OK")
+                    }
+                }
+            }
+        }
+
         // Resultados
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -110,7 +138,21 @@ fun DownloadsScreen(
                     },
                     trailingContent = {
                         if (isDl) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            val pct = progress[result.videoId] ?: 0f
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(64.dp)
+                            ) {
+                                LinearProgressIndicator(
+                                    progress = { pct },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "${(pct * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         } else {
                             IconButton(onClick = {
                                 youTubeManager.download(result) { success ->
