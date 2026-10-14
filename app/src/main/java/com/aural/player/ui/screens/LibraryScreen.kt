@@ -214,7 +214,6 @@ fun LibraryScreen(
                     hasFavorites = favorites.isNotEmpty(),
                     onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) }
                 )
-            }
             4 -> telegramManager?.let { tm ->
                 var showAuth by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
                 if (showAuth) {
@@ -229,6 +228,7 @@ fun LibraryScreen(
                         onAuthNeeded = { showAuth = true }
                     )
                 }
+            }
             }
         }
     }
