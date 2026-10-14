@@ -127,4 +127,27 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun moveSongInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
         viewModelScope.launch { settings.moveSongInPlaylist(playlistId, fromIndex, toIndex) }
     }
+
+    // ---- Temporizador de suspensión ----
+    private var sleepTimerJob: kotlinx.coroutines.Job? = null
+    private val _sleepTimerMinutes = MutableStateFlow<Int?>(null)
+    val sleepTimerMinutes: StateFlow<Int?> = _sleepTimerMinutes.asStateFlow()
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        _sleepTimerMinutes.value = minutes
+        sleepTimerJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(minutes * 60_000L)
+            if (playerState.value.isPlaying) {
+                playback.togglePlayPause()
+            }
+            _sleepTimerMinutes.value = null
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerMinutes.value = null
+    }
 }
