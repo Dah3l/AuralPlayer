@@ -47,6 +47,9 @@ class TelegramManager(private val context: Context) {
     private val _botButtons = MutableStateFlow<List<BotButton>>(emptyList())
     val botButtons: StateFlow<List<BotButton>> = _botButtons.asStateFlow()
 
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
     private var botChatId: Long = 0L
 
     fun initialize() {
@@ -183,12 +186,84 @@ class TelegramManager(private val context: Context) {
         }
         _botResponses.value = emptyList()
         _botButtons.value = emptyList()
+        _isSearching.value = true
         android.util.Log.d("TelegramManager", "Buscando '$query' en chat $botChatId")
         val content = TdApi.InputMessageText(
             TdApi.FormattedText(query, null), null, false
         )
         client?.send(TdApi.SendMessage(botChatId, null, null, null, null, content)) { obj ->
             android.util.Log.d("TelegramManager", "Mensaje enviado: $obj")
+            // Polling del historial por si las actualizaciones en tiempo real fallan
+            scheduleHistoryCheck(3000)
+            scheduleHistoryCheck(7000)
+            scheduleHistoryCheck(12000)
+            // Timeout: quitar el indicador después de 20s
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                _isSearching.value = false
+            }, 20000)
+        }
+    }
+
+    private fun scheduleHistoryCheck(delayMs: Long) {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            // Solo buscar si aún no hay botones y seguimos buscando
+            if (_botButtons.value.isEmpty() && _isSearching.value) {
+                fetchButtonsFromHistory()
+            }
+        }, delayMs)
+    }
+
+    /**
+     * Busca botones inline en el historial reciente del chat del bot.
+     */
+    private fun fetchButtonsFromHistory() {
+        if (botChatId == 0L) return
+        client?.send(TdApi.GetChatHistory(botChatId, 0, 0, 20, false)) { obj ->
+            if (obj is TdApi.Messages) {
+                for (msg in obj.messages) {
+                    if (msg == null) continue
+                    parseButtonsFromMessage(msg)
+                    if (_botButtons.value.isNotEmpty()) {
+                        _isSearching.value = false
+                        break
+                    }
+                }
+                // Si después de revisar no hay botones, seguir buscando
+                if (_botButtons.value.isEmpty()) {
+                    android.util.Log.d("TelegramManager", "Sin botones en historial, sigue buscando...")
+                }
+            }
+        }
+    }
+
+    /**
+     * Extrae botones inline de un mensaje (reutilizable).
+     */
+    private fun parseButtonsFromMessage(message: TdApi.Message) {
+        if (message.chatId != botChatId) return
+        val markup = message.replyMarkup
+        if (markup is TdApi.ReplyMarkupInlineKeyboard) {
+            val buttons = mutableListOf<BotButton>()
+            for (row in markup.rows) {
+                for (btn in row) {
+                    val btnType = btn.type
+                    if (btnType is TdApi.InlineKeyboardButtonTypeCallback) {
+                        buttons.add(
+                            BotButton(
+                                messageId = message.id,
+                                chatId = message.chatId,
+                                label = btn.text,
+                                callbackData = btnType.data
+                            )
+                        )
+                    }
+                }
+            }
+            if (buttons.isNotEmpty() && _botButtons.value.isEmpty()) {
+                _botButtons.value = buttons
+                _isSearching.value = false
+                android.util.Log.d("TelegramManager", "${buttons.size} botones del historial")
+            }
         }
     }
 
@@ -247,6 +322,7 @@ class TelegramManager(private val context: Context) {
                     }
                     if (buttons.isNotEmpty()) {
                         _botButtons.value = buttons
+                        _isSearching.value = false
                         android.util.Log.d("TelegramManager", "${buttons.size} botones inline detectados")
                     }
                 }
