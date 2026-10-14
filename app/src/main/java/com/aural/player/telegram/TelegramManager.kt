@@ -297,7 +297,7 @@ class TelegramManager(private val context: Context) {
             if (!srcFile.exists()) return false
 
             val fileName = "${song.performer} - ${song.title}.mp3"
-                .replace(Regex("[<>:"/\\\\|?*]"), "_")
+                .replace("/", "_").replace("\\", "_").replace(":", "_")
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 // Android 10+: usar MediaStore
