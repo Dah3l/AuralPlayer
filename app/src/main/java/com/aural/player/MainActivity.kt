@@ -60,6 +60,7 @@ private sealed class Screen {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuralViewModel by viewModels()
+    private val telegramManager by lazy { TelegramManager(this).apply { initialize() } }
 
     /** Launcher de permisos: audio + notificaciones según la versión. */
     private val permissionLauncher = registerForActivityResult(
