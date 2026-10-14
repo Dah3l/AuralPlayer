@@ -235,7 +235,7 @@ private fun SongsTab(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp)
+            contentPadding = PaddingValues(bottom = 90.dp, end = 32.dp)
         ) {
             items(songs, key = { it.id }) { song ->
                 SongRow(
@@ -290,7 +290,7 @@ private fun ArtistsTab(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = 110.dp),
-            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(artists, key = { it.name }) { artist ->
@@ -326,7 +326,7 @@ private fun AlbumsTab(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = 150.dp),
-            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(albums, key = { it.id }) { album ->
