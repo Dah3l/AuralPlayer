@@ -433,10 +433,9 @@ fun AuralLoadingIndicator(modifier: Modifier = Modifier) {
                 initialValue = 0f,
                 targetValue = -10f,
                 animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                    animation = androidx.compose.animation.core.tween(400),
+                    animation = androidx.compose.animation.core.tween(400, delayMillis = i * 150),
                     repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
                 ),
-                initialStartOffset = androidx.compose.animation.core.StartOffset(i * 150),
                 label = "dot_$i"
             )
             Box(
