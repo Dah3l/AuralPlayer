@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.aural.player.telegram.TelegramAuthState
 import com.aural.player.telegram.TelegramManager
+import androidx.compose.foundation.layout.size
 
 /**
  * Flujo de login de Telegram: teléfono → código SMS → contraseña 2FA.
@@ -38,6 +39,7 @@ fun TelegramAuthScreen(
     onBack: () -> Unit
 ) {
     val authState by telegramManager.authState.collectAsState()
+    val isLoading by telegramManager.isLoading.collectAsState()
 
     var phone by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
@@ -88,10 +90,18 @@ fun TelegramAuthScreen(
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = { telegramManager.sendPhoneNumber(phone) },
-                    enabled = phone.isNotBlank(),
+                    enabled = phone.isNotBlank() && !isLoading,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Enviar código")
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Enviar código")
+                    }
                 }
             }
             is TelegramAuthState.WaitingCode -> {
@@ -107,10 +117,18 @@ fun TelegramAuthScreen(
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = { telegramManager.sendCode(code) },
-                    enabled = code.isNotBlank(),
+                    enabled = code.isNotBlank() && !isLoading,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Verificar")
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Verificar")
+                    }
                 }
             }
             is TelegramAuthState.WaitingPassword -> {
