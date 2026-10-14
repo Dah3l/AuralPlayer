@@ -172,9 +172,7 @@ private fun AuralApp(viewModel: AuralViewModel) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
                     onPlayList = { songs, index ->
-                        viewModel.playSongs(songs, index,
-            telegramManager = telegramManager
-        )
+                        viewModel.playSongs(songs, index)
                         showNowPlaying = true
                     },
                     onOpenAlbum = { screen = Screen.Album(it) },
@@ -185,7 +183,8 @@ private fun AuralApp(viewModel: AuralViewModel) {
                     albumsGridState = albumsGridState,
                     artistsGridState = artistsGridState,
                     selectedTab = libraryTab,
-                    onTabSelected = { libraryTab = it }
+                    onTabSelected = { libraryTab = it },
+                    telegramManager = telegramManager
                 )
 
                 is Screen.Album -> {
