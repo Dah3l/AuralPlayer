@@ -28,9 +28,8 @@ sealed class TelegramAuthState {
 class TelegramManager(private val context: Context) {
 
     companion object {
-        // TODO: Dahel debe poner sus credenciales de https://my.telegram.org
-        private const val API_ID = 0
-        private const val API_HASH = ""
+        private const val API_ID = 35445093
+        private const val API_HASH = "a5f0365ad39624d63c70f9322b4df5d0"""
         private const val BOT_USERNAME = "musicleo23_bot"
     }
 
