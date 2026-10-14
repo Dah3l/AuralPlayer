@@ -237,6 +237,7 @@ private fun AuralApp(viewModel: AuralViewModel) {
     // ---- Pantalla Now Playing a pantalla completa ----
     if (showNowPlaying) {
         NowPlayingScreen(
+            viewModel = viewModel,
             state = playerState,
             isFavorite = playerState.currentSong?.let { favorites.contains(it.id) } ?: false,
             onDismiss = { showNowPlaying = false },
