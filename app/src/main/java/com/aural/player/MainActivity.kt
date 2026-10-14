@@ -189,8 +189,9 @@ private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager
                     artistsGridState = artistsGridState,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
-                    telegramManager = telegramManager
-                )
+                    telegramManager = telegramManager,
+                        youTubeManager = youTubeManager
+                    )
 
                 is Screen.Album -> {
                     val songs = library.songs.filter { it.album == s.title }
