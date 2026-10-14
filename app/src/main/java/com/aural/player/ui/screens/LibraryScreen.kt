@@ -246,21 +246,8 @@ private fun SongsTab(
                     isPlaying = song.id == currentId,
                     onClick = { onPlay(song) },
                     trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                            IconButton(onClick = { onFavorite(song.id) }) {
-                                Icon(
-                                    imageVector = if (favorites.contains(song.id))
-                                        Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                    contentDescription = "Favorito",
-                                    tint = if (favorites.contains(song.id))
-                                        MaterialTheme.colorScheme.error
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            TextButton(onClick = { onMenu(song) }) {
-                                Text("···", style = MaterialTheme.typography.titleMedium)
-                            }
+                        TextButton(onClick = { onMenu(song) }) {
+                            Text("···", style = MaterialTheme.typography.titleMedium)
                         }
                     }
                 )
