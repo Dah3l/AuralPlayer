@@ -1,115 +1,73 @@
-// Pantalla de descargas vía bot de Telegram
+// Pantalla de Descargas — búsqueda y descarga de YouTube
 package com.aural.player.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.aural.player.telegram.BotSong
-import com.aural.player.telegram.TelegramAuthState
-import com.aural.player.telegram.TelegramManager
+import com.aural.player.youtube.YTResult
+import com.aural.player.youtube.YouTubeManager
 
-/**
- * Sección de descargas: busca canciones vía el bot de Telegram y las descarga.
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
-    telegramManager: TelegramManager,
-    onAuthNeeded: () -> Unit,
+    youTubeManager: YouTubeManager,
     onDownloadComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val authState by telegramManager.authState.collectAsState()
-    val results by telegramManager.botResponses.collectAsState()
-    val buttons by telegramManager.botButtons.collectAsState()
-    val isSearching by telegramManager.isSearching.collectAsState()
-    val botStatus by telegramManager.botStatus.collectAsState()
-
     var query by remember { mutableStateOf("") }
-    var downloading by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val results by youTubeManager.results.collectAsState()
+    val isSearching by youTubeManager.isSearching.collectAsState()
+    val downloading by youTubeManager.downloading.collectAsState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(16.dp)
     ) {
-        if (authState !is TelegramAuthState.Ready) {
-            // No autenticado: pedir login
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "Vincula tu Telegram para descargar música",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(16.dp))
-                TextButton(onClick = onAuthNeeded) {
-                    Text("Conectar Telegram")
-                }
-            }
-            return@Column
-        }
-
-        Text(botStatus, style = MaterialTheme.typography.bodySmall,
+        Text(
+            "Descargas",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Text(
+            "Busca en YouTube y descarga el audio",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 4.dp))
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
         // Buscador
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Nombre de la canción...") },
+            label = { Text("Artista, álbum o canción") },
             singleLine = true,
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Rounded.Close, "Borrar")
+                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
                     }
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
+            modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(Modifier.height(8.dp))
+
         TextButton(
-            onClick = { telegramManager.searchSong(query) },
+            onClick = { youTubeManager.search(query) },
             enabled = query.isNotBlank() && !isSearching,
             modifier = Modifier.align(Alignment.End)
         ) {
-            Text("Buscar en Telegram")
+            Text("Buscar en YouTube")
         }
 
         // Indicador de búsqueda
@@ -124,7 +82,7 @@ fun DownloadsScreen(
                 CircularProgressIndicator(modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "Buscando en el bot...",
+                    "Buscando...",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -133,101 +91,46 @@ fun DownloadsScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Botones del bot (resultados para elegir)
-        if (buttons.isNotEmpty()) {
-            Text(
-                "Toca una canción para descargarla:",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-        }
+        // Resultados
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f)
         ) {
-            items(buttons, key = { it.label + it.messageId }) { button ->
-                TextButton(
-                    onClick = { telegramManager.pressButton(button) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        button.label,
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2
-                    )
-                }
-            }
-        }
-
-        // Resultados (audios recibidos)
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(results, key = { it.messageId }) { song ->
-                BotSongRow(
-                    song = song,
-                    isDownloading = downloading.contains(song.messageId),
-                    onDownload = {
-                        downloading = downloading + song.messageId
-                        telegramManager.downloadSong(song) { success ->
-                            downloading = downloading - song.messageId
-                            if (success) onDownloadComplete()
+            items(results, key = { it.videoId }) { result ->
+                val isDl = downloading.contains(result.videoId)
+                ListItem(
+                    headlineContent = {
+                        Text(result.title, maxLines = 1)
+                    },
+                    supportingContent = {
+                        Text(
+                            "${result.artist} • ${formatDuration(result.durationSec)}",
+                            maxLines = 1
+                        )
+                    },
+                    trailingContent = {
+                        if (isDl) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        } else {
+                            IconButton(onClick = {
+                                youTubeManager.download(result) { success ->
+                                    if (success) onDownloadComplete()
+                                }
+                            }) {
+                                Icon(Icons.Default.Download, contentDescription = "Descargar")
+                            }
                         }
                     }
                 )
-            }
-            if (results.isEmpty()) {
-                item {
-                    Text(
-                        "Busca una canción para ver resultados del bot.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 32.dp)
-                    )
-                }
+                HorizontalDivider()
             }
         }
     }
 }
 
-@Composable
-private fun BotSongRow(
-    song: BotSong,
-    isDownloading: Boolean,
-    onDownload: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                song.title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1
-            )
-            Text(
-                "${song.performer} • ${song.durationSec / 60}:${String.format("%02d", song.durationSec % 60)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        if (isDownloading) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-        } else {
-            IconButton(onClick = onDownload) {
-                Icon(
-                    Icons.Rounded.Download,
-                    contentDescription = "Descargar",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
+private fun formatDuration(seconds: Long): String {
+    if (seconds <= 0) return "--:--"
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%d:%02d".format(m, s)
 }
