@@ -227,16 +227,6 @@ fun LibraryScreen(
                     } else {
                         Text("YouTube no disponible")
                     }
-                } else {
-                    val ytm = youTubeManager
-                    if (ytm != null) {
-                        DownloadsScreen(
-                            youTubeManager = ytm,
-                            onDownloadComplete = { viewModel.rescan() }
-                        )
-                    } else {
-                        Text("YouTube no disponible")
-                    }
                 }
             }
             }
