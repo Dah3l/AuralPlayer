@@ -50,6 +50,7 @@ fun DownloadsScreen(
     val authState by telegramManager.authState.collectAsState()
     val results by telegramManager.botResponses.collectAsState()
     val buttons by telegramManager.botButtons.collectAsState()
+    val isSearching by telegramManager.isSearching.collectAsState()
 
     var query by remember { mutableStateOf("") }
     var downloading by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -100,10 +101,29 @@ fun DownloadsScreen(
 
         TextButton(
             onClick = { telegramManager.searchSong(query) },
-            enabled = query.isNotBlank(),
+            enabled = query.isNotBlank() && !isSearching,
             modifier = Modifier.align(Alignment.End)
         ) {
             Text("Buscar en Telegram")
+        }
+
+        // Indicador de búsqueda
+        if (isSearching) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Buscando en el bot...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
