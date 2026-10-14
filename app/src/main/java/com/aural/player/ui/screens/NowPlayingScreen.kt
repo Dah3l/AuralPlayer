@@ -359,8 +359,8 @@ fun NowPlayingScreen(
                         )
                     }
                 }
-            }
-        }
+            } // fin LazyColumn
+        } // fin Column altura fija
     }
 }
 
