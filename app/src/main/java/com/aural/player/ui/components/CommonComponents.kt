@@ -174,19 +174,19 @@ fun MediaGridCard(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            if (coverUri != null) {
+            // Icono siempre de fondo: si la imagen falla, no queda vacío
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(40.dp)
+            )
+            if (!coverUri.isNullOrBlank()) {
                 AsyncImage(
                     model = android.net.Uri.parse(coverUri),
                     contentDescription = "Portada",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(40.dp)
                 )
             }
         }
