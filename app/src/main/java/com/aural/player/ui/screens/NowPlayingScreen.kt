@@ -126,10 +126,7 @@ fun NowPlayingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { showQueue = true }) {
-                    Icon(Icons.Rounded.GraphicEq, contentDescription = "Cola",
-                        tint = MaterialTheme.colorScheme.onSurface)
-                }
+                Spacer(Modifier.size(48.dp))
             }
 
             if (song == null) {
@@ -285,7 +282,7 @@ fun NowPlayingScreen(
 
             Spacer(
                 Modifier
-                    .height(28.dp)
+                    .height(48.dp)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             )
         }
@@ -297,12 +294,18 @@ fun NowPlayingScreen(
             onDismissRequest = { showQueue = false },
             containerColor = MaterialTheme.colorScheme.surface
         ) {
-            Text(
-                "Cola de reproducción",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 24.dp, bottom = 8.dp)
-            )
-            LazyColumn(Modifier.fillMaxWidth()) {
+            // Altura fija: el modal no crece al hacer scroll
+            Column(Modifier.fillMaxHeight(0.6f)) {
+                Text(
+                    "Cola de reproducción",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 24.dp, bottom = 8.dp)
+                )
+                LazyColumn(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
                 itemsIndexed(state.queue) { index, item ->
                     Row(
                         modifier = Modifier
