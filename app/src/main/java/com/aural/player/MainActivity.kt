@@ -201,8 +201,7 @@ private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager
                         songs = songs.sortedBy { it.trackNumber },
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         onBack = { screen = Screen.Library },
-                        onSongMenu = { songMenuTarget = it },
-                        youTubeManager = youTubeManager
+                        onSongMenu = { songMenuTarget = it }
                     )
                 }
 
