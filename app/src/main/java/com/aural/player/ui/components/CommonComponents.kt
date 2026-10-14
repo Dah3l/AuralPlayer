@@ -41,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -349,3 +351,95 @@ fun AlphabetFastScroller(
         }
     }
 }
+
+/**
+ * Pantalla de bienvenida: logo de la app con animación de entrada.
+ */
+@Composable
+fun SplashScreen() {
+    var visible by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        visible = true
+    }
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0.7f,
+        animationSpec = androidx.compose.animation.core.tween(600),
+        label = "splash_scale"
+    )
+    val alpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(600),
+        label = "splash_alpha"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(
+                    id = com.aural.player.R.drawable.ic_launcher_foreground
+                ),
+                contentDescription = "Aural",
+                modifier = Modifier
+                    .size(140.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        this.alpha = alpha
+                    }
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Aural",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.graphicsLayer { this.alpha = alpha }
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "El sonido, sin ruido",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.graphicsLayer { this.alpha = alpha }
+            )
+        }
+    }
+}
+
+/**
+ * Indicador de carga: tres puntos que rebotan (no un spinner).
+ */
+@Composable
+fun AuralLoadingIndicator(modifier: Modifier = Modifier) {
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "dots")
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { i ->
+            val offsetY by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = -10f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    animation = androidx.compose.animation.core.tween(400),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                ),
+                initialStartOffset = androidx.compose.animation.core.StartOffset(i * 150),
+                label = "dot_$i"
+            )
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .graphicsLayer { translationY = offsetY }
+                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+            )
+        }
+    }
+}
+
