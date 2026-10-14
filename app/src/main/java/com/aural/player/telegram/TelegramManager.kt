@@ -139,6 +139,13 @@ class TelegramManager(private val context: Context) {
         client?.send(TdApi.SearchPublicChat(BOT_USERNAME)) { obj ->
             if (obj is TdApi.Chat) {
                 botChatId = obj.id
+                android.util.Log.d("TelegramManager", "Bot chat encontrado: $botChatId")
+                // Abrir el chat para recibir actualizaciones en tiempo real
+                client?.send(TdApi.OpenChat(botChatId)) { openResult ->
+                    android.util.Log.d("TelegramManager", "OpenChat: $openResult")
+                }
+            } else {
+                android.util.Log.e("TelegramManager", "No se encontró el bot: $obj")
             }
         }
     }
@@ -147,27 +154,61 @@ class TelegramManager(private val context: Context) {
      * Envía el nombre de una canción al bot y espera respuestas.
      */
     fun searchSong(query: String) {
-        if (botChatId == 0L) return
+        if (botChatId == 0L) {
+            android.util.Log.w("TelegramManager", "botChatId es 0, buscando de nuevo...")
+            findBotChat()
+            // Reintentar en 2 segundos
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (botChatId != 0L) searchSong(query)
+            }, 2000)
+            return
+        }
         _botResponses.value = emptyList()
+        android.util.Log.d("TelegramManager", "Buscando '$query' en chat $botChatId")
         val content = TdApi.InputMessageText(
             TdApi.FormattedText(query, null), null, false
         )
-        client?.send(TdApi.SendMessage(botChatId, null, null, null, null, content)) {}
+        client?.send(TdApi.SendMessage(botChatId, null, null, null, null, content)) { obj ->
+            android.util.Log.d("TelegramManager", "Mensaje enviado: $obj")
+        }
     }
 
     private fun handleNewMessage(message: TdApi.Message) {
-        if (message.chatId != botChatId) return
+        if (message.chatId != botChatId || botChatId == 0L) return
+        android.util.Log.d("TelegramManager", "Nuevo mensaje del bot: ${message.content.javaClass.simpleName}")
         val content = message.content
-        if (content is TdApi.MessageAudio) {
-            val audio = content.audio
-            val song = BotSong(
-                messageId = message.id,
-                title = audio.title ?: "Sin título",
-                performer = audio.performer ?: "Desconocido",
-                durationSec = audio.duration,
-                fileId = audio.audio.id
-            )
-            _botResponses.value = _botResponses.value + song
+        when (content) {
+            is TdApi.MessageAudio -> {
+                val audio = content.audio
+                val song = BotSong(
+                    messageId = message.id,
+                    title = audio.title?.takeIf { it.isNotBlank() } ?: "Sin título",
+                    performer = audio.performer?.takeIf { it.isNotBlank() } ?: "Desconocido",
+                    durationSec = audio.duration,
+                    fileId = audio.audio.id
+                )
+                _botResponses.value = _botResponses.value + song
+                android.util.Log.d("TelegramManager", "Audio agregado: ${song.title}")
+            }
+            is TdApi.MessageDocument -> {
+                val doc = content.document
+                val fileName = doc.fileName ?: "Sin título"
+                // Solo documentos de audio
+                if (doc.mimeType.startsWith("audio/")) {
+                    val song = BotSong(
+                        messageId = message.id,
+                        title = fileName.substringBeforeLast("."),
+                        performer = "Desconocido",
+                        durationSec = 0,
+                        fileId = doc.document.id
+                    )
+                    _botResponses.value = _botResponses.value + song
+                    android.util.Log.d("TelegramManager", "Documento agregado: $fileName")
+                }
+            }
+            else -> {
+                android.util.Log.d("TelegramManager", "Tipo no manejado: ${content.javaClass.simpleName}")
+            }
         }
     }
 
