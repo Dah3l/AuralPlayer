@@ -43,6 +43,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
