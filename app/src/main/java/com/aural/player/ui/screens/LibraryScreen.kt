@@ -51,6 +51,7 @@ import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.components.AlphabetFastScroller
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists")
@@ -255,6 +256,11 @@ private fun SongsTab(
                 }
             )
         }
+        AlphabetFastScroller(
+            keys = songs.map { it.title },
+            onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
