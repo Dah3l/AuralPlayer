@@ -54,6 +54,10 @@ import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.components.AlphabetFastScroller
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Close
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists")
@@ -93,12 +97,22 @@ fun LibraryScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Aural",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
-            )
+            ) {
+                Image(
+                    painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(36.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Aural",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             IconButton(onClick = { showSearch = !showSearch }) {
                 Icon(
                     imageVector = Icons.Rounded.Search,
@@ -117,6 +131,17 @@ fun LibraryScreen(
                 placeholder = { Text("Canciones, artistas o álbumes…") },
                 singleLine = true,
                 shape = MaterialTheme.shapes.large,
+                trailingIcon = {
+                    if (library.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setQuery("") }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Borrar búsqueda",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
