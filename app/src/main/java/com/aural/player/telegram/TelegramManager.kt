@@ -121,7 +121,7 @@ class TelegramManager(private val context: Context) {
         val content = TdApi.InputMessageText(
             TdApi.FormattedText(query, null), null, false
         )
-        client?.send(TdApi.SendMessage(botChatId, 0, null, null, null, content)) {}
+        client?.send(TdApi.SendMessage(botChatId, null, null, null, null, content)) {}
     }
 
     private fun handleNewMessage(message: TdApi.Message) {
@@ -173,7 +173,6 @@ class TelegramManager(private val context: Context) {
     }
 
     fun close() {
-        client?.close()
         client = null
     }
 }
