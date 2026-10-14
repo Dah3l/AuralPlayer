@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
-        Thread { telegramManager.initialize() }.start()
         enableEdgeToEdge()
         requestNeededPermissions()
 
@@ -118,7 +117,7 @@ class MainActivity : ComponentActivity() {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager,
+private fun AuralApp(viewModel: AuralViewModel,
     youTubeManager: com.aural.player.youtube.YouTubeManager?) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
@@ -186,7 +185,6 @@ private fun AuralApp(viewModel: AuralViewModel, telegramManager: TelegramManager
                     artistsGridState = artistsGridState,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
-                    telegramManager = telegramManager,
                         youTubeManager = youTubeManager
                     )
 
