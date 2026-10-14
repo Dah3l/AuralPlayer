@@ -16,9 +16,17 @@ class NewPipeDownloaderImpl : Downloader() {
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = request.httpMethod()
             connection.instanceFollowRedirects = true
+            // Headers de navegador real para evitar detección
+            connection.setRequestProperty("User-Agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,es;q=0.8")
+            connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             for ((key, values) in request.headers()) {
                 for (value in values) {
-                    connection.setRequestProperty(key, value)
+                    // No sobrescribir el User-Agent que ya pusimos
+                    if (!key.equals("User-Agent", ignoreCase = true)) {
+                        connection.setRequestProperty(key, value)
+                    }
                 }
             }
             request.dataToSend()?.let { data ->
