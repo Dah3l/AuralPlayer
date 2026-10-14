@@ -32,6 +32,9 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -139,65 +142,71 @@ fun NowPlayingScreen(
                 return@Column
             }
 
-            // ---- Carátula grande (responsiva, sin desbordar) ----
-            BoxWithConstraints(
+            // ---- Carátula grande ----
+            Box(
                 Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val artSize = (maxWidth * 0.8f).coerceAtMost(320.dp).coerceAtLeast(180.dp)
                 CoverArt(
                     uri = song.albumArtUri,
-                    size = artSize,
-                    cornerRadius = 20.dp
+                    size = 320.dp,
+                    cornerRadius = 16.dp
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // ---- Título y artista ----
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "${song.artist} · ${song.album}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // ---- Título + artista + estrella ----
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = song.artist.ifBlank { "Artista desconocido" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 IconButton(onClick = onToggleFavorite) {
                     Icon(
-                        imageVector = if (isFavorite) Icons.Rounded.Favorite
-                        else Icons.Rounded.FavoriteBorder,
+                        imageVector = if (isFavorite) Icons.Rounded.Star
+                        else Icons.Rounded.StarBorder,
                         contentDescription = "Favorito",
-                        tint = if (isFavorite) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
+            Spacer(Modifier.height(8.dp))
 
-            // ---- Barra de búsqueda (seek) ----
+            // ---- Barra de progreso ----
             val duration = state.durationMs.coerceAtLeast(1L)
             Slider(
                 value = state.positionMs.toFloat().coerceIn(0f, duration.toFloat()),
                 onValueChange = { onSeek(it.toLong()) },
                 valueRange = 0f..duration.toFloat(),
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    thumbColor = MaterialTheme.colorScheme.onSurface,
+                    activeTrackColor = MaterialTheme.colorScheme.onSurface,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
             Row(
                 Modifier.fillMaxWidth(),
@@ -206,72 +215,75 @@ fun NowPlayingScreen(
                 Text(formatDuration(state.positionMs),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("-" + formatDuration((duration - state.positionMs).coerceAtLeast(0)),
+                Text(formatDuration(duration),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Spacer(Modifier.height(8.dp))
 
-            // ---- Controles principales ----
+            // ---- Controles ----
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Aleatorio
-                IconButton(onClick = onToggleShuffle) {
-                    Icon(
-                        Icons.Rounded.Shuffle, "Aleatorio",
-                        tint = if (state.shuffleEnabled) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                // Repetir
+                IconButton(onClick = onCycleRepeat) {
+                    when (state.repeatMode) {
+                        RepeatMode.ONE -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp))
+                        RepeatMode.ALL -> Icon(Icons.Rounded.Repeat, "Repetir todas",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp))
+                        else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(28.dp))
+                    }
                 }
                 // Anterior
-                IconButton(onClick = onPrevious, modifier = Modifier.size(56.dp)) {
+                IconButton(onClick = onPrevious) {
                     Icon(Icons.Rounded.SkipPrevious, "Anterior",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(36.dp))
+                        modifier = Modifier.size(38.dp))
                 }
-                // Play/Pausa (botón principal de acento)
-                Box(
+                // Play/Pausa (botón principal grande)
+                IconButton(
+                    onClick = onTogglePlay,
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable(onClick = onTogglePlay),
-                    contentAlignment = Alignment.Center
+                        .size(76.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                            CircleShape
+                        )
                 ) {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Rounded.Pause
                         else Icons.Rounded.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
-                        tint = Color(0xFF07110E),
-                        modifier = Modifier.size(38.dp)
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(40.dp)
                     )
                 }
                 // Siguiente
-                IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
+                IconButton(onClick = onNext) {
                     Icon(Icons.Rounded.SkipNext, "Siguiente",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(36.dp))
+                        modifier = Modifier.size(38.dp))
                 }
-                // Repetir
-                IconButton(onClick = onCycleRepeat) {
-                    when (state.repeatMode) {
-                        RepeatMode.ONE -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
-                            tint = MaterialTheme.colorScheme.primary)
-                        RepeatMode.ALL -> Icon(Icons.Rounded.Repeat, "Repetir todas",
-                            tint = MaterialTheme.colorScheme.primary)
-                        else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                // Cola
+                IconButton(onClick = { showQueue = true }) {
+                    Icon(Icons.Rounded.QueueMusic, "Cola",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp))
                 }
             }
 
             Spacer(
                 Modifier
-                    .height(8.dp)
+                    .height(16.dp)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             )
         }
@@ -346,3 +358,4 @@ fun NowPlayingScreen(
         }
     }
 }
+
