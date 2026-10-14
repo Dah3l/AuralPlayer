@@ -55,7 +55,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // ---- Core KTX (ContextCompat y utilidades) ----
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.13.1")
 
     // ---- Actividad y ciclo de vida ----
     implementation("androidx.activity:activity-compose:1.9.2")
