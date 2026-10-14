@@ -60,7 +60,7 @@ private sealed class Screen {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuralViewModel by viewModels()
-    private val telegramManager by lazy { TelegramManager(this).apply { initialize() } }
+    private lateinit var telegramManager: TelegramManager
 
     /** Launcher de permisos: audio + notificaciones según la versión. */
     private val permissionLauncher = registerForActivityResult(
@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        telegramManager = TelegramManager(this)
+        Thread { telegramManager.initialize() }.start()
         enableEdgeToEdge()
         requestNeededPermissions()
 
