@@ -63,19 +63,19 @@ fun CoverArt(
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
-        if (uri != null) {
+        // Icono siempre de fondo: si la imagen falla, no queda el cuadro vacío
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(size / 3f)
+        )
+        if (!uri.isNullOrBlank()) {
             AsyncImage(
                 model = android.net.Uri.parse(uri),
                 contentDescription = "Carátula del álbum",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Rounded.MusicNote,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(size / 3f)
             )
         }
     }
