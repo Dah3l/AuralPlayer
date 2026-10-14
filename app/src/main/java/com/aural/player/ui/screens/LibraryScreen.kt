@@ -217,14 +217,16 @@ fun LibraryScreen(
                     hasFavorites = favorites.isNotEmpty(),
                     onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) }
                 )
-            4 -> telegramManager?.let { tm ->
-                var showAuth by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-                if (showAuth) {
-                    TelegramAuthScreen(
-                        telegramManager = tm,
-                        onAuthenticated = { showAuth = false },
-                        onBack = { showAuth = false }
-                    )
+            4 -> {
+                    val ytm = youTubeManager
+                    if (ytm != null) {
+                        DownloadsScreen(
+                            youTubeManager = ytm,
+                            onDownloadComplete = { viewModel.rescan() }
+                        )
+                    } else {
+                        Text("YouTube no disponible")
+                    }
                 } else {
                     val ytm = youTubeManager
                     if (ytm != null) {
