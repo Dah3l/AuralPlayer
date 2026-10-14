@@ -204,9 +204,9 @@ fun NowPlayingScreen(
                 onValueChange = { onSeek(it.toLong()) },
                 valueRange = 0f..duration.toFloat(),
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.onSurface,
-                    activeTrackColor = MaterialTheme.colorScheme.onSurface,
-                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -257,7 +257,7 @@ fun NowPlayingScreen(
                     modifier = Modifier
                         .size(76.dp)
                         .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                            MaterialTheme.colorScheme.primary,
                             CircleShape
                         )
                 ) {
@@ -265,7 +265,7 @@ fun NowPlayingScreen(
                         imageVector = if (state.isPlaying) Icons.Rounded.Pause
                         else Icons.Rounded.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(40.dp)
                     )
                 }
