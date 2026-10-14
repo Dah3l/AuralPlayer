@@ -60,8 +60,8 @@ private sealed class Screen {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuralViewModel by viewModels()
-    private lateinit var telegramManager
-    private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager: TelegramManager
+    private lateinit var telegramManager: com.aural.player.telegram.TelegramManager
+    private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager
 
     /** Launcher de permisos: audio + notificaciones según la versión. */
     private val permissionLauncher = registerForActivityResult(
