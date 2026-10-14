@@ -116,6 +116,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AuralApp(viewModel: AuralViewModel) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
+    // Estados elevados: sobreviven a la navegación para recordar posición
+    val songsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
 
@@ -146,6 +151,10 @@ private fun AuralApp(viewModel: AuralViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Atrás en detalle -> vuelve a la biblioteca (conserva posición)
+            androidx.activity.compose.BackHandler(enabled = screen != Screen.Library) {
+                screen = Screen.Library
+            }
             when (val s = screen) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
@@ -156,7 +165,12 @@ private fun AuralApp(viewModel: AuralViewModel) {
                     onOpenAlbum = { screen = Screen.Album(it) },
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
-                    onSongMenu = { songMenuTarget = it }
+                    onSongMenu = { songMenuTarget = it },
+                    songsListState = songsListState,
+                    albumsGridState = albumsGridState,
+                    artistsGridState = artistsGridState,
+                    selectedTab = libraryTab,
+                    onTabSelected = { libraryTab = it }
                 )
 
                 is Screen.Album -> {
