@@ -60,7 +60,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
 
 /** Pestañas de la biblioteca. */
-private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists")
+private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
 
 /**
  * Pantalla de biblioteca. Recibe callbacks para acciones globales
@@ -78,7 +78,8 @@ fun LibraryScreen(
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     selectedTab: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    telegramManager: com.aural.player.telegram.TelegramManager? = null
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -213,6 +214,21 @@ fun LibraryScreen(
                     hasFavorites = favorites.isNotEmpty(),
                     onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) }
                 )
+            }
+            4 -> telegramManager?.let { tm ->
+                var showAuth by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                if (showAuth) {
+                    TelegramAuthScreen(
+                        telegramManager = tm,
+                        onAuthenticated = { showAuth = false },
+                        onBack = { showAuth = false }
+                    )
+                } else {
+                    DownloadsScreen(
+                        telegramManager = tm,
+                        onAuthNeeded = { showAuth = true }
+                    )
+                }
             }
         }
     }
