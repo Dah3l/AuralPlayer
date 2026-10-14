@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aural.player.playback.PlayerUiState
+import androidx.compose.foundation.basicMarquee
 
 /**
  * Barra compacta que muestra la pista actual con progreso,
@@ -81,7 +82,8 @@ fun MiniPlayer(
                         text = song.title,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
                     Text(
                         text = song.artist,
