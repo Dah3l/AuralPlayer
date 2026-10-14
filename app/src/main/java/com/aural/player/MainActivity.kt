@@ -60,7 +60,8 @@ private sealed class Screen {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AuralViewModel by viewModels()
-    private lateinit var telegramManager: TelegramManager
+    private lateinit var telegramManager
+    private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager: TelegramManager
 
     /** Launcher de permisos: audio + notificaciones según la versión. */
     private val permissionLauncher = registerForActivityResult(
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         telegramManager = TelegramManager(this)
+        youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         Thread { telegramManager.initialize() }.start()
         enableEdgeToEdge()
         requestNeededPermissions()
