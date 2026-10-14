@@ -66,12 +66,18 @@ class TelegramManager(private val context: Context) {
                 val params = TdApi.SetTdlibParameters().apply {
                     apiId = API_ID
                     apiHash = API_HASH
-                    databaseDirectory = context.filesDir.absolutePath + "/tdlib"
-                    useMessageDatabase = true
-                    useSecretChats = false
                     systemLanguageCode = "es"
                     deviceModel = android.os.Build.MODEL
+                    systemVersion = android.os.Build.VERSION.RELEASE ?: "13"
                     applicationVersion = "1.0"
+                    useTestDc = false
+                    databaseDirectory = context.filesDir.absolutePath + "/tdlib/db"
+                    filesDirectory = context.filesDir.absolutePath + "/tdlib/files"
+                    databaseEncryptionKey = ByteArray(0)
+                    useFileDatabase = true
+                    useChatInfoDatabase = true
+                    useMessageDatabase = true
+                    useSecretChats = false
                 }
                 client?.send(params) {}
             }
