@@ -38,6 +38,9 @@ class TelegramManager(private val context: Context) {
     private val _authState = MutableStateFlow<TelegramAuthState>(TelegramAuthState.Idle)
     val authState: StateFlow<TelegramAuthState> = _authState.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val _botResponses = MutableStateFlow<List<BotSong>>(emptyList())
     val botResponses: StateFlow<List<BotSong>> = _botResponses.asStateFlow()
 
@@ -74,8 +77,10 @@ class TelegramManager(private val context: Context) {
             }
             is TdApi.AuthorizationStateWaitPhoneNumber ->
                 _authState.value = TelegramAuthState.WaitingPhone
-            is TdApi.AuthorizationStateWaitCode ->
+            is TdApi.AuthorizationStateWaitCode -> {
+                _isLoading.value = false
                 _authState.value = TelegramAuthState.WaitingCode
+            }
             is TdApi.AuthorizationStateWaitPassword ->
                 _authState.value = TelegramAuthState.WaitingPassword
             is TdApi.AuthorizationStateReady -> {
@@ -89,23 +94,31 @@ class TelegramManager(private val context: Context) {
     }
 
     fun sendPhoneNumber(phone: String) {
-        android.util.Log.d("TelegramManager", "Enviando teléfono: $phone, estado: ${_authState.value}")
+        if (_isLoading.value) return  // Evitar duplicados
+        _isLoading.value = true
         client?.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { obj ->
-            android.util.Log.d("TelegramManager", "Respuesta a SetPhoneNumber: $obj")
+            _isLoading.value = false
             if (obj is TdApi.Error) {
-                _authState.value = TelegramAuthState.Error("Error: ${obj.message}")
+                // Si es "another authorization query", no mostrar error, solo reintentar el estado
+                if (!obj.message.contains("Another authorization", ignoreCase = true)) {
+                    _authState.value = TelegramAuthState.Error("Error: ${obj.message}")
+                }
             }
         } ?: run {
+            _isLoading.value = false
             _authState.value = TelegramAuthState.Error("Cliente no inicializado")
         }
     }
 
     fun sendCode(code: String) {
+        if (_isLoading.value) return
+        _isLoading.value = true
         client?.send(TdApi.CheckAuthenticationCode(code)) { obj ->
+            _isLoading.value = false
             if (obj is TdApi.Error) {
                 _authState.value = TelegramAuthState.Error("Código incorrecto: ${obj.message}")
             }
-        }
+        } ?: run { _isLoading.value = false }
     }
 
     fun sendPassword(password: String) {
