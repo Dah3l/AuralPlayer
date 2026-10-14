@@ -44,6 +44,7 @@ import com.aural.player.telegram.TelegramManager
 fun DownloadsScreen(
     telegramManager: TelegramManager,
     onAuthNeeded: () -> Unit,
+    onDownloadComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val authState by telegramManager.authState.collectAsState()
@@ -145,9 +146,9 @@ fun DownloadsScreen(
                     isDownloading = downloading.contains(song.messageId),
                     onDownload = {
                         downloading = downloading + song.messageId
-                        telegramManager.downloadSong(song) { path ->
+                        telegramManager.downloadSong(song) { success ->
                             downloading = downloading - song.messageId
-                            // TODO: importar a la biblioteca local
+                            if (success) onDownloadComplete()
                         }
                     }
                 )
