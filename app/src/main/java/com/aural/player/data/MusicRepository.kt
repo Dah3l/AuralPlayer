@@ -106,7 +106,9 @@ class MusicRepository(private val context: Context) {
         songs.groupBy { it.albumId to it.album }
             .map { (key, list) ->
                 Album(
-                    id = key.first,
+                    // ID único por grupo: el mismo albumId puede venir con
+                    // distinto nombre en archivos mal etiquetados
+                    id = (key.first to key.second).hashCode().toLong(),
                     title = key.second,
                     artist = list.first().artist,
                     songs = list.sortedBy { it.trackNumber }
