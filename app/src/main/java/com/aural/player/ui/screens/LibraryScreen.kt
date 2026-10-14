@@ -52,6 +52,8 @@ import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.components.AlphabetFastScroller
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists")
@@ -218,43 +220,48 @@ private fun SongsTab(
     isPlaying: Boolean,
     onPlay: (Song) -> Unit,
     onFavorite: (Long) -> Unit,
-    onMenu: (Song) -> Unit
+    onMenu: (Song) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
 ) {
     if (songs.isEmpty()) {
         EmptyState("Sin resultados para tu búsqueda")
         return
     }
-    LazyColumn(
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
-        items(songs, key = { it.id }) { song ->
-            SongRow(
-                title = song.title,
-                subtitle = "${song.artist} · ${song.album}",
-                coverUri = song.albumArtUri,
-                durationMs = song.durationMs,
-                isPlaying = song.id == currentId,
-                onClick = { onPlay(song) },
-                trailing = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                        IconButton(onClick = { onFavorite(song.id) }) {
-                            Icon(
-                                imageVector = if (favorites.contains(song.id))
-                                    Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                contentDescription = "Favorito",
-                                tint = if (favorites.contains(song.id))
-                                    MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        TextButton(onClick = { onMenu(song) }) {
-                            Text("···", style = MaterialTheme.typography.titleMedium)
+            items(songs, key = { it.id }) { song ->
+                SongRow(
+                    title = song.title,
+                    subtitle = "${song.artist} · ${song.album}",
+                    coverUri = song.albumArtUri,
+                    durationMs = song.durationMs,
+                    isPlaying = song.id == currentId,
+                    onClick = { onPlay(song) },
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                            IconButton(onClick = { onFavorite(song.id) }) {
+                                Icon(
+                                    imageVector = if (favorites.contains(song.id))
+                                        Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    contentDescription = "Favorito",
+                                    tint = if (favorites.contains(song.id))
+                                        MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            TextButton(onClick = { onMenu(song) }) {
+                                Text("···", style = MaterialTheme.typography.titleMedium)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
         AlphabetFastScroller(
             keys = songs.map { it.title },
