@@ -261,31 +261,78 @@ class TelegramManager(private val context: Context) {
      * Descarga el archivo de audio de una canción del bot.
      * @return el fileId para observar el progreso vía TDLib
      */
-    fun downloadSong(song: BotSong, onComplete: (String?) -> Unit) {
+    fun downloadSong(song: BotSong, onComplete: (Boolean) -> Unit) {
         client?.send(TdApi.DownloadFile(song.fileId, 1, 0, 0, true)) { obj ->
             if (obj is TdApi.File) {
-                // Observar hasta que la descarga complete
-                observeDownload(obj.id, onComplete)
+                observeDownload(obj.id, song, onComplete)
             } else {
-                onComplete(null)
+                onComplete(false)
             }
         }
     }
 
-    private fun observeDownload(fileId: Int, onComplete: (String?) -> Unit) {
+    private fun observeDownload(fileId: Int, song: BotSong, onComplete: (Boolean) -> Unit) {
         client?.send(TdApi.GetFile(fileId)) { obj ->
             if (obj is TdApi.File) {
                 if (obj.local.isDownloadingCompleted) {
-                    onComplete(obj.local.path)
+                    val saved = saveToMusic(obj.local.path, song)
+                    onComplete(saved)
                 } else {
-                    // Reintentar en 1 segundo
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        observeDownload(fileId, onComplete)
+                        observeDownload(fileId, song, onComplete)
                     }, 1000)
                 }
             } else {
-                onComplete(null)
+                onComplete(false)
             }
+        }
+    }
+
+    /**
+     * Copia el archivo descargado a la carpeta pública de Música y lo escanea.
+     */
+    private fun saveToMusic(privatePath: String, song: BotSong): Boolean {
+        return try {
+            val srcFile = java.io.File(privatePath)
+            if (!srcFile.exists()) return false
+
+            val fileName = "${song.performer} - ${song.title}.mp3"
+                .replace(Regex("[<>:"/\\\\|?*]"), "_")
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                // Android 10+: usar MediaStore
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Audio.Media.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
+                    put(android.provider.MediaStore.Audio.Media.RELATIVE_PATH, "Music/Aural")
+                    put(android.provider.MediaStore.Audio.Media.TITLE, song.title)
+                    put(android.provider.MediaStore.Audio.Media.ARTIST, song.performer)
+                }
+                val uri = context.contentResolver.insert(
+                    android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
+                ) ?: return false
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    srcFile.inputStream().use { it.copyTo(out) }
+                }
+            } else {
+                // Android 9 y menor: carpeta pública directa
+                @Suppress("DEPRECATION")
+                val musicDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_MUSIC
+                )
+                val auralDir = java.io.File(musicDir, "Aural")
+                auralDir.mkdirs()
+                val destFile = java.io.File(auralDir, fileName)
+                srcFile.copyTo(destFile, overwrite = true)
+                android.media.MediaScannerConnection.scanFile(
+                    context, arrayOf(destFile.absolutePath), arrayOf("audio/mpeg"), null
+                )
+            }
+            android.util.Log.d("TelegramManager", "Guardado en Música: $fileName")
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("TelegramManager", "Error guardando: ${e.message}")
+            false
         }
     }
 
