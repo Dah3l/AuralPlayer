@@ -79,9 +79,6 @@ dependencies {
     // ---- Coil (carga de carátulas desde MediaStore) ----
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // ---- TDLib (Telegram, para descargas vía bot) ----
-    implementation("io.github.tdlib-android:core:0.1.1")
-
     // ---- NewPipe Extractor (búsqueda y descarga de YouTube) ----
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.5")
 }
