@@ -78,6 +78,20 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Mueve una canción dentro de la playlist (reordenar). */
+    suspend fun moveSongInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) = mutatePlaylists { list ->
+        list.map { pl ->
+            if (pl.id == playlistId) {
+                val ids = pl.songIds.toMutableList()
+                if (fromIndex in ids.indices && toIndex in ids.indices && fromIndex != toIndex) {
+                    val songId = ids.removeAt(fromIndex)
+                    ids.add(toIndex, songId)
+                }
+                pl.copy(songIds = ids)
+            } else pl
+        }
+    }
+
     private suspend fun mutatePlaylists(block: (List<Playlist>) -> List<Playlist>) {
         context.dataStore.edit { prefs ->
             val current = decodePlaylists(prefs[KEY_PLAYLISTS])
