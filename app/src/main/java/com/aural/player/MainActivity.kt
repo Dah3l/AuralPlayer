@@ -46,6 +46,7 @@ import com.aural.player.ui.screens.FAVORITES_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.theme.AuralTheme
+import com.aural.player.ui.components.SplashScreen
 
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
@@ -116,6 +117,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AuralApp(viewModel: AuralViewModel) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
+    var showSplash by remember { mutableStateOf(true) }
+    // El splash se oculta tras 1.8s (cortina mientras carga)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1800)
+        showSplash = false
+    }
     // Estados elevados: sobreviven a la navegación para recordar posición
     val songsListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
@@ -367,4 +374,9 @@ private fun SongMenuSheet(
         }
         Box(Modifier.padding(bottom = 24.dp)) {}
     }
+    // ---- Splash de bienvenida ----
+    if (showSplash) {
+        com.aural.player.ui.components.SplashScreen()
+    }
+
 }
