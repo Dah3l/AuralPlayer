@@ -81,7 +81,8 @@ fun LibraryScreen(
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    telegramManager: com.aural.player.telegram.TelegramManager? = null
+    telegramManager: com.aural.player.telegram.TelegramManager? = null,
+    youTubeManager: com.aural.player.youtube.YouTubeManager? = null
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
