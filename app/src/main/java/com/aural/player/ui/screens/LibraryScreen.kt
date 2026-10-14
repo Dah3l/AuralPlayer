@@ -229,7 +229,6 @@ fun LibraryScreen(
                     }
                 }
             }
-            }
         }
     }
 
