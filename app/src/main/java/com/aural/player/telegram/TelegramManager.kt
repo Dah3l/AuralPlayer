@@ -50,6 +50,9 @@ class TelegramManager(private val context: Context) {
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    private val _botStatus = MutableStateFlow("Iniciando...")
+    val botStatus: StateFlow<String> = _botStatus.asStateFlow()
+
     private var botChatId: Long = 0L
 
     fun initialize() {
@@ -142,19 +145,55 @@ class TelegramManager(private val context: Context) {
     }
 
     private fun findBotChat() {
+        _botStatus.value = "Buscando bot @$BOT_USERNAME..."
         client?.send(TdApi.SearchPublicChat(BOT_USERNAME)) { obj ->
+            android.util.Log.d("TelegramManager", "SearchPublicChat resultado: ${obj.javaClass.simpleName}")
             if (obj is TdApi.Chat) {
                 botChatId = obj.id
+                _botStatus.value = "Bot encontrado (chat $botChatId)"
                 android.util.Log.d("TelegramManager", "Bot chat encontrado: $botChatId")
-                // Abrir el chat para recibir actualizaciones en tiempo real
                 client?.send(TdApi.OpenChat(botChatId)) { openResult ->
                     android.util.Log.d("TelegramManager", "OpenChat: $openResult")
+                    if (openResult is TdApi.Ok) {
+                        _botStatus.value = "Conectado al bot"
+                    }
                 }
+                // Verificar historial inmediatamente
+                verifyBotChat()
+            } else if (obj is TdApi.Error) {
+                _botStatus.value = "Error: ${obj.message}"
+                android.util.Log.e("TelegramManager", "Error buscando bot: ${obj.message}")
             } else {
-                android.util.Log.e("TelegramManager", "No se encontró el bot: $obj")
+                _botStatus.value = "No se encontró el bot"
+            }
+        } ?: run {
+            _botStatus.value = "Cliente no inicializado"
+        }
+    }
+
+    /**
+     * Verifica que podemos leer el historial del bot.
+     */
+    private fun verifyBotChat() {
+        if (botChatId == 0L) return
+        client?.send(TdApi.GetChatHistory(botChatId, 0, 0, 5, false)) { obj ->
+            when (obj) {
+                is TdApi.Messages -> {
+                    _botStatus.value = "Conectado (${obj.totalCount} mensajes en historial)"
+                    android.util.Log.d("TelegramManager", "Historial OK: ${obj.messages.size} mensajes")
+                }
+                is TdApi.Error -> {
+                    _botStatus.value = "Error historial: ${obj.message}"
+                    android.util.Log.e("TelegramManager", "Error historial: ${obj.message}")
+                }
+                else -> {
+                    _botStatus.value = "Respuesta inesperada"
+                }
             }
         }
     }
+
+    fun getBotChatId(): Long = botChatId
 
     /**
      * Envía el nombre de una canción al bot y espera respuestas.
