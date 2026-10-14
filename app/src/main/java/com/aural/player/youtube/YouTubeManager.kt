@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
-import org.schabi.newpipe.extractor.services.youtube.YoutubeService
+import org.schabi.newpipe.extractor.StreamingService
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.io.File
 import java.net.URL
@@ -61,13 +62,13 @@ class YouTubeManager(private val context: Context) {
         _results.value = emptyList()
         scope.launch {
             try {
-                val service = NewPipe.getService<YoutubeService>(0)
+                val service: StreamingService = NewPipe.getService("YouTube")
                 val searchInfo: SearchInfo = SearchInfo.getInfo(
                     service,
                     service.searchQHFactory.fromQuery(query)
                 )
                 val items = searchInfo.relatedItems
-                    .filter { it.infoType.name == "STREAM" }
+                    .filterIsInstance<StreamInfoItem>()
                     .take(20)
                     .mapNotNull { item ->
                         try {
@@ -107,7 +108,7 @@ class YouTubeManager(private val context: Context) {
         scope.launch {
             var success = false
             try {
-                val service = NewPipe.getService<YoutubeService>(0)
+                val service: StreamingService = NewPipe.getService("YouTube")
                 val streamInfo = StreamInfo.getInfo(
                     service,
                     "https://www.youtube.com/watch?v=${result.videoId}"
