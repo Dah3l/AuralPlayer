@@ -88,6 +88,14 @@ fun NowPlayingScreen(
 ) {
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
+    val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Al abrir la cola, posicionar en la canción actual
+    androidx.compose.runtime.LaunchedEffect(showQueue) {
+        if (showQueue) {
+            queueListState.scrollToItem(state.currentIndex.coerceAtLeast(0))
+        }
+    }
 
     // Fondo oscuro con un halo de acento muy suave en la parte superior
     Box(
@@ -303,7 +311,8 @@ fun NowPlayingScreen(
                     modifier = Modifier.padding(start = 24.dp, bottom = 8.dp)
                 )
                 LazyColumn(
-                    Modifier
+                    state = queueListState,
+                    modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
