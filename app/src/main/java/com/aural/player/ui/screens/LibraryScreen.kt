@@ -225,11 +225,15 @@ fun LibraryScreen(
                         onBack = { showAuth = false }
                     )
                 } else {
-                    DownloadsScreen(
-                        telegramManager = tm,
-                        onAuthNeeded = { showAuth = true },
-                        onDownloadComplete = { viewModel.rescan() }
-                    )
+                    val ytm = youTubeManager
+                    if (ytm != null) {
+                        DownloadsScreen(
+                            youTubeManager = ytm,
+                            onDownloadComplete = { viewModel.rescan() }
+                        )
+                    } else {
+                        Text("YouTube no disponible")
+                    }
                 }
             }
             }
