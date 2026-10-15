@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -139,19 +140,28 @@ fun DownloadsScreen(
                     trailingContent = {
                         if (isDl) {
                             val pct = progress[result.videoId] ?: 0f
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.width(64.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                LinearProgressIndicator(
-                                    progress = { pct },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "${(pct * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.width(64.dp)
+                                ) {
+                                    LinearProgressIndicator(
+                                        progress = { pct },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "${(pct * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { youTubeManager.cancelDownload(result.videoId) }
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                                }
                             }
                         } else {
                             IconButton(onClick = {
