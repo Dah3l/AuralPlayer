@@ -91,6 +91,20 @@ fun LibraryScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showNewPlaylist by remember { mutableStateOf(false) }
 
+    var isRefreshing by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            refreshScope.launch {
+                viewModel.rescan()
+                isRefreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    ) {
     Column(Modifier.fillMaxSize()) {
 
         // ---- Barra superior: título + búsqueda ----
@@ -234,6 +248,7 @@ fun LibraryScreen(
                 }
             }
         }
+    }
     }
 
     // ---- Diálogo para crear playlist ----
