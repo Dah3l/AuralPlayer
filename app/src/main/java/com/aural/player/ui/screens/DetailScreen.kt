@@ -58,6 +58,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 
 /**
  * Cabecera común de detalle con portada grande, título, subtítulo
@@ -158,31 +161,71 @@ fun DetailScreen(
         }
 
         if (songs.isEmpty()) {
-            EmptyState("Esta lista no tiene canciones todavía")
-            // Si es una playlist, ofrecer agregar canciones
-            if (removableFromPlaylistId != null) {
-                Spacer(Modifier.height(16.dp))
-                var showPicker by remember { mutableStateOf(false) }
-                Button(
-                    onClick = { showPicker = true },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+            var showPicker by remember { mutableStateOf(false) }
+            // Placeholder premium para listas vacías
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 48.dp, horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Agregar canciones")
-                }
-                if (showPicker) {
-                    SongPickerDialog(
-                        songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
-                        onDismiss = { showPicker = false },
-                        onConfirm = { selected ->
-                            selected.forEach { song ->
-                                viewModel.addToPlaylist(removableFromPlaylistId, song.id)
-                            }
-                            showPicker = false
-                        }
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(56.dp)
                     )
                 }
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Todo tranquilo por aquí...",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Esta lista está esperando su primera canción. ¿Le damos vida?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (removableFromPlaylistId != null) {
+                    Spacer(Modifier.height(24.dp))
+                    Button(
+                        onClick = { showPicker = true },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.height(52.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Agregar canciones", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            if (showPicker && removableFromPlaylistId != null) {
+                SongPickerDialog(
+                    songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
+                    onDismiss = { showPicker = false },
+                    onConfirm = { selected ->
+                        selected.forEach { song ->
+                            viewModel.addToPlaylist(removableFromPlaylistId, song.id)
+                        }
+                        showPicker = false
+                    }
+                )
             }
             return@Column
         }
