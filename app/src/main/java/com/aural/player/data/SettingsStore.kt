@@ -25,6 +25,7 @@ class SettingsStore(private val context: Context) {
     private companion object {
         val KEY_PLAYLISTS = stringPreferencesKey("playlists_json")
         val KEY_FAVORITES = stringPreferencesKey("favorites_json")
+        val KEY_LRC_MAP = stringPreferencesKey("lrc_map_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -151,5 +152,42 @@ class SettingsStore(private val context: Context) {
         } catch (e: Exception) {
             emptySet()
         }
+    }
+
+    // ------------------------- Letras .lrc -------------------------
+
+    /** Flujo reactivo del mapa canción->archivo .lrc. */
+    val lrcMap: Flow<Map<Long, String>> = context.dataStore.data.map { prefs ->
+        decodeLrcMap(prefs[KEY_LRC_MAP])
+    }
+
+    /** Asocia un archivo .lrc a una canción. */
+    suspend fun setLrcForSong(songId: Long, lrcPath: String) {
+        context.dataStore.edit { prefs ->
+            val map = decodeLrcMap(prefs[KEY_LRC_MAP]).toMutableMap()
+            map[songId] = lrcPath
+            prefs[KEY_LRC_MAP] = JSONObject(map.mapKeys { it.key.toString() } as Map<String, String>).toString()
+        }
+    }
+
+    /** Quita la asociación de .lrc de una canción. */
+    suspend fun removeLrcForSong(songId: Long) {
+        context.dataStore.edit { prefs ->
+            val map = decodeLrcMap(prefs[KEY_LRC_MAP]).toMutableMap()
+            map.remove(songId)
+            prefs[KEY_LRC_MAP] = JSONObject(map.mapKeys { it.key.toString() } as Map<String, String>).toString()
+        }
+    }
+
+    private fun decodeLrcMap(json: String?): Map<Long, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                obj.keys().forEach { k ->
+                    k.toLongOrNull()?.let { put(it, obj.getString(k)) }
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
     }
 }
