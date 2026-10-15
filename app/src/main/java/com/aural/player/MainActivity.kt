@@ -47,6 +47,8 @@ import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.components.SplashScreen
+import com.aural.player.ui.screens.OnboardingScreen
+import com.aural.player.data.OnboardingPrefs
 
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
@@ -76,7 +78,19 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AuralTheme {
-                AuralApp(viewModel, youTubeManager = youTubeManager)
+                var showOnboarding by remember {
+                    mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))
+                }
+                if (showOnboarding) {
+                    OnboardingScreen(
+                        onFinish = {
+                            OnboardingPrefs.markSeen(this@MainActivity)
+                            showOnboarding = false
+                        }
+                    )
+                } else {
+                    AuralApp(viewModel, youTubeManager = youTubeManager)
+                }
             }
         }
     }
