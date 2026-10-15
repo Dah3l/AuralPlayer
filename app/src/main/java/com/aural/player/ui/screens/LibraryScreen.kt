@@ -121,11 +121,18 @@ fun LibraryScreen(
                     modifier = Modifier.size(36.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Aural",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column {
+                    Text(
+                        text = "Aural",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = greetingForHour(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             IconButton(onClick = { showSearch = !showSearch }) {
                 Icon(
@@ -656,4 +663,17 @@ private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
+
+/**
+ * Saludo según la hora del día, estilo cálido.
+ */
+private fun greetingForHour(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 5..11 -> "Buenos días ☀️"
+        in 12..17 -> "Buenas tardes 🌤️"
+        else -> "Buenas noches 🌙"
+    }
+}
+
 }
