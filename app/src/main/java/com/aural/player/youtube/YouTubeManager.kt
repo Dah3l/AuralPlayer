@@ -56,6 +56,16 @@ class YouTubeManager(private val context: Context) {
 
     fun clearError() { _error.value = null }
 
+    /**
+     * Cancela una descarga en curso.
+     */
+    fun cancelDownload(videoId: String) {
+        // Al quitarlo de _downloading, el loop de descarga lo detecta y se detiene
+        _downloading.value = _downloading.value - videoId
+        _progress.value = _progress.value - videoId
+        android.util.Log.d("YouTubeManager", "Descarga cancelada: $videoId")
+    }
+
     init {
         // Inicializar NewPipe con el downloader por defecto
         try {
@@ -194,7 +204,7 @@ class YouTubeManager(private val context: Context) {
                     android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
                 ) ?: return false
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    downloadWithProgress(url, out, onProgress)
+                    downloadWithProgress(url, out, result.videoId, onProgress)
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -205,7 +215,7 @@ class YouTubeManager(private val context: Context) {
                 auralDir.mkdirs()
                 val destFile = File(auralDir, fileName)
                 destFile.outputStream().use { out ->
-                    downloadWithProgress(url, out, onProgress)
+                    downloadWithProgress(url, out, result.videoId, onProgress)
                 }
                 android.media.MediaScannerConnection.scanFile(
                     context, arrayOf(destFile.absolutePath), arrayOf("audio/mp4"), null
@@ -219,14 +229,34 @@ class YouTubeManager(private val context: Context) {
         }
     }
 
-    private fun downloadWithProgress(url: String, out: java.io.OutputStream, onProgress: (Float) -> Unit) {
-        val connection = URL(url).openConnection()
+    private var currentDownloadId: String? = null
+
+    private fun downloadWithProgress(
+        url: String,
+        out: java.io.OutputStream,
+        videoId: String,
+        onProgress: (Float) -> Unit
+    ) {
+        currentDownloadId = videoId
+        val connection = URL(url).openConnection() as java.net.HttpURLConnection
+        // Headers de navegador
+        connection.setRequestProperty("User-Agent",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+        connection.setRequestProperty("Accept", "*/*")
+        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+        connection.setRequestProperty("Range", "bytes=0-")
         connection.connect()
         val total = connection.contentLengthLong
         var downloaded = 0L
-        val buffer = ByteArray(8192)
-        connection.getInputStream().use { input ->
+        val buffer = ByteArray(65536) // 64KB
+        var cancelled = false
+        connection.inputStream.use { input ->
             while (true) {
+                // Chequear cancelación
+                if (!_downloading.value.contains(videoId)) {
+                    cancelled = true
+                    break
+                }
                 val read = input.read(buffer)
                 if (read == -1) break
                 out.write(buffer, 0, read)
@@ -234,7 +264,9 @@ class YouTubeManager(private val context: Context) {
                 if (total > 0) onProgress(downloaded.toFloat() / total)
             }
         }
-        onProgress(1f)
+        connection.disconnect()
+        if (!cancelled) onProgress(1f)
+        else throw java.io.IOException("Descarga cancelada por el usuario")
     }
 
     fun clearResults() {
