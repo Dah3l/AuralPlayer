@@ -675,5 +675,4 @@ private fun greetingForHour(): String {
         else -> "Buenas noches 🌙"
     }
 }
-
 }
