@@ -389,7 +389,7 @@ private fun ArtistsTab(
                 MediaGridCard(
                     coverUri = artist.representativeSong.albumArtUri,
                     title = artist.name,
-                    subtitle = "+${artist.songs.size}+" "+if(${artist.songs.size}==1)"canción"else"canciones",
+                    subtitle = "${artist.songs.size} ${if (artist.songs.size == 1) "canción" else "canciones"}",
                     onClick = { onOpen(artist.name) }
                 )
             }
@@ -560,7 +560,7 @@ private fun PlaylistsTab(
                     ) {
                         Text(pl.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         Text(
-                            "+${songCount(pl)}+" "+if(${songCount(pl)}==1)"canción"else"canciones",
+                            "${songCount(pl)} ${if (songCount(pl) == 1) "canción" else "canciones"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
