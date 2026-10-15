@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Download
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
@@ -443,7 +444,9 @@ private fun PlaylistsTab(
     onRename: (Playlist) -> Unit,
     onDelete: (Playlist) -> Unit,
     hasFavorites: Boolean,
-    onOpenFavorites: () -> Unit
+    onOpenFavorites: () -> Unit,
+    downloadsCount: Int,
+    onOpenDownloads: () -> Unit
 ) {
     LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -482,6 +485,37 @@ private fun PlaylistsTab(
                 }
             }
         }
+        // Entrada fija de Descargas
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = null, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Descargas", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (downloadsCount > 0) "$downloadsCount ${if (downloadsCount == 1) "canción" else "canciones"}"
+                        else "Tus canciones de YouTube",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onOpenDownloads) {
+                    Icon(Icons.Default.Download, "Abrir descargas",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         // Botón crear playlist
         item {
             Row(
@@ -506,7 +540,7 @@ private fun PlaylistsTab(
         if (playlists.isEmpty()) {
             item { EmptyState("Todavía no has creado playlists") }
         } else {
-            items(playlists, key = { it.id }) { pl ->
+            items(playlists.filter { it.name != "Descargas" }, key = { it.id }) { pl ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
