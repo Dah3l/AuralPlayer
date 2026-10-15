@@ -235,16 +235,21 @@ fun LibraryScreen(
                     gridState = albumsGridState
                 )
 
-                3 -> PlaylistsTab(
-                    playlists = playlists,
-                    songCount = { viewModel.songsOfPlaylist(it).size },
-                    onCreate = { showNewPlaylist = true },
-                    onOpen = { pl -> onOpenPlaylist(pl.id) },
-                    onRename = { pl -> renameTarget = pl },
-                    onDelete = { pl -> deleteTarget = pl },
-                    hasFavorites = favorites.isNotEmpty(),
-                    onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) }
-                )
+                3 -> {
+                    val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
+                    PlaylistsTab(
+                        playlists = playlists,
+                        songCount = { viewModel.songsOfPlaylist(it).size },
+                        onCreate = { showNewPlaylist = true },
+                        onOpen = { pl -> onOpenPlaylist(pl.id) },
+                        onRename = { pl -> renameTarget = pl },
+                        onDelete = { pl -> deleteTarget = pl },
+                        hasFavorites = favorites.isNotEmpty(),
+                        onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
+                        downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
+                        onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } }
+                    )
+                }
             4 -> {
                     val ytm = youTubeManager
                     if (ytm != null) {
