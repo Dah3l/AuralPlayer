@@ -61,6 +61,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 
 /**
  * Cabecera común de detalle con portada grande, título, subtítulo
