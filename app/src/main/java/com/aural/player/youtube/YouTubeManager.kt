@@ -94,7 +94,7 @@ class YouTubeManager(private val context: Context) {
                             YTResult(
                                 videoId = extractVideoId(item.url),
                                 title = item.name ?: "Sin título",
-                                artist = item.uploaderName ?: "Desconocido",
+                                artist = item.uploaderName ?: "Artista misterioso",
                                 durationSec = item.duration,
                                 thumbnailUrl = item.thumbnails.firstOrNull()?.url
                             )
