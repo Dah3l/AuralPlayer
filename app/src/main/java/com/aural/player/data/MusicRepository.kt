@@ -57,7 +57,7 @@ class MusicRepository(private val context: Context) {
                     val uri = ContentUris.withAppendedId(collection, id)
                     songs += Song(
                         id = id,
-                        title = cursor.getString(titleCol) ?: "Desconocido",
+                        title = cursor.getString(titleCol) ?: "Artista misterioso",
                         artist = cleanMediaMetadata(cursor.getString(artistCol)),
                         album = cleanMediaMetadata(cursor.getString(albumCol)),
                         albumId = cursor.getLong(albumIdCol),
@@ -91,7 +91,7 @@ class MusicRepository(private val context: Context) {
     private fun cleanMediaMetadata(value: String?): String {
         if (value.isNullOrBlank() || value.equals("<unknown artist>", true)
             || value.equals("<unknown>", true)
-        ) return "Desconocido"
+        ) return "Artista misterioso"
         return value
     }
 
