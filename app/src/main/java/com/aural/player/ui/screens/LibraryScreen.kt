@@ -239,6 +239,8 @@ fun LibraryScreen(
                     songCount = { viewModel.songsOfPlaylist(it).size },
                     onCreate = { showNewPlaylist = true },
                     onOpen = { pl -> onOpenPlaylist(pl.id) },
+                    onRename = { pl -> renameTarget = pl },
+                    onDelete = { pl -> deleteTarget = pl },
                     hasFavorites = favorites.isNotEmpty(),
                     onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) }
                 )
@@ -456,9 +458,7 @@ private fun PlaylistsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                onRename = { pl -> renameTarget = pl },
-                onDelete = { pl -> deleteTarget = pl }
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 CoverArt(uri = null, size = 48.dp)
                 Spacer(Modifier.height(0.dp))
@@ -563,7 +563,6 @@ private fun PlaylistsTab(
 
 // --------------------------- Diálogo nueva playlist ---------------------------
 
-@Composable
 @Composable
 private fun RenamePlaylistDialog(
     currentName: String,
