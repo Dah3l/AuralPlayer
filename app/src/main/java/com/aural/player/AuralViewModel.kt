@@ -116,6 +116,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.deletePlaylist(id) }
     }
 
+    fun renamePlaylist(id: String, newName: String) {
+        viewModelScope.launch { settings.renamePlaylist(id, newName) }
+    }
+
     fun addToPlaylist(playlistId: String, songId: Long) {
         viewModelScope.launch { settings.addToPlaylist(playlistId, songId) }
     }
