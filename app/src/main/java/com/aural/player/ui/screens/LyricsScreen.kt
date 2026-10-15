@@ -44,23 +44,25 @@ fun LyricsScreen(
         loading = false
     }
 
-    // Actualizar la línea activa según la posición
-    var activeIndex by remember { mutableStateOf(0) }
+    // Actualizar la línea activa según la posición (tiempo real)
+    // Usamos un ticker que fuerza recomposición cada 500ms
+    var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(500)
-            if (lines.isNotEmpty()) {
-                val idx = LrcParser.currentIndex(lines, currentPositionMs())
-                if (idx != activeIndex) {
-                    activeIndex = idx
-                    // Auto-scroll a la línea activa
-                    try {
-                        listState.animateScrollToItem(
-                            (idx - 2).coerceAtLeast(0)
-                        )
-                    } catch (e: Exception) { }
-                }
-            }
+            tick++
+        }
+    }
+    val activeIndex = remember(lines, tick) {
+        if (lines.isNotEmpty()) LrcParser.currentIndex(lines, currentPositionMs())
+        else 0
+    }
+    // Auto-scroll cuando cambia la línea activa
+    LaunchedEffect(activeIndex) {
+        if (lines.isNotEmpty()) {
+            try {
+                listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
+            } catch (e: Exception) { }
         }
     }
 
