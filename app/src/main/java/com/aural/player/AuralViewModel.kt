@@ -120,6 +120,50 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.addToPlaylist(playlistId, songId) }
     }
 
+    /**
+     * Agrega una canción recién descargada a la playlist "Descargas".
+     * Crea la playlist si no existe. Busca la canción por nombre de archivo.
+     */
+    fun addDownloadToPlaylist(fileName: String) {
+        viewModelScope.launch {
+            // Recargar biblioteca para que incluya el archivo nuevo
+            rescan()
+            // Pequeña espera para que el state se actualice
+            kotlinx.coroutines.delay(500)
+            val songs = _library.value.songs
+            // Buscar por nombre de archivo (sin extensión, insensible a mayúsculas)
+            val baseName = fileName.substringBeforeLast(".").lowercase()
+            val song = songs.firstOrNull {
+                it.title.lowercase() in baseName || baseName in it.title.lowercase() ||
+                it.displayName?.lowercase() == baseName
+            } ?: songs.firstOrNull {
+                // Fallback: la canción más reciente (mayor ID = agregada última)
+                true
+            }?.let { songs.maxByOrNull { s -> s.id } }
+
+            if (song == null) {
+                android.util.Log.w("AuralViewModel", "No se encontró la canción descargada: $fileName")
+                return@launch
+            }
+
+            // Buscar o crear la playlist "Descargas"
+            val existing = settings.playlists.value.firstOrNull { it.name == "Descargas" }
+            val playlistId = if (existing != null) {
+                existing.id
+            } else {
+                createPlaylist("Descargas")
+                // Esperar a que se cree
+                kotlinx.coroutines.delay(500)
+                settings.playlists.value.firstOrNull { it.name == "Descargas" }?.id
+            }
+
+            if (playlistId != null) {
+                addToPlaylist(playlistId, song.id)
+                android.util.Log.d("AuralViewModel", "Agregada a Descargas: ${song.title}")
+            }
+        }
+    }
+
     fun removeFromPlaylist(playlistId: String, songId: Long) {
         viewModelScope.launch { settings.removeFromPlaylist(playlistId, songId) }
     }
