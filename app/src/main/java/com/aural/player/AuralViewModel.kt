@@ -56,6 +56,16 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
     )
 
+    init {
+        // Crear la playlist "Descargas" si no existe (como Favoritas, desde la instalación)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1000) // esperar a que cargue settings
+            if (playlists.value.none { it.name == "Descargas" }) {
+                settings.createPlaylist("Descargas")
+            }
+        }
+    }
+
     /** IDs de canciones favoritas. */
     val favorites: StateFlow<Set<Long>> = settings.favorites.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet()
