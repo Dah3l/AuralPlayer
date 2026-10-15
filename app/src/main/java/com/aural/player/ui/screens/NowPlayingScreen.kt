@@ -80,6 +80,8 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.rounded.MusicNote
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -432,7 +434,8 @@ private fun NowPlayingMenu(
     song: com.aural.player.data.Song?,
     viewModel: com.aural.player.AuralViewModel,
     state: com.aural.player.playback.PlayerUiState,
-    onRemoveFromQueue: (Int) -> Unit
+    onRemoveFromQueue: (Int) -> Unit,
+    onShowLyrics: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -441,6 +444,12 @@ private fun NowPlayingMenu(
     var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showLrcPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var lrcFiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var lrcLoading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val lrcMap by viewModel.lrcMap.collectAsStateWithLifecycle()
+    val hasLrc = song?.let { lrcMap.containsKey(it.id) } ?: false
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     DropdownMenu(
         expanded = expanded,
@@ -587,6 +596,19 @@ private fun NowPlayingMenu(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showSpeed = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // Diálogo selector de .lrc
+    if (showLrcPicker) {
+        com.aural.player.ui.components.LrcPickerDialog(
+            lrcFiles = lrcFiles,
+            isLoading = lrcLoading,
+            onDismiss = { showLrcPicker = false },
+            onSelect = { lrcPath ->
+                song?.let { viewModel.setLrcForSong(it.id, lrcPath) }
+                showLrcPicker = false
             }
         )
     }
