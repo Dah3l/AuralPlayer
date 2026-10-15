@@ -82,6 +82,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.rounded.MusicNote
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -213,6 +215,42 @@ fun NowPlayingScreen(
                     ),
                     cornerRadius = 16.dp
                 )
+            }
+
+            // ---- Línea actual de la letra (debajo de la carátula) ----
+            var lrcLines by remember(song?.id) {
+                mutableStateOf<List<com.aural.player.data.LrcLine>>(emptyList())
+            }
+            LaunchedEffect(song?.id) {
+                val lrcPath = song?.let { lrcMapState[it.id] }
+                lrcLines = if (lrcPath != null) {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val content = java.io.File(lrcPath).readText()
+                            com.aural.player.data.LrcParser.parse(content)
+                        } catch (e: Exception) { emptyList() }
+                    }
+                } else emptyList()
+            }
+            if (lrcLines.isNotEmpty()) {
+                val currentIdx = com.aural.player.data.LrcParser.currentIndex(
+                    lrcLines, state.positionMs
+                )
+                val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
+                if (currentLine.isNotBlank()) {
+                    Text(
+                        currentLine,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 8.dp)
+                            .clickable { showLyrics = true }
+                    )
+                }
             }
 
             // Empuja el bloque inferior (título/controles) hacia abajo
