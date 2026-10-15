@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.rounded.MusicNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.basicMarquee
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -265,10 +266,13 @@ fun NowPlayingScreen(
                     Text(
                         text = song.title,
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            repeatDelayMillis = 2000
+                        )
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
