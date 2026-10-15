@@ -105,6 +105,8 @@ fun NowPlayingScreen(
     onRemoveFromQueue: (Int) -> Unit
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
+    val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -175,7 +177,8 @@ fun NowPlayingScreen(
                         song = song,
                         viewModel = viewModel,
                         state = state,
-                        onRemoveFromQueue = onRemoveFromQueue
+                        onRemoveFromQueue = onRemoveFromQueue,
+                        onShowLyrics = { showLyrics = true }
                     )
                 }
             }
@@ -420,6 +423,26 @@ fun NowPlayingScreen(
             } // fin LazyColumn
         } // fin Column altura fija
     }
+    }
+
+    // Overlay de letras sincronizadas
+    if (showLyrics) {
+        val lrcPath = song?.let { lrcMapState[it.id] }
+        if (lrcPath != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                LyricsScreen(
+                    lrcPath = lrcPath,
+                    currentPositionMs = { state.positionMs },
+                    onBack = { showLyrics = false }
+                )
+            }
+        } else {
+            showLyrics = false
+        }
     }
 }
 
