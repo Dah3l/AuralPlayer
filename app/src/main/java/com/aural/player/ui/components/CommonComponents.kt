@@ -49,6 +49,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.LocalIndication
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -109,10 +113,21 @@ fun SongRow(
     trailing: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "song_press"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -209,6 +224,7 @@ fun MediaGridCard(
         Spacer(Modifier.height(8.dp))
         Text(
             text = title,
+            fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
