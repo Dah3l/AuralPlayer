@@ -389,7 +389,7 @@ private fun ArtistsTab(
                 MediaGridCard(
                     coverUri = artist.representativeSong.albumArtUri,
                     title = artist.name,
-                    subtitle = "${artist.songs.size} canciones",
+                    subtitle = "+${artist.songs.size}+" "+if(${artist.songs.size}==1)"canción"else"canciones",
                     onClick = { onOpen(artist.name) }
                 )
             }
@@ -477,7 +477,7 @@ private fun PlaylistsTab(
                 ) {
                     Text("Favoritas", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (hasFavorites) "Tu selección" else "Aún sin favoritas",
+                        if (hasFavorites) "Tu selección" else "Toca el ♡ en tus canciones",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -537,7 +537,7 @@ private fun PlaylistsTab(
                 )
                 Spacer(Modifier.height(0.dp))
                 TextButton(onClick = onCreate, modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Nueva playlist", style = MaterialTheme.typography.titleMedium)
+                    Text("Crear playlist", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -560,7 +560,7 @@ private fun PlaylistsTab(
                     ) {
                         Text(pl.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         Text(
-                            "${songCount(pl)} canciones",
+                            "+${songCount(pl)}+" "+if(${songCount(pl)}==1)"canción"else"canciones",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -638,7 +638,7 @@ private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Nueva playlist") },
+        title = { Text("Crear playlist") },
         text = {
             OutlinedTextField(
                 value = name,
