@@ -121,13 +121,16 @@ class YouTubeManager(private val context: Context) {
     /**
      * Descarga el audio de un video y lo guarda en Música/Aural.
      */
-    fun download(result: YTResult, onComplete: (Boolean) -> Unit) {
+    /**
+     * Descarga el audio. onComplete recibe el nombre del archivo guardado, o null si falló.
+     */
+    fun download(result: YTResult, onComplete: (String?) -> Unit) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
         _error.value = null
         scope.launch {
-            var success = false
+            var savedFileName: String? = null
             var errorMsg: String? = null
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
@@ -135,19 +138,16 @@ class YouTubeManager(private val context: Context) {
                     service,
                     "https://www.youtube.com/watch?v=${result.videoId}"
                 )
-                android.util.Log.d("YouTubeManager",
-                    "Audios: ${streamInfo.audioStreams.size}, Videos: ${streamInfo.videoStreams.size}")
 
                 // SOLO audio puro — sin fallback a video
-                // Priorizar m4a (mejor compatibilidad), luego el de menor bitrate decente
                 val audioStream = streamInfo.audioStreams
                     .sortedWith(
                         compareBy(
-                            { !it.content.contains("mime=audio/mp4") }, // m4a primero
-                            { it.averageBitrate } // luego menor bitrate = descarga rápida
+                            { !it.content.contains("mime=audio/mp4") },
+                            { it.averageBitrate }
                         )
                     )
-                    .firstOrNull { it.averageBitrate >= 48000 } // mínimo 48kbps
+                    .firstOrNull { it.averageBitrate >= 48000 }
                     ?: streamInfo.audioStreams.minByOrNull { it.averageBitrate }
 
                 if (audioStream != null) {
@@ -157,13 +157,18 @@ class YouTubeManager(private val context: Context) {
                         else -> "m4a"
                     }
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
-                    success = downloadToMusic(audioStream.content, fileName, result) { pct ->
+                    val ok = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
                         _progress.value = _progress.value + (result.videoId to pct)
                     }
-                    if (!success) errorMsg = "No se pudo guardar el archivo"
+                    if (ok) {
+                        savedFileName = fileName
+                        // Dar tiempo al MediaStore a indexar antes del rescan
+                        kotlinx.coroutines.delay(1500)
+                    } else {
+                        errorMsg = "No se pudo guardar el archivo"
+                    }
                 } else {
                     errorMsg = "Sin audio disponible para este video"
-                    android.util.Log.e("YouTubeManager", errorMsg)
                 }
             } catch (e: Exception) {
                 errorMsg = "Error: ${e.message?.take(100)}"
@@ -173,7 +178,7 @@ class YouTubeManager(private val context: Context) {
                 _downloading.value = _downloading.value - result.videoId
                 _progress.value = _progress.value - result.videoId
                 _error.value = errorMsg
-                onComplete(success)
+                onComplete(savedFileName)
             }
         }
     }
@@ -189,6 +194,7 @@ class YouTubeManager(private val context: Context) {
         url: String,
         fileName: String,
         result: YTResult,
+        videoId: String,
         onProgress: (Float) -> Unit
     ): Boolean {
         return try {
@@ -204,7 +210,7 @@ class YouTubeManager(private val context: Context) {
                     android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
                 ) ?: return false
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    downloadWithProgress(url, out, result.videoId, onProgress)
+                    downloadWithProgress(url, out, videoId, onProgress)
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -215,7 +221,7 @@ class YouTubeManager(private val context: Context) {
                 auralDir.mkdirs()
                 val destFile = File(auralDir, fileName)
                 destFile.outputStream().use { out ->
-                    downloadWithProgress(url, out, result.videoId, onProgress)
+                    downloadWithProgress(url, out, videoId, onProgress)
                 }
                 android.media.MediaScannerConnection.scanFile(
                     context, arrayOf(destFile.absolutePath), arrayOf("audio/mp4"), null
