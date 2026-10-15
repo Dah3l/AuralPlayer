@@ -663,6 +663,7 @@ private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
+}
 
 /**
  * Saludo según la hora del día, estilo cálido.
@@ -674,5 +675,4 @@ private fun greetingForHour(): String {
         in 12..17 -> "Buenas tardes 🌤️"
         else -> "Buenas noches 🌙"
     }
-}
 }
