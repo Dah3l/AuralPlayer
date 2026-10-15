@@ -489,6 +489,23 @@ private fun NowPlayingMenu(
             }
         )
         DropdownMenuItem(
+            text = { Text(if (hasLrc) "Ver letra" else "Agregar letra") },
+            leadingIcon = { Icon(Icons.Rounded.MusicNote, null) },
+            onClick = {
+                onDismiss()
+                if (hasLrc) {
+                    onShowLyrics()
+                } else {
+                    showLrcPicker = true
+                    lrcLoading = true
+                    scope.launch {
+                        lrcFiles = viewModel.scanLrcFiles()
+                        lrcLoading = false
+                    }
+                }
+            }
+        )
+        DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
             leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
             onClick = {
