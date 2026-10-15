@@ -50,6 +50,13 @@ import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.components.formatDuration
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 
 /**
  * Cabecera común de detalle con portada grande, título, subtítulo
@@ -151,6 +158,31 @@ fun DetailScreen(
 
         if (songs.isEmpty()) {
             EmptyState("Esta lista no tiene canciones todavía")
+            // Si es una playlist, ofrecer agregar canciones
+            if (removableFromPlaylistId != null) {
+                Spacer(Modifier.height(16.dp))
+                var showPicker by remember { mutableStateOf(false) }
+                Button(
+                    onClick = { showPicker = true },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Agregar canciones")
+                }
+                if (showPicker) {
+                    SongPickerDialog(
+                        songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
+                        onDismiss = { showPicker = false },
+                        onConfirm = { selected ->
+                            selected.forEach { song ->
+                                viewModel.addToPlaylist(removableFromPlaylistId, song.id)
+                            }
+                            showPicker = false
+                        }
+                    )
+                }
+            }
             return@Column
         }
 
@@ -251,4 +283,79 @@ fun DetailScreen(
             }
         }
     }
+}
+
+
+@Composable
+private fun SongPickerDialog(
+    songs: List<Song>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<Song>) -> Unit
+) {
+    var selected by remember { mutableStateOf(setOf<Long>()) }
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(songs, query) {
+        if (query.isBlank()) songs
+        else songs.filter {
+            it.title.contains(query, ignoreCase = true) ||
+            it.artist.contains(query, ignoreCase = true)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Agregar canciones") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 400.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Buscar") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(filtered, key = { it.id }) { song ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selected = if (song.id in selected) {
+                                        selected - song.id
+                                    } else {
+                                        selected + song.id
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = song.id in selected,
+                                onCheckedChange = null
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    song.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(songs.filter { it.id in selected }) },
+                enabled = selected.isNotEmpty()
+            ) { Text("Agregar (${selected.size})") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }
