@@ -33,8 +33,8 @@ import coil.compose.AsyncImage
 import com.aural.player.youtube.YTResult
 import com.aural.player.youtube.YouTubeManager
 
-private val YouTubeRed = Color(0xFFFF0000)
-private val YouTubeRedDark = Color(0xFFCC0000)
+private val YouTubeRed = Color(0xFFE5484D)
+private val YouTubeRedDark = Color(0xFFC93A3E)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
