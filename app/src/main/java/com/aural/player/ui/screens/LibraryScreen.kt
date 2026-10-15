@@ -128,6 +128,21 @@ fun LibraryScreen(
                     else MaterialTheme.colorScheme.onSurface
                 )
             }
+            IconButton(
+                onClick = {
+                    isRefreshing = true
+                    refreshScope.launch {
+                        viewModel.rescan()
+                        isRefreshing = false
+                    }
+                }
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
+                }
+            }
         }
 
         // ---- Campo de búsqueda local ----
