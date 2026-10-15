@@ -85,6 +85,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.runtime.LaunchedEffect
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
