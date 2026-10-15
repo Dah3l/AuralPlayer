@@ -79,6 +79,7 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.draw.shadow
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -199,6 +200,12 @@ fun NowPlayingScreen(
                 CoverArt(
                     uri = song.albumArtUri,
                     size = artSize,
+                    modifier = Modifier.shadow(
+                        elevation = 24.dp,
+                        shape = RoundedCornerShape(artSize / 6),
+                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    ),
                     cornerRadius = 16.dp
                 )
             }
