@@ -57,6 +57,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 
 /**
  * Cabecera común de detalle con portada grande, título, subtítulo
