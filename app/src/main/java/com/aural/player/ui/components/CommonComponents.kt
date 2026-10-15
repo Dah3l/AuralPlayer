@@ -53,6 +53,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.ui.graphics.Brush
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -80,14 +81,21 @@ fun CoverArt(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                        MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         // Icono siempre de fondo: si la imagen falla, no queda el cuadro vacío
         Icon(
             imageVector = Icons.Rounded.MusicNote,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
             modifier = Modifier.size(size / 3f)
         )
         if (!uri.isNullOrBlank()) {
