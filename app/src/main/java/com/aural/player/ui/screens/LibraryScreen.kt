@@ -222,7 +222,11 @@ fun LibraryScreen(
                     if (ytm != null) {
                         DownloadsScreen(
                             youTubeManager = ytm,
-                            onDownloadComplete = { viewModel.rescan() }
+                            onDownloadComplete = { fileName ->
+                                if (fileName != null) {
+                                    viewModel.addDownloadToPlaylist(fileName)
+                                }
+                            }
                         )
                     } else {
                         Text("YouTube no disponible")
