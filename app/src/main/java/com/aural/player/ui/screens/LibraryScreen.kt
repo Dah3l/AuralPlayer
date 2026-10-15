@@ -61,6 +61,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ScrollableTabRow
 import com.aural.player.youtube.YouTubeManager
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
@@ -91,6 +95,8 @@ fun LibraryScreen(
 
     var showSearch by remember { mutableStateOf(false) }
     var showNewPlaylist by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<Playlist?>(null) }
+    var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
     var isRefreshing by remember { mutableStateOf(false) }
     val refreshScope = rememberCoroutineScope()
@@ -256,6 +262,34 @@ fun LibraryScreen(
     }
 
     // ---- Diálogo para crear playlist ----
+    renameTarget?.let { pl ->
+        RenamePlaylistDialog(
+            currentName = pl.name,
+            onDismiss = { renameTarget = null },
+            onConfirm = { newName ->
+                viewModel.renamePlaylist(pl.id, newName)
+                renameTarget = null
+            }
+        )
+    }
+
+    deleteTarget?.let { pl ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Eliminar playlist") },
+            text = { Text("¿Eliminar \"${pl.name}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePlaylist(pl.id)
+                    deleteTarget = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
     if (showNewPlaylist) {
         NewPlaylistDialog(
             onDismiss = { showNewPlaylist = false },
@@ -404,6 +438,8 @@ private fun PlaylistsTab(
     songCount: (Playlist) -> Int,
     onCreate: () -> Unit,
     onOpen: (Playlist) -> Unit,
+    onRename: (Playlist) -> Unit,
+    onDelete: (Playlist) -> Unit,
     hasFavorites: Boolean,
     onOpenFavorites: () -> Unit
 ) {
@@ -420,7 +456,9 @@ private fun PlaylistsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                onRename = { pl -> renameTarget = pl },
+                onDelete = { pl -> deleteTarget = pl }
             ) {
                 CoverArt(uri = null, size = 48.dp)
                 Spacer(Modifier.height(0.dp))
@@ -492,6 +530,31 @@ private fun PlaylistsTab(
                         Icon(Icons.Rounded.PlayArrow, "Reproducir",
                             tint = MaterialTheme.colorScheme.primary)
                     }
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Renombrar") },
+                                onClick = {
+                                    showMenu = false
+                                    onRename(pl)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Eliminar") },
+                                onClick = {
+                                    showMenu = false
+                                    onDelete(pl)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -499,6 +562,37 @@ private fun PlaylistsTab(
 }
 
 // --------------------------- Diálogo nueva playlist ---------------------------
+
+@Composable
+@Composable
+private fun RenamePlaylistDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var name by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Renombrar playlist") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Nombre") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name.trim()) },
+                enabled = name.isNotBlank()
+            ) { Text("Guardar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
 
 @Composable
 private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
