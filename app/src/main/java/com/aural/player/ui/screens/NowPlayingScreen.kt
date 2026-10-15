@@ -223,8 +223,8 @@ fun NowPlayingScreen(
             var lrcLines by remember(song?.id) {
                 mutableStateOf<List<com.aural.player.data.LrcLine>>(emptyList())
             }
-            LaunchedEffect(song?.id) {
-                val lrcPath = song?.let { lrcMapState[it.id] }
+            val lrcPath = song?.let { lrcMapState[it.id] }
+            LaunchedEffect(song?.id, lrcPath) {
                 lrcLines = if (lrcPath != null) {
                     withContext(Dispatchers.IO) {
                         try {
