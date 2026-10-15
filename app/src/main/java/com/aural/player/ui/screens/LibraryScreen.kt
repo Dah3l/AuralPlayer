@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +53,6 @@ import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.components.AlphabetFastScroller
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ScrollableTabRow
 import com.aural.player.youtube.YouTubeManager
+import androidx.compose.material.icons.filled.Refresh
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
@@ -94,17 +95,6 @@ fun LibraryScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     val refreshScope = rememberCoroutineScope()
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            refreshScope.launch {
-                viewModel.rescan()
-                isRefreshing = false
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    ) {
     Column(Modifier.fillMaxSize()) {
 
         // ---- Barra superior: título + búsqueda ----
@@ -113,6 +103,22 @@ fun LibraryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
+
+            IconButton(
+                onClick = {
+                    isRefreshing = true
+                    refreshScope.launch {
+                        viewModel.rescan()
+                        isRefreshing = false
+                    }
+                }
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
+                }
+            }
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -248,7 +254,6 @@ fun LibraryScreen(
                 }
             }
         }
-    }
     }
 
     // ---- Diálogo para crear playlist ----
