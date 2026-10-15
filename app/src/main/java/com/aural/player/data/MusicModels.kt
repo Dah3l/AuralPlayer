@@ -6,8 +6,8 @@ package com.aural.player.data
  *
  * @param id            Identificador único (MediaStore _ID)
  * @param title         Título de la pista
- * @param artist        Nombre del artista (o "Desconocido")
- * @param album         Nombre del álbum (o "Desconocido")
+ * @param artist        Nombre del artista (o "Artista misterioso")
+ * @param album         Nombre del álbum (o "Artista misterioso")
  * @param albumId       Identificador del álbum en MediaStore
  * @param durationMs    Duración en milisegundos
  * @param uri           URI del archivo de audio
