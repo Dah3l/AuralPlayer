@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Estado de la interfaz de la biblioteca. */
 data class LibraryUiState(
@@ -54,6 +56,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Playlists persistidas. */
     val playlists: StateFlow<List<Playlist>> = settings.playlists.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
+    )
+
+    val lrcMap: StateFlow<Map<Long, String>> = settings.lrcMap.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyMap()
     )
 
     init {
@@ -128,6 +136,48 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun renamePlaylist(id: String, newName: String) {
         viewModelScope.launch { settings.renamePlaylist(id, newName) }
+    }
+
+    fun setLrcForSong(songId: Long, lrcPath: String) {
+        viewModelScope.launch { settings.setLrcForSong(songId, lrcPath) }
+    }
+
+    fun removeLrcForSong(songId: Long) {
+        viewModelScope.launch { settings.removeLrcForSong(songId) }
+    }
+
+    /**
+     * Escanea el dispositivo buscando archivos .lrc.
+     * Devuelve lista de (nombre, ruta).
+     */
+    suspend fun scanLrcFiles(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val result = mutableListOf<Pair<String, String>>()
+        try {
+            val resolver = getApplication<Application>().contentResolver
+            val projection = arrayOf(
+                android.provider.MediaStore.Files.FileColumns.DISPLAY_NAME,
+                android.provider.MediaStore.Files.FileColumns.DATA
+            )
+            val selection = "${android.provider.MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
+            val args = arrayOf("%.lrc")
+            resolver.query(
+                android.provider.MediaStore.Files.getContentUri("external"),
+                projection, selection, args, null
+            )?.use { cursor ->
+                val nameIdx = cursor.getColumnIndexOrThrow(
+                    android.provider.MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val dataIdx = cursor.getColumnIndexOrThrow(
+                    android.provider.MediaStore.Files.FileColumns.DATA)
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameIdx) ?: continue
+                    val path = cursor.getString(dataIdx) ?: continue
+                    result.add(name to path)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AuralViewModel", "Error escaneando .lrc: ${e.message}")
+        }
+        result.sortedBy { it.first.lowercase() }
     }
 
     fun addToPlaylist(playlistId: String, songId: Long) {
