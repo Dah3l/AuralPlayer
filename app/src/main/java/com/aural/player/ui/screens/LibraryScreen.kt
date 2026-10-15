@@ -103,7 +103,7 @@ fun LibraryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
-
+        ) {
             IconButton(
                 onClick = {
                     isRefreshing = true
@@ -119,7 +119,6 @@ fun LibraryScreen(
                     Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
                 }
             }
-        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
