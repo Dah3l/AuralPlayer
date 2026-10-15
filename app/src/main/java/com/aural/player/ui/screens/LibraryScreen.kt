@@ -104,21 +104,6 @@ fun LibraryScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = {
-                    isRefreshing = true
-                    refreshScope.launch {
-                        viewModel.rescan()
-                        isRefreshing = false
-                    }
-                }
-            ) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
-                }
-            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
