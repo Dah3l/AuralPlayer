@@ -20,7 +20,7 @@ import com.aural.player.youtube.YouTubeManager
 @Composable
 fun DownloadsScreen(
     youTubeManager: YouTubeManager,
-    onDownloadComplete: () -> Unit = {},
+    onDownloadComplete: (String?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
@@ -165,8 +165,8 @@ fun DownloadsScreen(
                             }
                         } else {
                             IconButton(onClick = {
-                                youTubeManager.download(result) { success ->
-                                    if (success) onDownloadComplete()
+                                youTubeManager.download(result) { fileName ->
+                                    onDownloadComplete(fileName)
                                 }
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Descargar")
