@@ -79,6 +79,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Tune
+import com.aural.player.ui.components.EqualizerDialog
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -581,6 +583,7 @@ private fun NowPlayingMenu(
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLrcPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showEqualizer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var isSearchingLyrics by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var lyricsSearchError by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     var lrcFiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>>(emptyList()) }
@@ -608,6 +611,11 @@ private fun NowPlayingMenu(
             text = { Text("Velocidad de reproducción") },
             leadingIcon = { Icon(Icons.Rounded.Speed, null) },
             onClick = { onDismiss(); showSpeed = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Ecualizador") },
+            leadingIcon = { Icon(Icons.Rounded.Tune, null) },
+            onClick = { onDismiss(); showEqualizer = true }
         )
         DropdownMenuItem(
             text = { Text("Compartir") },
@@ -663,6 +671,11 @@ private fun NowPlayingMenu(
                 }
             }
         )
+    }
+
+    // Diálogo del ecualizador
+    if (showEqualizer) {
+        EqualizerDialog(onDismiss = { showEqualizer = false })
     }
 
     // Diálogo: elegir playlist
