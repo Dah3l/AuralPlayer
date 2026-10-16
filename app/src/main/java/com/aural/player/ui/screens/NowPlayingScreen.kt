@@ -242,14 +242,14 @@ fun NowPlayingScreen(
                 if (currentLine.isNotBlank()) {
                     Text(
                         currentLine,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 3,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 32.dp, vertical = 8.dp)
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
                             .clickable { showLyrics = true }
                     )
                 }
