@@ -70,8 +70,7 @@ object LrcLibClient {
     private fun plainToLrc(plain: String): String {
         return plain.lines()
             .filter { it.isNotBlank() }
-            .joinToString("
-") { "[00:00.00]${it.trim()}" }
+            .joinToString("\n") { "[00:00.00]" + it.trim() }
     }
 
     private fun httpGet(urlStr: String): String? {
