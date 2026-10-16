@@ -202,7 +202,17 @@ fun NowPlayingScreen(
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 8.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                                androidx.compose.ui.graphics.Color.Transparent
+                            ),
+                            radius = 600f
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 val artSize = (maxWidth * 0.96f).coerceAtMost(420.dp).coerceAtLeast(220.dp)
