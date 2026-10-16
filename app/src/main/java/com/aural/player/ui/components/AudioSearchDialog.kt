@@ -28,7 +28,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -222,6 +227,8 @@ fun AudioSearchDialog(
                         }
                     }
                     AudioSearchState.ERROR -> {
+                        val clipboard = LocalClipboardManager.current
+                        var showDiag by remember { mutableStateOf(false) }
                         Text(
                             "No pude identificar la canción.",
                             textAlign = TextAlign.Center,
@@ -238,6 +245,32 @@ fun AudioSearchDialog(
                         }
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = { begin() }) { Text("Reintentar") }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = { showDiag = true }) {
+                            Text("Ver diagnóstico")
+                        }
+                        if (showDiag) {
+                            AlertDialog(
+                                onDismissRequest = { showDiag = false },
+                                title = { Text("Diagnóstico") },
+                                text = {
+                                    Text(
+                                        ShazamClient.lastDiagnostic.ifBlank { "Sin datos" },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.verticalScroll(rememberScrollState())
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        clipboard.setText(AnnotatedString(ShazamClient.lastDiagnostic))
+                                        showDiag = false
+                                    }) { Text("Copiar") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDiag = false }) { Text("Cerrar") }
+                                }
+                            )
+                        }
                     }
                 }
             }
