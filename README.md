@@ -197,6 +197,8 @@ Aural/
 
 ## 📋 Hoja de ruta
 
+- [ ] Menú general en la pantalla principal (licencia, repositorio, acerca de)
+
 - [ ] Ecualizador y normalización de volumen
 - [ ] Ordenación personalizada de la cola (arrastrar y soltar)
 - [ ] Importar/exportar playlists
