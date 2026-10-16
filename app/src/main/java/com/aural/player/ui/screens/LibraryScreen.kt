@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,6 +110,13 @@ fun LibraryScreen(
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
+    val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
+        val query = audioSearchRequest ?: return@LaunchedEffect
+        viewModel.consumeAudioSearchRequest()
+        onTabSelected(4) // pestaña Descargas
+        youTubeManager?.search(query)
+    }
     val m3uPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.importM3u(appContext, it) } }
@@ -152,6 +160,13 @@ fun LibraryScreen(
                     contentDescription = "Buscar",
                     tint = if (showSearch) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface
+                )
+            }
+            IconButton(onClick = { viewModel.openAudioSearch() }) {
+                Icon(
+                    imageVector = Icons.Rounded.Mic,
+                    contentDescription = "Identificar canción",
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             IconButton(
