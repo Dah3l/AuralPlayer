@@ -14,6 +14,9 @@
     <!-- Permiso de notificación multimedia (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Micrófono (reconocimiento de música por audio) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Servicio en primer plano para reproducción en segundo plano -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -39,6 +42,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Tile de ajustes rápidos: identificar canción -->
+        <service
+            android:name=".AudioSearchTileService"
+            android:icon="@drawable/ic_tile_audio_search"
+            android:label="Identificar canción"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Servicio de reproducción en segundo plano basado en Media3 -->
         <service
