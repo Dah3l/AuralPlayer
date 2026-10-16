@@ -92,10 +92,15 @@ object EqualizerManager {
         } catch (e: Exception) { /* ignorar */ }
     }
 
-    val presets: List<String> get() = try {
-        val eq = equalizer ?: return emptyList()
-        (0 until eq.numberOfPresets).map { eq.getPresetName(it.toShort()) }
-    } catch (e: Exception) { emptyList() }
+    val presets: List<String>
+        get() {
+            val eq = equalizer ?: return emptyList()
+            return try {
+                (0 until eq.numberOfPresets).map { eq.getPresetName(it.toShort()) }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
 
     fun usePreset(index: Int) {
         try {
