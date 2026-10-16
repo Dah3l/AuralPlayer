@@ -153,6 +153,17 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /** Mueve un elemento dentro de la cola (para reordenar por arrastre). */
+    fun moveInQueue(fromIndex: Int, toIndex: Int) {
+        val c = controller ?: return
+        if (fromIndex in 0 until c.mediaItemCount &&
+            toIndex in 0 until c.mediaItemCount && fromIndex != toIndex
+        ) {
+            c.moveMediaItem(fromIndex, toIndex)
+        }
+        publishState()
+    }
+
     fun setPlaybackSpeed(speed: Float) {
         controller?.setPlaybackSpeed(speed)
     }
