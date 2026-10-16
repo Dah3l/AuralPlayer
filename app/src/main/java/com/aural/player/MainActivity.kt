@@ -269,7 +269,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                 playerState.currentSong?.let { viewModel.toggleFavorite(it.id) }
             },
             onPlayQueueItem = viewModel.playback::playAt,
-            onRemoveFromQueue = viewModel.playback::removeFromQueue
+            onRemoveFromQueue = viewModel.playback::removeFromQueue,
+            onMoveQueueItem = viewModel.playback::moveInQueue
         )
     }
     // ---- Splash de bienvenida ----
