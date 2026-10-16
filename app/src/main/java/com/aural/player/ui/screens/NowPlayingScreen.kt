@@ -86,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.rounded.Search
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -566,6 +567,9 @@ private fun NowPlayingMenu(
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLrcPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isSearchingLyrics by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var lyricsSearchError by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     var lrcFiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var lrcLoading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val lrcMap by viewModel.lrcMap.collectAsStateWithLifecycle()
@@ -624,6 +628,15 @@ private fun NowPlayingMenu(
                         lrcLoading = false
                     }
                 }
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Buscar letra en línea") },
+            leadingIcon = { Icon(Icons.Rounded.Search, null) },
+            onClick = {
+                onDismiss()
+                lyricsSearchError = null
+                showLyricsSearch = true
             }
         )
         DropdownMenuItem(
@@ -734,6 +747,33 @@ private fun NowPlayingMenu(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showSpeed = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // Diálogo buscar letra en línea
+    if (showLyricsSearch) {
+        com.aural.player.ui.components.LyricsSearchDialog(
+            initialTrack = song?.title ?: "",
+            initialArtist = song?.artist ?: "",
+            isSearching = isSearchingLyrics,
+            errorMessage = lyricsSearchError,
+            onDismiss = { showLyricsSearch = false },
+            onSearch = { track, artist ->
+                isSearchingLyrics = true
+                lyricsSearchError = null
+                scope.launch {
+                    val found = song?.let {
+                        viewModel.searchAndSaveLyrics(it.id, track, artist)
+                    } ?: false
+                    isSearchingLyrics = false
+                    if (found) {
+                        showLyricsSearch = false
+                        onShowLyrics()
+                    } else {
+                        lyricsSearchError = "No se encontró la letra. Prueba con otro nombre."
+                    }
+                }
             }
         )
     }
