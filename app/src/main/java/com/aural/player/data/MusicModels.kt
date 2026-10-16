@@ -13,6 +13,7 @@ package com.aural.player.data
  * @param uri           URI del archivo de audio
  * @param albumArtUri   URI de la carátula obtenida del sistema
  * @param trackNumber   Número de pista dentro del álbum
+ * @param folderPath    Ruta relativa de la carpeta (MediaStore RELATIVE_PATH)
  */
 data class Song(
     val id: Long,
@@ -23,8 +24,20 @@ data class Song(
     val durationMs: Long,
     val uri: String,
     val albumArtUri: String?,
-    val trackNumber: Int = 0
+    val trackNumber: Int = 0,
+    val folderPath: String = ""
 )
+
+/**
+ * Agrupación de canciones por carpeta del dispositivo.
+ */
+data class Folder(
+    val path: String,
+    val songs: List<Song>
+) {
+    /** Nombre visible: última parte de la ruta. */
+    val displayName: String get() = path.trimEnd('/').substringAfterLast('/').ifBlank { "Raíz" }
+}
 
 /**
  * Agrupación de canciones por artista.
