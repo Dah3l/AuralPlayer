@@ -147,6 +147,28 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Busca la letra en línea (LRCLIB) y la guarda asociada a la canción.
+     * Devuelve true si se encontró y guardó.
+     */
+    suspend fun searchAndSaveLyrics(songId: Long, track: String, artist: String): Boolean {
+        return try {
+            val lrcContent = com.aural.player.data.LrcLibClient.searchLyrics(artist, track)
+                ?: return false
+            // Guardar el .lrc en almacenamiento interno
+            val file = java.io.File(
+                getApplication<android.app.Application>().filesDir,
+                "lyrics_$songId.lrc"
+            )
+            file.writeText(lrcContent)
+            settings.setLrcForSong(songId, file.absolutePath)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("AuralViewModel", "Error guardando letra: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Escanea el dispositivo buscando archivos .lrc.
      * Devuelve lista de (nombre, ruta).
      */
