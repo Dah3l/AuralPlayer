@@ -222,7 +222,9 @@ Por favor, escribe comentarios de código en español y sigue el estilo existent
 
 ## 📄 Licencia
 
-Proyecto de ejemplo — distribúyelo bajo la licencia que prefieras (MIT recomendada si planeas publicarlo). El nombre "Aural" es un homenaje estético a la app web homónima; este proyecto no está afiliado oficialmente.
+Este proyecto está bajo la **GNU General Public License v3.0** — ver el archivo [LICENSE](LICENSE) para más detalles.
+
+Copyright (C) 2026 Dahel
 
 ---
 
