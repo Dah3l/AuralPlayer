@@ -308,6 +308,41 @@ fun NowPlayingScreen(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
                     inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
+                thumb = {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                    )
+                },
+                track = { sliderState ->
+                    val fraction = if (sliderState.valueRange.endInclusive > 0) {
+                        (sliderState.value - sliderState.valueRange.start) /
+                        (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
+                    } else 0f
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(fraction)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             )
             Row(
