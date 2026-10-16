@@ -297,7 +297,8 @@ fun AlphabetFastScroller(
     var barHeightPx by remember { mutableStateOf(0) }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     var isDragging by remember { mutableStateOf(false) }
-    val letters = ('A'..'Z').toList() + '#'
+    // Símbolos primero (#), luego A-Z — 27 elementos en total
+    val letters = listOf('#') + ('A'..'Z').toList()
 
     fun letterAtY(y: Float): Char? {
         if (barHeightPx <= 0) return null
@@ -316,7 +317,7 @@ fun AlphabetFastScroller(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .fillMaxHeight(0.7f)
+                .fillMaxHeight(0.78f)
                 .onGloballyPositioned { barHeightPx = it.size.height }
                 .pointerInput(letterMap) {
                     detectVerticalDragGestures(
@@ -351,7 +352,7 @@ fun AlphabetFastScroller(
                 val isActive = letter == activeLetter
                 Text(
                     text = if (letter == '#') "•" else letter.toString(),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     color = when {
                         isActive -> MaterialTheme.colorScheme.primary
@@ -360,7 +361,7 @@ fun AlphabetFastScroller(
                     },
                     modifier = Modifier
                         .clickable(enabled = enabled) { jumpTo(letter) }
-                        .padding(horizontal = 10.dp, vertical = 1.dp)
+                        .padding(horizontal = 8.dp)
                 )
             }
         }
