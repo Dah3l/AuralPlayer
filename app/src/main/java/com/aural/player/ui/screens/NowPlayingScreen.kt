@@ -205,7 +205,7 @@ fun NowPlayingScreen(
                     .padding(top = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val artSize = (maxWidth * 0.88f).coerceAtMost(380.dp).coerceAtLeast(200.dp)
+                val artSize = (maxWidth * 0.96f).coerceAtMost(420.dp).coerceAtLeast(220.dp)
                 CoverArt(
                     uri = song.albumArtUri,
                     size = artSize,
