@@ -36,6 +36,9 @@ class MusicService : MediaSessionService() {
             )
             .setWakeMode(C.WAKE_MODE_NETWORK) // permite seguir reproduciendo con pantalla apagada
             .build()
+
+        // Ecualizador y normalización atados a la sesión de audio
+        EqualizerManager.init(this, player.audioSessionId)
         // Nota: ExoPlayer realiza transiciones gapless (sin silencio entre pistas)
         // de forma automática cuando las pistas consecutivas son compatibles.
 
@@ -61,6 +64,7 @@ class MusicService : MediaSessionService() {
 
     /** Liberar recursos cuando el servicio se destruye. */
     override fun onDestroy() {
+        EqualizerManager.release()
         mediaSession?.run {
             player.release()
             release()
