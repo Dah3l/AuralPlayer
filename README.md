@@ -1,37 +1,57 @@
-# 🎧 Aural
+# 🎧 AuralPlayer
 
-**Reproductor de música para Android con diseño moderno y minimalista (tema oscuro, limpio, al estilo de la app web Aural), pero con todas las funciones de un reproductor convencional.**
+**Reproductor de música para Android — minimalista, elegante y sin cuentas.** Tu música, sin ruido.
 
-Aural reproduce el audio local del dispositivo —sin nube, sin cuentas, sin rastreo— escaneando la biblioteca con `MediaStore` y reproduciéndola con `Media3 (ExoPlayer)` en segundo plano, con notificación multimedia y controles para auriculares y Bluetooth.
+AuralPlayer reproduce el audio local de tu dispositivo y descarga canciones de YouTube, todo con un diseño oscuro premium al estilo de la app web Aural. Sin nube, sin cuentas, sin rastreo.
 
 ---
 
 ## ✨ Características
 
-### Biblioteca
-- 📂 **Escaneo de audio local** mediante `MediaStore`: título, artista, álbum, duración, número de pista y carátula del álbum.
+### 🎵 Biblioteca
+- 📂 **Escaneo de audio local** mediante `MediaStore`: título, artista, álbum, duración y carátula.
 - 🗂️ **Cuatro pestañas**: Canciones · Artistas · Álbumes · Playlists.
-- 🔍 **Búsqueda local** instantánea sobre toda la biblioteca (título, artista o álbum).
-- ❤️ **Canción favorita** con un toque, persistida entre sesiones.
+- 🔍 **Búsqueda local** instantánea por título, artista o álbum.
+- 🔄 **Botón de actualización** para re-escanear tras añadir música nueva.
+- ❤️ **Favoritos** con un toque, persistidos entre sesiones.
 
-### Reproducción
-- ▶️ Play / pausa, siguiente / anterior y **seek** con barra deslizante.
-- 🔀 **Aleatorio** (shuffle) y 🔁 **repetición** (desactivada / todo / una).
-- 📋 **Cola de reproducción** visible y editable: reproducir cualquier pista de la cola o quitarla.
-- ⏸️ Añadir canciones a la cola desde los menús de la biblioteca.
-- 🌙 Pantalla **"Now Playing"** con carátula grande, controles completos y cola integrada.
-- 📱 **Mini-reproductor persistente** en la parte inferior; tocarlo abre "Now Playing".
+### ⬇️ Descargas de YouTube
+- 🔴 **Búsqueda y descarga de audio** directo desde YouTube (solo audio, sin video).
+- ⚡ **Descarga optimizada**: buffer de 64KB, headers de navegador, prioriza m4a.
+- ❌ **Botón de cancelar** durante la descarga.
+- 📥 Las canciones descargadas **aparecen automáticamente** en tu biblioteca.
+- 📋 **Playlist "Descargas"** creada automáticamente — todo lo que bajas se organiza solo.
 
-### Segundo plano y sistema
-- 🔔 **Servicio en primer plano** (`MediaSessionService`) con **notificación multimedia** (carátula, controles, barra de progreso).
-- 🎧 **MediaSession**: control desde auriculares cableados, Bluetooth y pantallas de bloqueo.
-- La reproducción continúa al cerrar la app o bloquear el teléfono.
+### 🎤 Letras sincronizadas (.lrc)
+- 📝 **Soporte de archivos .lrc** — letras sincronizadas con la música.
+- 🎵 **Línea actual integrada** en el Now Playing: se actualiza en tiempo real con la canción.
+- 👆 Toca la letra para ver la **vista completa** con scroll automático.
+- 📁 **"Agregar letra"** — elige cualquier .lrc de tu dispositivo y asócialo a la canción.
+- 🌐 **"Buscar letra en línea"** — busca automáticamente en LRCLIB (gratis, sin API key) con campos editables de canción y artista.
 
-### Playlists
-- ➕ Crear y eliminar playlists personalizadas.
-- ➕/➖ Agregar y quitar canciones desde el menú contextual de cada pista.
-- ▶️ Reproducir una playlist completa (con o sin aleatorio).
-- 💾 Persistencia con **DataStore Preferences** (formato JSON interno).
+### ▶️ Reproducción
+- ⏯️ Play/pausa, siguiente/anterior y **seek** con slider premium.
+- 🔀 **Aleatorio** y 🔁 **repetición** (todo / una).
+- 📋 **Cola de reproducción** visible y editable.
+- ⏱️ **Temporizador de suspensión** — la música se apaga sola.
+- 🎚️ **Velocidad de reproducción** ajustable.
+- 🌙 **Now Playing premium**: carátula grande con glow, título con marquesina, slider con thumb y sombra, controles elegantes.
+
+### 📋 Playlists
+- ➕ Crear, renombrar y eliminar playlists.
+- ➕/➖ Agregar canciones desde el menú de cada pista o con el selector múltiple.
+- ⭐ Playlists fijas: **Favoritas** y **Descargas** en la sección "Tuyas".
+- 💾 Persistencia con **DataStore Preferences**.
+
+### 🔔 Segundo plano y sistema
+- **Servicio en primer plano** con notificación multimedia (carátula, controles, progreso).
+- **MediaSession**: control desde auriculares, Bluetooth y pantalla de bloqueo.
+- La música sigue sonando al cerrar la app o bloquear el teléfono.
+
+### 👋 Experiencia
+- **Onboarding** de 4 pantallas en el primer arranque.
+- **Saludo según la hora** en la biblioteca (Buenos días ☀️ / Buenas tardes 🌤️ / Buenas noches 🌙).
+- Textos cálidos en toda la app ("Artista misterioso", "¿Le damos vida?", etc.).
 
 ---
 
@@ -76,8 +96,8 @@ Arquitectura sencilla y sin librerías de DI externas: un contenedor de dependen
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/<tu-usuario>/aural.git
-cd aural
+git clone https://github.com/Dah3l/AuralPlayer.git
+cd AuralPlayer
 
 # Generar el APK de depuración
 ./gradlew assembleDebug
