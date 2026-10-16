@@ -34,6 +34,10 @@ object ShazamClient {
     private const val TAG = "ShazamClient"
     private const val TIMEOUT_MS = 15_000
 
+    /** Diagnóstico del último intento (para depuración). */
+    var lastDiagnostic: String = ""
+        private set
+
     /**
      * Identifica la canción a partir de muestras PCM mono de 16 bits a 16 kHz.
      * Se recomiendan ~12 segundos (192000 muestras).
@@ -41,6 +45,7 @@ object ShazamClient {
     suspend fun recognize(pcm16khz: ShortArray): ShazamResult = withContext(Dispatchers.IO) {
         try {
             if (pcm16khz.size < ShazamSignatureGenerator.SAMPLE_RATE_HZ * 3) {
+                lastDiagnostic = "Audio muy corto (${pcm16khz.size} muestras)"
                 return@withContext ShazamResult.Error(
                     "Audio muy corto (${pcm16khz.size} muestras)"
                 )
@@ -51,7 +56,16 @@ object ShazamClient {
             gen.feedSamples(pcm16khz)
             val uri = gen.encodeToUri()
             val sampleMs = gen.sampleMs()
-            Log.d(TAG, "Firma generada: ${uri.length} chars, ${sampleMs}ms")
+            val peakCounts = gen.peakCounts()
+            val totalPeaks = gen.totalPeaks()
+            Log.d(TAG, "Firma: ${uri.length} chars, ${sampleMs}ms, picos=$totalPeaks $peakCounts")
+            val diag = StringBuilder()
+            diag.appendLine("=== DIAGNÓSTICO SHAZAM ===")
+            diag.appendLine("Muestras: ${pcm16khz.size} (${sampleMs}ms)")
+            diag.appendLine("Picos totales: $totalPeaks")
+            diag.appendLine("Por banda: $peakCounts")
+            diag.appendLine("Firma: ${uri.length} chars")
+            diag.appendLine("URI inicio: ${uri.take(80)}")
 
             // 2. Construir request
             val uuid1 = UUID.randomUUID().toString().uppercase()
@@ -100,27 +114,36 @@ object ShazamClient {
                 val errBody = runCatching {
                     conn.errorStream?.bufferedReader()?.readText()?.take(300)
                 }.getOrNull()
+                diag.appendLine("HTTP: $code ERROR: ${errBody ?: "sin detalle"}")
+                lastDiagnostic = diag.toString()
                 return@withContext ShazamResult.Error("HTTP $code: ${errBody ?: "sin detalle"}")
             }
 
             val respText = conn.inputStream.bufferedReader().readText()
-            parseResponse(respText)
+            diag.appendLine("HTTP: $code OK")
+            diag.appendLine("Respuesta: ${respText.take(500)}")
+            lastDiagnostic = diag.toString()
+            parseResponse(respText, diag)
         } catch (e: Exception) {
             Log.e(TAG, "Error: ${e.message}", e)
+            lastDiagnostic = "Error: ${e.javaClass.simpleName}: ${e.message}"
             ShazamResult.Error("${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
-    private fun parseResponse(json: String): ShazamResult {
+    private fun parseResponse(json: String, diag: StringBuilder): ShazamResult {
         return try {
             val root = JSONObject(json)
             val matches = root.optJSONArray("matches")
             if (matches == null || matches.length() == 0) {
+                diag.appendLine("Resultado: sin coincidencias"); lastDiagnostic = diag.toString()
                 return ShazamResult.NoMatch("Shazam no encontró coincidencia")
             }
             val trackObj = root.optJSONObject("track")
-                ?: return ShazamResult.NoMatch("Sin objeto track en respuesta")
+                ?: diag.appendLine("Resultado: sin objeto track"); lastDiagnostic = diag.toString()
+                return ShazamResult.NoMatch("Sin objeto track en respuesta")
             val title = trackObj.optString("title").ifBlank {
+                diag.appendLine("Resultado: track sin título"); lastDiagnostic = diag.toString()
                 return ShazamResult.NoMatch("Track sin título")
             }
             val artist = trackObj.optString("subtitle").ifBlank { "Artista misterioso" }
@@ -150,6 +173,8 @@ object ShazamClient {
                     ?.takeIf { it.isNotBlank() }
             val shazamId = trackObj.optString("key").takeIf { it.isNotBlank() }
 
+            diag.appendLine("Resultado: ENCONTRADO: $title - $artist")
+            lastDiagnostic = diag.toString()
             ShazamResult.Found(
                 ShazamTrack(
                     title = title,
@@ -160,6 +185,8 @@ object ShazamClient {
                 )
             )
         } catch (e: Exception) {
+            diag.appendLine("Resultado: error parseando: ${e.message}")
+            lastDiagnostic = diag.toString()
             ShazamResult.Error("Error parseando respuesta: ${e.message}")
         }
     }
