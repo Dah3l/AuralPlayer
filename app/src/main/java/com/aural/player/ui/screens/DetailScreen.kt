@@ -16,15 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -49,6 +43,9 @@ import com.aural.player.data.Song
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.components.DragHandle
+import com.aural.player.ui.components.draggedItemVisual
+import com.aural.player.ui.components.rememberDragReorderState
 import com.aural.player.ui.components.formatDuration
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
@@ -245,9 +242,7 @@ fun DetailScreen(
 
         // ---- Lista de canciones (reordenable en playlists) ----
         val listState = rememberLazyListState()
-        var draggedIndex by remember { mutableStateOf<Int?>(null) }
-        var dragOffsetPx by remember { mutableFloatStateOf(0f) }
-        val density = LocalDensity.current
+        val dragState = rememberDragReorderState()
         val reorderable = onMoveSong != null
 
         LazyColumn(
@@ -256,7 +251,6 @@ fun DetailScreen(
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
             itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
-                val isDragged = reorderable && index == draggedIndex
                 SongRow(
                     title = song.title,
                     subtitle = song.artist,
@@ -264,11 +258,8 @@ fun DetailScreen(
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
                     onClick = { viewModel.playSongs(songs, songs.indexOf(song)) },
-                    modifier = Modifier.graphicsLayer {
-                        translationY = if (isDragged) dragOffsetPx else 0f
-                        scaleX = if (isDragged) 1.03f else 1f
-                        scaleY = if (isDragged) 1.03f else 1f
-                    },
+                    modifier = if (reorderable) Modifier.draggedItemVisual(dragState, index)
+                    else Modifier,
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (removableFromPlaylistId != null) {
@@ -284,44 +275,13 @@ fun DetailScreen(
                                 }
                             }
                             // Agarradera para reordenar (solo en playlists)
-                            if (reorderable) {
-                                Icon(
-                                    imageVector = Icons.Rounded.DragHandle,
-                                    contentDescription = "Arrastrar para reordenar",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .pointerInput(index) {
-                                            detectVerticalDragGestures(
-                                                onDragStart = {
-                                                    draggedIndex = index
-                                                    dragOffsetPx = 0f
-                                                },
-                                                onDragEnd = {
-                                                    draggedIndex = null
-                                                    dragOffsetPx = 0f
-                                                },
-                                                onDragCancel = {
-                                                    draggedIndex = null
-                                                    dragOffsetPx = 0f
-                                                },
-                                                onVerticalDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    val from = draggedIndex ?: return@detectVerticalDragGestures
-                                                    dragOffsetPx += dragAmount
-                                                    val threshold = with(density) { 48.dp.toPx() }
-                                                    if (dragOffsetPx > threshold && from < songs.lastIndex) {
-                                                        onMoveSong?.invoke(from, from + 1)
-                                                        draggedIndex = from + 1
-                                                        dragOffsetPx -= threshold
-                                                    } else if (dragOffsetPx < -threshold && from > 0) {
-                                                        onMoveSong?.invoke(from, from - 1)
-                                                        draggedIndex = from - 1
-                                                        dragOffsetPx += threshold
-                                                    }
-                                                }
-                                            )
-                                        }
+                            if (reorderable && onMoveSong != null) {
+                                DragHandle(
+                                    index = index,
+                                    dragState = dragState,
+                                    itemCount = songs.size,
+                                    onMove = onMoveSong,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         }
