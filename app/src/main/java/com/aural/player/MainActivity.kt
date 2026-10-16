@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleAudioSearchIntent(intent)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         enableEdgeToEdge()
         requestNeededPermissions()
@@ -92,6 +93,21 @@ class MainActivity : ComponentActivity() {
                     AuralApp(viewModel, youTubeManager = youTubeManager)
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleAudioSearchIntent(intent)
+    }
+
+    /** Abre la búsqueda por audio si el intent viene del tile de ajustes rápidos. */
+    private fun handleAudioSearchIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(
+                com.aural.player.AudioSearchTileService.EXTRA_OPEN_AUDIO_SEARCH, false
+            ) == true
+        ) {
+            viewModel.openAudioSearch()
         }
     }
 
@@ -250,6 +266,18 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
             }
         }
+    }
+
+    // ---- Diálogo de búsqueda por audio ----
+    val showAudioSearch by viewModel.showAudioSearch.collectAsStateWithLifecycle()
+    if (showAudioSearch) {
+        com.aural.player.ui.components.AudioSearchDialog(
+            onDismiss = { viewModel.closeAudioSearch() },
+            onSearchYouTube = { query ->
+                viewModel.closeAudioSearch()
+                viewModel.requestYouTubeSearch(query)
+            }
+        )
     }
 
     // ---- Pantalla Now Playing a pantalla completa ----
