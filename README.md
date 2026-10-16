@@ -1,5 +1,7 @@
 # 🎧 AuralPlayer
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 **Reproductor de música para Android — minimalista, elegante y sin cuentas.** Tu música, sin ruido.
 
 AuralPlayer reproduce el audio local de tu dispositivo y descarga canciones de YouTube, todo con un diseño oscuro premium al estilo de la app web Aural. Sin nube, sin cuentas, sin rastreo.
