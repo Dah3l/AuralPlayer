@@ -1,27 +1,25 @@
-// Tile de ajustes rápidos: "Identificar canción" (estilo Shazam/Google)
+// Tile de ajustes rápidos: abre AuralPlayer directo en la búsqueda por audio.
+// En Android 14+ no se puede usar startActivityAndCollapse(Intent); se usa PendingIntent.
 package com.aural.player
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.service.quicksettings.TileService
 
-/**
- * Acceso directo en el panel de ajustes rápidos para identificar
- * la canción que suena, sin abrir la app manualmente.
- * El usuario lo agrega una vez desde "Editar" en los ajustes rápidos.
- */
 class AudioSearchTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            putExtra(EXTRA_OPEN_AUDIO_SEARCH, true)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_AUDIO_SEARCH
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-        // Cierra el panel y abre la app directo en la búsqueda por audio
-        startActivityAndCollapse(intent)
-    }
-
-    companion object {
-        const val EXTRA_OPEN_AUDIO_SEARCH = "open_audio_search"
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        startActivityAndCollapse(pendingIntent)
     }
 }
