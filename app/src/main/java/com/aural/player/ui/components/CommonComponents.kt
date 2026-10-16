@@ -54,6 +54,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -88,6 +89,11 @@ fun CoverArt(
                         MaterialTheme.colorScheme.surface
                     )
                 )
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(cornerRadius)
             ),
         contentAlignment = Alignment.Center
     ) {
