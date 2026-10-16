@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import com.aural.player.ui.components.DragHandle
+import com.aural.player.ui.components.draggedItemVisual
+import com.aural.player.ui.components.rememberDragReorderState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -107,7 +110,8 @@ fun NowPlayingScreen(
     onCycleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
     onPlayQueueItem: (Int) -> Unit,
-    onRemoveFromQueue: (Int) -> Unit
+    onRemoveFromQueue: (Int) -> Unit,
+    onMoveQueueItem: (Int, Int) -> Unit
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
@@ -115,6 +119,7 @@ fun NowPlayingScreen(
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val queueDragState = rememberDragReorderState()
 
     // Al abrir la cola, posicionar en la canción actual
     androidx.compose.runtime.LaunchedEffect(showQueue) {
@@ -470,6 +475,7 @@ fun NowPlayingScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .draggedItemVisual(queueDragState, index)
                             .clickable { onPlayQueueItem(index) }
                             .padding(horizontal = 24.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -499,6 +505,13 @@ fun NowPlayingScreen(
                                 maxLines = 1
                             )
                         }
+                        DragHandle(
+                            index = index,
+                            dragState = queueDragState,
+                            itemCount = state.queue.size,
+                            onMove = onMoveQueueItem,
+                            modifier = Modifier.size(24.dp)
+                        )
                         IconButton(onClick = { onRemoveFromQueue(index) }) {
                             Icon(Icons.Rounded.Close, "Quitar de la cola",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
