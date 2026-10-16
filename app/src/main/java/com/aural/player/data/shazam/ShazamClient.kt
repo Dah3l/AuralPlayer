@@ -136,8 +136,11 @@ object ShazamClient {
                 return ShazamResult.NoMatch("Shazam no encontró coincidencia")
             }
             val trackObj = root.optJSONObject("track")
-                ?: diag.appendLine("Resultado: sin objeto track"); lastDiagnostic = diag.toString()
+            if (trackObj == null) {
+                diag.appendLine("Resultado: sin objeto track")
+                lastDiagnostic = diag.toString()
                 return ShazamResult.NoMatch("Sin objeto track en respuesta")
+            }
             val title = trackObj.optString("title").ifBlank {
                 diag.appendLine("Resultado: track sin título"); lastDiagnostic = diag.toString()
                 return ShazamResult.NoMatch("Track sin título")
