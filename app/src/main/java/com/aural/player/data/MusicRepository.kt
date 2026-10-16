@@ -31,7 +31,8 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.IS_MUSIC
+            MediaStore.Audio.Media.IS_MUSIC,
+            MediaStore.Audio.Media.RELATIVE_PATH
         )
 
         // Solo pistas musicales reales, con duración mínima razonable
@@ -47,6 +48,8 @@ class MusicRepository(private val context: Context) {
                 val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+                // RELATIVE_PATH solo existe en API 29+; en versiones anteriores vale ""
+                val relPathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
@@ -64,7 +67,9 @@ class MusicRepository(private val context: Context) {
                         durationMs = duration,
                         uri = uri.toString(),
                         albumArtUri = albumArtUriFor(cursor.getLong(albumIdCol)),
-                        trackNumber = cursor.getInt(trackCol)
+                        trackNumber = cursor.getInt(trackCol),
+                        folderPath = if (relPathCol >= 0)
+                            cursor.getString(relPathCol) ?: "" else ""
                     )
                 }
             }
@@ -100,6 +105,12 @@ class MusicRepository(private val context: Context) {
         songs.groupBy { it.artist }
             .map { (name, list) -> Artist(name, list) }
             .sortedBy { it.name.lowercase() }
+
+    /** Agrupa las canciones por carpeta del dispositivo, ordenado alfabéticamente. */
+    fun groupByFolder(songs: List<Song>): List<Folder> =
+        songs.groupBy { it.folderPath.ifBlank { "Desconocida" } }
+            .map { (path, list) -> Folder(path, list.sortedBy { it.title.lowercase() }) }
+            .sortedBy { it.displayName.lowercase() }
 
     /** Agrupa las canciones por álbum, ordenado alfabéticamente. */
     fun groupByAlbum(songs: List<Song>): List<Album> =
