@@ -82,10 +82,10 @@ fun CoverArt(
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
             .background(
-                Brush.linearGradient(
+                Brush.radialGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-                        MaterialTheme.colorScheme.surfaceVariant
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.surface
                     )
                 )
             ),
@@ -95,8 +95,8 @@ fun CoverArt(
         Icon(
             imageVector = Icons.Rounded.MusicNote,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-            modifier = Modifier.size(size / 3f)
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+            modifier = Modifier.size(size / 2.5f)
         )
         if (!uri.isNullOrBlank()) {
             AsyncImage(
