@@ -66,9 +66,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.Download
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 
 /** Pestañas de la biblioteca. */
-private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas")
+private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas", "Carpetas")
 
 /**
  * Pantalla de biblioteca. Recibe callbacks para acciones globales
@@ -100,6 +105,13 @@ fun LibraryScreen(
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
     var isRefreshing by remember { mutableStateOf(false) }
+    var showGeneralMenu by remember { mutableStateOf(false) }
+    var showLicenseDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    val appContext = LocalContext.current
+    val m3uPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { viewModel.importM3u(appContext, it) } }
     val refreshScope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize()) {
@@ -155,6 +167,36 @@ fun LibraryScreen(
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
+                }
+            }
+            // ---- Menú general ⋮ ----
+            Box {
+                IconButton(onClick = { showGeneralMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Menú")
+                }
+                DropdownMenu(
+                    expanded = showGeneralMenu,
+                    onDismissRequest = { showGeneralMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Licencia") },
+                        onClick = { showGeneralMenu = false; showLicenseDialog = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Repositorio en GitHub") },
+                        onClick = {
+                            showGeneralMenu = false
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://github.com/Dah3l/AuralPlayer")
+                            )
+                            appContext.startActivity(intent)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Acerca de AuralPlayer") },
+                        onClick = { showGeneralMenu = false; showAboutDialog = true }
+                    )
                 }
             }
         }
@@ -251,6 +293,8 @@ fun LibraryScreen(
                         onOpen = { pl -> onOpenPlaylist(pl.id) },
                         onRename = { pl -> renameTarget = pl },
                         onDelete = { pl -> deleteTarget = pl },
+                        onExport = { pl -> viewModel.exportPlaylist(appContext, pl.id) },
+                        onImport = { m3uPicker.launch("audio/x-mpegurl") },
                         hasFavorites = favorites.isNotEmpty(),
                         onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
                         downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
@@ -272,6 +316,10 @@ fun LibraryScreen(
                         Text("YouTube no disponible")
                     }
                 }
+                5 -> FoldersTab(
+                    folders = viewModel.folders(),
+                    onPlay = { folder -> onPlayList(folder.songs, 0) }
+                )
             }
         }
     }
@@ -311,6 +359,45 @@ fun LibraryScreen(
             onCreate = { name ->
                 viewModel.createPlaylist(name)
                 showNewPlaylist = false
+            }
+        )
+    }
+
+    // ---- Diálogo de licencia ----
+    if (showLicenseDialog) {
+        AlertDialog(
+            onDismissRequest = { showLicenseDialog = false },
+            title = { Text("Licencia") },
+            text = {
+                Text(
+                    "AuralPlayer es software libre bajo la GNU General Public " +
+                        "License v3.0.\n\nPuedes usar, modificar y compartir " +
+                        "esta app libremente, siempre que cualquier versión " +
+                        "distribuida mantenga esta misma licencia y el código " +
+                        "fuente disponible.\n\nCopyright (C) 2026 Dahel"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showLicenseDialog = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // ---- Diálogo acerca de ----
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("Acerca de AuralPlayer") },
+            text = {
+                Text(
+                    "AuralPlayer — tu música, sin ruido.\n\n" +
+                        "Reproductor minimalista con descargas de YouTube, " +
+                        "letras sincronizadas y diseño oscuro premium.\n\n" +
+                        "Versión 1.0.0\nHecho con ❤️ y Jetpack Compose"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("Cerrar") }
             }
         )
     }
@@ -455,6 +542,8 @@ private fun PlaylistsTab(
     onOpen: (Playlist) -> Unit,
     onRename: (Playlist) -> Unit,
     onDelete: (Playlist) -> Unit,
+    onExport: (Playlist) -> Unit,
+    onImport: () -> Unit,
     hasFavorites: Boolean,
     onOpenFavorites: () -> Unit,
     downloadsCount: Int,
@@ -528,7 +617,7 @@ private fun PlaylistsTab(
                 }
             }
         }
-        // Botón crear playlist
+        // Botones crear / importar playlist
         item {
             Row(
                 modifier = Modifier
@@ -545,6 +634,10 @@ private fun PlaylistsTab(
                 Spacer(Modifier.height(0.dp))
                 TextButton(onClick = onCreate, modifier = Modifier.padding(start = 8.dp)) {
                     Text("Crear playlist", style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onImport) {
+                    Text("Importar .m3u", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -599,10 +692,43 @@ private fun PlaylistsTab(
                                     onDelete(pl)
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Exportar .m3u") },
+                                onClick = {
+                                    showMenu = false
+                                    onExport(pl)
+                                }
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+// --------------------------- Pestaña: Carpetas ---------------------------
+
+@Composable
+private fun FoldersTab(
+    folders: List<com.aural.player.data.Folder>,
+    onPlay: (com.aural.player.data.Folder) -> Unit
+) {
+    if (folders.isEmpty()) {
+        EmptyState("Sin carpetas"); return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(folders, key = { it.path }) { folder ->
+            MediaGridCard(
+                coverUri = folder.songs.firstOrNull()?.albumArtUri,
+                title = folder.displayName,
+                subtitle = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
+                onClick = { onPlay(folder) }
+            )
         }
     }
 }
