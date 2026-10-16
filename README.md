@@ -205,6 +205,7 @@ Aural/
 - [ ] Soporte para carpetas y reproducción gapless
 - [ ] Widget en pantalla de inicio y Android Auto
 - [ ] Reconocimiento de música por audio (estilo Shazam, vía ACRCloud)
+- [ ] Tile de ajustes rápidos para identificar canción (TileService)
 
 ---
 
