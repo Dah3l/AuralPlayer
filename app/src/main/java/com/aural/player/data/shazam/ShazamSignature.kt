@@ -246,9 +246,10 @@ class ShazamSignatureGenerator {
             // Es un pico: calcular magnitud y bin corregido
             val fftPassNumber = numSpreadFftsDone - 46
 
-            val mag = ln(fftMinus46[bin].coerceAtLeast(1f / 64f)) * 1477.3f + 6144f
-            val magBefore = ln(fftMinus46[bin - 1].coerceAtLeast(1f / 64f)) * 1477.3f + 6144f
-            val magAfter = ln(fftMinus46[bin + 1].coerceAtLeast(1f / 64f)) * 1477.3f + 6144f
+            // Orden exacto del original: ln(x).max(1/64), NO ln(max(x, 1/64))
+            val mag = maxOf(ln(fftMinus46[bin]), 1f / 64f) * 1477.3f + 6144f
+            val magBefore = maxOf(ln(fftMinus46[bin - 1]), 1f / 64f) * 1477.3f + 6144f
+            val magAfter = maxOf(ln(fftMinus46[bin + 1]), 1f / 64f) * 1477.3f + 6144f
 
             val var1 = mag * 2f - magBefore - magAfter
             // Evitar división por cero (el assert del original)
