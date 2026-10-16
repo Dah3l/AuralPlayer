@@ -244,29 +244,34 @@ fun NowPlayingScreen(
                     }
                 } else emptyList()
             }
-            if (lrcLines.isNotEmpty()) {
-                val currentIdx = com.aural.player.data.LrcParser.currentIndex(
-                    lrcLines, state.positionMs
-                )
-                val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
-                if (currentLine.isNotBlank()) {
-                    Text(
-                        currentLine,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 3,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 24.dp)
-                            .clickable { showLyrics = true }
+            // La letra ocupa el espacio flexible y se centra verticalmente
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (lrcLines.isNotEmpty()) {
+                    val currentIdx = com.aural.player.data.LrcParser.currentIndex(
+                        lrcLines, state.positionMs
                     )
+                    val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
+                    if (currentLine.isNotBlank()) {
+                        Text(
+                            currentLine,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 3,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .clickable { showLyrics = true }
+                        )
+                    }
                 }
             }
-
-            // Empuja el bloque inferior (título/controles) hacia abajo
-            Spacer(Modifier.weight(1f))
 
             // ---- Título + artista + estrella ----
             Row(
