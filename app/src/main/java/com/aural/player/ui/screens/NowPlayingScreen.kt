@@ -259,7 +259,7 @@ fun NowPlayingScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
                             .clickable { showLyrics = true }
                     )
                 }
@@ -322,6 +322,11 @@ fun NowPlayingScreen(
                     Box(
                         modifier = Modifier
                             .size(20.dp)
+                            .shadow(
+                                elevation = 6.dp,
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
                             .background(
                                 MaterialTheme.colorScheme.primary,
                                 shape = androidx.compose.foundation.shape.CircleShape
