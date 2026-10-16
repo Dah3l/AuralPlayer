@@ -107,7 +107,7 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
