@@ -36,6 +36,8 @@ class MusicService : MediaSessionService() {
             )
             .setWakeMode(C.WAKE_MODE_NETWORK) // permite seguir reproduciendo con pantalla apagada
             .build()
+        // Nota: ExoPlayer realiza transiciones gapless (sin silencio entre pistas)
+        // de forma automática cuando las pistas consecutivas son compatibles.
 
         // Sesión de medios: conecta el reproductor con la notificación y controles externos
         val sessionBuilder = MediaSession.Builder(this, player)
