@@ -338,6 +338,24 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------- Búsqueda por audio -------------------
+
+    private val _showAudioSearch = MutableStateFlow(false)
+    val showAudioSearch: StateFlow<Boolean> = _showAudioSearch.asStateFlow()
+
+    fun openAudioSearch() { _showAudioSearch.value = true }
+    fun closeAudioSearch() { _showAudioSearch.value = false }
+
+    /**
+     * Solicitud pendiente de buscar en YouTube (viene del reconocimiento
+     * por audio). LibraryScreen la consume y abre la pestaña Descargas.
+     */
+    private val _audioSearchRequest = MutableStateFlow<String?>(null)
+    val audioSearchRequest: StateFlow<String?> = _audioSearchRequest.asStateFlow()
+
+    fun requestYouTubeSearch(query: String) { _audioSearchRequest.value = query }
+    fun consumeAudioSearchRequest() { _audioSearchRequest.value = null }
+
     // ---- Temporizador de suspensión ----
     private var sleepTimerJob: kotlinx.coroutines.Job? = null
     private val _sleepTimerMinutes = MutableStateFlow<Int?>(null)
