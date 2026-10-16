@@ -6,8 +6,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aural.player.data.Album
 import com.aural.player.data.Artist
+import com.aural.player.data.Folder
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
+import com.aural.player.data.buildM3u
+import com.aural.player.data.parseM3u
+import android.content.ContentValues
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import com.aural.player.playback.PlayerUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -107,6 +115,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun artists(): List<Artist> = repository.groupByArtist(_library.value.filteredSongs)
 
     fun albums(): List<Album> = repository.groupByAlbum(_library.value.filteredSongs)
+
+    fun folders(): List<Folder> = repository.groupByFolder(_library.value.filteredSongs)
 
     fun favoriteSongs(): List<Song> =
         _library.value.songs.filter { favorites.value.contains(it.id) }
@@ -246,6 +256,86 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun moveSongInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
         viewModelScope.launch { settings.moveSongInPlaylist(playlistId, fromIndex, toIndex) }
+    }
+
+    // ------------------- Importar / exportar playlists (.m3u) -------------------
+
+    private fun toastOnMain(context: android.content.Context, msg: String) {
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Exporta una playlist a un archivo .m3u en la carpeta Descargas. */
+    fun exportPlaylist(context: android.content.Context, playlistId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val playlist = playlists.value.firstOrNull { it.id == playlistId }
+                ?: return@launch
+            val songs = songsOfPlaylist(playlist)
+            if (songs.isEmpty()) {
+                toastOnMain(context, "La playlist está vacía")
+                return@launch
+            }
+            try {
+                val m3u = buildM3u(songs)
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, "${playlist.name}.m3u")
+                    put(MediaStore.Downloads.MIME_TYPE, "audio/x-mpegurl")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = resolver.insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                ) ?: return@launch
+                resolver.openOutputStream(uri)?.use { out ->
+                    out.write(m3u.toByteArray())
+                }
+                toastOnMain(context, "Playlist exportada a Descargas")
+            } catch (e: Exception) {
+                android.util.Log.e("AuralViewModel", "Error exportando: ${e.message}")
+                toastOnMain(context, "Error al exportar la playlist")
+            }
+        }
+    }
+
+    /** Importa un archivo .m3u: crea una playlist con las canciones que existan en la biblioteca. */
+    fun importM3u(context: android.content.Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val content = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()?.readText() ?: return@launch
+                val entries = parseM3u(content)
+                if (entries.isEmpty()) {
+                    toastOnMain(context, "No se encontraron canciones en el archivo")
+                    return@launch
+                }
+                val allSongs = _library.value.songs
+                val matchedIds = entries.mapNotNull { entry ->
+                    allSongs.firstOrNull { song ->
+                        song.title.equals(entry.title, ignoreCase = true) ||
+                            (entry.artist.isNotBlank() &&
+                                song.title.contains(entry.title, ignoreCase = true) &&
+                                song.artist.contains(entry.artist, ignoreCase = true))
+                    }?.id
+                }.distinct()
+                if (matchedIds.isEmpty()) {
+                    toastOnMain(context, "Ninguna canción del archivo está en tu biblioteca")
+                    return@launch
+                }
+                val date = java.text.SimpleDateFormat(
+                    "dd/MM", java.util.Locale.getDefault()
+                ).format(java.util.Date())
+                val newId = settings.createPlaylist("Importada $date")
+                matchedIds.forEach { settings.addToPlaylist(newId, it) }
+                toastOnMain(
+                    context,
+                    "Playlist importada: ${matchedIds.size} de ${entries.size} canciones"
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("AuralViewModel", "Error importando: ${e.message}")
+                toastOnMain(context, "Error al importar el archivo")
+            }
+        }
     }
 
     // ---- Temporizador de suspensión ----
