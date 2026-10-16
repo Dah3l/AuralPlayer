@@ -286,8 +286,8 @@ fun NowPlayingScreen(
                 }
                 IconButton(onClick = onToggleFavorite) {
                     Icon(
-                        imageVector = if (isFavorite) Icons.Rounded.Star
-                        else Icons.Rounded.StarBorder,
+                        imageVector = if (isFavorite) Icons.Rounded.Favorite
+                        else Icons.Rounded.FavoriteBorder,
                         contentDescription = "Favorito",
                         tint = if (isFavorite) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
