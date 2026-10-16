@@ -80,7 +80,8 @@ fun LyricsScreen(
             Text(
                 "Letra",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
