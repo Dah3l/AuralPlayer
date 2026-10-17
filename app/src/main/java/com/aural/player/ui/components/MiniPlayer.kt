@@ -40,7 +40,8 @@ fun MiniPlayer(
     onOpen: () -> Unit,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier,
-    customCoverUri: String? = null
+    customCoverUri: String? = null,
+    customMetadata: Triple<String, String, String>? = null
 ) {
     val song = state.currentSong ?: return
 
@@ -80,14 +81,14 @@ fun MiniPlayer(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = song.title,
+                        text = customMetadata?.first?.ifBlank { song.title } ?: song.title,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.basicMarquee()
                     )
                     Text(
-                        text = song.artist,
+                        text = customMetadata?.second?.ifBlank { song.artist } ?: song.artist,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
