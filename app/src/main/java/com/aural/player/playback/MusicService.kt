@@ -54,12 +54,8 @@ class MusicService : MediaSessionService() {
             )
         mediaSession = sessionBuilder.build()
 
-        // Notificación multimedia de Media3 con el logo de Aural como icono pequeño
-        setMediaNotificationProvider(
-            object : DefaultMediaNotificationProvider(this) {
-                override fun getSmallIcon(): Int = R.drawable.ic_launcher_foreground
-            }
-        )
+        // Notificación multimedia de Media3 (usa el icono de la app del manifest)
+        setMediaNotificationProvider(DefaultMediaNotificationProvider(this))
     }
 
     /** El sistema llama a este método para entregar la sesión a los clientes. */
