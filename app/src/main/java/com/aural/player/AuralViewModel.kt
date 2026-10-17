@@ -140,11 +140,43 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     // ----------------------------- Consultas -----------------------------
 
-    fun artists(): List<Artist> = repository.groupByArtist(_library.value.filteredSongs)
+    /** Aplica metadatos personalizados a una lista de canciones. */
+    private fun withCustomMetadata(songs: List<Song>): List<Song> {
+        val custom = customMetadata.value
+        if (custom.isEmpty()) return songs
+        return songs.map { song ->
+            val meta = custom[song.id] ?: return@map song
+            song.copy(
+                title = meta.first.ifBlank { song.title },
+                artist = meta.second.ifBlank { song.artist },
+                album = meta.third.ifBlank { song.album }
+            )
+        }
+    }
 
-    fun albums(): List<Album> = repository.groupByAlbum(_library.value.filteredSongs)
+    /** Canciones con metadatos personalizados aplicados. */
+    fun effectiveSongs(): List<Song> = withCustomMetadata(_library.value.songs)
 
-    fun folders(): List<Folder> = repository.groupByFolder(_library.value.filteredSongs)
+    /** Canciones filtradas con metadatos personalizados aplicados.
+     *  El filtro y orden se aplican sobre los metadatos efectivos (personalizados). */
+    fun effectiveFilteredSongs(): List<Song> {
+        val withMeta = withCustomMetadata(_library.value.songs)
+        val query = _library.value.query
+        val filtered = if (query.isBlank()) withMeta
+        else withMeta.filter {
+            it.title.contains(query, true) ||
+                it.artist.contains(query, true) ||
+                it.album.contains(query, true)
+        }
+        // Ordenar por título efectivo
+        return filtered.sortedBy { it.title.lowercase() }
+    }
+
+    fun artists(): List<Artist> = repository.groupByArtist(effectiveFilteredSongs())
+
+    fun albums(): List<Album> = repository.groupByAlbum(effectiveFilteredSongs())
+
+    fun folders(): List<Folder> = repository.groupByFolder(effectiveFilteredSongs())
 
     fun favoriteSongs(): List<Song> =
         _library.value.songs.filter { favorites.value.contains(it.id) }
