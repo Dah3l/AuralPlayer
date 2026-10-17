@@ -139,6 +139,7 @@ fun DetailScreen(
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
         // ---- Barra superior con volver ----
@@ -254,7 +255,7 @@ fun DetailScreen(
                 SongRow(
                     title = song.title,
                     subtitle = song.artist,
-                    coverUri = song.albumArtUri,
+                    coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
                     onClick = { viewModel.playSongs(songs, songs.indexOf(song)) },
