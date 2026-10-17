@@ -301,13 +301,17 @@ fun LibraryScreen(
                 )
 
                 1 -> ArtistsTab(
-                    artists = viewModel.artists(),
+                    artists = viewModel.artists,
+                    customCovers = customCovers
+                )),
                     onOpen = { name -> onOpenArtist(name) },
                     gridState = artistsGridState
                 )
 
                 2 -> AlbumsTab(
-                    albums = viewModel.albums(),
+                    albums = viewModel.albums,
+                    customCovers = customCovers
+                )),
                     onOpen = { title -> onOpenAlbum(title) },
                     gridState = albumsGridState
                 )
@@ -345,7 +349,9 @@ fun LibraryScreen(
                     }
                 }
                 5 -> FoldersTab(
-                    folders = viewModel.folders(),
+                    folders = viewModel.folders,
+                    customCovers = customCovers
+                )),
                     onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
@@ -560,6 +566,8 @@ private fun ArtistsTab(
     artists: List<com.aural.player.data.Artist>,
     onOpen: (String) -> Unit,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+,
+    customCovers: Map<Long, String> = emptyMap()
 ) {
     if (artists.isEmpty()) {
         EmptyState("Sin resultados"); return
@@ -574,7 +582,7 @@ private fun ArtistsTab(
         ) {
             items(artists, key = { it.name }) { artist ->
                 MediaGridCard(
-                    coverUri = artist.representativeSong.albumArtUri,
+                    coverUri = customCovers[artist.representativeSong.id] ?: artist.representativeSong.albumArtUri,
                     title = artist.name,
                     subtitle = "${artist.songs.size} ${if (artist.songs.size == 1) "canción" else "canciones"}",
                     onClick = { onOpen(artist.name) }
@@ -596,6 +604,8 @@ private fun AlbumsTab(
     albums: List<com.aural.player.data.Album>,
     onOpen: (String) -> Unit,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+,
+    customCovers: Map<Long, String> = emptyMap()
 ) {
     if (albums.isEmpty()) {
         EmptyState("Sin resultados"); return
@@ -610,7 +620,7 @@ private fun AlbumsTab(
         ) {
             items(albums, key = { it.id }) { album ->
                 MediaGridCard(
-                    coverUri = album.songs.firstOrNull()?.albumArtUri,
+                    coverUri = album.songs.firstOrNull()?.let { customCovers[it.id] ?: it.albumArtUri },
                     title = album.title,
                     subtitle = album.artist,
                     onClick = { onOpen(album.title) }
@@ -806,6 +816,8 @@ private fun PlaylistsTab(
 private fun FoldersTab(
     folders: List<com.aural.player.data.Folder>,
     onPlay: (com.aural.player.data.Folder) -> Unit
+,
+    customCovers: Map<Long, String> = emptyMap()
 ) {
     if (folders.isEmpty()) {
         EmptyState("Sin carpetas"); return
