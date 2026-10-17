@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -140,11 +142,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     // ----------------------------- Consultas -----------------------------
 
-    /** Aplica metadatos personalizados a una lista de canciones. */
-    private fun withCustomMetadata(songs: List<Song>): List<Song> {
-        val custom = customMetadata.value
-        if (custom.isEmpty()) return songs
-        return songs.map { song ->
+    /** FUENTE ÚNICA: canciones con metadatos personalizados aplicados.
+     *  Toda la UI debe usar este Flow. Se actualiza automáticamente cuando
+     *  cambian la biblioteca o los metadatos personalizados. */
+    val songsFlow: StateFlow<List<Song>> = combine(
+        _library,
+        customMetadata
+    ) { library, custom ->
+        if (custom.isEmpty()) library.songs
+        else library.songs.map { song ->
             val meta = custom[song.id] ?: return@map song
             song.copy(
                 title = meta.first.ifBlank { song.title },
@@ -152,31 +158,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 album = meta.third.ifBlank { song.album }
             )
         }
-    }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Canciones con metadatos personalizados aplicados. */
-    fun effectiveSongs(): List<Song> = withCustomMetadata(_library.value.songs)
-
-    /** Canciones filtradas con metadatos personalizados aplicados.
-     *  El filtro y orden se aplican sobre los metadatos efectivos (personalizados). */
-    fun effectiveFilteredSongs(): List<Song> {
-        val withMeta = withCustomMetadata(_library.value.songs)
-        val query = _library.value.query
-        val filtered = if (query.isBlank()) withMeta
-        else withMeta.filter {
+    /** Canciones filtradas por búsqueda (usa metadatos efectivos). */
+    val filteredSongsFlow: StateFlow<List<Song>> = combine(
+        songsFlow,
+        _library
+    ) { songs, library ->
+        val query = library.query
+        val filtered = if (query.isBlank()) songs
+        else songs.filter {
             it.title.contains(query, true) ||
                 it.artist.contains(query, true) ||
                 it.album.contains(query, true)
         }
-        // Ordenar por título efectivo
-        return filtered.sortedBy { it.title.lowercase() }
-    }
+        filtered.sortedBy { it.title.lowercase() }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun artists(): List<Artist> = repository.groupByArtist(effectiveFilteredSongs())
+    /** Artistas agrupados (usa metadatos efectivos). */
+    val artistsFlow: StateFlow<List<Artist>> = filteredSongsFlow
+        .map { repository.groupByArtist(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun albums(): List<Album> = repository.groupByAlbum(effectiveFilteredSongs())
+    /** Álbumes agrupados (usa metadatos efectivos). */
+    val albumsFlow: StateFlow<List<Album>> = filteredSongsFlow
+        .map { repository.groupByAlbum(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun folders(): List<Folder> = repository.groupByFolder(effectiveFilteredSongs())
+    /** Carpetas agrupadas. */
+    val foldersFlow: StateFlow<List<Folder>> = filteredSongsFlow
+        .map { repository.groupByFolder(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun favoriteSongs(): List<Song> =
         _library.value.songs.filter { favorites.value.contains(it.id) }
