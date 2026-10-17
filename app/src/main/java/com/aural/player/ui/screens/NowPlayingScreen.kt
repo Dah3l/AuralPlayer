@@ -80,7 +80,9 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Image
 import com.aural.player.ui.components.EqualizerDialog
+import com.aural.player.ui.components.CoverPickerDialog
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -618,6 +620,11 @@ private fun NowPlayingMenu(
             onClick = { onDismiss(); showEqualizer = true }
         )
         DropdownMenuItem(
+            text = { Text("Cambiar portada") },
+            leadingIcon = { Icon(Icons.Rounded.Image, null) },
+            onClick = { onDismiss(); showCoverPicker = true }
+        )
+        DropdownMenuItem(
             text = { Text("Compartir") },
             leadingIcon = { Icon(Icons.Rounded.Share, null) },
             onClick = {
@@ -676,6 +683,19 @@ private fun NowPlayingMenu(
     // Diálogo del ecualizador
     if (showEqualizer) {
         EqualizerDialog(onDismiss = { showEqualizer = false })
+    }
+
+    // Diálogo: cambiar portada
+    if (showCoverPicker && song != null) {
+        CoverPickerDialog(
+            artist = song.artist,
+            title = song.title,
+            onSelect = { coverUrl ->
+                viewModel.setCustomCover(song.id, coverUrl)
+                showCoverPicker = false
+            },
+            onDismiss = { showCoverPicker = false }
+        )
     }
 
     // Diálogo: elegir playlist
