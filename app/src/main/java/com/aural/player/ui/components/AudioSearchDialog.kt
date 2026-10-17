@@ -1,4 +1,4 @@
-// Diálogo de reconocimiento de música por audio (vía AudD)
+// Diálogo de reconocimiento de música por audio (vía Shazam)
 package com.aural.player.ui.components
 
 import android.Manifest
@@ -48,23 +48,20 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.aural.player.data.audd.AudDClient
-import com.aural.player.data.audd.AudDResult
-import com.aural.player.data.audd.AudDTrack
+import com.aural.player.data.shazam.ShazamClient
+import com.aural.player.data.shazam.ShazamResult
+import com.aural.player.data.shazam.ShazamSignature
+import com.aural.player.data.shazam.ShazamTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val RECORD_SECONDS = 10
+private const val RECORD_SECONDS = 12
 private const val SAMPLE_RATE = 16000
 
 private enum class AudioSearchState { IDLE, RECORDING, IDENTIFYING, RESULT, ERROR }
 
-/**
- * Diálogo para identificar la canción que suena alrededor (vía AudD).
- * Muestra el error técnico si algo falla para facilitar el reporte.
- */
 @Composable
 fun AudioSearchDialog(
     onDismiss: () -> Unit,
@@ -73,7 +70,7 @@ fun AudioSearchDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(AudioSearchState.IDLE) }
-    var result by remember { mutableStateOf<AudDTrack?>(null) }
+    var result by remember { mutableStateOf<ShazamTrack?>(null) }
     var errorDetail by remember { mutableStateOf("") }
     var secondsLeft by remember { mutableIntStateOf(RECORD_SECONDS) }
     var recordJob by remember { mutableStateOf<Job?>(null) }
@@ -91,17 +88,17 @@ fun AudioSearchDialog(
                     return@launch
                 }
                 state = AudioSearchState.IDENTIFYING
-                val wav = AudDClient.pcmToWav(pcm, SAMPLE_RATE)
-                when (val r = AudDClient.recognize(wav)) {
-                    is AudDResult.Found -> {
+                val signature = ShazamSignature.generate(pcm)
+                when (val r = ShazamClient.recognize(signature)) {
+                    is ShazamResult.Found -> {
                         result = r.track
                         state = AudioSearchState.RESULT
                     }
-                    is AudDResult.NoMatch -> {
+                    is ShazamResult.NoMatch -> {
                         errorDetail = r.detail
                         state = AudioSearchState.ERROR
                     }
-                    is AudDResult.Error -> {
+                    is ShazamResult.Error -> {
                         errorDetail = r.detail
                         state = AudioSearchState.ERROR
                     }
@@ -198,14 +195,6 @@ fun AudioSearchDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
-                            if (track.album.isNotBlank()) {
-                                Text(
-                                    track.album,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
                             Spacer(Modifier.height(16.dp))
                             Button(onClick = {
                                 val q = listOf(track.artist, track.title)
@@ -246,14 +235,14 @@ fun AudioSearchDialog(
                                 title = { Text("Diagnóstico") },
                                 text = {
                                     Text(
-                                        AudDClient.lastDiagnostic.ifBlank { "Sin datos" },
+                                        ShazamClient.lastDiagnostic.ifBlank { "Sin datos" },
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.verticalScroll(rememberScrollState())
                                     )
                                 },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        clipboard.setText(AnnotatedString(AudDClient.lastDiagnostic))
+                                        clipboard.setText(AnnotatedString(ShazamClient.lastDiagnostic))
                                         showDiag = false
                                     }) { Text("Copiar") }
                                 },
@@ -275,7 +264,6 @@ fun AudioSearchDialog(
     )
 }
 
-/** Micrófono con animación de pulso mientras graba. */
 @Composable
 private fun PulsingMic() {
     val transition = rememberInfiniteTransition(label = "pulse")
@@ -297,7 +285,6 @@ private fun PulsingMic() {
     )
 }
 
-/** Graba [seconds] segundos de PCM mono 16-bit a 16 kHz. */
 private fun recordPcm(
     seconds: Int,
     onTick: (Int) -> Unit
