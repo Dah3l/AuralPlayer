@@ -102,6 +102,7 @@ fun LibraryScreen(
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
     var showSearch by remember { mutableStateOf(false) }
@@ -297,7 +298,8 @@ fun LibraryScreen(
                     onFavorite = viewModel::toggleFavorite,
                     onMenu = onSongMenu,
                     listState = songsListState,
-                    customCovers = customCovers
+                    customCovers = customCovers,
+                    customMetadata = customMetadata
                 )
 
                 1 -> ArtistsTab(
@@ -516,7 +518,8 @@ private fun SongsTab(
     onFavorite: (Long) -> Unit,
     onMenu: (Song) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    customCovers: Map<Long, String> = emptyMap()
+    customCovers: Map<Long, String> = emptyMap(),
+    customMetadata: Map<Long, Triple<String, String, String>> = emptyMap()
 ) {
     if (songs.isEmpty()) {
         EmptyState("Sin resultados para tu búsqueda")
@@ -530,9 +533,10 @@ private fun SongsTab(
             contentPadding = PaddingValues(bottom = 90.dp, end = 32.dp)
         ) {
             items(songs, key = { it.id }) { song ->
+                val meta = customMetadata[song.id]
                 SongRow(
-                    title = song.title,
-                    subtitle = "${song.artist} · ${song.album}",
+                    title = meta?.first?.ifBlank { song.title } ?: song.title,
+                    subtitle = "${meta?.second?.ifBlank { song.artist } ?: song.artist} · ${meta?.third?.ifBlank { song.album } ?: song.album}",
                     coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == currentId,
