@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.aural.player.data.shazam.ShazamClient
 import com.aural.player.data.shazam.ShazamResult
-import com.aural.player.data.shazam.ShazamSignature
+
 import com.aural.player.data.shazam.ShazamTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,8 +88,8 @@ fun AudioSearchDialog(
                     return@launch
                 }
                 state = AudioSearchState.IDENTIFYING
-                val signature = ShazamSignature.generate(pcm)
-                when (val r = ShazamClient.recognize(signature)) {
+                // La firma se genera dentro de ShazamClient
+                when (val r = ShazamClient.recognize(pcm)) {
                     is ShazamResult.Found -> {
                         result = r.track
                         state = AudioSearchState.RESULT
