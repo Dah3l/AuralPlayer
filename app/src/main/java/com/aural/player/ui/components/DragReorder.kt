@@ -15,6 +15,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
@@ -48,6 +50,7 @@ fun DragHandle(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     Icon(
         imageVector = Icons.Rounded.DragHandle,
         contentDescription = "Arrastrar para reordenar",
@@ -77,10 +80,12 @@ fun DragHandle(
                             onMove(from, from + 1)
                             dragState.draggedIndex = from + 1
                             dragState.dragOffsetPx -= threshold
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         } else if (dragState.dragOffsetPx < -threshold && from > 0) {
                             onMove(from, from - 1)
                             dragState.draggedIndex = from - 1
                             dragState.dragOffsetPx += threshold
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     }
                 )
@@ -96,6 +101,7 @@ fun Modifier.draggedItemVisual(dragState: DragReorderState, index: Int): Modifie
     graphicsLayer {
         val isDragged = dragState.draggedIndex == index
         translationY = if (isDragged) dragState.dragOffsetPx else 0f
-        scaleX = if (isDragged) 1.03f else 1f
-        scaleY = if (isDragged) 1.03f else 1f
+        scaleX = if (isDragged) 1.05f else 1f
+        scaleY = if (isDragged) 1.05f else 1f
+        shadowElevation = if (isDragged) 8f else 0f
     }
