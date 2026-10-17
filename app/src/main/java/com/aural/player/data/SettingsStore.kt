@@ -27,6 +27,7 @@ class SettingsStore(private val context: Context) {
         val KEY_FAVORITES = stringPreferencesKey("favorites_json")
         val KEY_LRC_MAP = stringPreferencesKey("lrc_map_json")
         val KEY_THEME = stringPreferencesKey("app_theme")
+        val KEY_CUSTOM_COVERS = stringPreferencesKey("custom_covers_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -51,6 +52,45 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[KEY_THEME] = themeName
         }
+    }
+
+    /** Portadas personalizadas: songId -> URL de portada. */
+    val customCovers: Flow<Map<Long, String>> = context.dataStore.data.map { prefs ->
+        decodeCovers(prefs[KEY_CUSTOM_COVERS])
+    }
+
+    suspend fun setCustomCover(songId: Long, coverUrl: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodeCovers(prefs[KEY_CUSTOM_COVERS]).toMutableMap()
+            if (coverUrl.isBlank()) {
+                current.remove(songId)
+            } else {
+                current[songId] = coverUrl
+            }
+            prefs[KEY_CUSTOM_COVERS] = encodeCovers(current)
+        }
+    }
+
+    private fun decodeCovers(json: String?): Map<Long, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(json)
+            val map = mutableMapOf<Long, String>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k.toLongOrNull() ?: continue] = obj.optString(k)
+            }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun encodeCovers(map: Map<Long, String>): String {
+        val obj = org.json.JSONObject()
+        for ((k, v) in map) obj.put(k.toString(), v)
+        return obj.toString()
     }
 
     suspend fun createPlaylist(name: String): String {
