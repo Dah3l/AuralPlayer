@@ -301,13 +301,13 @@ fun LibraryScreen(
                 )
 
                 1 -> ArtistsTab(
-                    artists = viewModel.artists,
+                    artists = viewModel.artists(),
                     onOpen = { name -> onOpenArtist(name) },
                     gridState = artistsGridState
                 )
 
                 2 -> AlbumsTab(
-                    albums = viewModel.albums,
+                    albums = viewModel.albums(),
                     onOpen = { title -> onOpenAlbum(title) },
                     gridState = albumsGridState
                 )
@@ -345,7 +345,7 @@ fun LibraryScreen(
                     }
                 }
                 5 -> FoldersTab(
-                    folders = viewModel.folders,
+                    folders = viewModel.folders(),
                     onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
