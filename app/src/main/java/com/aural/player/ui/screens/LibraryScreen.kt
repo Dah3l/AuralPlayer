@@ -142,7 +142,10 @@ fun LibraryScreen(
                 Image(
                     painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
                     contentDescription = "Logo",
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(36.dp),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                        MaterialTheme.colorScheme.primary
+                    )
                 )
                 Spacer(Modifier.width(8.dp))
                 Column {
