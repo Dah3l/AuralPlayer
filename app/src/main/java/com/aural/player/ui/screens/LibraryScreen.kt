@@ -296,7 +296,8 @@ fun LibraryScreen(
                     onPlay = { song -> onPlayList(library.filteredSongs, library.filteredSongs.indexOf(song)) },
                     onFavorite = viewModel::toggleFavorite,
                     onMenu = onSongMenu,
-                    listState = songsListState
+                    listState = songsListState,
+                    customCovers = customCovers
                 )
 
                 1 -> ArtistsTab(
@@ -514,7 +515,8 @@ private fun SongsTab(
     onPlay: (Song) -> Unit,
     onFavorite: (Long) -> Unit,
     onMenu: (Song) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    customCovers: Map<Long, String> = emptyMap()
 ) {
     if (songs.isEmpty()) {
         EmptyState("Sin resultados para tu búsqueda")
