@@ -1,14 +1,19 @@
 // Generador de firma acústica de Shazam.
-// Port del algoritmo de shazamio-core (Rust).
-// https://github.com/shazamio/shazamio-core/blob/master/src/fingerprinting/algorithm.rs
+// Basado en la implementación probada de opentune (https://github.com/justshivv/opentune),
+// que sigue a SongRec (https://github.com/marin-m/SongRec, GPL-3.0).
+//
+// Adaptado a la API de AuralPlayer: ShazamSignatureGenerator con
+// feedSamples(), encodeToUri() y sampleMs().
 package com.aural.player.data.shazam
 
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import java.util.zip.CRC32
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.ln
-import java.util.zip.CRC32
-import android.util.Base64
+import kotlin.math.max
+import kotlin.math.sin
 
 /**
  * Genera la firma acústica de Shazam a partir de muestras PCM.
@@ -20,275 +25,233 @@ class ShazamSignatureGenerator {
         const val SAMPLE_RATE_HZ = 16000
     }
 
-    private val ringBuf = ShortArray(2048)
-    private var ringPos = 0
-    private val reorderBuf = FloatArray(2048)
-    private val fftOut = Array(256) { FloatArray(1025) }
-    private var fftPos = 0
-    private val spreadOut = Array(256) { FloatArray(1025) }
-    private var spreadPos = 0
-    private var doneCount = 0
-    private var totalSamples = 0
-
-    private val hanning = FloatArray(2048) { n ->
-        (0.5 * (1.0 - cos(2.0 * PI * n / 2047.0))).toFloat()
-    }
-
-    private val bandPeaks = Array(4) { mutableListOf<Peak>() }
-
-    private class Peak(val pass: Int, val mag: Int, val bin: Int)
-
-    private fun wrap256(i: Int): Int {
-        var v = i % 256
-        if (v < 0) v += 256
-        return v
-    }
-
-    private fun wrap2048(i: Int): Int {
-        var v = i % 2048
-        if (v < 0) v += 2048
-        return v
-    }
+    private val sig = Signature()
 
     /** Alimenta muestras PCM 16-bit mono a 16 kHz. */
     fun feedSamples(samples: ShortArray) {
-        totalSamples += samples.size
-        var pos = 0
-        while (pos + 128 <= samples.size) {
-            doFft(samples, pos)
-            doSpread()
-            doneCount++
-            if (doneCount >= 46) doRecognize()
-            pos += 128
-        }
+        sig.add(samples)
     }
 
     /** Duración del audio procesado en milisegundos. */
-    fun sampleMs(): Int = (totalSamples * 1000L / SAMPLE_RATE_HZ).toInt()
+    fun sampleMs(): Int = sig.durationMs.toInt()
 
     /** Codifica la firma como URI data:audio/vnd.shazam.sig;base64,... */
     fun encodeToUri(): String {
-        val arr = encodeToBinary()
-        val b64 = Base64.encodeToString(arr, Base64.NO_WRAP)
+        val b64 = Base64.encodeToString(sig.encode(), Base64.NO_WRAP)
         return "data:audio/vnd.shazam.sig;base64,$b64"
     }
 
-    private fun doFft(samples: ShortArray, offset: Int) {
-        for (i in 0 until 128) {
-            ringBuf[wrap2048(ringPos + i)] = samples[offset + i]
-        }
-        ringPos = wrap2048(ringPos + 128)
+    /**
+     * Huella de audio en el formato que lee Shazam: los picos más fuertes
+     * del espectro de una grabación corta, en cuatro bandas de frecuencia,
+     * empaquetados en su formato binario de firma.
+     */
+    private class Signature {
+        private val samples = ShortArray(WINDOW)
+        private var samplesAt = 0
+        private val ffts = Array(RING) { FloatArray(BINS) }
+        private var fftAt = 0
+        private val spread = Array(RING) { FloatArray(BINS) }
+        private var spreadAt = 0
+        private var spreadWritten = 0
 
-        for (i in 0 until 2048) {
-            reorderBuf[i] = ringBuf[wrap2048(i + ringPos)].toFloat() * hanning[i]
-        }
+        var sampleCount = 0
+            private set
 
-        val spec = fft2048(reorderBuf)
-        val out = fftOut[fftPos]
-        for (i in 0 until 1025) {
-            val re = spec[i * 2]
-            val im = spec[i * 2 + 1]
-            var m = (re * re + im * im) / 131072f
-            if (m < 1e-10f) m = 1e-10f
-            out[i] = m
-        }
-        fftPos = wrap256(fftPos + 1)
-    }
+        private val peaks = sortedMapOf<Int, MutableList<Peak>>()
 
-    private fun doSpread() {
-        val src = fftOut[wrap256(fftPos - 1)]
-        val dst = spreadOut[spreadPos]
-        for (i in 0 until 1025) dst[i] = src[i]
-        for (p in 0..1022) {
-            dst[p] = maxOf(dst[p], dst[p + 1], dst[p + 2])
-        }
-        val copy = dst.copyOf()
-        for (p in 0 until 1025) {
-            val v = copy[p]
-            for (off in intArrayOf(1, 3, 6)) {
-                val f = spreadOut[wrap256(spreadPos - off)]
-                if (v > f[p]) f[p] = v
-            }
-        }
-        spreadPos = wrap256(spreadPos + 1)
-    }
+        private class Peak(val pass: Int, val magnitude: Int, val bin: Int)
 
-    private fun doRecognize() {
-        val f46 = fftOut[wrap256(fftPos - 46)]
-        val s49 = spreadOut[wrap256(spreadPos - 49)]
-        val freqOffs = intArrayOf(-10, -7, -4, -3, 1, 2, 5, 8)
-        val timeOffs = intArrayOf(-53, -45, 165, 172, 179, 186, 193, 200, 214, 221, 228, 235, 242, 249)
+        private val re = DoubleArray(WINDOW)
+        private val im = DoubleArray(WINDOW)
 
-        for (b in 10..1014) {
-            val mag = f46[b]
-            if (mag < 0.015625f) continue
-            if (mag < s49[b - 1]) continue
+        private val pending = ShortArray(STEP)
+        private var pendingCount = 0
 
-            var maxF = 0f
-            for (o in freqOffs) {
-                val nb = b + o
-                if (nb >= 0 && nb < 1025) {
-                    val v = s49[nb]
-                    if (v > maxF) maxF = v
+        fun add(pcm: ShortArray, count: Int = pcm.size) {
+            for (i in 0 until count) {
+                pending[pendingCount++] = pcm[i]
+                if (pendingCount == STEP) {
+                    for (k in 0 until STEP) samples[(samplesAt + k) % WINDOW] = pending[k]
+                    samplesAt = (samplesAt + STEP) % WINDOW
+                    sampleCount += STEP
+                    pendingCount = 0
+                    fft()
+                    spreadPeaks()
+                    if (spreadWritten >= 46) findPeaks()
                 }
             }
-            if (mag <= maxF) continue
-
-            var maxT = maxF
-            for (o in timeOffs) {
-                val v = spreadOut[wrap256(spreadPos + o)][b - 1]
-                if (v > maxT) maxT = v
-            }
-            if (mag <= maxT) continue
-
-            val pass = doneCount - 46
-            val m0 = logMag(f46[b])
-            val mB = logMag(f46[b - 1])
-            val mA = logMag(f46[b + 1])
-            val v1 = m0 * 2f - mB - mA
-            if (v1 <= 0f) continue
-            val v2 = (mA - mB) * 32f / v1
-            val cbin = (b * 64 + v2.toInt()) and 0xFFFF
-            val hz = cbin * 0.1220703125f
-
-            val band = when {
-                hz >= 250f && hz <= 519f -> 0
-                hz >= 520f && hz <= 1449f -> 1
-                hz >= 1450f && hz <= 3499f -> 2
-                hz >= 3500f && hz <= 5500f -> 3
-                else -> -1
-            }
-            if (band < 0) continue
-            bandPeaks[band].add(Peak(pass, m0.toInt(), cbin))
-        }
-    }
-
-    private fun logMag(v: Float): Float {
-        var l = ln(v.toDouble()).toFloat()
-        if (l < 0.015625f) l = 0.015625f
-        return l * 1477.3f + 6144f
-    }
-
-    private fun fft2048(input: FloatArray): FloatArray {
-        val n = 2048
-        val re = FloatArray(n)
-        val im = FloatArray(n)
-        for (i in 0 until n) re[i] = input[i]
-
-        var j = 0
-        for (i in 1 until n) {
-            var bit = n shr 1
-            while (j and bit != 0) {
-                j = j xor bit
-                bit = bit shr 1
-            }
-            j = j xor bit
-            if (i < j) {
-                val tr = re[i]; re[i] = re[j]; re[j] = tr
-                val ti = im[i]; im[i] = im[j]; im[j] = ti
-            }
         }
 
-        var len = 2
-        while (len <= n) {
-            val ang = -2.0 * PI / len
-            val wRe = cos(ang).toFloat()
-            val wIm = sin(ang).toFloat()
-            var i = 0
-            while (i < n) {
-                var wr = 1f
-                var wi = 0f
-                for (k in 0 until len / 2) {
-                    val a = i + k
-                    val bb = i + k + len / 2
-                    val ur = re[a]
-                    val ui = im[a]
-                    val vr = re[bb] * wr - im[bb] * wi
-                    val vi = re[bb] * wi + im[bb] * wr
-                    re[a] = ur + vr
-                    im[a] = ui + vi
-                    re[bb] = ur - vr
-                    im[bb] = ui - vi
-                    val nwr = wr * wRe - wi * wIm
-                    wi = wr * wIm + wi * wRe
-                    wr = nwr
+        val peakCount: Int get() = peaks.values.sumOf { it.size }
+
+        private fun fft() {
+            for (k in 0 until WINDOW) {
+                re[k] = samples[(samplesAt + k) % WINDOW] * HANN[k]
+                im[k] = 0.0
+            }
+            transform(re, im)
+            val out = ffts[fftAt]
+            for (k in 0 until BINS) {
+                out[k] = max(((re[k] * re[k] + im[k] * im[k]) / (1 shl 17)).toFloat(), 1e-10f)
+            }
+            fftAt = (fftAt + 1) % RING
+        }
+
+        private fun spreadPeaks() {
+            val origin = ffts[(fftAt - 1 + RING) % RING]
+            val s = spread[spreadAt]
+            origin.copyInto(s)
+            for (p in 0 until BINS) {
+                if (p < BINS - 2) s[p] = max(s[p], max(s[p + 1], s[p + 2]))
+                var top = s[p]
+                for (back in FORMER) {
+                    val former = spread[(spreadAt + back + RING) % RING]
+                    top = max(former[p], top)
+                    former[p] = top
                 }
-                i += len
             }
-            len = len shl 1
+            spreadAt = (spreadAt + 1) % RING
+            spreadWritten++
         }
 
-        val out = FloatArray(2050)
-        for (i in 0 until 1025) {
-            out[i * 2] = re[i]
-            out[i * 2 + 1] = im[i]
-        }
-        return out
-    }
+        private fun findPeaks() {
+            val f46 = ffts[(fftAt - 46 + RING) % RING]
+            val s49 = spread[(spreadAt - 49 + RING) % RING]
+            for (bin in 10 until 1015) {
+                val v = f46[bin]
+                if (v < 1f / 64 || v < s49[bin - 1]) continue
+                var near = 0f
+                for (o in NEIGHBOURS) near = max(s49[bin + o], near)
+                if (v <= near) continue
+                var around = near
+                for (o in OTHER_FRAMES) around = max(spread[((spreadAt + o) % RING + RING) % RING][bin - 1], around)
+                if (v <= around) continue
 
-    private fun encodeToBinary(): ByteArray {
-        val bytes = mutableListOf<Byte>()
-        fun w32(v: Long) {
-            bytes.add((v and 0xFF).toByte())
-            bytes.add(((v shr 8) and 0xFF).toByte())
-            bytes.add(((v shr 16) and 0xFF).toByte())
-            bytes.add(((v shr 24) and 0xFF).toByte())
-        }
-
-        w32(0xcafe2580L)
-        w32(0L)
-        w32(0L)
-        w32(0x94119c00L)
-        w32(0L); w32(0L); w32(0L)
-        w32(3L shl 27)
-        w32(0L); w32(0L)
-        w32(totalSamples.toLong() + 3840L)
-        w32(((15 shl 19) + 0x40000).toLong())
-        w32(0x40000000L)
-        w32(0L)
-
-        for (b in 0 until 4) {
-            val peaks = bandPeaks[b]
-            if (peaks.isEmpty()) continue
-            val pb = mutableListOf<Byte>()
-            var lastPass = 0
-            for (p in peaks) {
-                if (p.pass - lastPass >= 255) {
-                    pb.add(0xFF.toByte())
-                    val v = p.pass.toLong()
-                    pb.add((v and 0xFF).toByte())
-                    pb.add(((v shr 8) and 0xFF).toByte())
-                    pb.add(((v shr 16) and 0xFF).toByte())
-                    pb.add(((v shr 24) and 0xFF).toByte())
-                    lastPass = p.pass
+                val pass = spreadWritten - 46
+                val magnitude = ln(max(1f / 64, v)) * 1477.3f + 6144
+                val before = ln(max(1f / 64, f46[bin - 1])) * 1477.3f + 6144
+                val after = ln(max(1f / 64, f46[bin + 1])) * 1477.3f + 6144
+                val variation1 = magnitude * 2 - before - after
+                if (variation1 <= 0f) continue
+                val variation2 = (after - before) * 32 / variation1
+                val corrected = bin * 64 + variation2
+                val hz = corrected * (16000f / 2 / 1024 / 64)
+                val band = when {
+                    hz > 250 && hz < 520 -> 0
+                    hz > 520 && hz < 1450 -> 1
+                    hz > 1450 && hz < 3500 -> 2
+                    hz > 3500 && hz <= 5500 -> 3
+                    else -> continue
                 }
-                pb.add(((p.pass - lastPass) and 0xFF).toByte())
-                pb.add((p.mag and 0xFF).toByte())
-                pb.add(((p.mag shr 8) and 0xFF).toByte())
-                pb.add((p.bin and 0xFF).toByte())
-                pb.add(((p.bin shr 8) and 0xFF).toByte())
-                lastPass = p.pass
+                peaks.getOrPut(band) { mutableListOf() } += Peak(pass, magnitude.toInt(), corrected.toInt())
             }
-            w32(0x60030040L + b)
-            w32(pb.size.toLong())
-            bytes.addAll(pb)
-            val pad = (4 - pb.size % 4) % 4
-            repeat(pad) { bytes.add(0) }
         }
 
-        val arr = bytes.toByteArray()
-        val sz = arr.size - 48
-        fun wAt(off: Int, v: Long) {
-            arr[off] = (v and 0xFF).toByte()
-            arr[off + 1] = ((v shr 8) and 0xFF).toByte()
-            arr[off + 2] = ((v shr 16) and 0xFF).toByte()
-            arr[off + 3] = ((v shr 24) and 0xFF).toByte()
+        fun encode(): ByteArray {
+            val contents = ByteArrayOutputStream()
+            for ((band, list) in peaks) {
+                val body = ByteArrayOutputStream()
+                var pass = 0
+                for (p in list) {
+                    if (p.pass - pass >= 255) {
+                        body.write(0xFF)
+                        body.le32(p.pass)
+                        pass = p.pass
+                    }
+                    body.write(p.pass - pass)
+                    body.le16(p.magnitude)
+                    body.le16(p.bin)
+                    pass = p.pass
+                }
+                val bytes = body.toByteArray()
+                contents.le32(0x60030040 + band)
+                contents.le32(bytes.size)
+                contents.write(bytes)
+                repeat((4 - bytes.size % 4) % 4) { contents.write(0) }
+            }
+            val c = contents.toByteArray()
+            val out = ByteArrayOutputStream()
+            out.le32(0xCAFE2580.toInt())
+            out.le32(0)
+            out.le32(c.size + 8)
+            out.le32(0x94119C00.toInt())
+            repeat(3) { out.le32(0) }
+            out.le32(3 shl 27)
+            repeat(2) { out.le32(0) }
+            out.le32((sampleCount + 16000 * 0.24).toInt())
+            out.le32((15 shl 19) + 0x40000)
+            out.le32(0x40000000)
+            out.le32(c.size + 8)
+            out.write(c)
+            val all = out.toByteArray()
+            val crc = CRC32().apply { update(all, 8, all.size - 8) }.value.toInt()
+            for (k in 0 until 4) all[4 + k] = (crc ushr (8 * k)).toByte()
+            return all
         }
-        wAt(8, sz.toLong())
-        wAt(52, sz.toLong())
-        val crc = CRC32()
-        crc.update(arr, 8, arr.size - 8)
-        wAt(4, crc.value)
-        return arr
+
+        val durationMs: Long get() = sampleCount * 1000L / 16000
+
+        companion object {
+            private const val WINDOW = 2048
+            private const val BINS = 1025
+            private const val STEP = 128
+            private const val RING = 256
+            private val FORMER = intArrayOf(-1, -3, -6)
+            private val NEIGHBOURS = intArrayOf(-10, -7, -4, -3, 1, 2, 5, 8)
+            private val OTHER_FRAMES = intArrayOf(-53, -45) + (165..200 step 7).toList() + (214..249 step 7).toList()
+            private val HANN = DoubleArray(WINDOW) { 0.5 - 0.5 * cos(2 * PI * (it + 1) / 2049) }
+
+            private operator fun IntArray.plus(other: List<Int>): IntArray = (this.toList() + other).toIntArray()
+
+            private fun ByteArrayOutputStream.le32(v: Int) {
+                write(v and 0xFF); write((v ushr 8) and 0xFF); write((v ushr 16) and 0xFF); write((v ushr 24) and 0xFF)
+            }
+
+            private fun ByteArrayOutputStream.le16(v: Int) {
+                write(v and 0xFF); write((v ushr 8) and 0xFF)
+            }
+
+            private fun transform(re: DoubleArray, im: DoubleArray) {
+                val n = re.size
+                var j = 0
+                for (i in 1 until n) {
+                    var bit = n shr 1
+                    while (j and bit != 0) {
+                        j = j xor bit
+                        bit = bit shr 1
+                    }
+                    j = j xor bit
+                    if (i < j) {
+                        var t = re[i]; re[i] = re[j]; re[j] = t
+                        t = im[i]; im[i] = im[j]; im[j] = t
+                    }
+                }
+                var len = 2
+                while (len <= n) {
+                    val angle = -2 * PI / len
+                    val wr = cos(angle)
+                    val wi = sin(angle)
+                    var i = 0
+                    while (i < n) {
+                        var cr = 1.0
+                        var ci = 0.0
+                        for (k in 0 until len / 2) {
+                            val ar = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci
+                            val ai = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr
+                            re[i + k + len / 2] = re[i + k] - ar
+                            im[i + k + len / 2] = im[i + k] - ai
+                            re[i + k] += ar
+                            im[i + k] += ai
+                            val ncr = cr * wr - ci * wi
+                            ci = cr * wi + ci * wr
+                            cr = ncr
+                        }
+                        i += len
+                    }
+                    len = len shl 1
+                }
+            }
+        }
     }
 }
