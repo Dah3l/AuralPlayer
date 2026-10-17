@@ -303,15 +303,13 @@ fun LibraryScreen(
                 1 -> ArtistsTab(
                     artists = viewModel.artists,
                     onOpen = { name -> onOpenArtist(name) },
-                    gridState = artistsGridState,
-                    customCovers = customCovers
+                    gridState = artistsGridState
                 )
 
                 2 -> AlbumsTab(
                     albums = viewModel.albums,
                     onOpen = { title -> onOpenAlbum(title) },
-                    gridState = albumsGridState,
-                    customCovers = customCovers
+                    gridState = albumsGridState
                 )
 
                 3 -> {
@@ -348,8 +346,7 @@ fun LibraryScreen(
                 }
                 5 -> FoldersTab(
                     folders = viewModel.folders,
-                    onPlay = { folder -> onPlayList(folder.songs, 0) },
-                    customCovers = customCovers
+                    onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
         }
@@ -579,7 +576,7 @@ private fun ArtistsTab(
         ) {
             items(artists, key = { it.name }) { artist ->
                 MediaGridCard(
-                    coverUri = customCovers[artist.representativeSong.id] ?: artist.representativeSong.albumArtUri,
+                    coverUri = artist.representativeSong.albumArtUri,
                     title = artist.name,
                     subtitle = "${artist.songs.size} ${if (artist.songs.size == 1) "canción" else "canciones"}",
                     onClick = { onOpen(artist.name) }
@@ -617,7 +614,7 @@ private fun AlbumsTab(
         ) {
             items(albums, key = { it.id }) { album ->
                 MediaGridCard(
-                    coverUri = album.songs.firstOrNull()?.let { customCovers[it.id] ?: it.albumArtUri },
+                    coverUri = album.songs.firstOrNull()?.albumArtUri,
                     title = album.title,
                     subtitle = album.artist,
                     onClick = { onOpen(album.title) }
