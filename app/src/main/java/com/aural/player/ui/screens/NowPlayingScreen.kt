@@ -585,6 +585,8 @@ private fun NowPlayingMenu(
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val sleepMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
     var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -708,15 +710,14 @@ private fun NowPlayingMenu(
 
     // Diálogo: editar metadatos
     if (showEditMetadata && song != null) {
+        val meta = customMetadata[song.id]
         EditMetadataDialog(
-            songUri = song.uri,
-            initialTitle = song.title,
-            initialArtist = song.artist,
-            initialAlbum = song.album,
-            currentCoverUri = customCovers[song.id] ?: song.albumArtUri,
-            onSaved = {
+            initialTitle = meta?.first ?: song.title,
+            initialArtist = meta?.second ?: song.artist,
+            initialAlbum = meta?.third ?: song.album,
+            onSave = { title, artist, album ->
+                viewModel.setCustomMetadata(song.id, title, artist, album)
                 showEditMetadata = false
-                viewModel.rescan()
             },
             onDismiss = { showEditMetadata = false }
         )
