@@ -10,12 +10,14 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.aural.player.data.Song
+import com.aural.player.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 
@@ -43,6 +45,22 @@ data class PlayerUiState(
 class PlaybackManager(private val context: Context) {
 
     private var controller: MediaController? = null
+    private val settings = SettingsStore(context)
+
+    /** Caché de metadatos personalizados: songId -> (título, artista, álbum). */
+    private var customMetadataCache: Map<Long, Triple<String, String, String>> = emptyMap()
+    /** Caché de portadas personalizadas: songId -> URL. */
+    private var customCoversCache: Map<Long, String> = emptyMap()
+
+    init {
+        // Observar cambios en personalizaciones
+        CoroutineScope(Dispatchers.IO).launch {
+            settings.customMetadata.collect { customMetadataCache = it }
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            settings.customCovers.collect { customCoversCache = it }
+        }
+    }
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -244,18 +262,26 @@ class PlaybackManager(private val context: Context) {
     }
 
     /** Convierte una canción en MediaItem con metadatos para la notificación. */
-    private fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
-        .setMediaId(id.toString())
-        .setUri(uri)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(
-                    albumArtUri?.let { android.net.Uri.parse(it) }
-                )
-                .build()
-        )
-        .build()
+    private fun Song.toMediaItem(): MediaItem {
+        val meta = customMetadataCache[id]
+        val displayTitle = meta?.first?.ifBlank { title } ?: title
+        val displayArtist = meta?.second?.ifBlank { artist } ?: artist
+        val displayAlbum = meta?.third?.ifBlank { album } ?: album
+        val artworkUri = customCoversCache[id] ?: albumArtUri
+
+        return MediaItem.Builder()
+            .setMediaId(id.toString())
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(displayTitle)
+                    .setArtist(displayArtist)
+                    .setAlbumTitle(displayAlbum)
+                    .setArtworkUri(
+                        artworkUri?.let { android.net.Uri.parse(it) }
+                    )
+                    .build()
+            )
+            .build()
+    }
 }
