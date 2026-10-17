@@ -103,6 +103,10 @@ fun LibraryScreen(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val songs by viewModel.filteredSongsFlow.collectAsStateWithLifecycle()
+    val artists by viewModel.artistsFlow.collectAsStateWithLifecycle()
+    val albums by viewModel.albumsFlow.collectAsStateWithLifecycle()
+    val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
     var showSearch by remember { mutableStateOf(false) }
@@ -290,12 +294,12 @@ fun LibraryScreen(
 
             else -> when (selectedTab) {
                 0 -> SongsTab(
-                    songs = viewModel.effectiveFilteredSongs(),
+                    songs = songs,
                     favorites = favorites,
                     currentId = playerState.currentSong?.id,
                     isPlaying = playerState.isPlaying,
                     onPlay = { song ->
-                        val list = viewModel.effectiveFilteredSongs()
+                        val list = songs
                         onPlayList(list, list.indexOfFirst { it.id == song.id })
                     },
                     onFavorite = viewModel::toggleFavorite,
@@ -306,13 +310,13 @@ fun LibraryScreen(
                 )
 
                 1 -> ArtistsTab(
-                    artists = viewModel.artists(),
+                    artists = artists,
                     onOpen = { name -> onOpenArtist(name) },
                     gridState = artistsGridState
                 )
 
                 2 -> AlbumsTab(
-                    albums = viewModel.albums(),
+                    albums = albums,
                     onOpen = { title -> onOpenAlbum(title) },
                     gridState = albumsGridState
                 )
@@ -350,7 +354,7 @@ fun LibraryScreen(
                     }
                 }
                 5 -> FoldersTab(
-                    folders = viewModel.folders(),
+                    folders = folders,
                     onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
