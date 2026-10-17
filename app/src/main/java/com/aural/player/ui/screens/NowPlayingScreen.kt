@@ -716,7 +716,7 @@ private fun NowPlayingMenu(
             currentCoverUri = customCovers[song.id] ?: song.albumArtUri,
             onSaved = {
                 showEditMetadata = false
-                // TODO: refrescar la biblioteca
+                viewModel.rescan()
             },
             onDismiss = { showEditMetadata = false }
         )
