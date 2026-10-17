@@ -427,7 +427,10 @@ fun SplashScreen() {
                         scaleX = scale
                         scaleY = scale
                         this.alpha = alpha
-                    }
+                    },
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                    MaterialTheme.colorScheme.primary
+                )
             )
             Spacer(Modifier.height(16.dp))
             Text(
