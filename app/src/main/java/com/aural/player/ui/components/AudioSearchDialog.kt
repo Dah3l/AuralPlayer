@@ -60,6 +60,18 @@ import kotlinx.coroutines.withContext
 
 private const val RECORD_SECONDS = 14
 private val ASK_AT = intArrayOf(4, 7, 10, 13)
+/** Mensajes warm mientras escucha (aprobados por Dahel). */
+private val LISTENING_MESSAGES = listOf(
+    "Escuchando... 🎵",
+    "A ver qué está sonando por ahí...",
+    "Captando la vibra... 🎧"
+)
+/** Mensajes chistosos si se acaba el tiempo sin resultados. */
+private val NO_LUCK_MESSAGES = listOf(
+    "Hmm... ¿seguro que eso es música? 😅",
+    "Ni con café encuentro esto... ☕",
+    "¿Estás cantando o es el vecino con el taladro? 🔨😂"
+)
 private const val SAMPLE_RATE = 16000
 
 private enum class AudioSearchState { IDLE, RECORDING, IDENTIFYING, RESULT, ERROR }
@@ -74,7 +86,6 @@ fun AudioSearchDialog(
     var state by remember { mutableStateOf(AudioSearchState.IDLE) }
     var result by remember { mutableStateOf<ShazamTrack?>(null) }
     var errorDetail by remember { mutableStateOf("") }
-    var secondsLeft by remember { mutableIntStateOf(RECORD_SECONDS) }
     var recordJob by remember { mutableStateOf<Job?>(null) }
 
     fun startListening() {
@@ -83,7 +94,7 @@ fun AudioSearchDialog(
                 state = AudioSearchState.RECORDING
                 // Búsqueda incremental: graba por chunks y pregunta a los 4, 7, 10, 13 seg
                 val recognitionResult: ShazamResult? = withContext(Dispatchers.IO) {
-                    incrementalRecognize { secondsLeft = it }
+                    incrementalRecognize { /* contador oculto */ }
                 }
                 if (recognitionResult == null) {
                     errorDetail = "No se pudo acceder al micrófono"
@@ -146,8 +157,11 @@ fun AudioSearchDialog(
         title = { Text("Identificar canción") },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 when (state) {
                     AudioSearchState.IDLE -> {
@@ -172,10 +186,13 @@ fun AudioSearchDialog(
                     AudioSearchState.RECORDING -> {
                         PulsingMic()
                         Spacer(Modifier.height(12.dp))
+                        // Mensaje warm rotativo (sin contador visible)
+                        val msgIndex = remember { (LISTENING_MESSAGES.indices).random() }
                         Text(
-                            "Escuchando… $secondsLeft",
+                            LISTENING_MESSAGES[msgIndex],
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
                         )
                     }
                     AudioSearchState.IDENTIFYING -> {
@@ -209,50 +226,39 @@ fun AudioSearchDialog(
                         }
                     }
                     AudioSearchState.ERROR -> {
-                        val clipboard = LocalClipboardManager.current
-                        var showDiag by remember { mutableStateOf(false) }
-                        Text(
-                            "No pude identificar la canción.",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        if (errorDetail.isNotBlank()) {
+                        // Mensaje amigable según el tipo de error (sin diagnósticos técnicos)
+                        val isHttpError = errorDetail.contains("HTTP 4") ||
+                            errorDetail.contains("HTTP 5") ||
+                            errorDetail.contains("403")
+                        val funnyMsg = remember { NO_LUCK_MESSAGES.random() }
+                        if (isHttpError) {
+                            Text(
+                                "🌐",
+                                style = MaterialTheme.typography.displayMedium,
+                                textAlign = TextAlign.Center
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "Detalle: $errorDetail",
+                                "No hay conexión con Shazam.",
                                 textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Prueba usar VPN y reintenta.",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Button(onClick = { begin() }) { Text("Reintentar") }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { showDiag = true }) {
-                            Text("Ver diagnóstico")
-                        }
-                        if (showDiag) {
-                            AlertDialog(
-                                onDismissRequest = { showDiag = false },
-                                title = { Text("Diagnóstico") },
-                                text = {
-                                    Text(
-                                        ShazamClient.lastDiagnostic.ifBlank { "Sin datos" },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.verticalScroll(rememberScrollState())
-                                    )
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        clipboard.setText(AnnotatedString(ShazamClient.lastDiagnostic))
-                                        showDiag = false
-                                    }) { Text("Copiar") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showDiag = false }) { Text("Cerrar") }
-                                }
+                        } else {
+                            Text(
+                                funnyMsg,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.titleSmall
                             )
                         }
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = { begin() }) { Text("Reintentar") }
                     }
                 }
             }
