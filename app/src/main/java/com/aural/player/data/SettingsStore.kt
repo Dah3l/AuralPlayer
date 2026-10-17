@@ -26,6 +26,7 @@ class SettingsStore(private val context: Context) {
         val KEY_PLAYLISTS = stringPreferencesKey("playlists_json")
         val KEY_FAVORITES = stringPreferencesKey("favorites_json")
         val KEY_LRC_MAP = stringPreferencesKey("lrc_map_json")
+        val KEY_THEME = stringPreferencesKey("app_theme")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -41,6 +42,17 @@ class SettingsStore(private val context: Context) {
     // ------------------------- Playlists -------------------------
 
     /** Crea una playlist vacía con el nombre indicado. */
+    /** Tema seleccionado de la app (BOSQUE por defecto). */
+    val appTheme: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_THEME] ?: "BOSQUE"
+    }
+
+    suspend fun setAppTheme(themeName: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_THEME] = themeName
+        }
+    }
+
     suspend fun createPlaylist(name: String): String {
         val id = "pl_${System.currentTimeMillis()}"
         mutatePlaylists { list ->
