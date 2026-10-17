@@ -101,6 +101,7 @@ fun LibraryScreen(
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
     var showSearch by remember { mutableStateOf(false) }
@@ -530,7 +531,7 @@ private fun SongsTab(
                 SongRow(
                     title = song.title,
                     subtitle = "${song.artist} · ${song.album}",
-                    coverUri = song.albumArtUri,
+                    coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == currentId,
                     onClick = { onPlay(song) },
