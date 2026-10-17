@@ -95,6 +95,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setAppTheme(themeName) }
     }
 
+    /** Portadas personalizadas: songId -> URL. */
+    val customCovers: StateFlow<Map<Long, String>> = settings.customCovers.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyMap()
+    )
+
+    fun setCustomCover(songId: Long, coverUrl: String) {
+        viewModelScope.launch { settings.setCustomCover(songId, coverUrl) }
+    }
+
 
     // --------------------------- Permisos y escaneo ---------------------------
 
