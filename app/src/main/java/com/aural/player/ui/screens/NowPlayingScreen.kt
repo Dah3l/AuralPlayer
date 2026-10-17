@@ -120,6 +120,7 @@ fun NowPlayingScreen(
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
+    val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -227,7 +228,7 @@ fun NowPlayingScreen(
             ) {
                 val artSize = (maxWidth * 0.96f).coerceAtMost(420.dp).coerceAtLeast(220.dp)
                 CoverArt(
-                    uri = song.albumArtUri,
+                    uri = customCovers[song.id] ?: song.albumArtUri,
                     size = artSize,
                     modifier = Modifier.shadow(
                         elevation = 24.dp,
