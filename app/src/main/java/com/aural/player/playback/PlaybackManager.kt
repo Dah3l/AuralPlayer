@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Modos de repetición del reproductor. */
 enum class RepeatMode { OFF, ONE, ALL }
@@ -93,14 +94,17 @@ class PlaybackManager(private val context: Context) {
 
     /** Reconstruye el MediaItem actual con los metadatos actualizados. */
     private fun refreshCurrentMediaItem() {
-        val c = controller ?: return
-        val index = c.currentMediaItemIndex
-        if (index < 0) return
-        val song = _state.value.currentSong ?: return
-        try {
-            c.replaceMediaItem(index, song.toMediaItem())
-        } catch (e: Exception) {
-            // Ignorar si falla
+        // MediaController debe usarse en el hilo principal
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val c = controller ?: return@launch
+                val index = c.currentMediaItemIndex
+                if (index < 0) return@launch
+                val song = _state.value.currentSong ?: return@launch
+                c.replaceMediaItem(index, song.toMediaItem())
+            } catch (e: Exception) {
+                // Ignorar si falla
+            }
         }
     }
 
