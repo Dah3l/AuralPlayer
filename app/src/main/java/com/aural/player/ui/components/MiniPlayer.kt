@@ -39,7 +39,8 @@ fun MiniPlayer(
     state: PlayerUiState,
     onOpen: () -> Unit,
     onTogglePlay: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    customCoverUri: String? = null
 ) {
     val song = state.currentSong ?: return
 
@@ -72,7 +73,7 @@ fun MiniPlayer(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CoverArt(uri = song.albumArtUri, size = 42.dp)
+                CoverArt(uri = customCoverUri ?: song.albumArtUri, size = 42.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(
                     modifier = Modifier.weight(1f),
