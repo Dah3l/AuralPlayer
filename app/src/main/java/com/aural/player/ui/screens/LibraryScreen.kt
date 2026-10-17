@@ -48,17 +48,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.CoverArt
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.EmptyState
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.MediaGridCard
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.SectionHeader
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.SongRow
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -78,6 +72,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
 
 /** Pestañas de la biblioteca. */
 private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas", "Carpetas")
@@ -443,6 +438,54 @@ fun LibraryScreen(
             onDismiss = { showThemeDialog = false }
         )
     }
+}
+
+
+/** Diálogo selector de temas de la app. */
+@Composable
+private fun ThemeDialog(
+    currentTheme: AppTheme,
+    onSelect: (AppTheme) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tema de la app") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AppTheme.entries.forEach { theme ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(theme) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            theme.emoji,
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                        Text(
+                            theme.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(
+                            selected = theme == currentTheme,
+                            onClick = { onSelect(theme) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
 }
 
 /** ID virtual para la lista de favoritos dentro de las playlists. */
