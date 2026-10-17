@@ -589,6 +589,16 @@ private fun NowPlayingMenu(
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
+    // Canción con metadatos personalizados aplicados
+    val effectiveSong = song?.let { s ->
+        val meta = customMetadata[s.id]
+        if (meta != null) s.copy(
+            title = meta.first.ifBlank { s.title },
+            artist = meta.second.ifBlank { s.artist },
+            album = meta.third.ifBlank { s.album }
+        ) else s
+    }
+
     var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -725,20 +735,20 @@ private fun NowPlayingMenu(
     }
 
     // Diálogo: cambiar portada
-    if (showCoverPicker && song != null) {
+    if (showCoverPicker && effectiveSong != null) {
         CoverPickerDialog(
-            artist = song.artist,
-            title = song.title,
-            hasCustomCover = customCovers.containsKey(song.id),
+            artist = effectiveSong.artist,
+            title = effectiveSong.title,
+            hasCustomCover = customCovers.containsKey(effectiveSong.id),
             onSelect = { coverUrl ->
-                viewModel.setCustomCover(song.id, coverUrl)
+                viewModel.setCustomCover(effectiveSong.id, coverUrl)
                 showCoverPicker = false
             },
             onPickFromGallery = {
                 galleryLauncher.launch("image/*")
             },
             onRemove = {
-                viewModel.setCustomCover(song.id, "")
+                viewModel.setCustomCover(effectiveSong.id, "")
                 showCoverPicker = false
             },
             onDismiss = { showCoverPicker = false }
@@ -847,8 +857,8 @@ private fun NowPlayingMenu(
     // Diálogo buscar letra en línea
     if (showLyricsSearch) {
         com.aural.player.ui.components.LyricsSearchDialog(
-            initialTrack = song?.title ?: "",
-            initialArtist = song?.artist ?: "",
+            initialTrack = effectiveSong?.title ?: "",
+            initialArtist = effectiveSong?.artist ?: "",
             isSearching = isSearchingLyrics,
             errorMessage = lyricsSearchError,
             onDismiss = { showLyricsSearch = false },
