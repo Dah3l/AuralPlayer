@@ -18,6 +18,13 @@ import com.aural.player.data.CoverArtResult
 import com.aural.player.data.MetadataEditor
 import com.aural.player.data.SongMetadata
 import kotlinx.coroutines.launch
+import android.app.Activity
+import android.content.IntentSender
+import android.os.Build
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 
 @Composable
 fun EditMetadataDialog(
@@ -144,8 +151,12 @@ fun EditMetadataDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
+            // Launcher para pedir permiso de escritura en Android 11+
+            val writeRequestLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartIntentSenderForResult()
+            ) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    // Permiso concedido, reintentar guardado
                     scope.launch {
                         isSaving = true
                         val success = MetadataEditor.write(
@@ -162,6 +173,53 @@ fun EditMetadataDialog(
                         )
                         isSaving = false
                         if (success) onSaved() else onDismiss()
+                    }
+                } else {
+                    isSaving = false
+                }
+            }
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        isSaving = true
+                        try {
+                            val success = MetadataEditor.write(
+                                context = context,
+                                songUri = songUri,
+                                metadata = SongMetadata(
+                                    title = title,
+                                    artist = artist,
+                                    album = album,
+                                    genre = genre,
+                                    year = year
+                                ),
+                                coverUri = coverUri
+                            )
+                            isSaving = false
+                            if (success) onSaved() else onDismiss()
+                        } catch (e: SecurityException) {
+                            // Necesita permiso de escritura (Android 11+)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                try {
+                                    val uri = android.net.Uri.parse(songUri)
+                                    val request = MediaStore.createWriteRequest(
+                                        context.contentResolver,
+                                        listOf(uri)
+                                    )
+                                    val intentSenderRequest = IntentSenderRequest.Builder(
+                                        request.intentSender
+                                    ).build()
+                                    writeRequestLauncher.launch(intentSenderRequest)
+                                } catch (ex: Exception) {
+                                    isSaving = false
+                                    onDismiss()
+                                }
+                            } else {
+                                isSaving = false
+                                onDismiss()
+                            }
+                        }
                     }
                 },
                 enabled = !isSaving && !isLoading
