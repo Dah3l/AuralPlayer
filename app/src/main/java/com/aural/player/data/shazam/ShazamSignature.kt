@@ -1,239 +1,173 @@
 // Generador de firma acústica de Shazam.
-//
-// Port del algoritmo real de shazamio-core (Rust):
+// Port del algoritmo de shazamio-core (Rust).
 // https://github.com/shazamio/shazamio-core/blob/master/src/fingerprinting/algorithm.rs
-//
-// - FFT de 2048 puntos, ventana Hanning de 2048
-// - Buffer circular de 2048 muestras, 128 muestras nuevas por iteración
-// - Spreading en frecuencia y tiempo
-// - Detección de picos con vecinos en frecuencia y tiempo
-// - Magnitud logarítmica, interpolación parabólica de frecuencia
 package com.aural.player.data.shazam
 
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.ln
-import kotlin.math.max
 import kotlin.math.sin
+import kotlin.math.ln
 import java.util.zip.CRC32
 import android.util.Base64
 
-/** Pico de frecuencia detectado. */
-private data class FrequencyPeak(
-    val fftPassNumber: Int,
-    val peakMagnitude: Int,  // u16
-    val correctedBin: Int    // u16
-)
-
-/** Banda de frecuencia (por Hz). */
-private enum class FrequencyBand(val id: Int) {
-    B250_520(0),
-    B520_1450(1),
-    B1450_3500(2),
-    B3500_5500(3)
-}
-
 object ShazamSignature {
 
-    // FFT de 2048 puntos
-    private const val FFT_SIZE = 2048
-    private const val USEFUL_BINS = 1025  // 0..1024
-    private const val RING_SIZE = 256
-
-    // Ventana Hanning de 2048 (fórmula estándar)
-    private val HANNING: FloatArray = FloatArray(FFT_SIZE) { n ->
-        (0.5 * (1.0 - cos(2.0 * PI * n / (FFT_SIZE - 1)))).toFloat()
-    }
-
-    // Vecinos en frecuencia para detección de picos
-    private val FREQ_NEIGHBORS = intArrayOf(-10, -7, -4, -3, 1, 2, 5, 8)
-
-    // Vecinos en tiempo (offsets en el ring buffer de spread)
-    private val TIME_NEIGHBORS = intArrayOf(
-        -53, -45, 165, 172, 179, 186, 193, 200, 214, 221, 228, 235, 242, 249
-    )
-
-    // Offsets para el spreading temporal
-    private val SPREAD_TIME_OFFSETS = intArrayOf(1, 3, 6)
-
-    /**
-     * Genera la firma de Shazam para un buffer de audio.
-     * @param samples muestras PCM 16-bit mono a 16 kHz
-     * @return URI de la firma (data:audio/vnd.shazam.sig;base64,...)
-     */
     fun generate(samples: ShortArray): String {
-        val gen = Generator()
-        return gen.makeSignature(samples)
+        val gen = SigGen()
+        return gen.run(samples)
     }
 
-    private class Generator {
-        // Buffer circular de 2048 muestras i16
-        private val ringBuffer = ShortArray(FFT_SIZE)
-        private var ringIndex = 0
+    private class SigGen {
+        private val ringBuf = ShortArray(2048)
+        private var ringPos = 0
+        private val reorderBuf = FloatArray(2048)
+        private val fftOut = Array(256) { FloatArray(1025) }
+        private var fftPos = 0
+        private val spreadOut = Array(256) { FloatArray(1025) }
+        private var spreadPos = 0
+        private var doneCount = 0
 
-        // Buffer reordenado para la FFT
-        private val reordered = FloatArray(FFT_SIZE)
+        private val hanning = FloatArray(2048) { n ->
+            (0.5 * (1.0 - cos(2.0 * PI * n / 2047.0))).toFloat()
+        }
 
-        // Salidas de FFT (ring buffer de 256 x 1025)
-        private val fftOutputs = Array(RING_SIZE) { FloatArray(USEFUL_BINS) }
-        private var fftIndex = 0
+        // picos por banda: 0=250-520, 1=520-1450, 2=1450-3500, 3=3500-5500
+        private val bandPeaks = Array(4) { mutableListOf<Peak>() }
 
-        // Salidas con spreading (ring buffer de 256 x 1025)
-        private val spreadOutputs = Array(RING_SIZE) { FloatArray(USEFUL_BINS) }
-        private var spreadIndex = 0
+        private class Peak(val pass: Int, val mag: Int, val bin: Int)
 
-        private var numSpreadFftsDone = 0
+        private fun wrap256(i: Int): Int {
+            var v = i % 256
+            if (v < 0) v += 256
+            return v
+        }
 
-        // Picos por banda
-        private val peaks = mutableMapOf<FrequencyBand, MutableList<FrequencyPeak>>()
+        private fun wrap2048(i: Int): Int {
+            var v = i % 2048
+            if (v < 0) v += 2048
+            return v
+        }
 
-        fun makeSignature(samples: ShortArray): String {
-            // Procesar en chunks de 128
+        fun run(samples: ShortArray): String {
             var pos = 0
             while (pos + 128 <= samples.size) {
-                val chunk = samples.copyOfRange(pos, pos + 128)
-                doFft(chunk)
-                doPeakSpreading()
-                numSpreadFftsDone++
-                if (numSpreadFftsDone >= 46) {
-                    doPeakRecognition()
-                }
+                doFft(samples, pos)
+                doSpread()
+                doneCount++
+                if (doneCount >= 46) doRecognize()
                 pos += 128
             }
-
-            return encodeToUri(samples.size)
+            return encode(samples.size)
         }
 
-        private fun doFft(chunk: ShortArray) {
-            // Copiar 128 muestras al ring buffer
+        private fun doFft(samples: ShortArray, offset: Int) {
             for (i in 0 until 128) {
-                ringBuffer[ringIndex + i] = chunk[i]
+                ringBuf[wrap2048(ringPos + i)] = samples[offset + i]
             }
-            ringIndex = (ringIndex + 128) and 2047
+            ringPos = wrap2048(ringPos + 128)
 
-            // Reordenar (los más recientes al final) y aplicar Hanning
-            for (i in 0 until FFT_SIZE) {
-                val sample = ringBuffer[(i + ringIndex) and 2047]
-                reordered[i] = sample.toFloat() * HANNING[i]
+            for (i in 0 until 2048) {
+                reorderBuf[i] = ringBuf[wrap2048(i + ringPos)].toFloat() * hanning[i]
             }
 
-            // FFT de 2048 puntos reales -> 1025 complejos
-            val complex = fftForward2048(reordered)
-
-            // Magnitudes: (re² + im²) / 131072, mínimo 1e-10
-            val out = fftOutputs[fftIndex]
-            for (i in 0 until USEFUL_BINS) {
-                val re = complex[i * 2]
-                val im = complex[i * 2 + 1]
-                val mag = (re * re + im * im) / 131072f
-                out[i] = max(mag, 1e-10f)
+            val spec = fft2048(reorderBuf)
+            val out = fftOut[fftPos]
+            for (i in 0 until 1025) {
+                val re = spec[i * 2]
+                val im = spec[i * 2 + 1]
+                var m = (re * re + im * im) / 131072f
+                if (m < 1e-10f) m = 1e-10f
+                out[i] = m
             }
-
-            fftIndex = (fftIndex + 1) and 255
+            fftPos = wrap256(fftPos + 1)
         }
 
-        private fun doPeakSpreading() {
-            val real = fftOutputs[(fftIndex - 1) and 255]
-            val spread = spreadOutputs[spreadIndex]
-
-            // Spreading en frecuencia: máximo de 3 adyacentes
-            for (i in 0 until USEFUL_BINS) {
-                spread[i] = real[i]
+        private fun doSpread() {
+            val src = fftOut[wrap256(fftPos - 1)]
+            val dst = spreadOut[spreadPos]
+            for (i in 0 until 1025) dst[i] = src[i]
+            for (p in 0..1022) {
+                val m = maxOf(dst[p], dst[p + 1], dst[p + 2])
+                dst[p] = m
             }
-            for (pos in 0..1022) {
-                spread[pos] = max(spread[pos], max(spread[pos + 1], spread[pos + 2]))
-            }
-
-            // Spreading en tiempo: propagar a FFTs anteriores
-            val spreadCopy = spread.copyOf()
-            for (pos in 0 until USEFUL_BINS) {
-                for (offset in SPREAD_TIME_OFFSETS) {
-                    val former = spreadOutputs[(spreadIndex - offset) and 255]
-                    if (spreadCopy[pos] > former[pos]) {
-                        former[pos] = spreadCopy[pos]
-                    }
+            val copy = dst.copyOf()
+            for (p in 0 until 1025) {
+                val v = copy[p]
+                for (off in intArrayOf(1, 3, 6)) {
+                    val f = spreadOut[wrap256(spreadPos - off)]
+                    if (v > f[p]) f[p] = v
                 }
             }
-
-            spreadIndex = (spreadIndex + 1) and 255
+            spreadPos = wrap256(spreadPos + 1)
         }
 
-        private fun doPeakRecognition() {
-            val fftMinus46 = fftOutputs[(fftIndex - 46) and 255]
-            val spreadMinus49 = spreadOutputs[(spreadIndex - 49) and 255]
+        private fun doRecognize() {
+            val f46 = fftOut[wrap256(fftPos - 46)]
+            val s49 = spreadOut[wrap256(spreadPos - 49)]
+            val freqOffs = intArrayOf(-10, -7, -4, -3, 1, 2, 5, 8)
+            val timeOffs = intArrayOf(-53, -45, 165, 172, 179, 186, 193, 200, 214, 221, 228, 235, 242, 249)
 
-            for (bin in 10..1014) {
-                // El bin debe ser lo suficientemente grande
-                if (fftMinus46[bin] < 1f / 64f) continue
-                if (fftMinus46[bin] < spreadMinus49[bin - 1]) continue
+            for (b in 10..1014) {
+                val mag = f46[b]
+                if (mag < 0.015625f) continue
+                if (mag < s49[b - 1]) continue
 
-                // Verificar que es mínimo local en frecuencia
-                var maxFreqNeighbor = 0f
-                for (offset in FREQ_NEIGHBORS) {
-                    val neighborBin = bin + offset
-                    if (neighborBin in 0 until USEFUL_BINS) {
-                        maxFreqNeighbor = max(maxFreqNeighbor, spreadMinus49[neighborBin])
+                var maxF = 0f
+                for (o in freqOffs) {
+                    val nb = b + o
+                    if (nb >= 0 && nb < 1025) {
+                        val v = s49[nb]
+                        if (v > maxF) maxF = v
                     }
                 }
-                if (fftMinus46[bin] <= maxFreqNeighbor) continue
+                if (mag <= maxF) continue
 
-                // Verificar que es mínimo local en tiempo
-                var maxTimeNeighbor = maxFreqNeighbor
-                for (offset in TIME_NEIGHBORS) {
-                    val other = spreadOutputs[(spreadIndex + offset) and 255]
-                    // Nota: Rust usa bin_position - 1 para los vecinos temporales
-                    val neighborBin = bin - 1
-                    if (neighborBin in 0 until USEFUL_BINS) {
-                        maxTimeNeighbor = max(maxTimeNeighbor, other[neighborBin])
-                    }
+                var maxT = maxF
+                for (o in timeOffs) {
+                    val other = spreadOut[wrap256(spreadPos + o)]
+                    val v = other[b - 1]
+                    if (v > maxT) maxT = v
                 }
-                if (fftMinus46[bin] <= maxTimeNeighbor) continue
+                if (mag <= maxT) continue
 
-                // ¡PICO ENCONTRADO!
-                val fftPassNumber = numSpreadFftsDone - 46
+                val pass = doneCount - 46
+                val m0 = logMag(f46[b])
+                val mBefore = logMag(f46[b - 1])
+                val mAfter = logMag(f46[b + 1])
+                val v1 = m0 * 2f - mBefore - mAfter
+                if (v1 <= 0f) continue
+                val v2 = (mAfter - mBefore) * 32f / v1
+                val cbin = (b * 64 + v2.toInt()) and 0xFFFF
+                val hz = cbin * 0.1220703125f
 
-                // Magnitud logarítmica
-                val mag = max(ln(fftMinus46[bin].toDouble()), (1.0/64.0)).toFloat() * 1477.3f + 6144f
-                val magBefore = max(ln(fftMinus46[bin-1].toDouble()), (1.0/64.0)).toFloat() * 1477.3f + 6144f
-                val magAfter = max(ln(fftMinus46[bin+1].toDouble()), (1.0/64.0)).toFloat() * 1477.3f + 6144f
-
-                // Interpolación parabólica
-                val var1 = mag * 2f - magBefore - magAfter
-                // Evitar división por cero
-                if (var1 <= 0f) continue
-                val var2 = (magAfter - magBefore) * 32f / var1
-                val correctedBin = (bin * 64 + var2.toInt()) and 0xFFFF
-
-                // Convertir a Hz: corrected_bin * 16000 / 2 / 1024 / 64
-                val freqHz = correctedBin * (16000f / 2f / 1024f / 64f)
-
-                // Clasificar en banda
-                val band = when (freqHz.toInt()) {
-                    in 250..519 -> FrequencyBand.B250_520
-                    in 520..1449 -> FrequencyBand.B520_1450
-                    in 1450..3499 -> FrequencyBand.B1450_3500
-                    in 3500..5500 -> FrequencyBand.B3500_5500
-                    else -> continue
+                val band = when {
+                    hz >= 250f && hz <= 519f -> 0
+                    hz >= 520f && hz <= 1449f -> 1
+                    hz >= 1450f && hz <= 3499f -> 2
+                    hz >= 3500f && hz <= 5500f -> 3
+                    else -> -1
                 }
+                if (band < 0) continue
 
-                peaks.getOrPut(band) { mutableListOf() }.add(
-                    FrequencyPeak(fftPassNumber, mag.toInt(), correctedBin)
-                )
+                bandPeaks[band].add(Peak(pass, m0.toInt(), cbin))
             }
         }
 
-        /**
-         * FFT radix-2 de 2048 puntos reales.
-         * @return array de 2050 floats [re0, im0, re1, im1, ...]
-         */
-        private fun fftForward2048(input: FloatArray): FloatArray {
-            val n = FFT_SIZE
-            // Bit-reversal
+        private fun logMag(v: Float): Float {
+            var l = ln(v.toDouble()).toFloat()
+            val min = (1.0 / 64.0).toFloat()
+            // Rust: ln(v).max(1/64) — pero ln(1/64) es negativo, así que max con 1/64 no tiene sentido
+            // En realidad es: max(ln(v), ln(1/64))? No, el código dice .max(1.0/64.0)
+            // ln(v) donde v>=1e-10, ln(1e-10)=-23. Si ln(v) < 0.015625, usa 0.015625
+            if (l < min) l = min
+            return l * 1477.3f + 6144f
+        }
+
+        private fun fft2048(input: FloatArray): FloatArray {
+            val n = 2048
             val re = FloatArray(n)
             val im = FloatArray(n)
-            for (i in 0 until n) {
-                re[i] = input[i]
-            }
+            for (i in 0 until n) re[i] = input[i]
 
             var j = 0
             for (i in 1 until n) {
@@ -249,25 +183,26 @@ object ShazamSignature {
                 }
             }
 
-            // Cooley-Tukey
             var len = 2
             while (len <= n) {
-                val angle = -2.0 * PI / len
-                val wRe = cos(angle).toFloat()
-                val wIm = sin(angle).toFloat()
+                val ang = -2.0 * PI / len
+                val wRe = cos(ang).toFloat()
+                val wIm = sin(ang).toFloat()
                 var i = 0
                 while (i < n) {
                     var wr = 1f
                     var wi = 0f
                     for (k in 0 until len / 2) {
-                        val ur = re[i + k]
-                        val ui = im[i + k]
-                        val vr = re[i + k + len / 2] * wr - im[i + k + len / 2] * wi
-                        val vi = re[i + k + len / 2] * wi + im[i + k + len / 2] * wr
-                        re[i + k] = ur + vr
-                        im[i + k] = ui + vi
-                        re[i + k + len / 2] = ur - vr
-                        im[i + k + len / 2] = ui - vi
+                        val a = i + k
+                        val bIdx = i + k + len / 2
+                        val ur = re[a]
+                        val ui = im[a]
+                        val vr = re[bIdx] * wr - im[bIdx] * wi
+                        val vi = re[bIdx] * wi + im[bIdx] * wr
+                        re[a] = ur + vr
+                        im[a] = ui + vi
+                        re[bIdx] = ur - vr
+                        im[bIdx] = ui - vi
                         val nwr = wr * wRe - wi * wIm
                         wi = wr * wIm + wi * wRe
                         wr = nwr
@@ -277,112 +212,84 @@ object ShazamSignature {
                 len = len shl 1
             }
 
-            // Empaquetar solo los primeros 1025 (0..1024)
-            val out = FloatArray(USEFUL_BINS * 2)
-            for (i in 0 until USEFUL_BINS) {
+            val out = FloatArray(2050)
+            for (i in 0 until 1025) {
                 out[i * 2] = re[i]
                 out[i * 2 + 1] = im[i]
             }
             return out
         }
 
-        private fun encodeToUri(numSamples: Int): String {
-            val binary = encodeToBinary(numSamples)
-            val b64 = Base64.encodeToString(binary, Base64.NO_WRAP)
-            return "data:audio/vnd.shazam.sig;base64,$b64"
-        }
-
-        private fun encodeToBinary(numSamples: Int): ByteArray {
-            val out = mutableListOf<Byte>()
-
-            fun writeU32LE(v: Long) {
-                out.add((v and 0xFF).toByte())
-                out.add(((v shr 8) and 0xFF).toByte())
-                out.add(((v shr 16) and 0xFF).toByte())
-                out.add(((v shr 24) and 0xFF).toByte())
+        private fun encode(numSamples: Int): String {
+            val bytes = mutableListOf<Byte>()
+            fun w32(v: Long) {
+                bytes.add((v and 0xFF).toByte())
+                bytes.add(((v shr 8) and 0xFF).toByte())
+                bytes.add(((v shr 16) and 0xFF).toByte())
+                bytes.add(((v shr 24) and 0xFF).toByte())
             }
-            fun writeU16LE(v: Int) {
-                out.add((v and 0xFF).toByte())
-                out.add(((v shr 8) and 0xFF).toByte())
-            }
-            fun writeU8(v: Int) {
-                out.add((v and 0xFF).toByte())
+            fun w16(v: Int) {
+                bytes.add((v and 0xFF).toByte())
+                bytes.add(((v shr 8) and 0xFF).toByte())
             }
 
-            // Header de 48 bytes
-            writeU32LE(0xcafe2580)  // magic1
-            writeU32LE(0)  // crc32 (se calcula después)
-            writeU32LE(0)  // size_minus_header (después)
-            writeU32LE(0x94119c00)  // magic2
-            writeU32LE(0)  // void1
-            writeU32LE(0)
-            writeU32LE(0)
-            writeU32LE((3L shl 27))  // sample rate 16000 -> id 3
-            writeU32LE(0)  // void2
-            writeU32LE(0)
-            // number_samples + sample_rate * 0.24
-            writeU32LE(numSamples.toLong() + (16000 * 0.24).toLong())
-            writeU32LE(((15 shl 19) + 0x40000).toLong())  // fixed
+            w32(0xcafe2580L)
+            w32(0L)
+            w32(0L)
+            w32(0x94119c00L)
+            w32(0L); w32(0L); w32(0L)
+            w32(3L shl 27)
+            w32(0L); w32(0L)
+            w32(numSamples.toLong() + 3840L)
+            w32(((15 shl 19) + 0x40000).toLong())
+            w32(0x40000000L)
+            w32(0L)
 
-            writeU32LE(0x40000000)
-            writeU32LE(0)  // size_minus_header (después)
-
-            // Bandas ordenadas por id
-            val sortedBands = peaks.keys.sortedBy { it.id }
-            for (band in sortedBands) {
-                val bandPeaks = peaks[band] ?: continue
-                // Los picos ya están en orden de fftPassNumber por construcción
-
-                val peakBytes = mutableListOf<Byte>()
-                var fftPass = 0
-                for (peak in bandPeaks) {
-                    if (peak.fftPassNumber - fftPass >= 255) {
-                        peakBytes.add(0xFF.toByte())
-                        // write u32 LE
-                        val v = peak.fftPassNumber.toLong()
-                        peakBytes.add((v and 0xFF).toByte())
-                        peakBytes.add(((v shr 8) and 0xFF).toByte())
-                        peakBytes.add(((v shr 16) and 0xFF).toByte())
-                        peakBytes.add(((v shr 24) and 0xFF).toByte())
-                        fftPass = peak.fftPassNumber
+            for (b in 0 until 4) {
+                val peaks = bandPeaks[b]
+                if (peaks.isEmpty()) continue
+                val pb = mutableListOf<Byte>()
+                var lastPass = 0
+                for (p in peaks) {
+                    if (p.pass - lastPass >= 255) {
+                        pb.add(0xFF.toByte())
+                        val v = p.pass.toLong()
+                        pb.add((v and 0xFF).toByte())
+                        pb.add(((v shr 8) and 0xFF).toByte())
+                        pb.add(((v shr 16) and 0xFF).toByte())
+                        pb.add(((v shr 24) and 0xFF).toByte())
+                        lastPass = p.pass
                     }
-                    peakBytes.add(((peak.fftPassNumber - fftPass) and 0xFF).toByte())
-                    // magnitude u16 LE
-                    peakBytes.add((peak.peakMagnitude and 0xFF).toByte())
-                    peakBytes.add(((peak.peakMagnitude shr 8) and 0xFF).toByte())
-                    // corrected bin u16 LE
-                    peakBytes.add((peak.correctedBin and 0xFF).toByte())
-                    peakBytes.add(((peak.correctedBin shr 8) and 0xFF).toByte())
-                    fftPass = peak.fftPassNumber
+                    pb.add(((p.pass - lastPass) and 0xFF).toByte())
+                    pb.add((p.mag and 0xFF).toByte())
+                    pb.add(((p.mag shr 8) and 0xFF).toByte())
+                    pb.add((p.bin and 0xFF).toByte())
+                    pb.add(((p.bin shr 8) and 0xFF).toByte())
+                    lastPass = p.pass
                 }
-
-                writeU32LE(0x60030040L + band.id)
-                writeU32LE(peakBytes.size.toLong())
-                out.addAll(peakBytes)
-                // Padding a múltiplo de 4
-                val pad = (4 - peakBytes.size % 4) % 4
-                repeat(pad) { out.add(0) }
+                w32(0x60030040L + b)
+                w32(pb.size.toLong())
+                bytes.addAll(pb)
+                val pad = (4 - pb.size % 4) % 4
+                repeat(pad) { bytes.add(0) }
             }
 
-            val buffer = out.toByteArray()
-            val sizeMinusHeader = buffer.size - 48
-
-            // Escribir size_minus_header en offset 8 y 52
-            fun writeU32At(offset: Int, v: Long) {
-                buffer[offset] = (v and 0xFF).toByte()
-                buffer[offset + 1] = ((v shr 8) and 0xFF).toByte()
-                buffer[offset + 2] = ((v shr 16) and 0xFF).toByte()
-                buffer[offset + 3] = ((v shr 24) and 0xFF).toByte()
+            val arr = bytes.toByteArray()
+            val sz = arr.size - 48
+            fun wAt(off: Int, v: Long) {
+                arr[off] = (v and 0xFF).toByte()
+                arr[off + 1] = ((v shr 8) and 0xFF).toByte()
+                arr[off + 2] = ((v shr 16) and 0xFF).toByte()
+                arr[off + 3] = ((v shr 24) and 0xFF).toByte()
             }
-            writeU32At(8, sizeMinusHeader.toLong())
-            writeU32At(52, sizeMinusHeader.toLong())
-
-            // CRC32 de los bytes desde offset 8
+            wAt(8, sz.toLong())
+            wAt(52, sz.toLong())
             val crc = CRC32()
-            crc.update(buffer, 8, buffer.size - 8)
-            writeU32At(4, crc.value)
+            crc.update(arr, 8, arr.size - 8)
+            wAt(4, crc.value)
 
-            return buffer
+            val b64 = Base64.encodeToString(arr, Base64.NO_WRAP)
+            return "data:audio/vnd.shazam.sig;base64,$b64"
         }
     }
 }
