@@ -302,18 +302,16 @@ fun LibraryScreen(
 
                 1 -> ArtistsTab(
                     artists = viewModel.artists,
-                    customCovers = customCovers
-                )),
                     onOpen = { name -> onOpenArtist(name) },
-                    gridState = artistsGridState
+                    gridState = artistsGridState,
+                    customCovers = customCovers
                 )
 
                 2 -> AlbumsTab(
                     albums = viewModel.albums,
-                    customCovers = customCovers
-                )),
                     onOpen = { title -> onOpenAlbum(title) },
-                    gridState = albumsGridState
+                    gridState = albumsGridState,
+                    customCovers = customCovers
                 )
 
                 3 -> {
@@ -350,9 +348,8 @@ fun LibraryScreen(
                 }
                 5 -> FoldersTab(
                     folders = viewModel.folders,
+                    onPlay = { folder -> onPlayList(folder.songs, 0) },
                     customCovers = customCovers
-                )),
-                    onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
         }
