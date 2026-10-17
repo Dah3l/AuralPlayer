@@ -56,9 +56,9 @@ class MusicService : MediaSessionService() {
 
         // Notificación multimedia de Media3 con el logo de Aural como icono pequeño
         setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .build()
+            object : DefaultMediaNotificationProvider(this) {
+                override fun getSmallIcon(): Int = R.drawable.ic_launcher_foreground
+            }
         )
     }
 
