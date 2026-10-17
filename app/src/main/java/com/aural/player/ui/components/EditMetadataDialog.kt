@@ -42,8 +42,6 @@ fun EditMetadataDialog(
     var title by remember { mutableStateOf(initialTitle) }
     var artist by remember { mutableStateOf(initialArtist) }
     var album by remember { mutableStateOf(initialAlbum) }
-    var genre by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
     var coverUri by remember { mutableStateOf(currentCoverUri) }
     var showCoverSearch by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
@@ -55,8 +53,6 @@ fun EditMetadataDialog(
             title = meta.title.ifBlank { initialTitle }
             artist = meta.artist.ifBlank { initialArtist }
             album = meta.album.ifBlank { initialAlbum }
-            genre = meta.genre
-            year = meta.year
         }
         isLoading = false
     }
@@ -127,26 +123,7 @@ fun EditMetadataDialog(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = genre,
-                            onValueChange = { genre = it },
-                            label = { Text("Género") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = year,
-                            onValueChange = { year = it },
-                            label = { Text("Año") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
+
                 }
             }
         },
@@ -165,11 +142,8 @@ fun EditMetadataDialog(
                             metadata = SongMetadata(
                                 title = title,
                                 artist = artist,
-                                album = album,
-                                genre = genre,
-                                year = year
-                            ),
-                            coverUri = coverUri
+                                album = album
+                            )
                         )
                         isSaving = false
                         if (success) onSaved() else onDismiss()
@@ -190,11 +164,8 @@ fun EditMetadataDialog(
                                 metadata = SongMetadata(
                                     title = title,
                                     artist = artist,
-                                    album = album,
-                                    genre = genre,
-                                    year = year
-                                ),
-                                coverUri = coverUri
+                                    album = album
+                                )
                             )
                             isSaving = false
                             if (success) onSaved() else onDismiss()
