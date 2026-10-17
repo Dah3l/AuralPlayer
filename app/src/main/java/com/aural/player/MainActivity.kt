@@ -234,7 +234,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     )
 
                 is Screen.Album -> {
-                    val songs = viewModel.effectiveSongs().filter { it.album == s.title }
+                    val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
+                    val songs = allSongs.filter { it.album == s.title }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.title,
@@ -247,7 +248,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
 
                 is Screen.Artist -> {
-                    val songs = viewModel.effectiveSongs().filter { it.artist == s.name }
+                    val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
+                    val songs = allSongs.filter { it.artist == s.name }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.name,
