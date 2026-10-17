@@ -86,6 +86,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     val favorites: StateFlow<Set<Long>> = settings.favorites.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet()
     )
+    /** Tema seleccionado de la app. */
+    val appTheme: StateFlow<String> = settings.appTheme.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "BOSQUE"
+    )
+
+    fun setAppTheme(themeName: String) {
+        viewModelScope.launch { settings.setAppTheme(themeName) }
+    }
+
 
     // --------------------------- Permisos y escaneo ---------------------------
 
