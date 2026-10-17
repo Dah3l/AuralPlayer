@@ -60,15 +60,31 @@ object MetadataEditor {
         coverUri: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val original = uriToFile(context, songUri) ?: return@withContext false
+            val uri = Uri.parse(songUri)
+            val isContentUri = uri.scheme == "content"
 
-            // 1. Copiar a temporal
-            val temp = File.createTempFile("aural_meta_", ".tmp", context.cacheDir)
-            original.copyTo(temp, overwrite = true)
+            // 1. Obtener archivo de trabajo (copiar si es content://)
+            val workFile: File
+            val tempSource: File?
+            if (isContentUri) {
+                tempSource = File.createTempFile("aural_src_", ".tmp", context.cacheDir)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempSource.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                workFile = File.createTempFile("aural_meta_", ".tmp", context.cacheDir)
+                tempSource.copyTo(workFile, overwrite = true)
+            } else {
+                val original = uriToFile(context, songUri) ?: return@withContext false
+                tempSource = null
+                workFile = File.createTempFile("aural_meta_", ".tmp", context.cacheDir)
+                original.copyTo(workFile, overwrite = true)
+            }
 
             try {
-                // 2. Modificar el temporal
-                val audioFile = AudioFileIO.read(temp)
+                // 2. Modificar
+                val audioFile = AudioFileIO.read(workFile)
                 val tag = audioFile.tagOrCreateAndSetDefault
 
                 tag.setField(FieldKey.TITLE, metadata.title)
@@ -81,9 +97,12 @@ object MetadataEditor {
                 when {
                     coverUri == "" -> tag.deleteArtworkField()
                     coverUri != null -> {
-                        val coverFile = uriToFile(context, coverUri)
-                            ?: downloadToTemp(context, coverUri)
-                        if (coverFile != null) {
+                        val coverFile = if (coverUri.startsWith("http")) {
+                            downloadToTemp(context, coverUri)
+                        } else {
+                            uriToFile(context, coverUri)
+                        }
+                        if (coverFile != null && coverFile.exists()) {
                             val artwork = ArtworkFactory.createArtworkFromFile(coverFile)
                             tag.deleteArtworkField()
                             tag.addField(artwork)
@@ -93,12 +112,23 @@ object MetadataEditor {
 
                 audioFile.commit()
 
-                // 3. Verificar que el temporal es válido
-                AudioFileIO.read(temp)
+                // 3. Verificar
+                AudioFileIO.read(workFile)
 
-                // 4. Reemplazar original (atómico)
-                temp.copyTo(original, overwrite = true)
-                temp.delete()
+                // 4. Escribir de vuelta
+                if (isContentUri) {
+                    context.contentResolver.openOutputStream(uri, "wt")?.use { output ->
+                        workFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                } else {
+                    val original = uriToFile(context, songUri)!!
+                    workFile.copyTo(original, overwrite = true)
+                }
+
+                workFile.delete()
+                tempSource?.delete()
 
                 // 5. Notificar a MediaStore
                 refreshMediaStore(context, songUri)
@@ -106,11 +136,12 @@ object MetadataEditor {
                 Log.i(TAG, "Metadatos escritos correctamente")
                 true
             } catch (e: Exception) {
-                temp.delete()
+                workFile.delete()
+                tempSource?.delete()
                 throw e
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error escribiendo metadatos: ${e.message}")
+            Log.e(TAG, "Error escribiendo metadatos: ${e.message}", e)
             false
         }
     }
