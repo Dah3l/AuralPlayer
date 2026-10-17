@@ -140,6 +140,7 @@ fun DetailScreen(
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
         // ---- Barra superior con volver ----
@@ -253,8 +254,8 @@ fun DetailScreen(
         ) {
             itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
                 SongRow(
-                    title = song.title,
-                    subtitle = song.artist,
+                    title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
+                    subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
                     coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
