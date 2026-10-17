@@ -17,7 +17,11 @@ enum class AppTheme(val displayName: String, val emoji: String) {
     BOSQUE("Bosque", "🌿"),
     OCEANO("Océano", "🌊"),
     ATARDECER("Atardecer", "🌅"),
-    CLARO("Claro", "☀️")
+    CLARO("Claro", "☀️"),
+    NEON("Neón", "🌃"),
+    PERLA("Perla", "🤍"),
+    ROSA("Rosa", "🌸"),
+    MEDIANOCHE("Medianoche", "🌌")
 }
 
 // ---- Tema Bosque: el original (oscuro + verde turquesa) ----
@@ -143,6 +147,10 @@ fun AuralTheme(
         AppTheme.OCEANO -> OceanoColorScheme
         AppTheme.ATARDECER -> AtardecerColorScheme
         AppTheme.CLARO -> ClaroColorScheme
+        AppTheme.NEON -> NeonColorScheme
+        AppTheme.PERLA -> PerlaColorScheme
+        AppTheme.ROSA -> RosaColorScheme
+        AppTheme.MEDIANOCHE -> MedianocheColorScheme
     }
     MaterialTheme(
         colorScheme = colorScheme,
@@ -150,3 +158,67 @@ fun AuralTheme(
         content = content
     )
 }
+
+// ---- Tema Neón: oscuro + cian/magenta brillante ----
+private val NeonColorScheme = darkColorScheme(
+    primary = Color(0xFF00F0FF),
+    onPrimary = Color(0xFF001418),
+    secondary = Color(0xFFFF00E5),
+    background = Color(0xFF0A0A12),
+    onBackground = Color(0xFFF0F0FF),
+    surface = Color(0xFF12121E),
+    onSurface = Color(0xFFF0F0FF),
+    surfaceVariant = Color(0xFF1A1A2E),
+    onSurfaceVariant = Color(0xFFA0A0C0),
+    outline = Color(0xFF2A2A45),
+    outlineVariant = Color(0xFF20203A),
+    error = Color(0xFFFF3366)
+)
+
+// ---- Tema Perla: claro + grises suaves ----
+private val PerlaColorScheme = lightColorScheme(
+    primary = Color(0xFF5A6C7D),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFF8A9BA8),
+    background = Color(0xFFF5F5F7),
+    onBackground = Color(0xFF2C2C2E),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF2C2C2E),
+    surfaceVariant = Color(0xFFE8E8ED),
+    onSurfaceVariant = Color(0xFF6E6E73),
+    outline = Color(0xFFD1D1D6),
+    outlineVariant = Color(0xFFE5E5EA),
+    error = Color(0xFFFF3B30)
+)
+
+// ---- Tema Rosa: claro + rosas ----
+private val RosaColorScheme = lightColorScheme(
+    primary = Color(0xFFFF4D8D),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFFFF8AB5),
+    background = Color(0xFFFFF5F7),
+    onBackground = Color(0xFF3A2A30),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF3A2A30),
+    surfaceVariant = Color(0xFFFFE8EE),
+    onSurfaceVariant = Color(0xFF8A5A6B),
+    outline = Color(0xFFF5C6D6),
+    outlineVariant = Color(0xFFFFD6E3),
+    error = Color(0xFFFF3B30)
+)
+
+// ---- Tema Medianoche: oscuro + grises y violeta ----
+private val MedianocheColorScheme = darkColorScheme(
+    primary = Color(0xFF9D7BFF),
+    onPrimary = Color(0xFF0F0A1E),
+    secondary = Color(0xFF7B8CFF),
+    background = Color(0xFF121216),
+    onBackground = Color(0xFFE8E8EC),
+    surface = Color(0xFF1A1A20),
+    onSurface = Color(0xFFE8E8EC),
+    surfaceVariant = Color(0xFF23232C),
+    onSurfaceVariant = Color(0xFF9A9AA5),
+    outline = Color(0xFF2E2E3A),
+    outlineVariant = Color(0xFF26262F),
+    error = Color(0xFFFF5555)
+)
