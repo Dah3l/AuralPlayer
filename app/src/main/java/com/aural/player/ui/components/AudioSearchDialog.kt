@@ -1,4 +1,4 @@
-// Diálogo de reconocimiento de música por audio (vía Shazam, sin cuenta)
+// Diálogo de reconocimiento de música por audio (vía AudD)
 package com.aural.player.ui.components
 
 import android.Manifest
@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.AlertDialog
@@ -26,14 +28,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -44,32 +42,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.aural.player.data.shazam.ShazamClient
-import com.aural.player.data.shazam.ShazamResult
-import com.aural.player.data.shazam.ShazamSignatureGenerator
-import com.aural.player.data.shazam.ShazamTrack
+import com.aural.player.data.audd.AudDClient
+import com.aural.player.data.audd.AudDResult
+import com.aural.player.data.audd.AudDTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
-private const val RECORD_SECONDS = 12
-private const val SAMPLE_RATE = 16000 // Debe coincidir con ShazamSignatureGenerator
+private const val RECORD_SECONDS = 10
+private const val SAMPLE_RATE = 16000
 
 private enum class AudioSearchState { IDLE, RECORDING, IDENTIFYING, RESULT, ERROR }
 
 /**
- * Diálogo para identificar la canción que suena alrededor.
- * Graba [RECORD_SECONDS] segundos en PCM crudo y los identifica vía Shazam
- * (sin necesidad de cuenta). Muestra el error técnico si algo falla,
- * para facilitar el reporte de problemas.
+ * Diálogo para identificar la canción que suena alrededor (vía AudD).
+ * Muestra el error técnico si algo falla para facilitar el reporte.
  */
 @Composable
 fun AudioSearchDialog(
@@ -79,7 +73,7 @@ fun AudioSearchDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(AudioSearchState.IDLE) }
-    var result by remember { mutableStateOf<ShazamTrack?>(null) }
+    var result by remember { mutableStateOf<AudDTrack?>(null) }
     var errorDetail by remember { mutableStateOf("") }
     var secondsLeft by remember { mutableIntStateOf(RECORD_SECONDS) }
     var recordJob by remember { mutableStateOf<Job?>(null) }
@@ -88,12 +82,8 @@ fun AudioSearchDialog(
         recordJob = scope.launch {
             try {
                 state = AudioSearchState.RECORDING
-                // Grabar PCM mono 16-bit a 16 kHz
                 val pcm = withContext(Dispatchers.IO) {
-                    recordPcm(
-                        seconds = RECORD_SECONDS,
-                        onTick = { secondsLeft = it }
-                    )
+                    recordPcm(seconds = RECORD_SECONDS) { secondsLeft = it }
                 }
                 if (pcm == null) {
                     errorDetail = "No se pudo acceder al micrófono"
@@ -101,16 +91,17 @@ fun AudioSearchDialog(
                     return@launch
                 }
                 state = AudioSearchState.IDENTIFYING
-                when (val r = ShazamClient.recognize(pcm)) {
-                    is ShazamResult.Found -> {
+                val wav = AudDClient.pcmToWav(pcm, SAMPLE_RATE)
+                when (val r = AudDClient.recognize(wav)) {
+                    is AudDResult.Found -> {
                         result = r.track
                         state = AudioSearchState.RESULT
                     }
-                    is ShazamResult.NoMatch -> {
+                    is AudDResult.NoMatch -> {
                         errorDetail = r.detail
                         state = AudioSearchState.ERROR
                     }
-                    is ShazamResult.Error -> {
+                    is AudDResult.Error -> {
                         errorDetail = r.detail
                         state = AudioSearchState.ERROR
                     }
@@ -255,14 +246,14 @@ fun AudioSearchDialog(
                                 title = { Text("Diagnóstico") },
                                 text = {
                                     Text(
-                                        ShazamClient.lastDiagnostic.ifBlank { "Sin datos" },
+                                        AudDClient.lastDiagnostic.ifBlank { "Sin datos" },
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.verticalScroll(rememberScrollState())
                                     )
                                 },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        clipboard.setText(AnnotatedString(ShazamClient.lastDiagnostic))
+                                        clipboard.setText(AnnotatedString(AudDClient.lastDiagnostic))
                                         showDiag = false
                                     }) { Text("Copiar") }
                                 },
@@ -306,11 +297,7 @@ private fun PulsingMic() {
     )
 }
 
-/**
- * Graba [seconds] segundos de PCM mono 16-bit a 16 kHz.
- * Llama [onTick] cada segundo con los segundos restantes.
- * Devuelve null si no se puede grabar.
- */
+/** Graba [seconds] segundos de PCM mono 16-bit a 16 kHz. */
 private fun recordPcm(
     seconds: Int,
     onTick: (Int) -> Unit
@@ -351,10 +338,9 @@ private fun recordPcm(
                 chunk.copyInto(pcm, written, 0, toCopy)
                 written += toCopy
             } else if (read < 0) {
-                break // error de lectura
+                break
             }
             onTick(((endTime - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0))
-            // Pequeña pausa para no saturar; el callback de ticks se maneja por tiempo
             Thread.sleep(50)
         }
         recorder.stop()
