@@ -178,6 +178,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
         val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+        val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
@@ -194,7 +195,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     state = playerState,
                     onOpen = { showNowPlaying = true },
                     onTogglePlay = viewModel.playback::togglePlayPause,
-                    customCoverUri = playerState.currentSong?.let { customCovers[it.id] }
+                    customCoverUri = playerState.currentSong?.let { customCovers[it.id] },
+                    customMetadata = playerState.currentSong?.let { customMetadata[it.id] }
                 )
             }
         }
