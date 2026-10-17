@@ -94,6 +94,8 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.rounded.Search
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -588,6 +590,14 @@ private fun NowPlayingMenu(
     var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showEqualizer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCoverPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            song?.let { s -> viewModel.setCustomCover(s.id, it.toString()) }
+        }
+        showCoverPicker = false
+    }
     var isSearchingLyrics by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var lyricsSearchError by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     var lrcFiles by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>>(emptyList()) }
@@ -692,8 +702,16 @@ private fun NowPlayingMenu(
         CoverPickerDialog(
             artist = song.artist,
             title = song.title,
+            hasCustomCover = customCovers.containsKey(song.id),
             onSelect = { coverUrl ->
                 viewModel.setCustomCover(song.id, coverUrl)
+                showCoverPicker = false
+            },
+            onPickFromGallery = {
+                galleryLauncher.launch("image/*")
+            },
+            onRemove = {
+                viewModel.setCustomCover(song.id, "")
                 showCoverPicker = false
             },
             onDismiss = { showCoverPicker = false }
