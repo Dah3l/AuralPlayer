@@ -1,4 +1,4 @@
-// Diálogo para buscar y elegir portada en línea.
+// Diálogo para buscar y elegir portada: campos editables + resultados.
 package com.aural.player.ui.components
 
 import androidx.compose.foundation.clickable
@@ -23,80 +23,143 @@ import kotlinx.coroutines.launch
 fun CoverPickerDialog(
     artist: String,
     title: String,
+    hasCustomCover: Boolean,
     onSelect: (String) -> Unit,
+    onPickFromGallery: () -> Unit,
+    onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var results by remember { mutableStateOf<List<CoverArtResult>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    var searchTitle by remember { mutableStateOf(title) }
+    var searchArtist by remember { mutableStateOf(artist) }
+    var results by remember { mutableStateOf<List<CoverArtResult>?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(artist, title) {
-        isLoading = true
-        error = false
-        results = CoverArtClient.search(artist, title)
-        isLoading = false
-        if (results.isEmpty()) error = true
+    fun doSearch() {
+        scope.launch {
+            isLoading = true
+            error = false
+            results = CoverArtClient.search(searchArtist, searchTitle)
+            isLoading = false
+            if (results.isNullOrEmpty()) error = true
+        }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Elegir portada") },
+        title = { Text("Cambiar portada") },
         text = {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(400.dp),
-                contentAlignment = Alignment.Center
+                    .heightIn(max = 480.dp)
             ) {
-                when {
-                    isLoading -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(Modifier.height(8.dp))
-                            Text("Buscando portadas...")
-                        }
+                // Campos editables
+                OutlinedTextField(
+                    value = searchTitle,
+                    onValueChange = { searchTitle = it },
+                    label = { Text("Canción") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = searchArtist,
+                    onValueChange = { searchArtist = it },
+                    label = { Text("Artista") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { doSearch() },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading
+                    ) {
+                        Text("Buscar")
                     }
-                    error -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🌐", style = MaterialTheme.typography.displayMedium)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "No se encontraron portadas.\nPrueba usar VPN y reintenta.",
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
+                    OutlinedButton(
+                        onClick = onPickFromGallery,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Galería")
                     }
-                    else -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            contentPadding = PaddingValues(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(results) { result ->
-                                Column(
-                                    modifier = Modifier.clickable {
-                                        onSelect(result.artworkUrl)
-                                    },
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    AsyncImage(
-                                        model = result.thumbnailUrl,
-                                        contentDescription = result.collectionName,
-                                        modifier = Modifier
-                                            .size(100.dp),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        result.collectionName.ifBlank { result.trackName },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center
-                                    )
+                }
+
+                if (hasCustomCover) {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onRemove,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Quitar portada personalizada")
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Resultados
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .heightIn(min = 200.dp, max = 320.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        isLoading -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(8.dp))
+                                Text("Buscando portadas...")
+                            }
+                        }
+                        error -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🌐", style = MaterialTheme.typography.displayMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "No se encontraron portadas.\nPrueba usar VPN y reintenta.",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                        results != null -> {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                contentPadding = PaddingValues(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(results!!) { result ->
+                                    Column(
+                                        modifier = Modifier.clickable {
+                                            onSelect(result.artworkUrl)
+                                        },
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        AsyncImage(
+                                            model = result.thumbnailUrl,
+                                            contentDescription = result.collectionName,
+                                            modifier = Modifier.size(100.dp),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            result.collectionName.ifBlank { result.trackName },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -105,7 +168,7 @@ fun CoverPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
         }
     )
 }
