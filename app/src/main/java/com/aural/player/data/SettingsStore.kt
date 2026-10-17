@@ -28,6 +28,7 @@ class SettingsStore(private val context: Context) {
         val KEY_LRC_MAP = stringPreferencesKey("lrc_map_json")
         val KEY_THEME = stringPreferencesKey("app_theme")
         val KEY_CUSTOM_COVERS = stringPreferencesKey("custom_covers_json")
+        val KEY_CUSTOM_METADATA = stringPreferencesKey("custom_metadata_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -69,6 +70,52 @@ class SettingsStore(private val context: Context) {
             }
             prefs[KEY_CUSTOM_COVERS] = encodeCovers(current)
         }
+    }
+
+    /** Metadatos personalizados: songId -> "título|artista|álbum". */
+    val customMetadata: Flow<Map<Long, Triple<String, String, String>>> =
+        context.dataStore.data.map { prefs ->
+            decodeMetadata(prefs[KEY_CUSTOM_METADATA])
+        }
+
+    suspend fun setCustomMetadata(songId: Long, title: String, artist: String, album: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodeMetadata(prefs[KEY_CUSTOM_METADATA]).toMutableMap()
+            if (title.isBlank() && artist.isBlank() && album.isBlank()) {
+                current.remove(songId)
+            } else {
+                current[songId] = Triple(title, artist, album)
+            }
+            prefs[KEY_CUSTOM_METADATA] = encodeMetadata(current)
+        }
+    }
+
+    private fun decodeMetadata(json: String?): Map<Long, Triple<String, String, String>> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(json)
+            val map = mutableMapOf<Long, Triple<String, String, String>>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val id = k.toLongOrNull() ?: continue
+                val parts = obj.optString(k).split("|", limit = 3)
+                if (parts.size == 3) {
+                    map[id] = Triple(parts[0], parts[1], parts[2])
+                }
+            }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun encodeMetadata(map: Map<Long, Triple<String, String, String>>): String {
+        val obj = org.json.JSONObject()
+        for ((k, v) in map) {
+            obj.put(k.toString(), "${v.first}|${v.second}|${v.third}")
+        }
+        return obj.toString()
     }
 
     private fun decodeCovers(json: String?): Map<Long, String> {
