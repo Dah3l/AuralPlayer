@@ -82,6 +82,4 @@ dependencies {
     // ---- NewPipe Extractor (búsqueda y descarga de YouTube) ----
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
 
-    // ---- jaudiotagger (edición de metadatos de audio) ----
-    implementation("net.jthink:jaudiotagger:3.0.1")
 }
