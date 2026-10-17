@@ -290,11 +290,14 @@ fun LibraryScreen(
 
             else -> when (selectedTab) {
                 0 -> SongsTab(
-                    songs = library.filteredSongs,
+                    songs = viewModel.effectiveFilteredSongs(),
                     favorites = favorites,
                     currentId = playerState.currentSong?.id,
                     isPlaying = playerState.isPlaying,
-                    onPlay = { song -> onPlayList(library.filteredSongs, library.filteredSongs.indexOf(song)) },
+                    onPlay = { song ->
+                        val list = viewModel.effectiveFilteredSongs()
+                        onPlayList(list, list.indexOfFirst { it.id == song.id })
+                    },
                     onFavorite = viewModel::toggleFavorite,
                     onMenu = onSongMenu,
                     listState = songsListState,
