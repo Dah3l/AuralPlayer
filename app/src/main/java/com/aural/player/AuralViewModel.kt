@@ -104,6 +104,16 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setCustomCover(songId, coverUrl) }
     }
 
+    /** Metadatos personalizados: songId -> (título, artista, álbum). */
+    val customMetadata: StateFlow<Map<Long, Triple<String, String, String>>> =
+        settings.customMetadata.stateIn(
+            viewModelScope, SharingStarted.Eagerly, emptyMap()
+        )
+
+    fun setCustomMetadata(songId: Long, title: String, artist: String, album: String) {
+        viewModelScope.launch { settings.setCustomMetadata(songId, title, artist, album) }
+    }
+
 
     // --------------------------- Permisos y escaneo ---------------------------
 
