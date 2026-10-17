@@ -46,6 +46,10 @@ import com.aural.player.ui.screens.FAVORITES_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.theme.AuralTheme
+import com.aural.player.ui.theme.AppTheme
+import com.aural.player.data.SettingsStore
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.aural.player.ui.components.SplashScreen
 import com.aural.player.ui.screens.OnboardingScreen
 import com.aural.player.data.OnboardingPrefs
@@ -78,7 +82,14 @@ class MainActivity : ComponentActivity() {
         requestNeededPermissions()
 
         setContent {
-            AuralTheme {
+            val settingsStore = SettingsStore(this@MainActivity)
+            val themeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
+            val appTheme = try {
+                AppTheme.valueOf(themeName)
+            } catch (e: Exception) {
+                AppTheme.BOSQUE
+            }
+            AuralTheme(theme = appTheme) {
                 var showOnboarding by remember {
                     mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))
                 }
