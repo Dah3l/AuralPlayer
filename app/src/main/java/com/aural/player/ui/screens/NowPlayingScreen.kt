@@ -586,7 +586,6 @@ private fun NowPlayingMenu(
     val sleepMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
-    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
     var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
