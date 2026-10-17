@@ -125,6 +125,7 @@ fun NowPlayingScreen(
     var showLyrics by remember { mutableStateOf(false) }
     val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -295,7 +296,7 @@ fun NowPlayingScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = song.title,
+                        text = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -307,7 +308,8 @@ fun NowPlayingScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = song.artist.ifBlank { "Artista desconocido" },
+                        text = customMetadata[song.id]?.second?.ifBlank { song.artist.ifBlank { "Artista desconocido" } }
+                            ?: song.artist.ifBlank { "Artista desconocido" },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
