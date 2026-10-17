@@ -48,11 +48,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.CoverArt
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.EmptyState
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.MediaGridCard
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.SectionHeader
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -109,6 +115,7 @@ fun LibraryScreen(
     var showGeneralMenu by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
@@ -211,6 +218,10 @@ fun LibraryScreen(
                     DropdownMenuItem(
                         text = { Text("Acerca de AuralPlayer") },
                         onClick = { showGeneralMenu = false; showAboutDialog = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Tema") },
+                        onClick = { showGeneralMenu = false; showThemeDialog = true }
                     )
                 }
             }
@@ -414,6 +425,22 @@ fun LibraryScreen(
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) { Text("Cerrar") }
             }
+        )
+    }
+
+    if (showThemeDialog) {
+        val currentThemeName by viewModel.appTheme.collectAsStateWithLifecycle()
+        val currentTheme = try {
+            AppTheme.valueOf(currentThemeName)
+        } catch (e: Exception) {
+            AppTheme.BOSQUE
+        }
+        ThemeDialog(
+            currentTheme = currentTheme,
+            onSelect = { theme ->
+                viewModel.setAppTheme(theme.name)
+            },
+            onDismiss = { showThemeDialog = false }
         )
     }
 }
