@@ -82,26 +82,26 @@ fun AudioSearchDialog(
             try {
                 state = AudioSearchState.RECORDING
                 // Búsqueda incremental: graba por chunks y pregunta a los 4, 7, 10, 13 seg
-                val result = withContext(Dispatchers.IO) {
+                val recognitionResult: ShazamResult? = withContext(Dispatchers.IO) {
                     incrementalRecognize { secondsLeft = it }
                 }
-                if (result == null) {
+                if (recognitionResult == null) {
                     errorDetail = "No se pudo acceder al micrófono"
                     state = AudioSearchState.ERROR
                     return@launch
                 }
                 state = AudioSearchState.IDENTIFYING
-                when (val r = result) {
+                when (recognitionResult) {
                     is ShazamResult.Found -> {
-                        result = r.track
+                        result = recognitionResult.track
                         state = AudioSearchState.RESULT
                     }
                     is ShazamResult.NoMatch -> {
-                        errorDetail = r.detail
+                        errorDetail = recognitionResult.detail
                         state = AudioSearchState.ERROR
                     }
                     is ShazamResult.Error -> {
-                        errorDetail = r.detail
+                        errorDetail = recognitionResult.detail
                         state = AudioSearchState.ERROR
                     }
                 }
