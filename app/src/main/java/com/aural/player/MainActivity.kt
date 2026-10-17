@@ -234,7 +234,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     )
 
                 is Screen.Album -> {
-                    val songs = library.songs.filter { it.album == s.title }
+                    val songs = viewModel.effectiveSongs().filter { it.album == s.title }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.title,
@@ -247,7 +247,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
 
                 is Screen.Artist -> {
-                    val songs = library.songs.filter { it.artist == s.name }
+                    val songs = viewModel.effectiveSongs().filter { it.artist == s.name }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.name,
