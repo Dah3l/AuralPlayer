@@ -12,6 +12,10 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,6 +55,26 @@ private val pages = listOf(
         Icons.Default.PlayArrow,
         "Escucha a tu manera",
         "Temporizador de suspensión, velocidad de reproducción, modo oscuro y mucho más."
+    ),
+    OnboardingPage(
+        Icons.Default.Mic,
+        "¿Qué está sonando?",
+        "Toca el micrófono y descubre qué canción suena a tu alrededor. Rápido y preciso."
+    ),
+    OnboardingPage(
+        Icons.Default.Tune,
+        "Ecualizador",
+        "Ajusta el sonido a tu gusto con el ecualizador de 5 bandas y refuerzo de graves."
+    ),
+    OnboardingPage(
+        Icons.Default.Folder,
+        "Por carpetas",
+        "Explora tu música organizada por carpetas, igual que en tu explorador de archivos."
+    ),
+    OnboardingPage(
+        Icons.Default.Settings,
+        "Acceso rápido",
+        "Agrega el tile a tus ajustes rápidos y reconoce canciones sin abrir la app."
     )
 )
 
