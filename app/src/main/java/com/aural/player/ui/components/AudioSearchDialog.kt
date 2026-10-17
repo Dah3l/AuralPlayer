@@ -49,7 +49,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.aural.player.data.shazam.ShazamClient
-import com.aural.player.data.shazam.ShazamSignatureGenerator
 import com.aural.player.data.shazam.ShazamResult
 
 import com.aural.player.data.shazam.ShazamTrack
@@ -58,8 +57,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val RECORD_SECONDS = 14
-private val ASK_AT = intArrayOf(4, 7, 10, 13)
+private const val RECORD_SECONDS = 12
 private const val SAMPLE_RATE = 16000
 
 private enum class AudioSearchState { IDLE, RECORDING, IDENTIFYING, RESULT, ERROR }
@@ -81,17 +79,17 @@ fun AudioSearchDialog(
         recordJob = scope.launch {
             try {
                 state = AudioSearchState.RECORDING
-                // Búsqueda incremental: graba por chunks y pregunta a los 4, 7, 10, 13 seg
-                val result = withContext(Dispatchers.IO) {
-                    incrementalRecognize { secondsLeft = it }
+                val pcm = withContext(Dispatchers.IO) {
+                    recordPcm(seconds = RECORD_SECONDS) { secondsLeft = it }
                 }
-                if (result == null) {
+                if (pcm == null) {
                     errorDetail = "No se pudo acceder al micrófono"
                     state = AudioSearchState.ERROR
                     return@launch
                 }
                 state = AudioSearchState.IDENTIFYING
-                when (val r = result) {
+                // La firma se genera dentro de ShazamClient
+                when (val r = ShazamClient.recognize(pcm)) {
                     is ShazamResult.Found -> {
                         result = r.track
                         state = AudioSearchState.RESULT
@@ -287,78 +285,56 @@ private fun PulsingMic() {
     )
 }
 
-
-/**
- * Reconocimiento incremental estilo opentune: graba audio por chunks de 0.1s,
- * alimenta la firma de Shazam incrementalmente y consulta a los 4, 7, 10 y 13
- * segundos. Devuelve el primer resultado exitoso, o el último intento.
- * Devuelve null si falla el micrófono.
- */
-private suspend fun incrementalRecognize(
+private fun recordPcm(
+    seconds: Int,
     onTick: (Int) -> Unit
-): ShazamResult? = withContext(Dispatchers.IO) {
-    val minBuffer = AudioRecord.getMinBufferSize(
-        SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-    )
-    if (minBuffer <= 0) return@withContext null
+): ShortArray? {
+    val channelConfig = AudioFormat.CHANNEL_IN_MONO
+    val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+    val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, channelConfig, audioFormat)
+    if (minBuffer <= 0) return null
 
     val recorder = try {
         AudioRecord(
             MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuffer, SAMPLE_RATE / 5)
+            channelConfig,
+            audioFormat,
+            minBuffer * 2
         )
     } catch (e: Exception) {
-        return@withContext null
+        return null
     }
     if (recorder.state != AudioRecord.STATE_INITIALIZED) {
         recorder.release()
-        return@withContext null
+        return null
     }
 
-    val gen = ShazamSignatureGenerator()
-    val chunk = ShortArray(SAMPLE_RATE / 10) // 0.1 segundos
-    var totalSamples = 0
-    var askIdx = 0
-    var lastResult: ShazamResult? = null
-
-    try {
+    return try {
+        val totalSamples = SAMPLE_RATE * seconds
+        val pcm = ShortArray(totalSamples)
+        val chunk = ShortArray(minBuffer / 2)
         recorder.startRecording()
-        val deadline = System.currentTimeMillis() + RECORD_SECONDS * 1000L
 
-        while (System.currentTimeMillis() < deadline) {
-            val n = recorder.read(chunk, 0, chunk.size)
-            if (n > 0) {
-                gen.feedSamples(if (n == chunk.size) chunk else chunk.copyOf(n))
-                totalSamples += n
-            } else if (n < 0) {
+        var written = 0
+        val endTime = System.currentTimeMillis() + seconds * 1000L
+        while (written < totalSamples && System.currentTimeMillis() < endTime) {
+            val read = recorder.read(chunk, 0, chunk.size)
+            if (read > 0) {
+                val toCopy = minOf(read, totalSamples - written)
+                chunk.copyInto(pcm, written, 0, toCopy)
+                written += toCopy
+            } else if (read < 0) {
                 break
             }
-
-            val elapsedSec = totalSamples / SAMPLE_RATE
-            onTick((RECORD_SECONDS - elapsedSec).coerceAtLeast(0))
-
-            if (askIdx < ASK_AT.size && elapsedSec >= ASK_AT[askIdx]) {
-                askIdx++
-                when (val r = ShazamClient.lookup(gen)) {
-                    is ShazamResult.Found -> return@withContext r
-                    else -> lastResult = r
-                }
-            }
-            kotlinx.coroutines.delay(50)
+            onTick(((endTime - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0))
+            Thread.sleep(50)
         }
-
-        // Consulta final si no se completaron todas
-        if (askIdx < ASK_AT.size) {
-            return@withContext ShazamClient.lookup(gen)
-        }
-        return@withContext lastResult ?: ShazamResult.NoMatch("Sin coincidencia")
+        recorder.stop()
+        if (written < SAMPLE_RATE * 3) null else pcm.copyOf(written)
     } catch (e: Exception) {
-        return@withContext ShazamResult.Error("${e.javaClass.simpleName}: ${e.message}")
+        null
     } finally {
-        runCatching { recorder.stop() }
         recorder.release()
     }
 }
