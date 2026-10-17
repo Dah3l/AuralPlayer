@@ -53,12 +53,54 @@ class PlaybackManager(private val context: Context) {
     private var customCoversCache: Map<Long, String> = emptyMap()
 
     init {
-        // Observar cambios en personalizaciones
+        // Observar cambios en personalizaciones y refrescar notificación si afecta la canción actual
         CoroutineScope(Dispatchers.IO).launch {
-            settings.customMetadata.collect { customMetadataCache = it }
+            settings.customMetadata.collect { newMeta ->
+                val oldMeta = customMetadataCache
+                customMetadataCache = newMeta
+                refreshCurrentIfAffected(oldMeta, newMeta)
+            }
         }
         CoroutineScope(Dispatchers.IO).launch {
-            settings.customCovers.collect { customCoversCache = it }
+            settings.customCovers.collect { newCovers ->
+                val oldCovers = customCoversCache
+                customCoversCache = newCovers
+                refreshCurrentIfCoverAffected(oldCovers, newCovers)
+            }
+        }
+    }
+
+    /** Si la canción actual fue editada, actualiza su metadata en el reproductor. */
+    private fun refreshCurrentIfAffected(
+        old: Map<Long, Triple<String, String, String>>,
+        new: Map<Long, Triple<String, String, String>>
+    ) {
+        val currentId = _state.value.currentSong?.id ?: return
+        if (old[currentId] != new[currentId]) {
+            refreshCurrentMediaItem()
+        }
+    }
+
+    private fun refreshCurrentIfCoverAffected(
+        old: Map<Long, String>,
+        new: Map<Long, String>
+    ) {
+        val currentId = _state.value.currentSong?.id ?: return
+        if (old[currentId] != new[currentId]) {
+            refreshCurrentMediaItem()
+        }
+    }
+
+    /** Reconstruye el MediaItem actual con los metadatos actualizados. */
+    private fun refreshCurrentMediaItem() {
+        val c = controller ?: return
+        val index = c.currentMediaItemIndex
+        if (index < 0) return
+        val song = _state.value.currentSong ?: return
+        try {
+            c.replaceMediaItem(index, song.toMediaItem())
+        } catch (e: Exception) {
+            // Ignorar si falla
         }
     }
 
