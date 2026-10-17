@@ -81,8 +81,10 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Edit
 import com.aural.player.ui.components.EqualizerDialog
 import com.aural.player.ui.components.CoverPickerDialog
+import com.aural.player.ui.components.EditMetadataDialog
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -591,6 +593,7 @@ private fun NowPlayingMenu(
     var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showEqualizer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCoverPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showEditMetadata by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -636,6 +639,11 @@ private fun NowPlayingMenu(
             text = { Text("Cambiar portada") },
             leadingIcon = { Icon(Icons.Rounded.Image, null) },
             onClick = { onDismiss(); showCoverPicker = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Editar información") },
+            leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+            onClick = { onDismiss(); showEditMetadata = true }
         )
         DropdownMenuItem(
             text = { Text("Compartir") },
@@ -696,6 +704,22 @@ private fun NowPlayingMenu(
     // Diálogo del ecualizador
     if (showEqualizer) {
         EqualizerDialog(onDismiss = { showEqualizer = false })
+    }
+
+    // Diálogo: editar metadatos
+    if (showEditMetadata && song != null) {
+        EditMetadataDialog(
+            songUri = song.uri,
+            initialTitle = song.title,
+            initialArtist = song.artist,
+            initialAlbum = song.album,
+            currentCoverUri = customCovers[song.id] ?: song.albumArtUri,
+            onSaved = {
+                showEditMetadata = false
+                // TODO: refrescar la biblioteca
+            },
+            onDismiss = { showEditMetadata = false }
+        )
     }
 
     // Diálogo: cambiar portada
