@@ -14,6 +14,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.sin
 import java.util.zip.CRC32
 import android.util.Base64
 
@@ -201,7 +202,7 @@ object ShazamSignature {
                 // Evitar división por cero
                 if (var1 <= 0f) continue
                 val var2 = (magAfter - magBefore) * 32f / var1
-                val correctedBin = (bin * 64 + var2.toInt()).toUShort().toInt()
+                val correctedBin = (bin * 64 + var2.toInt()) and 0xFFFF
 
                 // Convertir a Hz: corrected_bin * 16000 / 2 / 1024 / 64
                 val freqHz = correctedBin * (16000f / 2f / 1024f / 64f)
@@ -253,7 +254,7 @@ object ShazamSignature {
             while (len <= n) {
                 val angle = -2.0 * PI / len
                 val wRe = cos(angle).toFloat()
-                val wIm = kotlin.math.sin(angle).toFloat()
+                val wIm = sin(angle).toFloat()
                 var i = 0
                 while (i < n) {
                     var wr = 1f
