@@ -331,6 +331,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.moveSongInPlaylist(playlistId, fromIndex, toIndex) }
     }
 
+    /** Guarda el orden completo de una playlist (la UI reordena en local y confirma al soltar). */
+    fun setPlaylistOrder(playlistId: String, songIds: List<Long>) {
+        viewModelScope.launch { settings.setPlaylistSongs(playlistId, songIds) }
+    }
+
     // ------------------- Importar / exportar playlists (.m3u) -------------------
 
     private fun toastOnMain(context: android.content.Context, msg: String) {
