@@ -192,6 +192,13 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Sustituye el orden completo de una playlist (al soltar tras reordenar en local). */
+    suspend fun setPlaylistSongs(playlistId: String, songIds: List<Long>) = mutatePlaylists { list ->
+        list.map { pl ->
+            if (pl.id == playlistId) pl.copy(songIds = songIds) else pl
+        }
+    }
+
     private suspend fun mutatePlaylists(block: (List<Playlist>) -> List<Playlist>) {
         context.dataStore.edit { prefs ->
             val current = decodePlaylists(prefs[KEY_PLAYLISTS])
