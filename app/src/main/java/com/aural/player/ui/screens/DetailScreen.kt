@@ -35,10 +35,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,11 +45,13 @@ import com.aural.player.data.Song
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.SongRow
-import com.aural.player.ui.components.DragHandle
-import com.aural.player.ui.components.DragAutoScroll
-import com.aural.player.ui.components.draggedItemVisual
-import com.aural.player.ui.components.rememberDragReorderState
 import com.aural.player.ui.components.formatDuration
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -248,28 +248,11 @@ fun DetailScreen(
 
         // ---- Lista de canciones (reordenable en playlists) ----
         val listState = rememberLazyListState()
-        val dragState = rememberDragReorderState()
+        val detailHaptics = LocalHapticFeedback.current
         // En playlists el reorden es LOCAL e instantáneo, como la cola (que vive
         // en memoria): el orden definitivo se guarda una sola vez, al soltar.
         val reorderable = removableFromPlaylistId != null
         var displaySongs by remember(removableFromPlaylistId) { mutableStateOf(songs) }
-        // Seguir a la fuente cuando cambia por fuera (altas/bajas), nunca a mitad de arrastre
-        LaunchedEffect(songs) {
-            if (!dragState.isDragging && displaySongs.map { it.id } != songs.map { it.id }) {
-                displaySongs = songs
-            }
-        }
-        // Al soltar, persistir el orden local si difiere del guardado
-        LaunchedEffect(dragState) {
-            snapshotFlow { dragState.isDragging }.collect { dragging ->
-                val pid = removableFromPlaylistId
-                if (!dragging && pid != null &&
-                    displaySongs.map { it.id } != songs.map { it.id }
-                ) {
-                    viewModel.setPlaylistOrder(pid, displaySongs.map { it.id })
-                }
-            }
-        }
         val moveLocal: (Int, Int) -> Unit = { from, to ->
             val current = displaySongs
             if (from in current.indices && to in current.indices && from != to) {
@@ -278,15 +261,34 @@ fun DetailScreen(
                 displaySongs = reordered
             }
         }
+        // Reorden con sh.calvin.reorderable (la librería de InnerTune/OuterTune):
+        // agarradera, auto-scroll de borde y vecinos que se deslizan, de serie.
+        // El padding inferior aparta la zona de auto-scroll del MiniPlayer.
+        val reorderableState = rememberReorderableLazyListState(
+            listState,
+            scrollThresholdPadding = PaddingValues(bottom = 96.dp)
+        ) { from, to ->
+            if (reorderable) {
+                moveLocal(from.index, to.index)
+                detailHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
+        // Seguir a la fuente cuando cambia por fuera (altas/bajas), nunca a mitad de arrastre
+        LaunchedEffect(songs) {
+            if (!reorderableState.isAnyItemDragging && displaySongs.map { it.id } != songs.map { it.id }) {
+                displaySongs = songs
+            }
+        }
+        // Al soltar, persistir el orden local si difiere del guardado
+        LaunchedEffect(reorderableState.isAnyItemDragging) {
+            val pid = removableFromPlaylistId
+            if (!reorderableState.isAnyItemDragging && pid != null &&
+                displaySongs.map { it.id } != songs.map { it.id }
+            ) {
+                viewModel.setPlaylistOrder(pid, displaySongs.map { it.id })
+            }
+        }
         val listSongs = if (reorderable) displaySongs else songs
-        // Auto-scroll al arrastrar hacia los bordes (igual que en la cola)
-        DragAutoScroll(
-            listState = listState,
-            dragState = dragState,
-            itemCount = listSongs.size,
-            onMove = moveLocal,
-            enabled = reorderable
-        )
 
         LazyColumn(
             state = listState,
@@ -294,43 +296,54 @@ fun DetailScreen(
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
             itemsIndexed(listSongs, key = { _, song -> song.id }) { index, song ->
-                SongRow(
-                    title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
-                    subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
-                    coverUri = customCovers[song.id] ?: song.albumArtUri,
-                    durationMs = song.durationMs,
-                    isPlaying = song.id == playerState.currentSong?.id,
-                    onClick = { viewModel.playSongs(listSongs, index) },
-                    modifier = if (reorderable) {
-                        (if (dragState.draggedIndex != index) Modifier.animateItem() else Modifier)
-                            .onSizeChanged {
-                                if (it.height > 0) {
-                                    dragState.draggedItemSizePx = it.height.toFloat()
+                if (reorderable) {
+                    ReorderableItem(reorderableState, key = song.id) { isDragging ->
+                        SongRow(
+                            title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
+                            subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
+                            coverUri = customCovers[song.id] ?: song.albumArtUri,
+                            durationMs = song.durationMs,
+                            isPlaying = song.id == playerState.currentSong?.id,
+                            onClick = { viewModel.playSongs(listSongs, index) },
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = if (isDragging) 1.03f else 1f
+                                scaleY = if (isDragging) 1.03f else 1f
+                            },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Tres puntos: el mismo menú de la biblioteca; abierto
+                                    // desde una playlist trae "Eliminar de la lista" en
+                                    // vez de "Añadir a playlist"
+                                    TextButton(onClick = { onSongMenu(song) }) {
+                                        Text("···", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    Icon(
+                                        Icons.Rounded.DragHandle,
+                                        contentDescription = "Arrastrar para reordenar",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .draggableHandle()
+                                            .size(28.dp)
+                                    )
                                 }
                             }
-                            .draggedItemVisual(dragState, index)
-                    } else Modifier,
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Tres puntos: el mismo menú de la biblioteca; abierto
-                            // desde una playlist trae "Eliminar de la lista" en
-                            // vez de "Añadir a playlist"
+                        )
+                    }
+                } else {
+                    SongRow(
+                        title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
+                        subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
+                        coverUri = customCovers[song.id] ?: song.albumArtUri,
+                        durationMs = song.durationMs,
+                        isPlaying = song.id == playerState.currentSong?.id,
+                        onClick = { viewModel.playSongs(listSongs, index) },
+                        trailing = {
                             TextButton(onClick = { onSongMenu(song) }) {
                                 Text("···", style = MaterialTheme.typography.titleMedium)
                             }
-                            // Agarradera para reordenar (solo en playlists)
-                            if (reorderable) {
-                                DragHandle(
-                                    index = index,
-                                    dragState = dragState,
-                                    itemCount = listSongs.size,
-                                    onMove = moveLocal,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
     }

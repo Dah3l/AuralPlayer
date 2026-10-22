@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import com.aural.player.ui.components.DragHandle
-import com.aural.player.ui.components.DragAutoScroll
-import com.aural.player.ui.components.draggedItemVisual
-import com.aural.player.ui.components.rememberDragReorderState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.ui.graphics.graphicsLayer
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import com.aural.player.data.Song
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +61,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -131,7 +132,55 @@ fun NowPlayingScreen(
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val queueDragState = rememberDragReorderState()
+    val queueHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Espejo local de la cola: la librería de reorden exige que la lista
+    // renderizada cambie en el acto dentro de onMove, y el reproductor aplica
+    // el movimiento a su ritmo a través del controlador de Media3.
+    var queueDisplay by remember { mutableStateOf(state.queue) }
+    val queueReorderState = rememberReorderableLazyListState(
+        queueListState,
+        scrollThresholdPadding = PaddingValues(bottom = 24.dp)
+    ) { from, to ->
+        if (from.index in queueDisplay.indices && to.index in queueDisplay.indices && from.index != to.index) {
+            queueDisplay = queueDisplay.toMutableList().apply { add(to.index, removeAt(from.index)) }
+            onMoveQueueItem(from.index, to.index)
+            queueHaptics.performHapticFeedback(
+                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+            )
+        }
+    }
+
+    // Resincronizar el espejo cuando la cola cambia por fuera de un arrastre
+    // (quitar un tema, saltar de pista, cola nueva…)
+    androidx.compose.runtime.LaunchedEffect(state.queue) {
+        if (!queueReorderState.isAnyItemDragging && state.queue != queueDisplay) {
+            queueDisplay = state.queue
+        }
+    }
+
+    // Llaves únicas por aparición: la misma canción puede estar dos veces en
+    // la cola y la librería exige llaves estables y sin repetir. Se derivan
+    // emparejando la lista anterior con la nueva por id, en orden.
+    val queueKeyMemory = remember {
+        object {
+            var songs: List<Song> = emptyList()
+            var keys: List<Long> = emptyList()
+            var seed: Long = 1L
+        }
+    }
+    val queueKeys: List<Long> = remember(queueDisplay) {
+        val pool = queueKeyMemory.songs.mapIndexed { i, s ->
+            s.id to queueKeyMemory.keys.getOrElse(i) { 0L }
+        }.toMutableList()
+        val newKeys = queueDisplay.map { s ->
+            val match = pool.indexOfFirst { it.first == s.id }
+            if (match >= 0) pool.removeAt(match).second else queueKeyMemory.seed++
+        }
+        queueKeyMemory.songs = queueDisplay
+        queueKeyMemory.keys = newKeys
+        newKeys
+    }
 
     // Al abrir la cola, posicionar en la canción actual
     androidx.compose.runtime.LaunchedEffect(showQueue) {
@@ -139,14 +188,6 @@ fun NowPlayingScreen(
             queueListState.scrollToItem(state.currentIndex.coerceAtLeast(0))
         }
     }
-
-    // Auto-scroll de la cola al arrastrar una canción a los bordes
-    DragAutoScroll(
-        listState = queueListState,
-        dragState = queueDragState,
-        itemCount = state.queue.size,
-        onMove = onMoveQueueItem
-    )
 
     // Fondo oscuro con un halo de acento muy suave en la parte superior
     Box(
@@ -492,56 +533,70 @@ fun NowPlayingScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                itemsIndexed(state.queue) { index, item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged {
-                                if (it.height > 0) {
-                                    queueDragState.draggedItemSizePx = it.height.toFloat()
+                itemsIndexed(queueDisplay, key = { index, _ -> queueKeys.getOrElse(index) { index.toLong() } }) { index, item ->
+                    ReorderableItem(
+                        queueReorderState,
+                        key = queueKeys.getOrElse(index) { index.toLong() }
+                    ) { isDragging ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (isDragging) {
+                                        Modifier.background(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .graphicsLayer {
+                                    scaleX = if (isDragging) 1.03f else 1f
+                                    scaleY = if (isDragging) 1.03f else 1f
                                 }
-                            }
-                            .draggedItemVisual(queueDragState, index)
-                            .clickable { onPlayQueueItem(index) }
-                            .padding(horizontal = 24.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${index + 1}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (index == state.currentIndex)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(28.dp)
-                        )
-                        Column(Modifier.weight(1f)) {
+                                .clickable { onPlayQueueItem(index) }
+                                .padding(horizontal = 24.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = customMetadata[item.id]?.first?.ifBlank { item.title } ?: item.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                text = "${index + 1}",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = if (index == state.currentIndex)
                                     MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(28.dp)
                             )
-                            Text(
-                                text = customMetadata[item.id]?.second?.ifBlank { item.artist } ?: item.artist,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
-                        }
-                        DragHandle(
-                            index = index,
-                            dragState = queueDragState,
-                            itemCount = state.queue.size,
-                            onMove = onMoveQueueItem,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        IconButton(onClick = { onRemoveFromQueue(index) }) {
-                            Icon(Icons.Rounded.Close, "Quitar de la cola",
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = customMetadata[item.id]?.first?.ifBlank { item.title } ?: item.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (index == state.currentIndex)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = customMetadata[item.id]?.second?.ifBlank { item.artist } ?: item.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                            Icon(
+                                Icons.Rounded.DragHandle,
+                                contentDescription = "Arrastrar para reordenar",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp))
+                                modifier = Modifier
+                                    .draggableHandle()
+                                    .size(24.dp)
+                            )
+                            IconButton(onClick = { onRemoveFromQueue(index) }) {
+                                Icon(Icons.Rounded.Close, "Quitar de la cola",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
