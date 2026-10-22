@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -495,6 +496,11 @@ fun NowPlayingScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onSizeChanged {
+                                if (it.height > 0) {
+                                    queueDragState.draggedItemSizePx = it.height.toFloat()
+                                }
+                            }
                             .draggedItemVisual(queueDragState, index)
                             .clickable { onPlayQueueItem(index) }
                             .padding(horizontal = 24.dp, vertical = 10.dp),
