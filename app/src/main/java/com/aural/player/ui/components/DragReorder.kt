@@ -14,7 +14,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -23,7 +25,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
-import androidx.compose.runtime.withFrameNanos
 
 /**
  * Estado del arrastre para una lista. Se crea con [rememberDragReorderState]
@@ -32,6 +33,14 @@ import androidx.compose.runtime.withFrameNanos
 class DragReorderState {
     var draggedIndex by mutableStateOf<Int?>(null)
     var dragOffsetPx by mutableFloatStateOf(0f)
+
+    /**
+     * Hay un gesto de arrastre vivo. Solo lo enciende la agarradera al
+     * empezar el gesto y lo apaga al terminar o cancelarse; el auto-scroll
+     * lo revisa en cada frame, así que sin gesto activo no puede seguir
+     * desplazando la lista por su cuenta.
+     */
+    var isDragging by mutableStateOf(false)
 
     /**
      * Altura real en px del ítem arrastrado. La alimentan las propias filas
@@ -48,6 +57,12 @@ fun rememberDragReorderState(): DragReorderState = remember { DragReorderState()
  * Agarradera de arrastre (icono ⠿⠿). Al arrastrar verticalmente invoca
  * [onMove] cada vez que el ítem arrastrado cruza el centro de un vecino.
  *
+ * El detector de gesto se ata al estado compartido (estable), NO al índice:
+ * si la clave fuera el índice, cada intercambio reiniciaría el detector a
+ * mitad de gesto y el "soltar" podría no registrarse nunca, dejando el
+ * auto-scroll corriendo solo. El índice inicial se lee de un estado
+ * actualizado en cada recomposición.
+ *
  * @param index índice del ítem al que pertenece esta agarradera
  * @param dragState estado compartido de la lista
  * @param itemCount total de ítems (para no salir de los bordes)
@@ -63,24 +78,28 @@ fun DragHandle(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val currentIndex = rememberUpdatedState(index)
     Icon(
         imageVector = Icons.Rounded.DragHandle,
         contentDescription = "Arrastrar para reordenar",
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
-            .pointerInput(index) {
+            .pointerInput(dragState) {
                 detectVerticalDragGestures(
                     onDragStart = {
-                        dragState.draggedIndex = index
+                        dragState.draggedIndex = currentIndex.value
                         dragState.dragOffsetPx = 0f
+                        dragState.isDragging = true
                     },
                     onDragEnd = {
                         dragState.draggedIndex = null
                         dragState.dragOffsetPx = 0f
+                        dragState.isDragging = false
                     },
                     onDragCancel = {
                         dragState.draggedIndex = null
                         dragState.dragOffsetPx = 0f
+                        dragState.isDragging = false
                     },
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
@@ -145,12 +164,13 @@ fun DragReorderState.consumeDragDelta(
 }
 
 /**
- * Auto-scroll mientras se arrastra: si el ítem arrastrado entra en la zona
- * de borde (arriba o abajo) de la lista visible, la lista se desplaza poco
- * a poco y el desplazamiento alimenta el mismo mecanismo de cruce de ítems
- * del arrastre manual, para poder llevar un ítem más allá de lo visible
- * sin soltarlo. El desplazamiento se calcula una vez por frame
- * (withFrameNanos), sincronizado con el refresco de pantalla.
+ * Auto-scroll mientras se arrastra: cuando el CENTRO del ítem arrastrado
+ * entra en la zona de borde (arriba o abajo) de la lista visible, la lista
+ * se desplaza poco a poco — empieza con la tile todavía completa en
+ * pantalla — y el desplazamiento alimenta el mismo mecanismo de cruce de
+ * ítems del arrastre manual. La velocidad crece con la profundidad en la
+ * zona. El bucle vive solo mientras el gesto vive ([DragReorderState.isDragging])
+ * y lo comprueba en cada frame: al soltar, se detiene en seco.
  */
 @Composable
 fun DragAutoScroll(
@@ -162,25 +182,25 @@ fun DragAutoScroll(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
-    val edgePx = with(density) { 72.dp.toPx() }
-    val dragging = enabled && dragState.draggedIndex != null
+    val zonePx = with(density) { 96.dp.toPx() }
+    val dragging = enabled && dragState.isDragging
     LaunchedEffect(dragging) {
         if (!dragging) return@LaunchedEffect
         while (isActive) {
             withFrameNanos { }
+            if (!dragState.isDragging) break
             val index = dragState.draggedIndex ?: break
             val layout = listState.layoutInfo
             val info = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: continue
             if (info.size > 0) dragState.draggedItemSizePx = info.size.toFloat()
-            val top = info.offset + dragState.dragOffsetPx
-            val bottom = top + info.size
-            val overBottom = bottom - (layout.viewportEndOffset - edgePx)
-            val overTop = (layout.viewportStartOffset + edgePx) - top
+            val center = info.offset + dragState.dragOffsetPx + info.size / 2f
+            val overBottom = center - (layout.viewportEndOffset - zonePx)
+            val overTop = (layout.viewportStartOffset + zonePx) - center
             var desired = 0f
             if (overBottom > 0f) {
-                desired = (overBottom * 0.25f).coerceIn(1.5f, 12f)
+                desired = 2f + (overBottom / zonePx).coerceIn(0f, 1f) * 12f
             } else if (overTop > 0f) {
-                desired = -(overTop * 0.25f).coerceIn(1.5f, 12f)
+                desired = -(2f + (overTop / zonePx).coerceIn(0f, 1f) * 12f)
             }
             if (desired != 0f) {
                 val scrolled = listState.scrollBy(desired)
