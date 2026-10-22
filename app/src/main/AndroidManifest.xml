@@ -47,7 +47,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconOceano"
+            android:name=".IconOceano"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_oceano"
@@ -63,7 +63,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconAtardecer"
+            android:name=".IconAtardecer"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_atardecer"
@@ -79,7 +79,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconClaro"
+            android:name=".IconClaro"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_claro"
@@ -95,7 +95,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconNeon"
+            android:name=".IconNeon"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_neon"
@@ -111,7 +111,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconPerla"
+            android:name=".IconPerla"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_perla"
@@ -127,7 +127,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconRosa"
+            android:name=".IconRosa"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_rosa"
@@ -143,7 +143,7 @@
              por defecto; AppIconManager activa el del tema aplicado y
              desactiva el resto; MainActivity es la entrada del tema Bosque) -->
         <activity-alias
-            android:name=".IconIconMedianoche"
+            android:name=".IconMedianoche"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_medianoche"
