@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -269,8 +270,15 @@ fun DetailScreen(
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
                     onClick = { viewModel.playSongs(songs, songs.indexOf(song)) },
-                    modifier = if (reorderable) Modifier.draggedItemVisual(dragState, index)
-                    else Modifier,
+                    modifier = if (reorderable) {
+                        (if (dragState.draggedIndex != index) Modifier.animateItem() else Modifier)
+                            .onSizeChanged {
+                                if (it.height > 0) {
+                                    dragState.draggedItemSizePx = it.height.toFloat()
+                                }
+                            }
+                            .draggedItemVisual(dragState, index)
+                    } else Modifier,
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (removableFromPlaylistId != null) {
