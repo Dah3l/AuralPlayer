@@ -40,7 +40,7 @@ private val YouTubeRedDark = Color(0xFFC93A3E)
 @Composable
 fun DownloadsScreen(
     youTubeManager: YouTubeManager,
-    onDownloadComplete: (String?) -> Unit = {},
+    onDownloadComplete: (String?, Long) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
@@ -287,8 +287,8 @@ fun DownloadsScreen(
                             )
                             IconButton(
                                 onClick = {
-                                    youTubeManager.download(result) { fileName ->
-                                        onDownloadComplete(fileName)
+                                    youTubeManager.download(result) { fileName, mediaId ->
+                                        onDownloadComplete(fileName, mediaId)
                                     }
                                 },
                                 interactionSource = dlInteraction,
