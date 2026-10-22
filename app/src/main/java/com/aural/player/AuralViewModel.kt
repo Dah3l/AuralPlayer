@@ -289,36 +289,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Agrega una canción recién descargada a la playlist "Descargas".
-     * Crea la playlist si no existe. Busca la canción por nombre de archivo.
+     * Agrega una canción recién descargada a la playlist "Descargas", por su
+     * ID exacto de MediaStore (antes se buscaba por título tras esperas fijas
+     * y a veces no se encontraba, o se añadía otra canción). Crea la playlist
+     * si no existe. Si el MediaStore aún no la indexó, la playlist guarda el
+     * ID igualmente y la fila aparece en cuanto un rescan la recoja.
      */
-    fun addDownloadToPlaylist(fileName: String) {
+    fun addDownloadToPlaylist(fileName: String?, mediaId: Long) {
+        if (mediaId <= 0L) return
         viewModelScope.launch {
-            rescan()
-            kotlinx.coroutines.delay(500)
-            val songs = _library.value.songs
-            val baseName = fileName.substringBeforeLast(".").lowercase()
-            // Buscar por título contenido en el nombre del archivo
-            var song = songs.firstOrNull {
-                it.title.lowercase() in baseName || baseName in it.title.lowercase()
-            }
-            // Fallback: la de mayor ID (más reciente)
-            if (song == null) {
-                song = songs.maxByOrNull { it.id }
-            }
-            if (song == null) return@launch
-
-            val target = song
-            // Buscar o crear la playlist "Descargas"
             var playlistId = playlists.value.firstOrNull { it.name == "Descargas" }?.id
             if (playlistId == null) {
-                createPlaylist("Descargas")
-                kotlinx.coroutines.delay(500)
-                playlistId = playlists.value.firstOrNull { it.name == "Descargas" }?.id
+                settings.createPlaylist("Descargas")
+                // La tienda deduplica por nombre; esperar a verla en el estado
+                var espera = 0
+                while (playlistId == null && espera < 10) {
+                    kotlinx.coroutines.delay(200)
+                    playlistId = playlists.value.firstOrNull { it.name == "Descargas" }?.id
+                    espera++
+                }
             }
-            if (playlistId != null) {
-                addToPlaylist(playlistId, target.id)
+            val destino = playlistId ?: return@launch
+            // Reescanear con reintentos acotados hasta que la biblioteca la incluya
+            var intentos = 0
+            while (intentos < 8 && _library.value.songs.none { it.id == mediaId }) {
+                rescan()
+                intentos++
+                if (_library.value.songs.none { it.id == mediaId }) {
+                    kotlinx.coroutines.delay(400)
+                }
             }
+            addToPlaylist(destino, mediaId)
         }
     }
 
