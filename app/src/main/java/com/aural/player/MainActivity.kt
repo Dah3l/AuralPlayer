@@ -1,1 +1,448 @@
-Ly8gQWN0aXZpZGFkIHByaW5jaXBhbDogcGVybWlzb3MsIG5hdmVnYWNpw7NuIGRlIHBhbnRhbGxhcyB5IG1pbmktcmVwcm9kdWN0b3IKcGFja2FnZSBjb20uYXVyYWwucGxheWVyCgppbXBvcnQgYW5kcm9pZC5NYW5pZmVzdAppbXBvcnQgYW5kcm9pZC5jb250ZW50LnBtLlBhY2thZ2VNYW5hZ2VyCmltcG9ydCBhbmRyb2lkLm9zLkJ1aWxkCmltcG9ydCBhbmRyb2lkLm9zLkJ1bmRsZQppbXBvcnQgYW5kcm9pZHguYWN0aXZpdHkuY29tcG9zZS5zZXRDb250ZW50CmltcG9ydCBhbmRyb2lkeC5hY3Rpdml0eS5lbmFibGVFZGdlVG9FZGdlCmltcG9ydCBhbmRyb2lkeC5hY3Rpdml0eS5yZXN1bHQuY29udHJhY3QuQWN0aXZpdHlSZXN1bHRDb250cmFjdHMKaW1wb3J0IGFuZHJvaWR4LmFjdGl2aXR5LnZpZXdNb2RlbHMKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuYW5pbWF0aW9uLkFuaW1hdGVkVmlzaWJpbGl0eQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5hbmltYXRpb24uc2xpZGVJblZlcnRpY2FsbHkKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuYW5pbWF0aW9uLnNsaWRlT3V0VmVydGljYWxseQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5Cb3gKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuZmlsbE1heFNpemUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQucGFkZGluZwppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5uYXZpZ2F0aW9uQmFyc1BhZGRpbmcKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLk1hdGVyaWFsVGhlbWUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLlNjYWZmb2xkCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLm1hdGVyaWFsMy5UZXh0CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLm1hdGVyaWFsMy5UZXh0QnV0dG9uCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnJ1bnRpbWUuQ29tcG9zYWJsZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLmdldFZhbHVlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnJ1bnRpbWUubXV0YWJsZVN0YXRlT2YKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UucnVudGltZS5yZW1lbWJlcgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLnNldFZhbHVlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLkFsaWdubWVudAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS5Nb2RpZmllcgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS51bml0LmRwCmltcG9ydCBhbmRyb2lkeC5jb3JlLmNvbnRlbnQuQ29udGV4dENvbXBhdAppbXBvcnQgYW5kcm9pZHguYWN0aXZpdHkuQ29tcG9uZW50QWN0aXZpdHkKaW1wb3J0IGFuZHJvaWR4LmxpZmVjeWNsZS5jb21wb3NlLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5tYXRlcmlhbDMuQWxlcnREaWFsb2cKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuaGVpZ2h0SW4KaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi52ZXJ0aWNhbFNjcm9sbAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLnJlbWVtYmVyU2Nyb2xsU3RhdGUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UucnVudGltZS5MYXVuY2hlZEVmZmVjdAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS5wbGF0Zm9ybS5Mb2NhbENsaXBib2FyZE1hbmFnZXIKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkucGxhdGZvcm0uTG9jYWxDb250ZXh0CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnRleHQuQW5ub3RhdGVkU3RyaW5nCmltcG9ydCBhbmRyb2lkLmFwcC5BcHBsaWNhdGlvbgppbXBvcnQgY29tLmF1cmFsLnBsYXllci5kYXRhLlNvbmcKaW1wb3J0IGNvbS5hdXJhbC5wbGF5ZXIudWkuY29tcG9uZW50cy5NaW5pUGxheWVyCmltcG9ydCBjb20uYXVyYWwucGxheWVyLnVpLnNjcmVlbnMuRGV0YWlsU2NyZWVuCmltcG9ydCBjb20uYXVyYWwucGxheWVyLnVpLnNjcmVlbnMuRkFWT1JJVEVTX0lECmltcG9ydCBjb20uYXVyYWwucGxheWVyLnVpLnNjcmVlbnMuTGlicmFyeVNjcmVlbgppbXBvcnQgY29tLmF1cmFsLnBsYXllci51aS5zY3JlZW5zLk5vd1BsYXlpbmdTY3JlZW4KaW1wb3J0IGNvbS5hdXJhbC5wbGF5ZXIudWkudGhlbWUuQXVyYWxUaGVtZQppbXBvcnQgY29tLmF1cmFsLnBsYXllci51aS50aGVtZS5BcHBUaGVtZQppbXBvcnQgY29tLmF1cmFsLnBsYXllci5kYXRhLlNldHRpbmdzU3RvcmUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UucnVudGltZS5jb2xsZWN0QXNTdGF0ZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLmdldFZhbHVlCmltcG9ydCBjb20uYXVyYWwucGxheWVyLnVpLmNvbXBvbmVudHMuU3BsYXNoU2NyZWVuCmltcG9ydCBjb20uYXVyYWwucGxheWVyLnVpLnNjcmVlbnMuT25ib2FyZGluZ1NjcmVlbgppbXBvcnQgY29tLmF1cmFsLnBsYXllci5kYXRhLk9uYm9hcmRpbmdQcmVmcwoKLyoqIFBhbnRhbGxhcyBuYXZlZ2FibGVzIGRlIGxhIGFwcCAobmF2ZWdhY2nDs24gc2ltcGxlIHBvciBlc3RhZG8pLiAqLwpwcml2YXRlIHNlYWxlZCBjbGFzcyBTY3JlZW4gewogICAgZGF0YSBvYmplY3QgTGlicmFyeSA6IFNjcmVlbigpCiAgICBkYXRhIGNsYXNzIEFsYnVtKHZhbCB0aXRsZTogU3RyaW5nKSA6IFNjcmVlbigpCiAgICBkYXRhIGNsYXNzIEFydGlzdCh2YWwgbmFtZTogU3RyaW5nKSA6IFNjcmVlbigpCiAgICBkYXRhIGNsYXNzIFBsYXlsaXN0KHZhbCBpZDogU3RyaW5nKSA6IFNjcmVlbigpCn0KCmNsYXNzIE1haW5BY3Rpdml0eSA6IENvbXBvbmVudEFjdGl2aXR5KCkgewoKICAgIHByaXZhdGUgdmFsIHZpZXdNb2RlbDogQXVyYWxWaWV3TW9kZWwgYnkgdmlld01vZGVscygpCiAgICBwcml2YXRlIGxhdGVpbml0IHZhciB5b3VUdWJlTWFuYWdlcjogY29tLmF1cmFsLnBsYXllci55b3V0dWJlLllvdVR1YmVNYW5hZ2VyCgogICAgLyoqIExhdW5jaGVyIGRlIHBlcm1pc29zOiBhdWRpbyArIG5vdGlmaWNhY2lvbmVzIHNlZ8O6biBsYSB2ZXJzacOzbi4gKi8KICAgIHByaXZhdGUgdmFsIHBlcm1pc3Npb25MYXVuY2hlciA9IHJlZ2lzdGVyRm9yQWN0aXZpdHlSZXN1bHQoCiAgICAgICAgQWN0aXZpdHlSZXN1bHRDb250cmFjdHMuUmVxdWVzdE11bHRpcGxlUGVybWlzc2lvbnMoKQogICAgKSB7IHJlc3VsdHMgLT4KICAgICAgICB2aWV3TW9kZWwub25QZXJtaXNzaW9uUmVzdWx0KHJlc3VsdHMudmFsdWVzLmFueSB7IGl0IH0pCiAgICB9CgogICAgb3ZlcnJpZGUgZnVuIG9uQ3JlYXRlKHNhdmVkSW5zdGFuY2VTdGF0ZTogQnVuZGxlPykgewogICAgICAgIHN1cGVyLm9uQ3JlYXRlKHNhdmVkSW5zdGFuY2VTdGF0ZSkKICAgICAgICBoYW5kbGVBdWRpb1NlYXJjaEludGVudChpbnRlbnQpCiAgICAgICAgeW91VHViZU1hbmFnZXIgPSBjb20uYXVyYWwucGxheWVyLnlvdXR1YmUuWW91VHViZU1hbmFnZXIodGhpcykKICAgICAgICBlbmFibGVFZGdlVG9FZGdlKCkKICAgICAgICByZXF1ZXN0TmVlZGVkUGVybWlzc2lvbnMoKQoKICAgICAgICBzZXRDb250ZW50IHsKICAgICAgICAgICAgdmFsIHNldHRpbmdzU3RvcmUgPSBTZXR0aW5nc1N0b3JlKHRoaXNATWFpbkFjdGl2aXR5KQogICAgICAgICAgICB2YWwgdGhlbWVOYW1lIGJ5IHNldHRpbmdzU3RvcmUuYXBwVGhlbWUuY29sbGVjdEFzU3RhdGUoaW5pdGlhbCA9ICJCT1NRVUUiKQogICAgICAgICAgICB2YWwgYXBwVGhlbWUgPSB0cnkgewogICAgICAgICAgICAgICAgQXBwVGhlbWUudmFsdWVPZih0aGVtZU5hbWUpCiAgICAgICAgICAgIH0gY2F0Y2ggKGU6IEV4Y2VwdGlvbikgewogICAgICAgICAgICAgICAgQXBwVGhlbWUuQk9TUVVFCiAgICAgICAgICAgIH0KICAgICAgICAgICAgQXVyYWxUaGVtZSh0aGVtZSA9IGFwcFRoZW1lKSB7CiAgICAgICAgICAgICAgICB2YXIgc2hvd09uYm9hcmRpbmcgYnkgcmVtZW1iZXIgewogICAgICAgICAgICAgICAgICAgIG11dGFibGVTdGF0ZU9mKCFPbmJvYXJkaW5nUHJlZnMuaXNTZWVuKHRoaXNATWFpbkFjdGl2aXR5KSkKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGlmIChzaG93T25ib2FyZGluZykgewogICAgICAgICAgICAgICAgICAgIE9uYm9hcmRpbmdTY3JlZW4oCiAgICAgICAgICAgICAgICAgICAgICAgIG9uRmluaXNoID0gewogICAgICAgICAgICAgICAgICAgICAgICAgICAgT25ib2FyZGluZ1ByZWZzLm1hcmtTZWVuKHRoaXNATWFpbkFjdGl2aXR5KQogICAgICAgICAgICAgICAgICAgICAgICAgICAgc2hvd09uYm9hcmRpbmcgPSBmYWxzZQogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgfSBlbHNlIHsKICAgICAgICAgICAgICAgICAgICBBdXJhbEFwcCh2aWV3TW9kZWwsIHlvdVR1YmVNYW5hZ2VyID0geW91VHViZU1hbmFnZXIpCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICB9CgogICAgb3ZlcnJpZGUgZnVuIG9uTmV3SW50ZW50KGludGVudDogYW5kcm9pZC5jb250ZW50LkludGVudCkgewogICAgICAgIHN1cGVyLm9uTmV3SW50ZW50KGludGVudCkKICAgICAgICBoYW5kbGVBdWRpb1NlYXJjaEludGVudChpbnRlbnQpCiAgICB9CgogICAgLyoqIEFicmUgbGEgYsO6c3F1ZWRhIHBvciBhdWRpbyBzaSBlbCBpbnRlbnQgdmllbmUgZGVsIHRpbGUgZGUgYWp1c3RlcyByw6FwaWRvcy4gKi8KICAgIHByaXZhdGUgZnVuIGhhbmRsZUF1ZGlvU2VhcmNoSW50ZW50KGludGVudDogYW5kcm9pZC5jb250ZW50LkludGVudD8pIHsKICAgICAgICBpZiAoaW50ZW50Py5nZXRCb29sZWFuRXh0cmEoCiAgICAgICAgICAgICAgICBjb20uYXVyYWwucGxheWVyLkF1ZGlvU2VhcmNoVGlsZVNlcnZpY2UuRVhUUkFfT1BFTl9BVURJT19TRUFSQ0gsIGZhbHNlCiAgICAgICAgICAgICkgPT0gdHJ1ZQogICAgICAgICkgewogICAgICAgICAgICB2aWV3TW9kZWwub3BlbkF1ZGlvU2VhcmNoKCkKICAgICAgICB9CiAgICB9CgogICAgLyoqCiAgICAgKiBTb2xpY2l0YSBSRUFEX01FRElBX0FVRElPIGVuIEFuZHJvaWQgMTMrIG8gUkVBRF9FWFRFUk5BTF9TVE9SQUdFCiAgICAgKiBlbiB2ZXJzaW9uZXMgYW50ZXJpb3JlczsgYcOxYWRlIFBPU1RfTk9USUZJQ0FUSU9OUyBzaSBoYWNlIGZhbHRhLgogICAgICovCiAgICBwcml2YXRlIGZ1biByZXF1ZXN0TmVlZGVkUGVybWlzc2lvbnMoKSB7CiAgICAgICAgdmFsIG5lZWRlZCA9IG11dGFibGVMaXN0T2Y8U3RyaW5nPigpCiAgICAgICAgdmFsIGF1ZGlvUGVybWlzc2lvbiA9IGlmIChCdWlsZC5WRVJTSU9OLlNES19JTlQgPj0gQnVpbGQuVkVSU0lPTl9DT0RFUy5USVJBTUlTVSkgewogICAgICAgICAgICBNYW5pZmVzdC5wZXJtaXNzaW9uLlJFQURfTUVESUFfQVVESU8KICAgICAgICB9IGVsc2UgewogICAgICAgICAgICBNYW5pZmVzdC5wZXJtaXNzaW9uLlJFQURfRVhURVJOQUxfU1RPUkFHRQogICAgICAgIH0KICAgICAgICBpZiAoIWlzR3JhbnRlZChhdWRpb1Blcm1pc3Npb24pKSBuZWVkZWQgKz0gYXVkaW9QZXJtaXNzaW9uCgogICAgICAgIGlmIChCdWlsZC5WRVJTSU9OLlNES19JTlQgPj0gQnVpbGQuVkVSU0lPTl9DT0RFUy5USVJBTUlTVSAmJgogICAgICAgICAgICAhaXNHcmFudGVkKE1hbmlmZXN0LnBlcm1pc3Npb24uUE9TVF9OT1RJRklDQVRJT05TKQogICAgICAgICkgewogICAgICAgICAgICBuZWVkZWQgKz0gTWFuaWZlc3QucGVybWlzc2lvbi5QT1NUX05PVElGSUNBVElPTlMKICAgICAgICB9CgogICAgICAgIGlmIChuZWVkZWQuaXNFbXB0eSgpKSB7CiAgICAgICAgICAgIC8vIFlhIGNvbmNlZGlkb3MgcHJldmlhbWVudGU6IGVzY2FuZWFyIGRpcmVjdGFtZW50ZQogICAgICAgICAgICB2aWV3TW9kZWwub25QZXJtaXNzaW9uUmVzdWx0KHRydWUpCiAgICAgICAgfSBlbHNlIHsKICAgICAgICAgICAgcGVybWlzc2lvbkxhdW5jaGVyLmxhdW5jaChuZWVkZWQudG9UeXBlZEFycmF5KCkpCiAgICAgICAgfQogICAgfQoKICAgIHByaXZhdGUgZnVuIGlzR3JhbnRlZChwZXJtaXNzaW9uOiBTdHJpbmcpOiBCb29sZWFuID0KICAgICAgICBDb250ZXh0Q29tcGF0LmNoZWNrU2VsZlBlcm1pc3Npb24odGhpcywgcGVybWlzc2lvbikgPT0gUGFja2FnZU1hbmFnZXIuUEVSTUlTU0lPTl9HUkFOVEVECn0KCi8vIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQovLyBSYcOteiBkZSBsYSBpbnRlcmZhegovLyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCkBDb21wb3NhYmxlCnByaXZhdGUgZnVuIEF1cmFsQXBwKHZpZXdNb2RlbDogQXVyYWxWaWV3TW9kZWwsCiAgICB5b3VUdWJlTWFuYWdlcjogY29tLmF1cmFsLnBsYXllci55b3V0dWJlLllvdVR1YmVNYW5hZ2VyPykgewogICAgdmFyIHNjcmVlbiBieSByZW1lbWJlciB7IG11dGFibGVTdGF0ZU9mPFNjcmVlbj4oU2NyZWVuLkxpYnJhcnkpIH0KICAgIHZhciBzaG93U3BsYXNoIGJ5IHJlbWVtYmVyIHsgbXV0YWJsZVN0YXRlT2YodHJ1ZSkgfQogICAgLy8gRWwgc3BsYXNoIHNlIG9jdWx0YSB0cmFzIDEuOHMgKGNvcnRpbmEgbWllbnRyYXMgY2FyZ2EpCiAgICBhbmRyb2lkeC5jb21wb3NlLnJ1bnRpbWUuTGF1bmNoZWRFZmZlY3QoVW5pdCkgewogICAgICAgIGtvdGxpbnguY29yb3V0aW5lcy5kZWxheSgxODAwKQogICAgICAgIHNob3dTcGxhc2ggPSBmYWxzZQogICAgfQogICAgLy8gRXN0YWRvcyBlbGV2YWRvczogc29icmV2aXZlbiBhIGxhIG5hdmVnYWNpw7NuIHBhcmEgcmVjb3JkYXIgcG9zaWNpw7NuCiAgICB2YWwgc29uZ3NMaXN0U3RhdGUgPSBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24ubGF6eS5yZW1lbWJlckxhenlMaXN0U3RhdGUoKQogICAgdmFsIGFsYnVtc0dyaWRTdGF0ZSA9IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXp5LmdyaWQucmVtZW1iZXJMYXp5R3JpZFN0YXRlKCkKICAgIHZhbCBhcnRpc3RzR3JpZFN0YXRlID0gYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxhenkuZ3JpZC5yZW1lbWJlckxhenlHcmlkU3RhdGUoKQogICAgdmFyIGxpYnJhcnlUYWIgYnkgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLnJlbWVtYmVyIHsgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLm11dGFibGVJbnRTdGF0ZU9mKDApIH0KICAgIHZhciBzaG93Tm93UGxheWluZyBieSByZW1lbWJlciB7IG11dGFibGVTdGF0ZU9mKGZhbHNlKSB9CiAgICB2YXIgc29uZ01lbnVUYXJnZXQgYnkgcmVtZW1iZXIgeyBtdXRhYmxlU3RhdGVPZjxTb25nPz4obnVsbCkgfQoKICAgIHZhbCBsaWJyYXJ5IGJ5IHZpZXdNb2RlbC5saWJyYXJ5LmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICB2YWwgcGxheWVyU3RhdGUgYnkgdmlld01vZGVsLnBsYXllclN0YXRlLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICAgICAgdmFsIGN1c3RvbUNvdmVycyBieSB2aWV3TW9kZWwuY3VzdG9tQ292ZXJzLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICAgICAgdmFsIGN1c3RvbU1ldGFkYXRhIGJ5IHZpZXdNb2RlbC5jdXN0b21NZXRhZGF0YS5jb2xsZWN0QXNTdGF0ZVdpdGhMaWZlY3ljbGUoKQogICAgdmFsIGZhdm9yaXRlcyBieSB2aWV3TW9kZWwuZmF2b3JpdGVzLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICB2YWwgcGxheWxpc3RzIGJ5IHZpZXdNb2RlbC5wbGF5bGlzdHMuY29sbGVjdEFzU3RhdGVXaXRoTGlmZWN5Y2xlKCkKCiAgICBTY2FmZm9sZCgKICAgICAgICBjb250YWluZXJDb2xvciA9IE1hdGVyaWFsVGhlbWUuY29sb3JTY2hlbWUuYmFja2dyb3VuZCwKICAgICAgICAvLyBNaW5pLXJlcHJvZHVjdG9yIHBlcnNpc3RlbnRlIHNvYnJlIGxhIGJhcnJhIGRlIG5hdmVnYWNpw7NuCiAgICAgICAgYm90dG9tQmFyID0gewogICAgICAgICAgICBBbmltYXRlZFZpc2liaWxpdHkoCiAgICAgICAgICAgICAgICB2aXNpYmxlID0gcGxheWVyU3RhdGUuY3VycmVudFNvbmcgIT0gbnVsbCAmJiAhc2hvd05vd1BsYXlpbmcsCiAgICAgICAgICAgICAgICBlbnRlciA9IHNsaWRlSW5WZXJ0aWNhbGx5IHsgaXQgfSwKICAgICAgICAgICAgICAgIGV4aXQgPSBzbGlkZU91dFZlcnRpY2FsbHkgeyBpdCB9CiAgICAgICAgICAgICkgewogICAgICAgICAgICAgICAgTWluaVBsYXllcigKICAgICAgICAgICAgICAgICAgICBzdGF0ZSA9IHBsYXllclN0YXRlLAogICAgICAgICAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIubmF2aWdhdGlvbkJhcnNQYWRkaW5nKCksCiAgICAgICAgICAgICAgICAgICAgb25PcGVuID0geyBzaG93Tm93UGxheWluZyA9IHRydWUgfSwKICAgICAgICAgICAgICAgICAgICBvblRvZ2dsZVBsYXkgPSB2aWV3TW9kZWwucGxheWJhY2s6OnRvZ2dsZVBsYXlQYXVzZSwKICAgICAgICAgICAgICAgICAgICBjdXN0b21Db3ZlclVyaSA9IHBsYXllclN0YXRlLmN1cnJlbnRTb25nPy5sZXQgeyBjdXN0b21Db3ZlcnNbaXQuaWRdIH0sCiAgICAgICAgICAgICAgICAgICAgY3VzdG9tTWV0YWRhdGEgPSBwbGF5ZXJTdGF0ZS5jdXJyZW50U29uZz8ubGV0IHsgY3VzdG9tTWV0YWRhdGFbaXQuaWRdIH0KICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgfQogICAgICAgIH0KICAgICkgeyBpbm5lclBhZGRpbmcgLT4KICAgICAgICBCb3goCiAgICAgICAgICAgIE1vZGlmaWVyCiAgICAgICAgICAgICAgICAuZmlsbE1heFNpemUoKQogICAgICAgICAgICAgICAgLnBhZGRpbmcoaW5uZXJQYWRkaW5nKQogICAgICAgICkgewogICAgICAgICAgICAvLyBBdHLDoXMgZW4gZGV0YWxsZSAtPiB2dWVsdmUgYSBsYSBiaWJsaW90ZWNhIChjb25zZXJ2YSBwb3NpY2nDs24pCiAgICAgICAgICAgIGFuZHJvaWR4LmFjdGl2aXR5LmNvbXBvc2UuQmFja0hhbmRsZXIoZW5hYmxlZCA9IHNjcmVlbiAhPSBTY3JlZW4uTGlicmFyeSkgewogICAgICAgICAgICAgICAgc2NyZWVuID0gU2NyZWVuLkxpYnJhcnkKICAgICAgICAgICAgfQogICAgICAgICAgICAvLyBBdHLDoXMgZW4gTm93IFBsYXlpbmcgLT4gdnVlbHZlIGEgbGEgcGFudGFsbGEgYW50ZXJpb3IKICAgICAgICAgICAgYW5kcm9pZHguYWN0aXZpdHkuY29tcG9zZS5CYWNrSGFuZGxlcihlbmFibGVkID0gc2hvd05vd1BsYXlpbmcpIHsKICAgICAgICAgICAgICAgIHNob3dOb3dQbGF5aW5nID0gZmFsc2UKICAgICAgICAgICAgfQogICAgICAgICAgICB3aGVuICh2YWwgcyA9IHNjcmVlbikgewogICAgICAgICAgICAgICAgU2NyZWVuLkxpYnJhcnkgLT4gTGlicmFyeVNjcmVlbigKICAgICAgICAgICAgICAgICAgICB2aWV3TW9kZWwgPSB2aWV3TW9kZWwsCiAgICAgICAgICAgICAgICAgICAgb25QbGF5TGlzdCA9IHsgc29uZ3MsIGluZGV4IC0+CiAgICAgICAgICAgICAgICAgICAgICAgIHZpZXdNb2RlbC5wbGF5U29uZ3Moc29uZ3MsIGluZGV4KQogICAgICAgICAgICAgICAgICAgICAgICBzaG93Tm93UGxheWluZyA9IHRydWUKICAgICAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgICAgIG9uT3BlbkFsYnVtID0geyBzY3JlZW4gPSBTY3JlZW4uQWxidW0oaXQpIH0sCiAgICAgICAgICAgICAgICAgICAgb25PcGVuQXJ0aXN0ID0geyBzY3JlZW4gPSBTY3JlZW4uQXJ0aXN0KGl0KSB9LAogICAgICAgICAgICAgICAgICAgIG9uT3BlblBsYXlsaXN0ID0geyBzY3JlZW4gPSBTY3JlZW4uUGxheWxpc3QoaXQpIH0sCiAgICAgICAgICAgICAgICAgICAgb25Tb25nTWVudSA9IHsgc29uZ01lbnVUYXJnZXQgPSBpdCB9LAogICAgICAgICAgICAgICAgICAgIHNvbmdzTGlzdFN0YXRlID0gc29uZ3NMaXN0U3RhdGUsCiAgICAgICAgICAgICAgICAgICAgYWxidW1zR3JpZFN0YXRlID0gYWxidW1zR3JpZFN0YXRlLAogICAgICAgICAgICAgICAgICAgIGFydGlzdHNHcmlkU3RhdGUgPSBhcnRpc3RzR3JpZFN0YXRlLAogICAgICAgICAgICAgICAgICAgIHNlbGVjdGVkVGFiID0gbGlicmFyeVRhYiwKICAgICAgICAgICAgICAgICAgICBvblRhYlNlbGVjdGVkID0geyBsaWJyYXJ5VGFiID0gaXQgfSwKICAgICAgICAgICAgICAgICAgICAgICAgeW91VHViZU1hbmFnZXIgPSB5b3VUdWJlTWFuYWdlcgogICAgICAgICAgICAgICAgICAgICkKCiAgICAgICAgICAgICAgICBpcyBTY3JlZW4uQWxidW0gLT4gewogICAgICAgICAgICAgICAgICAgIHZhbCBhbGxTb25ncyBieSB2aWV3TW9kZWwuc29uZ3NGbG93LmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICAgICAgICAgICAgICAgICAgdmFsIHNvbmdzID0gYWxsU29uZ3MuZmlsdGVyIHsgaXQuYWxidW0gPT0gcy50aXRsZSB9CiAgICAgICAgICAgICAgICAgICAgRGV0YWlsU2NyZWVuKAogICAgICAgICAgICAgICAgICAgICAgICB2aWV3TW9kZWwgPSB2aWV3TW9kZWwsCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlID0gcy50aXRsZSwKICAgICAgICAgICAgICAgICAgICAgICAgc3VidGl0bGUgPSBzb25ncy5maXJzdE9yTnVsbCgpPy5hcnRpc3QgPzogIiIsCiAgICAgICAgICAgICAgICAgICAgICAgIHNvbmdzID0gc29uZ3Muc29ydGVkQnkgeyBpdC50cmFja051bWJlciB9LAogICAgICAgICAgICAgICAgICAgICAgICBjb3ZlclVyaSA9IHNvbmdzLmZpcnN0T3JOdWxsKCk/LmFsYnVtQXJ0VXJpLAogICAgICAgICAgICAgICAgICAgICAgICBvbkJhY2sgPSB7IHNjcmVlbiA9IFNjcmVlbi5MaWJyYXJ5IH0sCiAgICAgICAgICAgICAgICAgICAgICAgIG9uU29uZ01lbnUgPSB7IHNvbmdNZW51VGFyZ2V0ID0gaXQgfQogICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICBpcyBTY3JlZW4uQXJ0aXN0IC0+IHsKICAgICAgICAgICAgICAgICAgICB2YWwgYWxsU29uZ3MgYnkgdmlld01vZGVsLnNvbmdzRmxvdy5jb2xsZWN0QXNTdGF0ZVdpdGhMaWZlY3ljbGUoKQogICAgICAgICAgICAgICAgICAgIHZhbCBzb25ncyA9IGFsbFNvbmdzLmZpbHRlciB7IGl0LmFydGlzdCA9PSBzLm5hbWUgfQogICAgICAgICAgICAgICAgICAgIERldGFpbFNjcmVlbigKICAgICAgICAgICAgICAgICAgICAgICAgdmlld01vZGVsID0gdmlld01vZGVsLAogICAgICAgICAgICAgICAgICAgICAgICB0aXRsZSA9IHMubmFtZSwKICAgICAgICAgICAgICAgICAgICAgICAgc3VidGl0bGUgPSAiQXJ0aXN0YSIsCiAgICAgICAgICAgICAgICAgICAgICAgIHNvbmdzID0gc29uZ3MsCiAgICAgICAgICAgICAgICAgICAgICAgIGNvdmVyVXJpID0gc29uZ3MuZmlyc3RPck51bGwoKT8uYWxidW1BcnRVcmksCiAgICAgICAgICAgICAgICAgICAgICAgIG9uQmFjayA9IHsgc2NyZWVuID0gU2NyZWVuLkxpYnJhcnkgfSwKICAgICAgICAgICAgICAgICAgICAgICAgb25Tb25nTWVudSA9IHsgc29uZ01lbnVUYXJnZXQgPSBpdCB9CiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgIGlzIFNjcmVlbi5QbGF5bGlzdCAtPiB7CiAgICAgICAgICAgICAgICAgICAgdmFsIGlzRmF2b3JpdGVzID0gcy5pZCA9PSBGQVZPUklURVNfSUQKICAgICAgICAgICAgICAgICAgICB2YWwgcGxheWxpc3QgPSBwbGF5bGlzdHMuZmluZCB7IGl0LmlkID09IHMuaWQgfQogICAgICAgICAgICAgICAgICAgIHZhbCBzb25ncyA9IGlmIChpc0Zhdm9yaXRlcykgdmlld01vZGVsLmZhdm9yaXRlU29uZ3MoKQogICAgICAgICAgICAgICAgICAgIGVsc2UgcGxheWxpc3Q/LmxldCB7IHZpZXdNb2RlbC5zb25nc09mUGxheWxpc3QoaXQpIH0gPzogZW1wdHlMaXN0KCkKCiAgICAgICAgICAgICAgICAgICAgRGV0YWlsU2NyZWVuKAogICAgICAgICAgICAgICAgICAgICAgICB2aWV3TW9kZWwgPSB2aWV3TW9kZWwsCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlID0gaWYgKGlzRmF2b3JpdGVzKSAiQ2FuY2lvbmVzIGZhdm9yaXRhcyIgZWxzZSBwbGF5bGlzdD8ubmFtZSA/OiAiIiwKICAgICAgICAgICAgICAgICAgICAgICAgc3VidGl0bGUgPSBpZiAoaXNGYXZvcml0ZXMpICJUdXMgcHJlZmVyaWRhcyIgZWxzZSAiUGxheWxpc3QiLAogICAgICAgICAgICAgICAgICAgICAgICBzb25ncyA9IHNvbmdzLAogICAgICAgICAgICAgICAgICAgICAgICBjb3ZlclVyaSA9IHNvbmdzLmZpcnN0T3JOdWxsKCk/LmFsYnVtQXJ0VXJpLAogICAgICAgICAgICAgICAgICAgICAgICBvbkJhY2sgPSB7IHNjcmVlbiA9IFNjcmVlbi5MaWJyYXJ5IH0sCiAgICAgICAgICAgICAgICAgICAgICAgIG9uU29uZ01lbnUgPSB7IHNvbmdNZW51VGFyZ2V0ID0gaXQgfSwKICAgICAgICAgICAgICAgICAgICAgICAgcmVtb3ZhYmxlRnJvbVBsYXlsaXN0SWQgPSBpZiAoaXNGYXZvcml0ZXMpIG51bGwgZWxzZSBzLmlkLAogICAgICAgICAgICAgICAgICAgICAgICBvbk1vdmVTb25nID0gaWYgKGlzRmF2b3JpdGVzIHx8IHBsYXlsaXN0ID09IG51bGwpIG51bGwgZWxzZSB7IGZyb20sIHRvIC0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB2aWV3TW9kZWwubW92ZVNvbmdJblBsYXlsaXN0KHBsYXlsaXN0LmlkLCBmcm9tLCB0bykKICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KCiAgICAvLyAtLS0tIERpw6Fsb2dvIGRlIGLDunNxdWVkYSBwb3IgYXVkaW8gLS0tLQogICAgdmFsIHNob3dBdWRpb1NlYXJjaCBieSB2aWV3TW9kZWwuc2hvd0F1ZGlvU2VhcmNoLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCiAgICBpZiAoc2hvd0F1ZGlvU2VhcmNoKSB7CiAgICAgICAgY29tLmF1cmFsLnBsYXllci51aS5jb21wb25lbnRzLkF1ZGlvU2VhcmNoRGlhbG9nKAogICAgICAgICAgICBvbkRpc21pc3MgPSB7IHZpZXdNb2RlbC5jbG9zZUF1ZGlvU2VhcmNoKCkgfSwKICAgICAgICAgICAgb25TZWFyY2hZb3VUdWJlID0geyBxdWVyeSAtPgogICAgICAgICAgICAgICAgdmlld01vZGVsLmNsb3NlQXVkaW9TZWFyY2goKQogICAgICAgICAgICAgICAgdmlld01vZGVsLnJlcXVlc3RZb3VUdWJlU2VhcmNoKHF1ZXJ5KQogICAgICAgICAgICB9CiAgICAgICAgKQogICAgfQoKICAgIC8vIC0tLS0gUGFudGFsbGEgTm93IFBsYXlpbmcgYSBwYW50YWxsYSBjb21wbGV0YSAtLS0tCiAgICBpZiAoc2hvd05vd1BsYXlpbmcpIHsKICAgICAgICBOb3dQbGF5aW5nU2NyZWVuKAogICAgICAgICAgICB2aWV3TW9kZWwgPSB2aWV3TW9kZWwsCiAgICAgICAgICAgIHN0YXRlID0gcGxheWVyU3RhdGUsCiAgICAgICAgICAgIGlzRmF2b3JpdGUgPSBwbGF5ZXJTdGF0ZS5jdXJyZW50U29uZz8ubGV0IHsgZmF2b3JpdGVzLmNvbnRhaW5zKGl0LmlkKSB9ID86IGZhbHNlLAogICAgICAgICAgICBvbkRpc21pc3MgPSB7IHNob3dOb3dQbGF5aW5nID0gZmFsc2UgfSwKICAgICAgICAgICAgb25Ub2dnbGVQbGF5ID0gdmlld01vZGVsLnBsYXliYWNrOjp0b2dnbGVQbGF5UGF1c2UsCiAgICAgICAgICAgIG9uTmV4dCA9IHZpZXdNb2RlbC5wbGF5YmFjazo6c2Vla1RvTmV4dCwKICAgICAgICAgICAgb25QcmV2aW91cyA9IHZpZXdNb2RlbC5wbGF5YmFjazo6c2Vla1RvUHJldmlvdXMsCiAgICAgICAgICAgIG9uU2VlayA9IHZpZXdNb2RlbC5wbGF5YmFjazo6c2Vla1RvLAogICAgICAgICAgICBvblRvZ2dsZVNodWZmbGUgPSB2aWV3TW9kZWwucGxheWJhY2s6OnRvZ2dsZVNodWZmbGUsCiAgICAgICAgICAgIG9uQ3ljbGVSZXBlYXQgPSB2aWV3TW9kZWwucGxheWJhY2s6OmN5Y2xlUmVwZWF0TW9kZSwKICAgICAgICAgICAgb25Ub2dnbGVGYXZvcml0ZSA9IHsKICAgICAgICAgICAgICAgIHBsYXllclN0YXRlLmN1cnJlbnRTb25nPy5sZXQgeyB2aWV3TW9kZWwudG9nZ2xlRmF2b3JpdGUoaXQuaWQpIH0KICAgICAgICAgICAgfSwKICAgICAgICAgICAgb25QbGF5UXVldWVJdGVtID0gdmlld01vZGVsLnBsYXliYWNrOjpwbGF5QXQsCiAgICAgICAgICAgIG9uUmVtb3ZlRnJvbVF1ZXVlID0gdmlld01vZGVsLnBsYXliYWNrOjpyZW1vdmVGcm9tUXVldWUsCiAgICAgICAgICAgIG9uTW92ZVF1ZXVlSXRlbSA9IHZpZXdNb2RlbC5wbGF5YmFjazo6bW92ZUluUXVldWUKICAgICAgICApCiAgICB9CiAgICAvLyAtLS0tIFNwbGFzaCBkZSBiaWVudmVuaWRhIC0tLS0KICAgIGlmIChzaG93U3BsYXNoKSB7CiAgICAgICAgU3BsYXNoU2NyZWVuKCkKICAgIH0KCiAgICAvLyAtLS0tIE1lbsO6IGNvbnRleHR1YWwgZGUgY2FuY2nDs246IGHDsWFkaXIgYSBwbGF5bGlzdCAvIGZhdm9yaXRvcyAtLS0tCiAgICBzb25nTWVudVRhcmdldD8ubGV0IHsgc29uZyAtPgogICAgICAgIFNvbmdNZW51U2hlZXQoCiAgICAgICAgICAgIHNvbmcgPSBzb25nLAogICAgICAgICAgICBwbGF5bGlzdHMgPSBwbGF5bGlzdHMsCiAgICAgICAgICAgIGlzRmF2b3JpdGUgPSBmYXZvcml0ZXMuY29udGFpbnMoc29uZy5pZCksCiAgICAgICAgICAgIG9uRGlzbWlzcyA9IHsgc29uZ01lbnVUYXJnZXQgPSBudWxsIH0sCiAgICAgICAgICAgIG9uVG9nZ2xlRmF2b3JpdGUgPSB7CiAgICAgICAgICAgICAgICB2aWV3TW9kZWwudG9nZ2xlRmF2b3JpdGUoc29uZy5pZCkKICAgICAgICAgICAgICAgIHNvbmdNZW51VGFyZ2V0ID0gbnVsbAogICAgICAgICAgICB9LAogICAgICAgICAgICBvbkFkZFRvUGxheWxpc3QgPSB7IHBsSWQgLT4KICAgICAgICAgICAgICAgIHZpZXdNb2RlbC5hZGRUb1BsYXlsaXN0KHBsSWQsIHNvbmcuaWQpCiAgICAgICAgICAgICAgICBzb25nTWVudVRhcmdldCA9IG51bGwKICAgICAgICAgICAgfSwKICAgICAgICAgICAgb25FbnF1ZXVlID0gewogICAgICAgICAgICAgICAgdmlld01vZGVsLnBsYXliYWNrLmVucXVldWUoc29uZykKICAgICAgICAgICAgICAgIHNvbmdNZW51VGFyZ2V0ID0gbnVsbAogICAgICAgICAgICB9CiAgICAgICAgKQogICAgfQoKICAgIC8vIC0tLS0gRGnDoWxvZ28gZGUgcmVwb3J0ZSBkZSBjcmFzaCAoZGlhZ27Ds3N0aWNvIHRlbXBvcmFsKSAtLS0tCiAgICB2YWwgYXBwQ3R4ID0gTG9jYWxDb250ZXh0LmN1cnJlbnQuYXBwbGljYXRpb25Db250ZXh0IGFzIEFwcGxpY2F0aW9uCiAgICB2YXIgY3Jhc2hSZXBvcnQgYnkgcmVtZW1iZXIgeyBtdXRhYmxlU3RhdGVPZjxTdHJpbmc/PihudWxsKSB9CiAgICBMYXVuY2hlZEVmZmVjdChVbml0KSB7CiAgICAgICAgY3Jhc2hSZXBvcnQgPSBjb20uYXVyYWwucGxheWVyLkF1cmFsQXBwLnJlYWRDcmFzaFJlcG9ydChhcHBDdHgpCiAgICB9CiAgICBjcmFzaFJlcG9ydD8ubGV0IHsgcmVwb3J0IC0+CiAgICAgICAgQ3Jhc2hSZXBvcnREaWFsb2coCiAgICAgICAgICAgIHJlcG9ydCA9IHJlcG9ydCwKICAgICAgICAgICAgb25EaXNtaXNzID0gewogICAgICAgICAgICAgICAgY29tLmF1cmFsLnBsYXllci5BdXJhbEFwcC5jbGVhckNyYXNoUmVwb3J0KGFwcEN0eCkKICAgICAgICAgICAgICAgIGNyYXNoUmVwb3J0ID0gbnVsbAogICAgICAgICAgICB9CiAgICAgICAgKQogICAgfQp9CgovKiogTXVlc3RyYSBlbCDDumx0aW1vIGNyYXNoIHBhcmEgZGlhZ27Ds3N0aWNvLiBUZW1wb3JhbC4gKi8KQENvbXBvc2FibGUKcHJpdmF0ZSBmdW4gQ3Jhc2hSZXBvcnREaWFsb2cocmVwb3J0OiBTdHJpbmcsIG9uRGlzbWlzczogKCkgLT4gVW5pdCkgewogICAgdmFsIGNsaXBib2FyZCA9IExvY2FsQ2xpcGJvYXJkTWFuYWdlci5jdXJyZW50CiAgICBBbGVydERpYWxvZygKICAgICAgICBvbkRpc21pc3NSZXF1ZXN0ID0gb25EaXNtaXNzLAogICAgICAgIHRpdGxlID0geyBUZXh0KCJMYSBhcHAgc2UgY2VycsOzIGFudGVzIikgfSwKICAgICAgICB0ZXh0ID0gewogICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgdGV4dCA9ICJDb3BpYSBlc3RlIGVycm9yIHkgbcOhbmRhbG8gcGFyYSBhcnJlZ2xhcmxvOlxuXG4iICsgcmVwb3J0LnRha2UoMzAwMCksCiAgICAgICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGwsCiAgICAgICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyCiAgICAgICAgICAgICAgICAgICAgLmhlaWdodEluKG1heCA9IDQwMC5kcCkKICAgICAgICAgICAgICAgICAgICAudmVydGljYWxTY3JvbGwocmVtZW1iZXJTY3JvbGxTdGF0ZSgpKQogICAgICAgICAgICApCiAgICAgICAgfSwKICAgICAgICBjb25maXJtQnV0dG9uID0gewogICAgICAgICAgICBUZXh0QnV0dG9uKG9uQ2xpY2sgPSB7CiAgICAgICAgICAgICAgICBjbGlwYm9hcmQuc2V0VGV4dChBbm5vdGF0ZWRTdHJpbmcocmVwb3J0KSkKICAgICAgICAgICAgICAgIG9uRGlzbWlzcygpCiAgICAgICAgICAgIH0pIHsgVGV4dCgiQ29waWFyIGVycm9yIikgfQogICAgICAgIH0sCiAgICAgICAgZGlzbWlzc0J1dHRvbiA9IHsKICAgICAgICAgICAgVGV4dEJ1dHRvbihvbkNsaWNrID0gb25EaXNtaXNzKSB7IFRleHQoIkNlcnJhciIpIH0KICAgICAgICB9CiAgICApCn0KCi8qKiBIb2phIGluZmVyaW9yIGNvbiBhY2Npb25lcyBwYXJhIHVuYSBjYW5jacOzbiBjb25jcmV0YS4gKi8KQGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLkV4cGVyaW1lbnRhbE1hdGVyaWFsM0FwaQpAQ29tcG9zYWJsZQpwcml2YXRlIGZ1biBTb25nTWVudVNoZWV0KAogICAgc29uZzogU29uZywKICAgIHBsYXlsaXN0czogTGlzdDxjb20uYXVyYWwucGxheWVyLmRhdGEuUGxheWxpc3Q+LAogICAgaXNGYXZvcml0ZTogQm9vbGVhbiwKICAgIG9uRGlzbWlzczogKCkgLT4gVW5pdCwKICAgIG9uVG9nZ2xlRmF2b3JpdGU6ICgpIC0+IFVuaXQsCiAgICBvbkFkZFRvUGxheWxpc3Q6IChTdHJpbmcpIC0+IFVuaXQsCiAgICBvbkVucXVldWU6ICgpIC0+IFVuaXQKKSB7CiAgICBhbmRyb2lkeC5jb21wb3NlLm1hdGVyaWFsMy5Nb2RhbEJvdHRvbVNoZWV0KAogICAgICAgIG9uRGlzbWlzc1JlcXVlc3QgPSBvbkRpc21pc3MsCiAgICAgICAgY29udGFpbmVyQ29sb3IgPSBNYXRlcmlhbFRoZW1lLmNvbG9yU2NoZW1lLnN1cmZhY2UKICAgICkgewogICAgICAgIFRleHQoCiAgICAgICAgICAgIHRleHQgPSBzb25nLnRpdGxlLAogICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS50aXRsZUxhcmdlLAogICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyLnBhZGRpbmcoc3RhcnQgPSAyNC5kcCwgdG9wID0gOC5kcCwgZW5kID0gMjQuZHAsIGJvdHRvbSA9IDQuZHApLAogICAgICAgICAgICBtYXhMaW5lcyA9IDEKICAgICAgICApCiAgICAgICAgVGV4dEJ1dHRvbihvbkNsaWNrID0gb25FbnF1ZXVlLCBtb2RpZmllciA9IE1vZGlmaWVyLmFsaWduKEFsaWdubWVudC5TdGFydCkucGFkZGluZyhzdGFydCA9IDEyLmRwKSkgewogICAgICAgICAgICBUZXh0KCJBw7FhZGlyIGEgbGEgY29sYSIpCiAgICAgICAgfQogICAgICAgIFRleHRCdXR0b24ob25DbGljayA9IG9uVG9nZ2xlRmF2b3JpdGUsIG1vZGlmaWVyID0gTW9kaWZpZXIuYWxpZ24oQWxpZ25tZW50LlN0YXJ0KS5wYWRkaW5nKHN0YXJ0ID0gMTIuZHApKSB7CiAgICAgICAgICAgIFRleHQoaWYgKGlzRmF2b3JpdGUpICJRdWl0YXIgZGUgZmF2b3JpdGFzIiBlbHNlICJNYXJjYXIgY29tbyBmYXZvcml0YSIpCiAgICAgICAgfQogICAgICAgIFRleHQoCiAgICAgICAgICAgICJBw7FhZGlyIGEgcGxheWxpc3QiLAogICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5sYWJlbFNtYWxsLAogICAgICAgICAgICBjb2xvciA9IE1hdGVyaWFsVGhlbWUuY29sb3JTY2hlbWUub25TdXJmYWNlVmFyaWFudCwKICAgICAgICAgICAgbW9kaWZpZXIgPSBNb2RpZmllci5wYWRkaW5nKHN0YXJ0ID0gMjQuZHAsIHRvcCA9IDEyLmRwKQogICAgICAgICkKICAgICAgICBpZiAocGxheWxpc3RzLmlzRW1wdHkoKSkgewogICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgIk5vIHRpZW5lcyBwbGF5bGlzdHMgdG9kYXbDrWEiLAogICAgICAgICAgICAgICAgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkuYm9keVNtYWxsLAogICAgICAgICAgICAgICAgY29sb3IgPSBNYXRlcmlhbFRoZW1lLmNvbG9yU2NoZW1lLm9uU3VyZmFjZVZhcmlhbnQsCiAgICAgICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyLnBhZGRpbmcoMjQuZHApCiAgICAgICAgICAgICkKICAgICAgICB9IGVsc2UgewogICAgICAgICAgICBwbGF5bGlzdHMuZm9yRWFjaCB7IHBsIC0+CiAgICAgICAgICAgICAgICBUZXh0QnV0dG9uKAogICAgICAgICAgICAgICAgICAgIG9uQ2xpY2sgPSB7IG9uQWRkVG9QbGF5bGlzdChwbC5pZCkgfSwKICAgICAgICAgICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyLmFsaWduKEFsaWdubWVudC5TdGFydCkucGFkZGluZyhzdGFydCA9IDEyLmRwKQogICAgICAgICAgICAgICAgKSB7CiAgICAgICAgICAgICAgICAgICAgVGV4dChwbC5uYW1lKQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgICAgIEJveChNb2RpZmllci5wYWRkaW5nKGJvdHRvbSA9IDI0LmRwKSkge30KICAgIH0KfQo=
+// Actividad principal: permisos, navegación de pantallas y mini-reproductor
+package com.aural.player
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import android.app.Application
+import com.aural.player.data.Song
+import com.aural.player.ui.components.MiniPlayer
+import com.aural.player.ui.screens.DetailScreen
+import com.aural.player.ui.screens.FAVORITES_ID
+import com.aural.player.ui.screens.LibraryScreen
+import com.aural.player.ui.screens.NowPlayingScreen
+import com.aural.player.ui.theme.AuralTheme
+import com.aural.player.ui.theme.AppTheme
+import com.aural.player.data.SettingsStore
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.aural.player.ui.components.SplashScreen
+import com.aural.player.ui.screens.OnboardingScreen
+import com.aural.player.data.OnboardingPrefs
+
+/** Pantallas navegables de la app (navegación simple por estado). */
+private sealed class Screen {
+    data object Library : Screen()
+    data class Album(val title: String) : Screen()
+    data class Artist(val name: String) : Screen()
+    data class Playlist(val id: String) : Screen()
+}
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: AuralViewModel by viewModels()
+    private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager
+
+    /** Launcher de permisos: audio + notificaciones según la versión. */
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        viewModel.onPermissionResult(results.values.any { it })
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleAudioSearchIntent(intent)
+        youTubeManager = com.aural.player.youtube.YouTubeManager(this)
+        enableEdgeToEdge()
+        requestNeededPermissions()
+
+        setContent {
+            val settingsStore = SettingsStore(this@MainActivity)
+            val themeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
+            val appTheme = try {
+                AppTheme.valueOf(themeName)
+            } catch (e: Exception) {
+                AppTheme.BOSQUE
+            }
+            AuralTheme(theme = appTheme) {
+                var showOnboarding by remember {
+                    mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))
+                }
+                if (showOnboarding) {
+                    OnboardingScreen(
+                        onFinish = {
+                            OnboardingPrefs.markSeen(this@MainActivity)
+                            showOnboarding = false
+                        }
+                    )
+                } else {
+                    AuralApp(viewModel, youTubeManager = youTubeManager)
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleAudioSearchIntent(intent)
+    }
+
+    /** Abre la búsqueda por audio si el intent viene del tile de ajustes rápidos. */
+    private fun handleAudioSearchIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(
+                com.aural.player.AudioSearchTileService.EXTRA_OPEN_AUDIO_SEARCH, false
+            ) == true
+        ) {
+            viewModel.openAudioSearch()
+        }
+    }
+
+    /**
+     * Solicita READ_MEDIA_AUDIO en Android 13+ o READ_EXTERNAL_STORAGE
+     * en versiones anteriores; añade POST_NOTIFICATIONS si hace falta.
+     */
+    private fun requestNeededPermissions() {
+        val needed = mutableListOf<String>()
+        val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (!isGranted(audioPermission)) needed += audioPermission
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !isGranted(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            needed += Manifest.permission.POST_NOTIFICATIONS
+        }
+
+        if (needed.isEmpty()) {
+            // Ya concedidos previamente: escanear directamente
+            viewModel.onPermissionResult(true)
+        } else {
+            permissionLauncher.launch(needed.toTypedArray())
+        }
+    }
+
+    private fun isGranted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+}
+
+// ---------------------------------------------------------------------------
+// Raíz de la interfaz
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun AuralApp(viewModel: AuralViewModel,
+    youTubeManager: com.aural.player.youtube.YouTubeManager?) {
+    var screen by remember { mutableStateOf<Screen>(Screen.Library) }
+    var showSplash by remember { mutableStateOf(true) }
+    // El splash se oculta tras 1.8s (cortina mientras carga)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1800)
+        showSplash = false
+    }
+    // Estados elevados: sobreviven a la navegación para recordar posición
+    val songsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var showNowPlaying by remember { mutableStateOf(false) }
+    var songMenuTarget by remember { mutableStateOf<Song?>(null) }
+
+    val library by viewModel.library.collectAsStateWithLifecycle()
+    val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+        val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+        val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        // Mini-reproductor persistente sobre la barra de navegación
+        bottomBar = {
+            AnimatedVisibility(
+                visible = playerState.currentSong != null && !showNowPlaying,
+                enter = slideInVertically { it },
+                exit = slideOutVertically { it }
+            ) {
+                MiniPlayer(
+                    state = playerState,
+                    modifier = Modifier.navigationBarsPadding(),
+                    onOpen = { showNowPlaying = true },
+                    onTogglePlay = viewModel.playback::togglePlayPause,
+                    customCoverUri = playerState.currentSong?.let { customCovers[it.id] },
+                    customMetadata = playerState.currentSong?.let { customMetadata[it.id] }
+                )
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            // Atrás en detalle -> vuelve a la biblioteca (conserva posición)
+            androidx.activity.compose.BackHandler(enabled = screen != Screen.Library) {
+                screen = Screen.Library
+            }
+            // Atrás en Now Playing -> vuelve a la pantalla anterior
+            androidx.activity.compose.BackHandler(enabled = showNowPlaying) {
+                showNowPlaying = false
+            }
+            when (val s = screen) {
+                Screen.Library -> LibraryScreen(
+                    viewModel = viewModel,
+                    onPlayList = { songs, index ->
+                        viewModel.playSongs(songs, index)
+                        showNowPlaying = true
+                    },
+                    onOpenAlbum = { screen = Screen.Album(it) },
+                    onOpenArtist = { screen = Screen.Artist(it) },
+                    onOpenPlaylist = { screen = Screen.Playlist(it) },
+                    onSongMenu = { songMenuTarget = it },
+                    songsListState = songsListState,
+                    albumsGridState = albumsGridState,
+                    artistsGridState = artistsGridState,
+                    selectedTab = libraryTab,
+                    onTabSelected = { libraryTab = it },
+                        youTubeManager = youTubeManager
+                    )
+
+                is Screen.Album -> {
+                    val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
+                    val songs = allSongs.filter { it.album == s.title }
+                    DetailScreen(
+                        viewModel = viewModel,
+                        title = s.title,
+                        subtitle = songs.firstOrNull()?.artist ?: "",
+                        songs = songs.sortedBy { it.trackNumber },
+                        coverUri = songs.firstOrNull()?.albumArtUri,
+                        onBack = { screen = Screen.Library },
+                        onSongMenu = { songMenuTarget = it }
+                    )
+                }
+
+                is Screen.Artist -> {
+                    val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
+                    val songs = allSongs.filter { it.artist == s.name }
+                    DetailScreen(
+                        viewModel = viewModel,
+                        title = s.name,
+                        subtitle = "Artista",
+                        songs = songs,
+                        coverUri = songs.firstOrNull()?.albumArtUri,
+                        onBack = { screen = Screen.Library },
+                        onSongMenu = { songMenuTarget = it }
+                    )
+                }
+
+                is Screen.Playlist -> {
+                    val isFavorites = s.id == FAVORITES_ID
+                    val playlist = playlists.find { it.id == s.id }
+                    val songs = if (isFavorites) viewModel.favoriteSongs()
+                    else playlist?.let { viewModel.songsOfPlaylist(it) } ?: emptyList()
+
+                    DetailScreen(
+                        viewModel = viewModel,
+                        title = if (isFavorites) "Canciones favoritas" else playlist?.name ?: "",
+                        subtitle = if (isFavorites) "Tus preferidas" else "Playlist",
+                        songs = songs,
+                        coverUri = songs.firstOrNull()?.albumArtUri,
+                        onBack = { screen = Screen.Library },
+                        onSongMenu = { songMenuTarget = it },
+                        removableFromPlaylistId = if (isFavorites) null else s.id,
+                        onMoveSong = if (isFavorites || playlist == null) null else { from, to ->
+                            viewModel.moveSongInPlaylist(playlist.id, from, to)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // ---- Diálogo de búsqueda por audio ----
+    val showAudioSearch by viewModel.showAudioSearch.collectAsStateWithLifecycle()
+    if (showAudioSearch) {
+        com.aural.player.ui.components.AudioSearchDialog(
+            onDismiss = { viewModel.closeAudioSearch() },
+            onSearchYouTube = { query ->
+                viewModel.closeAudioSearch()
+                viewModel.requestYouTubeSearch(query)
+            }
+        )
+    }
+
+    // ---- Pantalla Now Playing a pantalla completa ----
+    if (showNowPlaying) {
+        NowPlayingScreen(
+            viewModel = viewModel,
+            state = playerState,
+            isFavorite = playerState.currentSong?.let { favorites.contains(it.id) } ?: false,
+            onDismiss = { showNowPlaying = false },
+            onTogglePlay = viewModel.playback::togglePlayPause,
+            onNext = viewModel.playback::seekToNext,
+            onPrevious = viewModel.playback::seekToPrevious,
+            onSeek = viewModel.playback::seekTo,
+            onToggleShuffle = viewModel.playback::toggleShuffle,
+            onCycleRepeat = viewModel.playback::cycleRepeatMode,
+            onToggleFavorite = {
+                playerState.currentSong?.let { viewModel.toggleFavorite(it.id) }
+            },
+            onPlayQueueItem = viewModel.playback::playAt,
+            onRemoveFromQueue = viewModel.playback::removeFromQueue,
+            onMoveQueueItem = viewModel.playback::moveInQueue
+        )
+    }
+    // ---- Splash de bienvenida ----
+    if (showSplash) {
+        SplashScreen()
+    }
+
+    // ---- Menú contextual de canción: añadir a playlist / favoritos ----
+    songMenuTarget?.let { song ->
+        SongMenuSheet(
+            song = song,
+            playlists = playlists,
+            isFavorite = favorites.contains(song.id),
+            onDismiss = { songMenuTarget = null },
+            onToggleFavorite = {
+                viewModel.toggleFavorite(song.id)
+                songMenuTarget = null
+            },
+            onAddToPlaylist = { plId ->
+                viewModel.addToPlaylist(plId, song.id)
+                songMenuTarget = null
+            },
+            onEnqueue = {
+                viewModel.playback.enqueue(song)
+                songMenuTarget = null
+            }
+        )
+    }
+
+    // ---- Diálogo de reporte de crash (diagnóstico temporal) ----
+    val appCtx = LocalContext.current.applicationContext as Application
+    var crashReport by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        crashReport = com.aural.player.AuralApp.readCrashReport(appCtx)
+    }
+    crashReport?.let { report ->
+        CrashReportDialog(
+            report = report,
+            onDismiss = {
+                com.aural.player.AuralApp.clearCrashReport(appCtx)
+                crashReport = null
+            }
+        )
+    }
+}
+
+/** Muestra el último crash para diagnóstico. Temporal. */
+@Composable
+private fun CrashReportDialog(report: String, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("La app se cerró antes") },
+        text = {
+            Text(
+                text = "Copia este error y mándalo para arreglarlo:\n\n" + report.take(3000),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(report))
+                onDismiss()
+            }) { Text("Copiar error") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
+}
+
+/** Hoja inferior con acciones para una canción concreta. */
+@androidx.compose.material3.ExperimentalMaterial3Api
+@Composable
+private fun SongMenuSheet(
+    song: Song,
+    playlists: List<com.aural.player.data.Playlist>,
+    isFavorite: Boolean,
+    onDismiss: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onAddToPlaylist: (String) -> Unit,
+    onEnqueue: () -> Unit
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 4.dp),
+            maxLines = 1
+        )
+        TextButton(onClick = onEnqueue, modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)) {
+            Text("Añadir a la cola")
+        }
+        TextButton(onClick = onToggleFavorite, modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)) {
+            Text(if (isFavorite) "Quitar de favoritas" else "Marcar como favorita")
+        }
+        Text(
+            "Añadir a playlist",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 24.dp, top = 12.dp)
+        )
+        if (playlists.isEmpty()) {
+            Text(
+                "No tienes playlists todavía",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(24.dp)
+            )
+        } else {
+            playlists.forEach { pl ->
+                TextButton(
+                    onClick = { onAddToPlaylist(pl.id) },
+                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                ) {
+                    Text(pl.name)
+                }
+            }
+        }
+        Box(Modifier.padding(bottom = 24.dp)) {}
+    }
+}
