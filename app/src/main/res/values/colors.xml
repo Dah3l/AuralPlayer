@@ -3,4 +3,12 @@
     <!-- Color de fondo oscuro minimalista -->
     <color name="aural_background">#0E0F13</color>
     <color name="ic_launcher_background">#0E0F13</color>
+    <!-- Fondos de icono por tema (icono dinámico del lanzador) -->
+    <color name="ic_launcher_background_oceano">#0D1117</color>
+    <color name="ic_launcher_background_atardecer">#12100E</color>
+    <color name="ic_launcher_background_claro">#F8FAFC</color>
+    <color name="ic_launcher_background_neon">#0A0A12</color>
+    <color name="ic_launcher_background_perla">#F5F5F7</color>
+    <color name="ic_launcher_background_rosa">#FFF5F7</color>
+    <color name="ic_launcher_background_medianoche">#121216</color>
 </resources>

@@ -43,6 +43,118 @@
             </intent-filter>
         </activity>
 
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconOceano"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_oceano"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconAtardecer"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_atardecer"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconClaro"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_claro"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconNeon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_neon"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconPerla"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_perla"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconRosa"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_rosa"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Icono dinámico: alias de lanzador por tema (todos desactivados
+             por defecto; AppIconManager activa el del tema aplicado y
+             desactiva el resto; MainActivity es la entrada del tema Bosque) -->
+        <activity-alias
+            android:name=".IconIconMedianoche"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_medianoche"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Tile de ajustes rápidos: identificar canción -->
         <service
             android:name=".AudioSearchTileService"
