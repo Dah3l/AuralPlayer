@@ -33,7 +33,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -137,8 +139,7 @@ fun DetailScreen(
     coverUri: String?,
     onBack: () -> Unit,
     onSongMenu: (Song) -> Unit,
-    removableFromPlaylistId: String? = null,
-    onMoveSong: ((fromIndex: Int, toIndex: Int) -> Unit)? = null
+    removableFromPlaylistId: String? = null
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -248,13 +249,42 @@ fun DetailScreen(
         // ---- Lista de canciones (reordenable en playlists) ----
         val listState = rememberLazyListState()
         val dragState = rememberDragReorderState()
-        val reorderable = onMoveSong != null
+        // En playlists el reorden es LOCAL e instantáneo, como la cola (que vive
+        // en memoria): el orden definitivo se guarda una sola vez, al soltar.
+        val reorderable = removableFromPlaylistId != null
+        var displaySongs by remember(removableFromPlaylistId) { mutableStateOf(songs) }
+        // Seguir a la fuente cuando cambia por fuera (altas/bajas), nunca a mitad de arrastre
+        LaunchedEffect(songs) {
+            if (!dragState.isDragging && displaySongs.map { it.id } != songs.map { it.id }) {
+                displaySongs = songs
+            }
+        }
+        // Al soltar, persistir el orden local si difiere del guardado
+        LaunchedEffect(dragState) {
+            snapshotFlow { dragState.isDragging }.collect { dragging ->
+                val pid = removableFromPlaylistId
+                if (!dragging && pid != null &&
+                    displaySongs.map { it.id } != songs.map { it.id }
+                ) {
+                    viewModel.setPlaylistOrder(pid, displaySongs.map { it.id })
+                }
+            }
+        }
+        val moveLocal: (Int, Int) -> Unit = { from, to ->
+            val current = displaySongs
+            if (from in current.indices && to in current.indices && from != to) {
+                val reordered = current.toMutableList()
+                reordered.add(to, reordered.removeAt(from))
+                displaySongs = reordered
+            }
+        }
+        val listSongs = if (reorderable) displaySongs else songs
         // Auto-scroll al arrastrar hacia los bordes (igual que en la cola)
         DragAutoScroll(
             listState = listState,
             dragState = dragState,
-            itemCount = songs.size,
-            onMove = { from, to -> onMoveSong?.invoke(from, to) },
+            itemCount = listSongs.size,
+            onMove = moveLocal,
             enabled = reorderable
         )
 
@@ -263,14 +293,14 @@ fun DetailScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
-            itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+            itemsIndexed(listSongs, key = { _, song -> song.id }) { index, song ->
                 SongRow(
                     title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
                     subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
                     coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == playerState.currentSong?.id,
-                    onClick = { viewModel.playSongs(songs, songs.indexOf(song)) },
+                    onClick = { viewModel.playSongs(listSongs, index) },
                     modifier = if (reorderable) {
                         (if (dragState.draggedIndex != index) Modifier.animateItem() else Modifier)
                             .onSizeChanged {
@@ -282,25 +312,19 @@ fun DetailScreen(
                     } else Modifier,
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (removableFromPlaylistId != null) {
-                                // Opción de quitar de la playlist actual
-                                TextButton(onClick = {
-                                    viewModel.removeFromPlaylist(removableFromPlaylistId, song.id)
-                                }) {
-                                    Text("Quitar", style = MaterialTheme.typography.bodySmall)
-                                }
-                            } else {
-                                TextButton(onClick = { onSongMenu(song) }) {
-                                    Text("···", style = MaterialTheme.typography.titleMedium)
-                                }
+                            // Tres puntos: el mismo menú de la biblioteca; abierto
+                            // desde una playlist trae "Eliminar de la lista" en
+                            // vez de "Añadir a playlist"
+                            TextButton(onClick = { onSongMenu(song) }) {
+                                Text("···", style = MaterialTheme.typography.titleMedium)
                             }
                             // Agarradera para reordenar (solo en playlists)
-                            if (reorderable && onMoveSong != null) {
+                            if (reorderable) {
                                 DragHandle(
                                     index = index,
                                     dragState = dragState,
-                                    itemCount = songs.size,
-                                    onMove = onMoveSong,
+                                    itemCount = listSongs.size,
+                                    onMove = moveLocal,
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
