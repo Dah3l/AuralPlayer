@@ -175,6 +175,10 @@ private fun AuralApp(viewModel: AuralViewModel,
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
+    // Playlist desde la que se abrió el menú de canción (null si fue desde
+    // la biblioteca, un álbum o un artista): cambia "Añadir a playlist"
+    // por "Eliminar de la lista"
+    var songMenuPlaylistId by remember { mutableStateOf<String?>(null) }
 
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -226,7 +230,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenAlbum = { screen = Screen.Album(it) },
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
-                    onSongMenu = { songMenuTarget = it },
+                    onSongMenu = { song ->
+                        songMenuTarget = song
+                        songMenuPlaylistId = null
+                    },
                     songsListState = songsListState,
                     albumsGridState = albumsGridState,
                     artistsGridState = artistsGridState,
@@ -245,7 +252,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                         songs = songs.sortedBy { it.trackNumber },
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         onBack = { screen = Screen.Library },
-                        onSongMenu = { songMenuTarget = it }
+                        onSongMenu = { song ->
+                            songMenuTarget = song
+                            songMenuPlaylistId = null
+                        }
                     )
                 }
 
@@ -259,7 +269,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                         songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         onBack = { screen = Screen.Library },
-                        onSongMenu = { songMenuTarget = it }
+                        onSongMenu = { song ->
+                            songMenuTarget = song
+                            songMenuPlaylistId = null
+                        }
                     )
                 }
 
@@ -276,11 +289,11 @@ private fun AuralApp(viewModel: AuralViewModel,
                         songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         onBack = { screen = Screen.Library },
-                        onSongMenu = { songMenuTarget = it },
-                        removableFromPlaylistId = if (isFavorites) null else s.id,
-                        onMoveSong = if (isFavorites || playlist == null) null else { from, to ->
-                            viewModel.moveSongInPlaylist(playlist.id, from, to)
-                        }
+                        onSongMenu = { song ->
+                            songMenuTarget = song
+                            songMenuPlaylistId = if (isFavorites) null else s.id
+                        },
+                        removableFromPlaylistId = if (isFavorites) null else s.id
                     )
                 }
             }
@@ -331,18 +344,30 @@ private fun AuralApp(viewModel: AuralViewModel,
             song = song,
             playlists = playlists,
             isFavorite = favorites.contains(song.id),
-            onDismiss = { songMenuTarget = null },
+            removeFromPlaylistId = songMenuPlaylistId,
+            onDismiss = {
+                songMenuTarget = null
+                songMenuPlaylistId = null
+            },
             onToggleFavorite = {
                 viewModel.toggleFavorite(song.id)
                 songMenuTarget = null
+                songMenuPlaylistId = null
             },
             onAddToPlaylist = { plId ->
                 viewModel.addToPlaylist(plId, song.id)
                 songMenuTarget = null
+                songMenuPlaylistId = null
             },
             onEnqueue = {
                 viewModel.playback.enqueue(song)
                 songMenuTarget = null
+                songMenuPlaylistId = null
+            },
+            onRemoveFromPlaylist = {
+                songMenuPlaylistId?.let { viewModel.removeFromPlaylist(it, song.id) }
+                songMenuTarget = null
+                songMenuPlaylistId = null
             }
         )
     }
@@ -399,10 +424,12 @@ private fun SongMenuSheet(
     song: Song,
     playlists: List<com.aural.player.data.Playlist>,
     isFavorite: Boolean,
+    removeFromPlaylistId: String? = null,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
     onAddToPlaylist: (String) -> Unit,
-    onEnqueue: () -> Unit
+    onEnqueue: () -> Unit,
+    onRemoveFromPlaylist: () -> Unit = {}
 ) {
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -420,26 +447,36 @@ private fun SongMenuSheet(
         TextButton(onClick = onToggleFavorite, modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)) {
             Text(if (isFavorite) "Quitar de favoritas" else "Marcar como favorita")
         }
-        Text(
-            "Añadir a playlist",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 24.dp, top = 12.dp)
-        )
-        if (playlists.isEmpty()) {
-            Text(
-                "No tienes playlists todavía",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(24.dp)
-            )
+        if (removeFromPlaylistId != null) {
+            // Abierto desde una playlist: quitar de esta lista en vez de añadir a otra
+            TextButton(
+                onClick = onRemoveFromPlaylist,
+                modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+            ) {
+                Text("Eliminar de la lista")
+            }
         } else {
-            playlists.forEach { pl ->
-                TextButton(
-                    onClick = { onAddToPlaylist(pl.id) },
-                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
-                ) {
-                    Text(pl.name)
+            Text(
+                "Añadir a playlist",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 24.dp, top = 12.dp)
+            )
+            if (playlists.isEmpty()) {
+                Text(
+                    "No tienes playlists todavía",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(24.dp)
+                )
+            } else {
+                playlists.forEach { pl ->
+                    TextButton(
+                        onClick = { onAddToPlaylist(pl.id) },
+                        modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                    ) {
+                        Text(pl.name)
+                    }
                 }
             }
         }
