@@ -343,9 +343,9 @@ fun LibraryScreen(
                     if (ytm != null) {
                         DownloadsScreen(
                             youTubeManager = ytm,
-                            onDownloadComplete = { fileName ->
+                            onDownloadComplete = { fileName, mediaId ->
                                 if (fileName != null) {
-                                    viewModel.addDownloadToPlaylist(fileName)
+                                    viewModel.addDownloadToPlaylist(fileName, mediaId)
                                 }
                             }
                         )
