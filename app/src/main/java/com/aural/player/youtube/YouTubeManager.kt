@@ -122,15 +122,17 @@ class YouTubeManager(private val context: Context) {
      * Descarga el audio de un video y lo guarda en Música/Aural.
      */
     /**
-     * Descarga el audio. onComplete recibe el nombre del archivo guardado, o null si falló.
+     * Descarga el audio. onComplete recibe el nombre del archivo guardado
+     * (o null si falló) y el ID exacto de MediaStore de la canción (-1 si falló).
      */
-    fun download(result: YTResult, onComplete: (String?) -> Unit) {
+    fun download(result: YTResult, onComplete: (fileName: String?, mediaId: Long) -> Unit) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
         _error.value = null
         scope.launch {
             var savedFileName: String? = null
+            var savedMediaId = -1L
             var errorMsg: String? = null
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
@@ -157,13 +159,12 @@ class YouTubeManager(private val context: Context) {
                         else -> "m4a"
                     }
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
-                    val ok = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
+                    val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
                         _progress.value = _progress.value + (result.videoId to pct)
                     }
-                    if (ok) {
+                    if (mediaId > 0L) {
                         savedFileName = fileName
-                        // Dar tiempo al MediaStore a indexar antes del rescan
-                        kotlinx.coroutines.delay(1500)
+                        savedMediaId = mediaId
                     } else {
                         errorMsg = "No se pudo guardar el archivo"
                     }
@@ -178,7 +179,7 @@ class YouTubeManager(private val context: Context) {
                 _downloading.value = _downloading.value - result.videoId
                 _progress.value = _progress.value - result.videoId
                 _error.value = errorMsg
-                onComplete(savedFileName)
+                onComplete(savedFileName, savedMediaId)
             }
         }
     }
@@ -190,13 +191,18 @@ class YouTubeManager(private val context: Context) {
             .take(100)
     }
 
+    /**
+     * Guarda el audio en Música/Aural y devuelve el ID exacto de MediaStore
+     * de la fila creada (-1 si falló). Con ese ID, la playlist "Descargas"
+     * se actualiza por identidad, sin adivinar por título.
+     */
     private fun downloadToMusic(
         url: String,
         fileName: String,
         result: YTResult,
         videoId: String,
         onProgress: (Float) -> Unit
-    ): Boolean {
+    ): Long {
         return try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 val values = android.content.ContentValues().apply {
@@ -208,10 +214,18 @@ class YouTubeManager(private val context: Context) {
                 }
                 val uri = context.contentResolver.insert(
                     android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
-                ) ?: return false
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    downloadWithProgress(url, out, videoId, onProgress)
+                ) ?: return -1L
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        downloadWithProgress(url, out, videoId, onProgress)
+                    }
+                } catch (e: Exception) {
+                    // No dejar la fila vacía en la biblioteca si la descarga falló
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                    throw e
                 }
+                android.util.Log.d("YouTubeManager", "Guardado: $fileName")
+                android.content.ContentUris.parseId(uri)
             } else {
                 @Suppress("DEPRECATION")
                 val musicDir = android.os.Environment.getExternalStoragePublicDirectory(
@@ -223,15 +237,38 @@ class YouTubeManager(private val context: Context) {
                 destFile.outputStream().use { out ->
                     downloadWithProgress(url, out, videoId, onProgress)
                 }
+                // Escanear el archivo y esperar (acotado) a conocer su ID indexado
+                var scannedId = -1L
+                val latch = java.util.concurrent.CountDownLatch(1)
                 android.media.MediaScannerConnection.scanFile(
-                    context, arrayOf(destFile.absolutePath), arrayOf("audio/mp4"), null
-                )
+                    context, arrayOf(destFile.absolutePath), arrayOf("audio/mp4")
+                ) { _, scannedUri ->
+                    if (scannedUri != null) {
+                        scannedId = runCatching {
+                            android.content.ContentUris.parseId(scannedUri)
+                        }.getOrDefault(-1L)
+                    }
+                    latch.countDown()
+                }
+                latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                if (scannedId <= 0L) {
+                    // Respaldo: consultar MediaStore por la ruta exacta del archivo
+                    context.contentResolver.query(
+                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(android.provider.MediaStore.Audio.Media._ID),
+                        "${android.provider.MediaStore.Audio.Media.DATA} = ?",
+                        arrayOf(destFile.absolutePath),
+                        null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) scannedId = cursor.getLong(0)
+                    }
+                }
+                android.util.Log.d("YouTubeManager", "Guardado: $fileName")
+                scannedId
             }
-            android.util.Log.d("YouTubeManager", "Guardado: $fileName")
-            true
         } catch (e: Exception) {
             android.util.Log.e("YouTubeManager", "Error guardando: ${e.message}")
-            false
+            -1L
         }
     }
 
