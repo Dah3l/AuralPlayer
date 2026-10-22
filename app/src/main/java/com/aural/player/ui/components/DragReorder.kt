@@ -17,11 +17,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withFrameNanos
 
 /**
  * Estado del arrastre para una lista. Se crea con [rememberDragReorderState]
@@ -30,6 +32,13 @@ import kotlinx.coroutines.isActive
 class DragReorderState {
     var draggedIndex by mutableStateOf<Int?>(null)
     var dragOffsetPx by mutableFloatStateOf(0f)
+
+    /**
+     * Altura real en px del ítem arrastrado. La alimentan las propias filas
+     * (onSizeChanged) y el auto-scroll (layoutInfo). Con ella el cruce de
+     * ítems usa la medida exacta de la fila y no un umbral fijo.
+     */
+    var draggedItemSizePx by mutableFloatStateOf(0f)
 }
 
 @Composable
@@ -37,7 +46,7 @@ fun rememberDragReorderState(): DragReorderState = remember { DragReorderState()
 
 /**
  * Agarradera de arrastre (icono ⠿⠿). Al arrastrar verticalmente invoca
- * [onMove] cada vez que se cruza el umbral de un ítem.
+ * [onMove] cada vez que el ítem arrastrado cruza el centro de un vecino.
  *
  * @param index índice del ítem al que pertenece esta agarradera
  * @param dragState estado compartido de la lista
@@ -53,6 +62,7 @@ fun DragHandle(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     Icon(
         imageVector = Icons.Rounded.DragHandle,
         contentDescription = "Arrastrar para reordenar",
@@ -75,8 +85,13 @@ fun DragHandle(
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
                         if (dragState.draggedIndex == null) return@detectVerticalDragGestures
-                        val threshold = with(density) { 48.dp.toPx() }
-                        dragState.consumeDragDelta(dragAmount, threshold, itemCount, onMove)
+                        val fallback = with(density) { 48.dp.toPx() }
+                        val swaps = dragState.consumeDragDelta(
+                            dragAmount, fallback, itemCount, onMove
+                        )
+                        if (swaps > 0) {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
                     }
                 )
             }
@@ -97,30 +112,36 @@ fun Modifier.draggedItemVisual(dragState: DragReorderState, index: Int): Modifie
     }
 
 /**
- * Aplica un desplazamiento de arrastre al estado: acumula el delta y cruza
- * ítems cada vez que se supera el umbral. Lo usan tanto el gesto manual
- * (DragHandle) como el auto-scroll, para que ambos muevan igual.
+ * Aplica un desplazamiento de arrastre al estado y cruza ítems cuando el
+ * centro del ítem arrastrado supera el centro del vecino, usando la altura
+ * REAL del ítem (o [fallbackItemSizePx] si aún no se conoce). Al cruzar se
+ * resta la altura completa, así el offset queda continuo y el ítem sigue el
+ * dedo 1:1, sin saltos. Devuelve cuántos intercambios hizo (para el háptico).
+ * Lo comparten el gesto manual (DragHandle) y el auto-scroll.
  */
 fun DragReorderState.consumeDragDelta(
     deltaPx: Float,
-    thresholdPx: Float,
+    fallbackItemSizePx: Float,
     itemCount: Int,
     onMove: (from: Int, to: Int) -> Unit
-) {
-    if (draggedIndex == null) return
+): Int {
+    var current = draggedIndex ?: return 0
+    val size = if (draggedItemSizePx > 0f) draggedItemSizePx else fallbackItemSizePx
+    if (size <= 0f) return 0
+    val start = current
     dragOffsetPx += deltaPx
-    while (dragOffsetPx > thresholdPx && (draggedIndex ?: return) < itemCount - 1) {
-        val from = draggedIndex ?: return
-        onMove(from, from + 1)
-        draggedIndex = from + 1
-        dragOffsetPx -= thresholdPx
+    while (dragOffsetPx > size / 2f && current < itemCount - 1) {
+        onMove(current, current + 1)
+        current += 1
+        dragOffsetPx -= size
     }
-    while (dragOffsetPx < -thresholdPx && (draggedIndex ?: return) > 0) {
-        val from = draggedIndex ?: return
-        onMove(from, from - 1)
-        draggedIndex = from - 1
-        dragOffsetPx += thresholdPx
+    while (dragOffsetPx < -size / 2f && current > 0) {
+        onMove(current, current - 1)
+        current -= 1
+        dragOffsetPx += size
     }
+    draggedIndex = current
+    return kotlin.math.abs(current - start)
 }
 
 /**
@@ -128,7 +149,8 @@ fun DragReorderState.consumeDragDelta(
  * de borde (arriba o abajo) de la lista visible, la lista se desplaza poco
  * a poco y el desplazamiento alimenta el mismo mecanismo de cruce de ítems
  * del arrastre manual, para poder llevar un ítem más allá de lo visible
- * sin soltarlo.
+ * sin soltarlo. El desplazamiento se calcula una vez por frame
+ * (withFrameNanos), sincronizado con el refresco de pantalla.
  */
 @Composable
 fun DragAutoScroll(
@@ -139,19 +161,17 @@ fun DragAutoScroll(
     enabled: Boolean = true
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val edgePx = with(density) { 72.dp.toPx() }
-    val thresholdPx = with(density) { 48.dp.toPx() }
     val dragging = enabled && dragState.draggedIndex != null
     LaunchedEffect(dragging) {
         if (!dragging) return@LaunchedEffect
         while (isActive) {
+            withFrameNanos { }
             val index = dragState.draggedIndex ?: break
             val layout = listState.layoutInfo
-            val info = layout.visibleItemsInfo.firstOrNull { it.index == index }
-            if (info == null) {
-                delay(16)
-                continue
-            }
+            val info = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: continue
+            if (info.size > 0) dragState.draggedItemSizePx = info.size.toFloat()
             val top = info.offset + dragState.dragOffsetPx
             val bottom = top + info.size
             val overBottom = bottom - (layout.viewportEndOffset - edgePx)
@@ -165,10 +185,14 @@ fun DragAutoScroll(
             if (desired != 0f) {
                 val scrolled = listState.scrollBy(desired)
                 if (scrolled != 0f) {
-                    dragState.consumeDragDelta(scrolled, thresholdPx, itemCount, onMove)
+                    val swaps = dragState.consumeDragDelta(
+                        scrolled, info.size.toFloat(), itemCount, onMove
+                    )
+                    if (swaps > 0) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
                 }
             }
-            delay(16)
         }
     }
 }
