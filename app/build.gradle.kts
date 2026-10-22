@@ -13,11 +13,29 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Solo en CI: la keystore llega decodificada a una ruta temporal.
+            // Sin estas variables de entorno (build local), esta config queda vacía.
+            val ksPath = System.getenv("AURAL_KEYSTORE_PATH")
+            if (!ksPath.isNullOrBlank()) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("AURAL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("AURAL_KEY_ALIAS")
+                keyPassword = System.getenv("AURAL_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            // Firma con la keystore oficial cuando está disponible (CI)
+            if (System.getenv("AURAL_KEYSTORE_PATH") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
