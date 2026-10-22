@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 // Pantallas de detalle: álbum, artista, playlist y favoritas
 package com.aural.player.ui.screens
 
