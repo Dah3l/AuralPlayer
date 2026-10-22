@@ -1,1 +1,265 @@
-PGRpdiBhbGlnbj0iY2VudGVyIj4KICA8aW1nIHNyYz0iYXNzZXRzL2Jhbm5lci5qcGciIHdpZHRoPSIxMDAwIiBhbHQ9IkF1cmFsUGxheWVyIOKAlCBFbCBzb25pZG8sIHNpbiBydWlkbyI+CiAgPGgxPvCfjqcgQXVyYWxQbGF5ZXI8L2gxPgogIDxwPjxzdHJvbmc+UmVwcm9kdWN0b3IgZGUgbcO6c2ljYSBwYXJhIEFuZHJvaWQg4oCUIG1pbmltYWxpc3RhLCBlbGVnYW50ZSB5IHNpbiBjdWVudGFzLiBUdSBtw7pzaWNhLCBzaW4gcnVpZG8uPC9zdHJvbmc+PC9wPgogIDxwPgogICAgPGEgaHJlZj0iaHR0cHM6Ly9naXRodWIuY29tL0RhaDNsL0F1cmFsUGxheWVyL3JlbGVhc2VzL2xhdGVzdCI+CiAgICAgIDxpbWcgc3JjPSJodHRwczovL2ltZy5zaGllbGRzLmlvL2JhZGdlL0Rlc2Nhcmdhci1Fc3RhYmxlLTM3QTg2Nj9zdHlsZT1mb3ItdGhlLWJhZGdlJmxvZ289YW5kcm9pZCZsb2dvQ29sb3I9d2hpdGUiIGFsdD0iRGVzY2FyZ2FyIGxhIMO6bHRpbWEgdmVyc2nDs24gZXN0YWJsZSI+CiAgICA8L2E+CiAgPC9wPgogIDxwPgogICAgPGEgaHJlZj0iaHR0cHM6Ly9naXRodWIuY29tL0RhaDNsL0F1cmFsUGxheWVyL3JlbGVhc2VzIj4KICAgICAgPGltZyBzcmM9Imh0dHBzOi8vaW1nLnNoaWVsZHMuaW8vZ2l0aHViL2Rvd25sb2Fkcy9EYWgzbC9BdXJhbFBsYXllci90b3RhbD9zdHlsZT1mb3ItdGhlLWJhZGdlJmxhYmVsPWRlc2NhcmdhcyUyMHRvdGFsZXMmbG9nbz1naXRodWIiIGFsdD0iRGVzY2FyZ2FzIHRvdGFsZXMiPgogICAgPC9hPgogIDwvcD4KICA8cD4KICAgIDxhIGhyZWY9IkxJQ0VOU0UiPjxpbWcgc3JjPSJodHRwczovL2ltZy5zaGllbGRzLmlvL2JhZGdlL0xpY2VuY2lhLUdQTHYzLWJsdWUuc3ZnIiBhbHQ9IkxpY2VuY2lhIEdQTCB2MyI+PC9hPgogICAgPGltZyBzcmM9Imh0dHBzOi8vaW1nLnNoaWVsZHMuaW8vYmFkZ2UvQW5kcm9pZC04LjAlMkItM0REQzg0P3N0eWxlPWZsYXQmbG9nbz1hbmRyb2lkJmxvZ29Db2xvcj13aGl0ZSIgYWx0PSJBbmRyb2lkIDguMCBvIHN1cGVyaW9yIj4KICA8L3A+CjwvZGl2PgoKQXVyYWxQbGF5ZXIgcmVwcm9kdWNlIGVsIGF1ZGlvIGxvY2FsIGRlIHR1IGRpc3Bvc2l0aXZvIHkgZGVzY2FyZ2EgY2FuY2lvbmVzIGRlIFlvdVR1YmUsIHRvZG8gY29uIHVuIGRpc2XDsW8gcHJlbWl1bSBhbCBlc3RpbG8gZGUgbGEgYXBwIHdlYiBBdXJhbCB5IDggdGVtYXMgcGFyYSBoYWNlcmxvIHR1eW8uIFNpbiBudWJlLCBzaW4gY3VlbnRhcywgc2luIHJhc3RyZW8uCgotLS0KCiMjIPCfk7ggQ2FwdHVyYXMKCnwgQmlibGlvdGVjYSB8IFJlcHJvZHVjaWVuZG8gYWhvcmEgfCBEZXNjYXJnYXMgZGUgWW91VHViZSB8CnwtLS18LS0tfC0tLXwKfCA8aW1nIHNyYz0iYXNzZXRzL2JpYmxpb3RlY2EuanBnIiB3aWR0aD0iMjQwIj4gfCA8aW1nIHNyYz0iYXNzZXRzL3JlcHJvZHVjdG9yLmpwZyIgd2lkdGg9IjI0MCI+IHwgPGltZyBzcmM9ImFzc2V0cy9kZXNjYXJnYXMuanBnIiB3aWR0aD0iMjQwIj4gfAoKfCBFY3VhbGl6YWRvciB8IElkZW50aWZpY2FyIGNhbmNpw7NuIHwKfC0tLXwtLS18CnwgPGltZyBzcmM9ImFzc2V0cy9lY3VhbGl6YWRvci5qcGciIHdpZHRoPSIyNDAiPiB8IDxpbWcgc3JjPSJhc3NldHMvc2hhemFtLmpwZyIgd2lkdGg9IjI0MCI+IHwKCi0tLQoKIyMg4pyoIENhcmFjdGVyw61zdGljYXMKCiMjIyDwn461IEJpYmxpb3RlY2EKLSDwn5OCICoqRXNjYW5lbyBkZSBhdWRpbyBsb2NhbCoqIG1lZGlhbnRlIGBNZWRpYVN0b3JlYDogdMOtdHVsbywgYXJ0aXN0YSwgw6FsYnVtLCBkdXJhY2nDs24geSBjYXLDoXR1bGEuCi0g8J+Xgu+4jyAqKlBlc3Rhw7FhcyoqOiBDYW5jaW9uZXMgwrcgQXJ0aXN0YXMgwrcgw4FsYnVtZXMgwrcgUGxheWxpc3RzIMK3ICoqRGVzY2FyZ2FzKiogwrcgKipDYXJwZXRhcyoqLgotIPCflKQgKirDjW5kaWNlIGFsZmFiw6l0aWNvIGxhdGVyYWwqKiBwYXJhIHNhbHRhciBkaXJlY3RvIGEgdW5hIGxldHJhLgotIPCflI0gKipCw7pzcXVlZGEgbG9jYWwqKiBpbnN0YW50w6FuZWEgcG9yIHTDrXR1bG8sIGFydGlzdGEgbyDDoWxidW0uCi0g8J+UhCAqKkJvdMOzbiBkZSBhY3R1YWxpemFjacOzbioqIHBhcmEgcmUtZXNjYW5lYXIgdHJhcyBhw7FhZGlyIG3DunNpY2EgbnVldmEuCi0g4p2k77iPICoqRmF2b3JpdG9zKiogY29uIHVuIHRvcXVlLCBwZXJzaXN0aWRvcyBlbnRyZSBzZXNpb25lcy4KLSDwn4yFICoqU2FsdWRvIHNlZ8O6biBsYSBob3JhKiogKEJ1ZW5vcyBkw61hcyDimIDvuI8gLyBCdWVuYXMgdGFyZGVzIPCfjKTvuI8gLyBCdWVuYXMgbm9jaGVzIPCfjJkpIHkgdGV4dG9zIGPDoWxpZG9zIGVuIHRvZGEgbGEgYXBwLgoKIyMjIOKWtu+4jyBSZXByb2R1Y2Npw7NuCi0g4o+v77iPIFBsYXkvcGF1c2EsIHNpZ3VpZW50ZS9hbnRlcmlvciB5ICoqc2VlayoqIGNvbiBzbGlkZXIgcHJlbWl1bS4KLSDwn5SAICoqQWxlYXRvcmlvKiogeSDwn5SBICoqcmVwZXRpY2nDs24qKiAodG9kbyAvIHVuYSkuCi0g8J+TiyAqKkNvbGEgZGUgcmVwcm9kdWNjacOzbioqIHZpc2libGUsIGVkaXRhYmxlIHkgKiphcnJhc3RyYWJsZSoqIHBhcmEgcmVvcmRlbmFyLgotIPCflIcgKipSZXByb2R1Y2Npw7NuIHNpbiBwYXVzYXMqKiAoKmdhcGxlc3MqKSBlbnRyZSBjYW5jaW9uZXMuCi0g4o+x77iPICoqVGVtcG9yaXphZG9yIGRlIHN1c3BlbnNpw7NuKiog4oCUIGxhIG3DunNpY2Egc2UgYXBhZ2Egc29sYS4KLSDwn46a77iPICoqVmVsb2NpZGFkIGRlIHJlcHJvZHVjY2nDs24qKiBhanVzdGFibGUuCi0g8J+MmSAqKk5vdyBQbGF5aW5nIHByZW1pdW0qKjogY2Fyw6F0dWxhIGdyYW5kZSBjb24gZ2xvdywgdMOtdHVsbyBjb24gbWFycXVlc2luYSwgc2xpZGVyIGNvbiB0aHVtYiB5IHNvbWJyYSwgY29udHJvbGVzIGVsZWdhbnRlcy4KCiMjIyDwn46kIExldHJhcyBzaW5jcm9uaXphZGFzICgubHJjKQotIPCfk50gKipTb3BvcnRlIGRlIGFyY2hpdm9zIC5scmMqKiDigJQgbGV0cmFzIHNpbmNyb25pemFkYXMgY29uIGxhIG3DunNpY2EuCi0g8J+OtSAqKkzDrW5lYSBhY3R1YWwgaW50ZWdyYWRhKiogZW4gZWwgTm93IFBsYXlpbmc6IHNlIGFjdHVhbGl6YSBlbiB0aWVtcG8gcmVhbCBjb24gbGEgY2FuY2nDs24uCi0g8J+RhiBUb2NhIGxhIGxldHJhIHBhcmEgdmVyIGxhICoqdmlzdGEgY29tcGxldGEqKiBjb24gc2Nyb2xsIGF1dG9tw6F0aWNvLgotIPCfk4EgKioiQWdyZWdhciBsZXRyYSIqKiDigJQgZWxpZ2UgY3VhbHF1aWVyIC5scmMgZGUgdHUgZGlzcG9zaXRpdm8geSBhc8OzY2lhbG8gYSBsYSBjYW5jacOzbi4KLSDwn4yQICoqIkJ1c2NhciBsZXRyYSBlbiBsw61uZWEiKiog4oCUIGJ1c2NhIGF1dG9tw6F0aWNhbWVudGUgZW4gTFJDTElCIChncmF0aXMsIHNpbiBBUEkga2V5KSBjb24gY2FtcG9zIGVkaXRhYmxlcyBkZSBjYW5jacOzbiB5IGFydGlzdGEuCgojIyMg4qyH77iPIERlc2NhcmdhcyBkZSBZb3VUdWJlCi0g8J+UtCAqKkLDunNxdWVkYSB5IGRlc2NhcmdhIGRlIGF1ZGlvKiogZGlyZWN0byBkZXNkZSBZb3VUdWJlIChzb2xvIGF1ZGlvLCBzaW4gdmlkZW8pLCBzaW4gc2FsaXIgZGUgbGEgYXBwLgotIOKaoSAqKkRlc2NhcmdhIG9wdGltaXphZGEqKjogYnVmZmVyIGRlIDY0S0IsIGhlYWRlcnMgZGUgbmF2ZWdhZG9yLCBwcmlvcml6YSBtNGEuCi0g4p2MICoqQm90w7NuIGRlIGNhbmNlbGFyKiogZHVyYW50ZSBsYSBkZXNjYXJnYS4KLSDwn5OlIExhcyBjYW5jaW9uZXMgZGVzY2FyZ2FkYXMgKiphcGFyZWNlbiBhdXRvbcOhdGljYW1lbnRlKiogZW4gdHUgYmlibGlvdGVjYS4KLSDwn5OLICoqUGxheWxpc3QgIkRlc2NhcmdhcyIqKiBjcmVhZGEgYXV0b23DoXRpY2FtZW50ZSDigJQgdG9kbyBsbyBxdWUgYmFqYXMgc2Ugb3JnYW5pemEgc29sby4KCiMjIyDwn46Z77iPIElkZW50aWZpY2FyIGNhbmNpw7NuIChlc3RpbG8gU2hhemFtKQotIPCfjqcgKipSZWNvbm9jaW1pZW50byBkZSBtw7pzaWNhKiogY29uIHVuIHRvcXVlOiBlc2N1Y2hhIGxvIHF1ZSBzdWVuYSBhIHR1IGFscmVkZWRvciB5IHRlIGRpY2UgcXXDqSBlcy4KLSDirIfvuI8gQWwgaWRlbnRpZmljYXJsYSwgYm90w7NuIGRpcmVjdG8gcGFyYSAqKmRlc2NhcmdhcmxhIGRlIFlvdVR1YmUqKiBhIHR1IGJpYmxpb3RlY2EuCi0g4pqhIEFjY2VzbyByw6FwaWRvIGRlc2RlIHVuICoqVGlsZSBkZSBhanVzdGVzIHLDoXBpZG9zKiogZGUgQW5kcm9pZCwgc2luIGFicmlyIGxhIGFwcC4KCiMjIyDwn46b77iPIEVjdWFsaXphZG9yIHkgc29uaWRvCi0g8J+Omu+4jyAqKkVjdWFsaXphZG9yIGRlIDUgYmFuZGFzKiogKDYwSHogwrcgMjMwSHogwrcgOTEwSHogwrcgM2tIeiDCtyAxNGtIeikgY29uIHByZXNldHMgKE5vcm1hbCwgQ2xhc3NpY2FsLCBEYW5jZeKApikuCi0g8J+UiiAqKk5vcm1hbGl6YWNpw7NuIGRlIHZvbHVtZW4qKiDigJQgaWd1YWxhIGVsIHZvbHVtZW4gZW50cmUgY2FuY2lvbmVzLgotIPCfk6IgKipSZWZ1ZXJ6byBkZSBzb25vcmlkYWQqKiAoKkxvdWRuZXNzKikgcGFyYSBhdXJpY3VsYXJlcyB5IGFsdGF2b2NlcyBtb2Rlc3Rvcy4KCiMjIyDwn46oIFBlcnNvbmFsaXphY2nDs24KLSDwn4yIICoqOCB0ZW1hcyBkZSBjb2xvcioqIGludGVncmFkb3Mg4oCUIGNhbWJpYSBlbCBhY2VudG8gZGUgdG9kYSBsYSBpbnRlcmZheiBhIHR1IGd1c3RvLgotIPCflrzvuI8gKipQb3J0YWRhcyBwZXJzb25hbGl6YWRhcyoqOiBidXNjYSBjYXLDoXR1bGFzIGVuIGlUdW5lcyBvIGVsaWdlIHVuYSBpbWFnZW4gZGUgdHUgZ2FsZXLDrWEuCi0g4pyP77iPICoqTWV0YWRhdG9zIGVkaXRhYmxlcyoqOiBjb3JyaWdlIHTDrXR1bG8sIGFydGlzdGEgeSDDoWxidW0gZGUgY3VhbHF1aWVyIGNhbmNpw7NuIHNpbiBzYWxpciBkZSBsYSBhcHAuCgojIyMg8J+TiyBQbGF5bGlzdHMKLSDinpUgQ3JlYXIsIHJlbm9tYnJhciB5IGVsaW1pbmFyIHBsYXlsaXN0cy4KLSDinpUv4p6WIEFncmVnYXIgY2FuY2lvbmVzIGRlc2RlIGVsIG1lbsO6IGRlIGNhZGEgcGlzdGEgbyBjb24gZWwgc2VsZWN0b3IgbcO6bHRpcGxlLgotIOKtkCBQbGF5bGlzdHMgZmlqYXM6ICoqRmF2b3JpdGFzKiogeSAqKkRlc2NhcmdhcyoqIGVuIGxhIHNlY2Npw7NuICJUdXlhcyIuCi0g8J+SviAqKkltcG9ydGFyIHkgZXhwb3J0YXIgcGxheWxpc3RzIGVuIC5tM3UqKiDigJQgcmVzcGFsZG9zIHkgcGFzbyBlbnRyZSBkaXNwb3NpdGl2b3MuCi0g8J+XhO+4jyBQZXJzaXN0ZW5jaWEgY29uICoqRGF0YVN0b3JlIFByZWZlcmVuY2VzKiouCgojIyMg8J+UlCBTZWd1bmRvIHBsYW5vIHkgc2lzdGVtYQotICoqU2VydmljaW8gZW4gcHJpbWVyIHBsYW5vKiogY29uIG5vdGlmaWNhY2nDs24gbXVsdGltZWRpYSAoY2Fyw6F0dWxhLCBjb250cm9sZXMsIHByb2dyZXNvKS4KLSAqKk1lZGlhU2Vzc2lvbioqOiBjb250cm9sIGRlc2RlIGF1cmljdWxhcmVzLCBCbHVldG9vdGggeSBwYW50YWxsYSBkZSBibG9xdWVvLgotIExhIG3DunNpY2Egc2lndWUgc29uYW5kbyBhbCBjZXJyYXIgbGEgYXBwIG8gYmxvcXVlYXIgZWwgdGVsw6lmb25vLgotICoqT25ib2FyZGluZyoqIGRlIGJpZW52ZW5pZGEgZW4gZWwgcHJpbWVyIGFycmFucXVlLgoKLS0tCgojIyDwn5qAIERlc2NhcmdhCgotICoqRXN0YWJsZToqKiBbw7psdGltYSBSZWxlYXNlIGRlIEdpdEh1Yl0oaHR0cHM6Ly9naXRodWIuY29tL0RhaDNsL0F1cmFsUGxheWVyL3JlbGVhc2VzL2xhdGVzdCkg4oCUIGRlc2NhcmdhIGVsIEFQSyBlIGluc3TDoWxhbG8gKHB1ZWRlIHF1ZSBBbmRyb2lkIHBpZGEgcGVybWl0aXIgbGEgaW5zdGFsYWNpw7NuIGRlc2RlIGVsIG5hdmVnYWRvciBvIGVsIGV4cGxvcmFkb3IgZGUgYXJjaGl2b3MpLgotIFRhbWJpw6luIHNlIGRpc3RyaWJ1eWUgcG9yICoqVGVsZWdyYW0qKi4KCi0tLQoKIyMg8J+boO+4jyBTdGFjayB0ZWNub2zDs2dpY28KCnwgQ29tcG9uZW50ZSB8IFZlcnNpw7NuIHwKfC0tLXwtLS18CnwgTGVuZ3VhamUgfCBLb3RsaW4gKioxLjkuMjQqKiB8CnwgSmF2YSAvIEpWTSB0YXJnZXQgfCAqKjE3KiogfAp8IEdyYWRsZSB8ICoqOC43KiogfAp8IEFuZHJvaWQgR3JhZGxlIFBsdWdpbiB8ICoqOC41LjIqKiB8CnwgU0RLIHwgbWluU2RrICoqMjYqKiDCtyB0YXJnZXRTZGsgKiozNCoqIMK3IGNvbXBpbGVTZGsgKiozNCoqIHwKfCBVSSB8IEpldHBhY2sgQ29tcG9zZSArICoqTWF0ZXJpYWwgMyoqIChCT00gYDIwMjQuMDkuMDJgKSB8CnwgQXVkaW8gfCAqKk1lZGlhMyAvIEV4b1BsYXllcioqIGAxLjQuMWAgKGV4b3BsYXllciwgc2Vzc2lvbiwgY29tbW9uKSB8CnwgUGVyc2lzdGVuY2lhIGRlIGFqdXN0ZXMgfCBEYXRhU3RvcmUgUHJlZmVyZW5jZXMgKioxLjEuMSoqIHwKfCBBc2luY3JvbsOtYSB8IENvcm91dGluZXMgKioxLjguMSoqICgrIGBrb3RsaW54LWNvcm91dGluZXMtZ3VhdmFgIHBhcmEgYGF3YWl0KClgIGVuIE1lZGlhQ29udHJvbGxlcikgfAp8IEltw6FnZW5lcyB8IENvaWwgQ29tcG9zZSAyLjcuMCAoY2FyZ2EgZGUgY2Fyw6F0dWxhcyBkZXNkZSBNZWRpYVN0b3JlKSB8CgpBcnF1aXRlY3R1cmEgc2VuY2lsbGEgeSBzaW4gbGlicmVyw61hcyBkZSBESSBleHRlcm5hczogdW4gY29udGVuZWRvciBkZSBkZXBlbmRlbmNpYXMgbWFudWFsIGVuIGBBdXJhbEFwcGAgKEFwcGxpY2F0aW9uKSBjb25lY3RhIFJlcG9zaXRvcmlvIOKGkiBWaWV3TW9kZWwg4oaSIENvbXBvc2UsIHkgZWwgYFBsYXliYWNrTWFuYWdlcmAgYWN0w7phIGNvbW8gcHVlbnRlIGNvbiBlbCBzZXJ2aWNpbyBNZWRpYTMgdsOtYSBgTWVkaWFDb250cm9sbGVyYC4KCi0tLQoKIyMg8J+UpyBDb21lbnphciAoZGVzYXJyb2xsbykKCiMjIyBSZXF1aXNpdG9zCi0gKipBbmRyb2lkIFN0dWRpbyoqIExhZHlidWcgbyBzdXBlcmlvciAobyBsw61uZWEgZGUgY29tYW5kb3MgY29uIEpESyAqKjE3KiopLgotICoqR3JhZGxlIDguNyoqICh3cmFwcGVyIHJlY29tZW5kYWRvKSB5IHVuIGRpc3Bvc2l0aXZvL2VtdWxhZG9yIGNvbiAqKkFuZHJvaWQgOC4wIChBUEkgMjYpIG8gc3VwZXJpb3IqKi4KCiMjIyBDb25zdHJ1Y2Npw7NuCgpgYGBiYXNoCiMgQ2xvbmFyIGVsIHJlcG9zaXRvcmlvCmdpdCBjbG9uZSBodHRwczovL2dpdGh1Yi5jb20vRGFoM2wvQXVyYWxQbGF5ZXIuZ2l0CmNkIEF1cmFsUGxheWVyCgojIEdlbmVyYXIgZWwgQVBLIGRlIGRlcHVyYWNpw7NuCi4vZ3JhZGxldyBhc3NlbWJsZURlYnVnCgojIEluc3RhbGFyIGVuIHVuIGRpc3Bvc2l0aXZvIGNvbmVjdGFkbwouL2dyYWRsZXcgaW5zdGFsbERlYnVnCmBgYAoKRWwgQVBLIHJlc3VsdGFudGUgc2UgZW5jdWVudHJhIGVuIGBhcHAvYnVpbGQvb3V0cHV0cy9hcGsvZGVidWcvYXBwLWRlYnVnLmFwa2AuCgojIyMgUHJpbWVyIGFycmFucXVlCjEuIE90b3JnYSBlbCBwZXJtaXNvIGRlICoqYXVkaW8qKiBjdWFuZG8gc2Ugc29saWNpdGUuCjIuIEVuIEFuZHJvaWQgMTMrLCBvdG9yZ2EgZWwgcGVybWlzbyBkZSAqKm5vdGlmaWNhY2lvbmVzKiogcGFyYSB2ZXIgbGEgbm90aWZpY2FjacOzbiBtdWx0aW1lZGlhLgozLiBBdXJhbCBlc2NhbmVhIGF1dG9tw6F0aWNhbWVudGUgdHUgYmlibGlvdGVjYSB5IG11ZXN0cmEgbGFzIGNhbmNpb25lcy4gVXNhIGVsIGJvdMOzbiAqKuKGuyoqIHBhcmEgdm9sdmVyIGEgZXNjYW5lYXIgdHJhcyBhw7FhZGlyIG3DunNpY2EgbnVldmEuCgotLS0KCiMjIPCflJAgUGVybWlzb3MKCnwgUGVybWlzbyB8IEN1w6FuZG8gfCBQYXJhIHF1w6kgfAp8LS0tfC0tLXwtLS18CnwgYFJFQURfTUVESUFfQVVESU9gIHwgQW5kcm9pZCAxMysgKEFQSSAzMyspIHwgTGVlciBsb3MgYXJjaGl2b3MgZGUgYXVkaW8gZGVsIGRpc3Bvc2l0aXZvIHwKfCBgUkVBRF9FWFRFUk5BTF9TVE9SQUdFYCAobWF4U2RrIDMyKSB8IEFuZHJvaWQg4omkIDEyIHwgTGVlciBsb3MgYXJjaGl2b3MgZGUgYXVkaW8gZW4gdmVyc2lvbmVzIGFudGlndWFzIHwKfCBgUE9TVF9OT1RJRklDQVRJT05TYCB8IEFuZHJvaWQgMTMrIHwgTW9zdHJhciBsYSBub3RpZmljYWNpw7NuIG11bHRpbWVkaWEgZW4gY3Vyc28gfAp8IGBGT1JFR1JPVU5EX1NFUlZJQ0VgICsgYEZPUkVHUk9VTkRfU0VSVklDRV9NRURJQV9QTEFZQkFDS2AgfCBTaWVtcHJlIHwgU2VydmljaW8gZW4gcHJpbWVyIHBsYW5vIGRlIHJlcHJvZHVjY2nDs24gfAp8IGBXQUtFX0xPQ0tgIHwgU2llbXByZSB8IE1hbnRlbmVyIGxhIHJlcHJvZHVjY2nDs24gY29uIHBhbnRhbGxhIGFwYWdhZGEgfAoKTG9zIHBlcm1pc29zIGRlIHVzdWFyaW8gc2Ugc29saWNpdGFuIGRlIGZvcm1hIGRpbsOhbWljYSBlbiBgTWFpbkFjdGl2aXR5YCBjb24gYEFjdGl2aXR5UmVzdWx0Q29udHJhY3RzYC4KCi0tLQoKIyMg8J+TgSBFc3RydWN0dXJhIGRlbCBwcm95ZWN0bwoKYGBgCkF1cmFsLwrilJzilIDilIAgYnVpbGQuZ3JhZGxlLmt0cyAgICAgICAgICAgICAgIyBQbHVnaW5zIHJhw616IChBR1AgOC41LjIsIEtvdGxpbiAxLjkuMjQpCuKUnOKUgOKUgCBzZXR0aW5ncy5ncmFkbGUua3RzICAgICAgICAgICAjIFJlcG9zaXRvcmlvcyB5IG3Ds2R1bG8gOmFwcArilJzilIDilIAgZ3JhZGxlLnByb3BlcnRpZXMgICAgICAgICAgICAgIyBBanVzdGVzIGdsb2JhbGVzIGRlIEdyYWRsZQrilJTilIDilIAgYXBwLwogICAg4pSc4pSA4pSAIGJ1aWxkLmdyYWRsZS5rdHMgICAgICAgICAgIyBEZXBlbmRlbmNpYXMgZGUgQ29tcG9zZSwgTWVkaWEzLCBEYXRhU3RvcmXigKYKICAgIOKUlOKUgOKUgCBzcmMvbWFpbi8KICAgICAgICDilJzilIDilIAgQW5kcm9pZE1hbmlmZXN0LnhtbCAgICMgUGVybWlzb3MsIGFjdGl2aWRhZCB5IE11c2ljU2VydmljZQogICAgICAgIOKUnOKUgOKUgCBqYXZhL2NvbS9hdXJhbC9wbGF5ZXIvCiAgICAgICAg4pSCICAg4pSc4pSA4pSAIEF1cmFsQXBwLmt0ICAgICAgICAgICAjIEFwcGxpY2F0aW9uOiBjb250ZW5lZG9yIGRlIGRlcGVuZGVuY2lhcwogICAgICAgIOKUgiAgIOKUnOKUgOKUgCBNYWluQWN0aXZpdHkua3QgICAgICAgIyBQZXJtaXNvcywgbmF2ZWdhY2nDs24geSBtaW5pLXJlcHJvZHVjdG9yCiAgICAgICAg4pSCICAg4pSc4pSA4pSAIEF1cmFsVmlld01vZGVsLmt0ICAgICAjIEVzdGFkbyBkZSBiaWJsaW90ZWNhLCBiw7pzcXVlZGEsIHBsYXlsaXN0cwogICAgICAgIOKUgiAgIOKUnOKUgOKUgCBkYXRhLwogICAgICAgIOKUgiAgIOKUgiAgIOKUnOKUgOKUgCBNdXNpY01vZGVscy5rdCAgICAjIFNvbmcsIEFydGlzdCwgQWxidW0sIFBsYXlsaXN0CiAgICAgICAg4pSCICAg4pSCICAg4pSc4pSA4pSAIE11c2ljUmVwb3NpdG9yeS5rdCMgRXNjYW5lbyBNZWRpYVN0b3JlICsgYWdydXBhY2lvbmVzCiAgICAgICAg4pSCICAg4pSCICAg4pSU4pSA4pSAIFNldHRpbmdzU3RvcmUua3QgICMgUGxheWxpc3RzIHkgZmF2b3JpdG9zIChEYXRhU3RvcmUgKyBKU09OKQogICAgICAgIOKUgiAgIOKUnOKUgOKUgCBwbGF5YmFjay8KICAgICAgICDilIIgICDilIIgICDilJzilIDilIAgTXVzaWNTZXJ2aWNlLmt0ICAgIyBNZWRpYVNlc3Npb25TZXJ2aWNlICsgbm90aWZpY2FjacOzbgogICAgICAgIOKUgiAgIOKUgiAgIOKUlOKUgOKUgCBQbGF5YmFja01hbmFnZXIua3QjIE1lZGlhQ29udHJvbGxlciDihpQgZXN0YWRvIEZsb3cKICAgICAgICDilIIgICDilJTilIDilIAgdWkvCiAgICAgICAg4pSCICAgICAgIOKUnOKUgOKUgCB0aGVtZS9UaGVtZS5rdCAgICAgICAgICAgICMgVGVtYXMgZGUgY29sb3IgTTMKICAgICAgICDilIIgICAgICAg4pSc4pSA4pSAIGNvbXBvbmVudHMvICAgICAgICAgICAgICAgIyBNaW5pUGxheWVyIHkgY29tcG9uZW50ZXMgY29tdW5lcwogICAgICAgIOKUgiAgICAgICDilJTilIDilIAgc2NyZWVucy8KICAgICAgICDilIIgICAgICAgICAgIOKUnOKUgOKUgCBMaWJyYXJ5U2NyZWVuLmt0ICAgICAgIyBQZXN0YcOxYXMgKyBiw7pzcXVlZGEKICAgICAgICDilIIgICAgICAgICAgIOKUnOKUgOKUgCBOb3dQbGF5aW5nU2NyZWVuLmt0ICAgIyBDYXLDoXR1bGEsIGNvbnRyb2xlcyB5IGNvbGEKICAgICAgICDilIIgICAgICAgICAgIOKUlOKUgOKUgCBEZXRhaWxTY3JlZW4ua3QgICAgICAgIyDDgWxidW0sIGFydGlzdGEsIHBsYXlsaXN0LCBmYXZvcml0YXMKICAgICAgICDilJTilIDilIAgcmVzLyAgICAgICAgICAgICAgICAgICAgIyBJY29ub3MsIGNvbG9yZXMgeSByZWN1cnNvcyBkZWwgbGF1bmNoZXIKYGBgCgotLS0KCiMjIPCfjqggRGlzZcOxbwoKLSAqKkRpc2XDsW8gcHJlbWl1bSoqOiBmb25kbyBjYXNpIG5lZ3JvIHBvciBkZWZlY3RvLCBzdXBlcmZpY2llcyBlc2NhbG9uYWRhcyB5IHVuIGNvbG9yIGRlIGFjZW50byBwb3IgdGVtYS4KLSAqKjggdGVtYXMqKiBpbnRlZ3JhZG9zIHBhcmEgcGVyc29uYWxpemFyIGVsIGFjZW50byAoZWwgdHVycXVlc2EgZXMgZWwgZGUgbGEgY2FzYSkuCi0gVGlwb2dyYWbDrWEgbGltcGlhIChzYW5zIHN5c3RlbSBjb24gcGVzb3MgZGVmaW5pZG9zKSwgaWNvbm9ncmFmw61hIHJlZG9uZGVhZGEgTWF0ZXJpYWwgU3ltYm9scyB5IGVzcGFjaW9zIGdlbmVyb3Nvcy4KLSBTaW4gc2F0dXJhY2nDs24gdmlzdWFsOiBqZXJhcnF1w61hIHBvciBjb250cmFzdGUgeSBwZXNvIHRpcG9ncsOhZmljbywgbm8gcG9yIGNvbG9yLgotIEJvcmRlcyBzdWF2ZXMsIGNoaXBzIGRpc2NyZXRvcyB5IGRpdmlzb3JlcyBzdXRpbGVzIHBhcmEgbWFudGVuZXIgbGEgY2FsbWEgZGUgbGEgaW50ZXJmYXouCgotLS0KCiMjIPCfp6AgQ8OzbW8gZnVuY2lvbmEKCjEuICoqRXNjYW5lbyoqOiBgTXVzaWNSZXBvc2l0b3J5YCBjb25zdWx0YSBgTWVkaWFTdG9yZS5BdWRpb2AgZW4gYERpc3BhdGNoZXJzLklPYCB5IGFncnVwYSBwb3IgYXJ0aXN0YS/DoWxidW0uCjIuICoqRXN0YWRvKio6IGBBdXJhbFZpZXdNb2RlbGAgZXhwb25lIGBTdGF0ZUZsb3dgcyAoYGxpYnJhcnlgLCBgcGxheWxpc3RzYCwgYGZhdm9yaXRlc2AsIGBwbGF5ZXJTdGF0ZWApIHF1ZSBvYnNlcnZhIENvbXBvc2UuCjMuICoqUmVwcm9kdWNjacOzbioqOiBgTXVzaWNTZXJ2aWNlYCBhbG9qYSB1biBgRXhvUGxheWVyYCBkZW50cm8gZGUgdW5hIGBNZWRpYVNlc3Npb25gOyBgUGxheWJhY2tNYW5hZ2VyYCBzZSBjb25lY3RhIGNvbW8gYE1lZGlhQ29udHJvbGxlcmAgeSB0cmFkdWNlIGxvcyBldmVudG9zIGRlbCByZXByb2R1Y3RvciBhIHVuIGBQbGF5ZXJVaVN0YXRlYCBpbm11dGFibGUgKGluY2x1eWUgdW4gdGlja2VyIGRlIHBvc2ljacOzbiB+NTAwIG1zKS4KNC4gKipQZXJzaXN0ZW5jaWEqKjogcGxheWxpc3RzIHkgZmF2b3JpdG9zIHNlIHNlcmlhbGl6YW4gYSBKU09OIGVuIHVuYSDDum5pY2EgY2xhdmUgZGUgRGF0YVN0b3JlIFByZWZlcmVuY2VzLgo1LiAqKk5vdGlmaWNhY2nDs24qKjogbGEgZ2VuZXJhIGF1dG9tw6F0aWNhbWVudGUgZWwgYE1lZGlhTm90aWZpY2F0aW9uTWFuYWdlcmAgZGUgTWVkaWEzIGEgcGFydGlyIGRlIGxvcyBtZXRhZGF0b3MgZGVsIGBNZWRpYUl0ZW1gIChjYXLDoXR1bGEgaW5jbHVpZGEpLgoKLS0tCgojIyDwn5CeIFNvbHVjacOzbiBkZSBwcm9ibGVtYXMKCnwgUHJvYmxlbWEgfCBTb2x1Y2nDs24gfAp8LS0tfC0tLXwKfCBObyBhcGFyZWNlbiBjYW5jaW9uZXMgfCBPdG9yZ2EgZWwgcGVybWlzbyBkZSBhdWRpbyB5IHB1bHNhICoq4oa7KiogKHJlZXNjYW5lYXIpLiBBc2Vnw7pyYXRlIGRlIHF1ZSBlbCBhcmNoaXZvIGVzdMOpIGVuIHVuIHZvbHVtZW4gdmlzaWJsZSBwYXJhIE1lZGlhU3RvcmUuIHwKfCBObyBzdWVuYSBlbiBzZWd1bmRvIHBsYW5vIHwgVmVyaWZpY2EgZWwgcGVybWlzbyBkZSBub3RpZmljYWNpb25lcyAoQW5kcm9pZCAxMyspIHkgcXVlIGVsIGFob3JybyBkZSBiYXRlcsOtYSBubyBkZXRlbmdhIGVsIHNlcnZpY2lvLiB8CnwgU2luIGNhcsOhdHVsYSB8IEFsZ3Vub3MgTVAzIG5vIGluY3J1c3RhbiBwb3J0YWRhOyBBdXJhbCB1c2EgYENvbnRlbnRVcmlzYCBkZSBNZWRpYVN0b3JlIHkgcmVjdXJyZSBhIHVuIG1hcmNhZG9yIGdyw6FmaWNvLiB8CnwgQ29udHJvbGVzIGRlIGF1cmljdWxhcmVzIG5vIHJlc3BvbmRlbiB8IExhIGFwcCBkZWJlIGVzdGFyIGNvbmVjdGFkYSBhbCBgTWVkaWFTZXNzaW9uYDsgcmVpbmljaWEgbGEgcmVwcm9kdWNjacOzbiBzaSBlbCBzZXJ2aWNpbyBmdWUgZGVzdHJ1aWRvIHBvciBlbCBzaXN0ZW1hLiB8CgotLS0KCiMjIPCfk4sgSG9qYSBkZSBydXRhCgotIFsgXSBXaWRnZXQgZW4gcGFudGFsbGEgZGUgaW5pY2lvCi0gWyBdIE3DunNpY2EgZW4gbMOtbmVhIChzdHJlYW1pbmcpCi0gWyBdIEFuZHJvaWQgQXV0bwoKLS0tCgojIyDwn6SdIENvbnRyaWJ1aXIKCkxhcyBjb250cmlidWNpb25lcyBzb24gYmllbnZlbmlkYXM6CgoxLiBIYXogKmZvcmsqIGRlbCByZXBvc2l0b3Jpby4KMi4gQ3JlYSB1bmEgcmFtYSBkZSBjYXJhY3RlcsOtc3RpY2E6IGBnaXQgY2hlY2tvdXQgLWIgZmVhdHVyZS9hbGdvLW51ZXZvYC4KMy4gQ29uZmlybWEgdHVzIGNhbWJpb3M6IGBnaXQgY29tbWl0IC1tICJmZWF0OiBhw7FhZGUgYWxnbyBudWV2byJgLgo0LiBFbnbDrWEgbGEgcmFtYTogYGdpdCBwdXNoIG9yaWdpbiBmZWF0dXJlL2FsZ28tbnVldm9gLgo1LiBBYnJlIHVuICpQdWxsIFJlcXVlc3QqIGRlc2NyaWJpZW5kbyBlbCBwcm9ibGVtYSB5IGxhIHNvbHVjacOzbi4KClBvciBmYXZvciwgZXNjcmliZSBjb21lbnRhcmlvcyBkZSBjw7NkaWdvIGVuIGVzcGHDsW9sIHkgc2lndWUgZWwgZXN0aWxvIGV4aXN0ZW50ZSAoQ29tcG9zZSBmdW5jaW9uYWwgKyBGbG93cywgc2luIERJIGV4dGVybmEpLgoKLS0tCgojIyDwn5OEIExpY2VuY2lhCgpFc3RlIHByb3llY3RvIGVzdMOhIGJham8gbGEgKipHTlUgR2VuZXJhbCBQdWJsaWMgTGljZW5zZSB2My4wKiog4oCUIHZlciBlbCBhcmNoaXZvIFtMSUNFTlNFXShMSUNFTlNFKSBwYXJhIG3DoXMgZGV0YWxsZXMuCgpDb3B5cmlnaHQgKEMpIDIwMjYgRGFoZWwKCi0tLQoKSGVjaG8gY29uIOKdpO+4jyB5IEpldHBhY2sgQ29tcG9zZS4gU2kgdGUgZ3VzdGEsIGRhbGUg4q2QIGFsIHJlcG9zaXRvcmlvLgo=
+<div align="center">
+  <img src="assets/banner.jpg" width="1000" alt="AuralPlayer — El sonido, sin ruido">
+  <h1>🎧 AuralPlayer</h1>
+  <p><strong>Reproductor de música para Android — minimalista, elegante y sin cuentas. Tu música, sin ruido.</strong></p>
+  <p>
+    <a href="https://github.com/Dah3l/AuralPlayer/releases/latest">
+      <img src="https://img.shields.io/badge/Descargar-Estable-37A866?style=for-the-badge&logo=android&logoColor=white" alt="Descargar la última versión estable">
+    </a>
+  </p>
+  <p>
+    <a href="https://github.com/Dah3l/AuralPlayer/releases">
+      <img src="https://img.shields.io/github/downloads/Dah3l/AuralPlayer/total?style=for-the-badge&label=descargas%20totales&logo=github" alt="Descargas totales">
+    </a>
+  </p>
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/Licencia-GPLv3-blue.svg" alt="Licencia GPL v3"></a>
+    <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat&logo=android&logoColor=white" alt="Android 8.0 o superior">
+  </p>
+</div>
+
+AuralPlayer reproduce el audio local de tu dispositivo y descarga canciones de YouTube, todo con un diseño premium al estilo de la app web Aural y 8 temas para hacerlo tuyo. Sin nube, sin cuentas, sin rastreo.
+
+---
+
+## 📸 Capturas
+
+| Biblioteca | Reproduciendo ahora | Descargas de YouTube |
+|---|---|---|
+| <img src="assets/biblioteca.jpg" width="240"> | <img src="assets/reproductor.jpg" width="240"> | <img src="assets/descargas.jpg" width="240"> |
+
+| Ecualizador | Identificar canción |
+|---|---|
+| <img src="assets/ecualizador.jpg" width="240"> | <img src="assets/shazam.jpg" width="240"> |
+
+---
+
+## ✨ Características
+
+### 🎵 Biblioteca
+- 📂 **Escaneo de audio local** mediante `MediaStore`: título, artista, álbum, duración y carátula.
+- 🗂️ **Pestañas**: Canciones · Artistas · Álbumes · Playlists · **Descargas** · **Carpetas**.
+- 🔤 **Índice alfabético lateral** para saltar directo a una letra.
+- 🔍 **Búsqueda local** instantánea por título, artista o álbum.
+- 🔄 **Botón de actualización** para re-escanear tras añadir música nueva.
+- ❤️ **Favoritos** con un toque, persistidos entre sesiones.
+- 🌅 **Saludo según la hora** (Buenos días ☀️ / Buenas tardes 🌤️ / Buenas noches 🌙) y textos cálidos en toda la app.
+
+### ▶️ Reproducción
+- ⏯️ Play/pausa, siguiente/anterior y **seek** con slider premium.
+- 🔀 **Aleatorio** y 🔁 **repetición** (todo / una).
+- 📋 **Cola de reproducción** visible, editable y **arrastrable** para reordenar.
+- 🔇 **Reproducción sin pausas** (*gapless*) entre canciones.
+- ⏱️ **Temporizador de suspensión** — la música se apaga sola.
+- 🎚️ **Velocidad de reproducción** ajustable.
+- 🌙 **Now Playing premium**: carátula grande con glow, título con marquesina, slider con thumb y sombra, controles elegantes.
+
+### 🎤 Letras sincronizadas (.lrc)
+- 📝 **Soporte de archivos .lrc** — letras sincronizadas con la música.
+- 🎵 **Línea actual integrada** en el Now Playing: se actualiza en tiempo real con la canción.
+- 👆 Toca la letra para ver la **vista completa** con scroll automático.
+- 📁 **"Agregar letra"** — elige cualquier .lrc de tu dispositivo y asócialo a la canción.
+- 🌐 **"Buscar letra en línea"** — busca automáticamente en LRCLIB (gratis, sin API key) con campos editables de canción y artista.
+
+### ⬇️ Descargas de YouTube
+- 🔴 **Búsqueda y descarga de audio** directo desde YouTube (solo audio, sin video), sin salir de la app.
+- ⚡ **Descarga optimizada**: buffer de 64KB, headers de navegador, prioriza m4a.
+- ❌ **Botón de cancelar** durante la descarga.
+- 📥 Las canciones descargadas **aparecen automáticamente** en tu biblioteca.
+- 📋 **Playlist "Descargas"** creada automáticamente — todo lo que bajas se organiza solo.
+
+### 🎙️ Identificar canción (estilo Shazam)
+- 🎧 **Reconocimiento de música** con un toque: escucha lo que suena a tu alrededor y te dice qué es.
+- ⬇️ Al identificarla, botón directo para **descargarla de YouTube** a tu biblioteca.
+- ⚡ Acceso rápido desde un **Tile de ajustes rápidos** de Android, sin abrir la app.
+
+### 🎛️ Ecualizador y sonido
+- 🎚️ **Ecualizador de 5 bandas** (60Hz · 230Hz · 910Hz · 3kHz · 14kHz) con presets (Normal, Classical, Dance…).
+- 🔊 **Normalización de volumen** — iguala el volumen entre canciones.
+- 📢 **Refuerzo de sonoridad** (*Loudness*) para auriculares y altavoces modestos.
+
+### 🎨 Personalización
+- 🌈 **8 temas de color** integrados — cambia el acento de toda la interfaz a tu gusto.
+- 🖼️ **Portadas personalizadas**: busca carátulas en iTunes o elige una imagen de tu galería.
+- ✏️ **Metadatos editables**: corrige título, artista y álbum de cualquier canción sin salir de la app.
+
+### 📋 Playlists
+- ➕ Crear, renombrar y eliminar playlists.
+- ➕/➖ Agregar canciones desde el menú de cada pista o con el selector múltiple.
+- ⭐ Playlists fijas: **Favoritas** y **Descargas** en la sección "Tuyas".
+- 💾 **Importar y exportar playlists en .m3u** — respaldos y paso entre dispositivos.
+- 🗄️ Persistencia con **DataStore Preferences**.
+
+### 🔔 Segundo plano y sistema
+- **Servicio en primer plano** con notificación multimedia (carátula, controles, progreso).
+- **MediaSession**: control desde auriculares, Bluetooth y pantalla de bloqueo.
+- La música sigue sonando al cerrar la app o bloquear el teléfono.
+- **Onboarding** de bienvenida en el primer arranque.
+
+---
+
+## 🚀 Descarga
+
+- **Estable:** [última Release de GitHub](https://github.com/Dah3l/AuralPlayer/releases/latest) — descarga el APK e instálalo (puede que Android pida permitir la instalación desde el navegador o el explorador de archivos).
+- También se distribuye por **Telegram**.
+
+---
+
+## 🛠️ Stack tecnológico
+
+| Componente | Versión |
+|---|---|
+| Lenguaje | Kotlin **1.9.24** |
+| Java / JVM target | **17** |
+| Gradle | **8.7** |
+| Android Gradle Plugin | **8.5.2** |
+| SDK | minSdk **26** · targetSdk **34** · compileSdk **34** |
+| UI | Jetpack Compose + **Material 3** (BOM `2024.09.02`) |
+| Audio | **Media3 / ExoPlayer** `1.4.1` (exoplayer, session, common) |
+| Persistencia de ajustes | DataStore Preferences **1.1.1** |
+| Asincronía | Coroutines **1.8.1** (+ `kotlinx-coroutines-guava` para `await()` en MediaController) |
+| Imágenes | Coil Compose 2.7.0 (carga de carátulas desde MediaStore) |
+
+Arquitectura sencilla y sin librerías de DI externas: un contenedor de dependencias manual en `AuralApp` (Application) conecta Repositorio → ViewModel → Compose, y el `PlaybackManager` actúa como puente con el servicio Media3 vía `MediaController`.
+
+---
+
+## 🔧 Comenzar (desarrollo)
+
+### Requisitos
+- **Android Studio** Ladybug o superior (o línea de comandos con JDK **17**).
+- **Gradle 8.7** (wrapper recomendado) y un dispositivo/emulador con **Android 8.0 (API 26) o superior**.
+
+### Construcción
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/Dah3l/AuralPlayer.git
+cd AuralPlayer
+
+# Generar el APK de depuración
+./gradlew assembleDebug
+
+# Instalar en un dispositivo conectado
+./gradlew installDebug
+```
+
+El APK resultante se encuentra en `app/build/outputs/apk/debug/app-debug.apk`.
+
+### Primer arranque
+1. Otorga el permiso de **audio** cuando se solicite.
+2. En Android 13+, otorga el permiso de **notificaciones** para ver la notificación multimedia.
+3. Aural escanea automáticamente tu biblioteca y muestra las canciones. Usa el botón **↻** para volver a escanear tras añadir música nueva.
+
+---
+
+## 🔐 Permisos
+
+| Permiso | Cuándo | Para qué |
+|---|---|---|
+| `READ_MEDIA_AUDIO` | Android 13+ (API 33+) | Leer los archivos de audio del dispositivo |
+| `READ_EXTERNAL_STORAGE` (maxSdk 32) | Android ≤ 12 | Leer los archivos de audio en versiones antiguas |
+| `POST_NOTIFICATIONS` | Android 13+ | Mostrar la notificación multimedia en curso |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Siempre | Servicio en primer plano de reproducción |
+| `WAKE_LOCK` | Siempre | Mantener la reproducción con pantalla apagada |
+
+Los permisos de usuario se solicitan de forma dinámica en `MainActivity` con `ActivityResultContracts`.
+
+---
+
+## 📁 Estructura del proyecto
+
+```
+Aural/
+├── build.gradle.kts              # Plugins raíz (AGP 8.5.2, Kotlin 1.9.24)
+├── settings.gradle.kts           # Repositorios y módulo :app
+├── gradle.properties             # Ajustes globales de Gradle
+└── app/
+    ├── build.gradle.kts          # Dependencias de Compose, Media3, DataStore…
+    └── src/main/
+        ├── AndroidManifest.xml   # Permisos, actividad y MusicService
+        ├── java/com/aural/player/
+        │   ├── AuralApp.kt           # Application: contenedor de dependencias
+        │   ├── MainActivity.kt       # Permisos, navegación y mini-reproductor
+        │   ├── AuralViewModel.kt     # Estado de biblioteca, búsqueda, playlists
+        │   ├── data/
+        │   │   ├── MusicModels.kt    # Song, Artist, Album, Playlist
+        │   │   ├── MusicRepository.kt# Escaneo MediaStore + agrupaciones
+        │   │   └── SettingsStore.kt  # Playlists y favoritos (DataStore + JSON)
+        │   ├── playback/
+        │   │   ├── MusicService.kt   # MediaSessionService + notificación
+        │   │   └── PlaybackManager.kt# MediaController ↔ estado Flow
+        │   └── ui/
+        │       ├── theme/Theme.kt            # Temas de color M3
+        │       ├── components/               # MiniPlayer y componentes comunes
+        │       └── screens/
+        │           ├── LibraryScreen.kt      # Pestañas + búsqueda
+        │           ├── NowPlayingScreen.kt   # Carátula, controles y cola
+        │           └── DetailScreen.kt       # Álbum, artista, playlist, favoritas
+        └── res/                    # Iconos, colores y recursos del launcher
+```
+
+---
+
+## 🎨 Diseño
+
+- **Diseño premium**: fondo casi negro por defecto, superficies escalonadas y un color de acento por tema.
+- **8 temas** integrados para personalizar el acento (el turquesa es el de la casa).
+- Tipografía limpia (sans system con pesos definidos), iconografía redondeada Material Symbols y espacios generosos.
+- Sin saturación visual: jerarquía por contraste y peso tipográfico, no por color.
+- Bordes suaves, chips discretos y divisores sutiles para mantener la calma de la interfaz.
+
+---
+
+## 🧠 Cómo funciona
+
+1. **Escaneo**: `MusicRepository` consulta `MediaStore.Audio` en `Dispatchers.IO` y agrupa por artista/álbum.
+2. **Estado**: `AuralViewModel` expone `StateFlow`s (`library`, `playlists`, `favorites`, `playerState`) que observa Compose.
+3. **Reproducción**: `MusicService` aloja un `ExoPlayer` dentro de una `MediaSession`; `PlaybackManager` se conecta como `MediaController` y traduce los eventos del reproductor a un `PlayerUiState` inmutable (incluye un ticker de posición ~500 ms).
+4. **Persistencia**: playlists y favoritos se serializan a JSON en una única clave de DataStore Preferences.
+5. **Notificación**: la genera automáticamente el `MediaNotificationManager` de Media3 a partir de los metadatos del `MediaItem` (carátula incluida).
+
+---
+
+## 🐞 Solución de problemas
+
+| Problema | Solución |
+|---|---|
+| No aparecen canciones | Otorga el permiso de audio y pulsa **↻** (reescanear). Asegúrate de que el archivo esté en un volumen visible para MediaStore. |
+| No suena en segundo plano | Verifica el permiso de notificaciones (Android 13+) y que el ahorro de batería no detenga el servicio. |
+| Sin carátula | Algunos MP3 no incrustan portada; Aural usa `ContentUris` de MediaStore y recurre a un marcador gráfico. |
+| Controles de auriculares no responden | La app debe estar conectada al `MediaSession`; reinicia la reproducción si el servicio fue destruido por el sistema. |
+
+---
+
+## 📋 Hoja de ruta
+
+- [ ] Widget en pantalla de inicio
+- [ ] Música en línea (streaming)
+- [ ] Android Auto
+
+---
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas:
+
+1. Haz *fork* del repositorio.
+2. Crea una rama de característica: `git checkout -b feature/algo-nuevo`.
+3. Confirma tus cambios: `git commit -m "feat: añade algo nuevo"`.
+4. Envía la rama: `git push origin feature/algo-nuevo`.
+5. Abre un *Pull Request* describiendo el problema y la solución.
+
+Por favor, escribe comentarios de código en español y sigue el estilo existente (Compose funcional + Flows, sin DI externa).
+
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la **GNU General Public License v3.0** — ver el archivo [LICENSE](LICENSE) para más detalles.
+
+Copyright (C) 2026 Dahel
+
+---
+
+Hecho con ❤️ y Jetpack Compose. Si te gusta, dale ⭐ al repositorio.
