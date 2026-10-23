@@ -13,8 +13,8 @@ android {
         applicationId = "com.aural.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     signingConfigs {
@@ -48,6 +48,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Desugaring: empaqueta APIs nuevas de Java para Android viejos.
+        // NewPipeExtractor llama URLEncoder.encode(String, Charset), que
+        // solo existe desde Android 13; con esto funciona desde el minSdk.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -72,6 +76,10 @@ dependencies {
 
     // ---- Reordenar arrastrando (cola y playlists): la que usan InnerTune/OuterTune ----
     implementation("sh.calvin.reorderable:reorderable:3.1.0")
+
+    // ---- Desugaring (sabor NIO: es el que retroporta URLEncoder con Charset,
+    // igual que en la app oficial de NewPipe) ----
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     // ---- Core KTX (ContextCompat y utilidades) ----
     implementation("androidx.core:core-ktx:1.13.1")

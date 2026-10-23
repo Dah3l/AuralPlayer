@@ -4,6 +4,15 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.2 — 2026-10-23
+
+### Correcciones
+- **YouTube en Android 10, 11 y 12**: la búsqueda (y con ella las descargas)
+  cerraba la app en equipos con Android anterior al 13, porque NewPipe usa
+  una función del sistema que solo existe desde Android 13. Ahora la app la
+  trae empaquetada (desugaring, la misma solución de la app oficial de
+  NewPipe) y funciona en todos los Android compatibles.
+
 ## v1.0.1 — 2026-10-22
 
 ### Mejoras
