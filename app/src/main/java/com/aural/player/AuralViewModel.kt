@@ -96,10 +96,6 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun setAppTheme(themeName: String) {
         viewModelScope.launch {
             settings.setAppTheme(themeName)
-            // El icono del lanzador sigue al tema aplicado
-            withContext(Dispatchers.IO) {
-                AppIconManager.applyForTheme(auralApp, themeName)
-            }
         }
     }
 

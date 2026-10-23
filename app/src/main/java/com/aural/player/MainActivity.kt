@@ -90,14 +90,6 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 AppTheme.BOSQUE
             }
-            // El icono del lanzador sigue al tema: se reaplica al arrancar y al
-            // cambiar el tema. Algunos lanzadores (Xiaomi/HyperOS) no lo
-            // redibujan con el cambio en caliente, pero sí al abrir la app.
-            LaunchedEffect(themeName) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    AppIconManager.applyForTheme(this@MainActivity, themeName)
-                }
-            }
             AuralTheme(theme = appTheme) {
                 var showOnboarding by remember {
                     mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))

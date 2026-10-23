@@ -2,6 +2,11 @@
 package com.aural.player
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.util.Log
 import com.aural.player.data.MusicRepository
 import com.aural.player.data.SettingsStore
@@ -23,6 +28,10 @@ class AuralApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Icono único garantizado: una versión anterior con icono dinámico
+        // pudo dejar MainActivity desactivada al cambiar el tema; si es así,
+        // se rehabilita aquí (sin tocar nada cuando ya está bien).
+        ensureMainActivityEnabled()
         // Guardar reporte de crashes para diagnóstico (temporal)
         setupCrashReporter()
         repository = MusicRepository(this)
@@ -30,6 +39,24 @@ class AuralApp : Application() {
         playback = PlaybackManager(this)
         // Conectar el MediaController con el servicio en segundo plano
         playback.connect()
+    }
+
+    /** Rehabilita MainActivity si quedó desactivada (icono único de la app). */
+    private fun ensureMainActivityEnabled() {
+        try {
+            val component = ComponentName(this, MainActivity::class.java)
+            if (packageManager.getComponentEnabledSetting(component) ==
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            ) {
+                packageManager.setComponentEnabledSetting(
+                    component,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        } catch (e: Exception) {
+            Log.w("AuralApp", "No se pudo verificar el icono: ${e.message}")
+        }
     }
 
     /** Guarda el stack trace de cualquier crash no capturado en un archivo. */
@@ -59,5 +86,15 @@ class AuralApp : Application() {
         fun clearCrashReport(app: Application) {
             File(app.filesDir, "crash_report.txt").delete()
         }
+    }
+}
+
+/**
+ * Al actualizar la app, el sistema despierta el proceso con este aviso:
+ * con eso basta, porque AuralApp.onCreate ya garantiza el icono único.
+ */
+class PackageReplacedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        // Sin trabajo propio: la autocuración vive en AuralApp.onCreate.
     }
 }
