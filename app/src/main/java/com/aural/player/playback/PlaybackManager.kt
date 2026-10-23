@@ -249,6 +249,31 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /**
+     * Ciclo único del botón de modo de Now Playing:
+     * sin repetir → repetir todo → repetir uno → aleatorio → sin repetir.
+     * El aleatorio activa la mezcla CON repetir todo (bucle), para que la
+     * música no se detenga al terminar la cola.
+     */
+    fun cyclePlayMode() {
+        val c = controller ?: return
+        when {
+            c.shuffleModeEnabled -> {
+                c.shuffleModeEnabled = false
+                c.repeatMode = Player.REPEAT_MODE_OFF
+            }
+            c.repeatMode == Player.REPEAT_MODE_OFF ->
+                c.repeatMode = Player.REPEAT_MODE_ALL
+            c.repeatMode == Player.REPEAT_MODE_ALL ->
+                c.repeatMode = Player.REPEAT_MODE_ONE
+            else -> {
+                c.repeatMode = Player.REPEAT_MODE_ALL
+                c.shuffleModeEnabled = true
+            }
+        }
+        publishState()
+    }
+
     fun stop() {
         controller?.stop()
         publishState()

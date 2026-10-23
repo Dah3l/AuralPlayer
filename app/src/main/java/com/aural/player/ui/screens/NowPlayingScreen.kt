@@ -454,13 +454,16 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Repetir
+                // Modo: sin repetir → repetir todo → repetir uno → aleatorio
                 IconButton(onClick = onCycleRepeat) {
-                    when (state.repeatMode) {
-                        RepeatMode.ONE -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
+                    when {
+                        state.shuffleEnabled -> Icon(Icons.Rounded.Shuffle, "Aleatorio",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp))
-                        RepeatMode.ALL -> Icon(Icons.Rounded.Repeat, "Repetir todas",
+                        state.repeatMode == RepeatMode.ONE -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp))
+                        state.repeatMode == RepeatMode.ALL -> Icon(Icons.Rounded.Repeat, "Repetir todas",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp))
                         else -> Icon(Icons.Rounded.Repeat, "Sin repetir",

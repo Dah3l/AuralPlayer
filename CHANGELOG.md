@@ -6,6 +6,13 @@ en GitHub salen de aquí.
 
 ## v1.0.2 — 2026-10-23
 
+### Novedades
+- **Aleatorio en Now Playing**: el botón de repetir ahora es un ciclo de
+  cuatro estados — sin repetir, repetir todo, repetir uno y aleatorio. El
+  aleatorio mezcla la cola y la repite en bucle, para que la música no se
+  detenga al final. (La app no tenía botón de aleatorio visible; la mezcla
+  existía por dentro pero sin botón.)
+
 ### Correcciones
 - **YouTube en Android 10, 11 y 12**: la búsqueda (y con ella las descargas)
   cerraba la app en equipos con Android anterior al 13, porque NewPipe usa

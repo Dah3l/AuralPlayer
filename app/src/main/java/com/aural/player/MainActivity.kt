@@ -324,7 +324,7 @@ private fun AuralApp(viewModel: AuralViewModel,
             onPrevious = viewModel.playback::seekToPrevious,
             onSeek = viewModel.playback::seekTo,
             onToggleShuffle = viewModel.playback::toggleShuffle,
-            onCycleRepeat = viewModel.playback::cycleRepeatMode,
+            onCycleRepeat = viewModel.playback::cyclePlayMode,
             onToggleFavorite = {
                 playerState.currentSong?.let { viewModel.toggleFavorite(it.id) }
             },
