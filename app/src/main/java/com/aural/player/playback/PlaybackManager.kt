@@ -334,6 +334,42 @@ class PlaybackManager(private val context: Context) {
         tickerJob = null
     }
 
+    /** PNG de la portada predeterminada (signo de música) para canciones sin arte. */
+    private val defaultCoverBytes: ByteArray by lazy { renderDefaultCover() }
+
+    /** Dibuja el signo de música sobre fondo neutro y lo devuelve como PNG. */
+    private fun renderDefaultCover(): ByteArray {
+        val size = 512
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            size, size, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(bitmap)
+        canvas.drawColor(android.graphics.Color.parseColor("#333333"))
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            style = android.graphics.Paint.Style.FILL
+            isAntiAlias = true
+        }
+        // Cabeza de la nota (elipse inclinada)
+        canvas.save()
+        canvas.rotate(-20f, 190f, 380f)
+        canvas.drawOval(android.graphics.RectF(120f, 330f, 260f, 430f), paint)
+        canvas.restore()
+        // Tallo
+        canvas.drawRect(android.graphics.RectF(240f, 110f, 275f, 380f), paint)
+        // Bandera
+        val flag = android.graphics.Path().apply {
+            moveTo(275f, 110f)
+            cubicTo(360f, 120f, 400f, 160f, 385f, 230f)
+            cubicTo(360f, 190f, 320f, 175f, 275f, 190f)
+            close()
+        }
+        canvas.drawPath(flag, paint)
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        return stream.toByteArray()
+    }
+
     /** Convierte una canción en MediaItem con metadatos para la notificación. */
     private fun Song.toMediaItem(): MediaItem {
         val meta = customMetadataCache[id]
@@ -342,19 +378,20 @@ class PlaybackManager(private val context: Context) {
         val displayAlbum = meta?.third?.ifBlank { album } ?: album
         val artworkUri = customCoversCache[id] ?: albumArtUri
 
+        val metadataBuilder = MediaMetadata.Builder()
+            .setTitle(displayTitle)
+            .setArtist(displayArtist)
+            .setAlbumTitle(displayAlbum)
+        if (!artworkUri.isNullOrBlank()) {
+            metadataBuilder.setArtworkUri(android.net.Uri.parse(artworkUri))
+        } else {
+            // Sin portada: el signo de música como arte directo
+            metadataBuilder.setArtworkData(defaultCoverBytes)
+        }
         return MediaItem.Builder()
             .setMediaId(id.toString())
             .setUri(uri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(displayTitle)
-                    .setArtist(displayArtist)
-                    .setAlbumTitle(displayAlbum)
-                    .setArtworkUri(
-                        artworkUri?.let { android.net.Uri.parse(it) }
-                    )
-                    .build()
-            )
+            .setMediaMetadata(metadataBuilder.build())
             .build()
     }
 }
