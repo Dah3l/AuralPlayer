@@ -50,8 +50,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -88,6 +90,14 @@ sealed interface CardBackground {
 /** Máximo de líneas que caben en la tarjeta (como en la referencia). */
 private const val MAX_CARD_LINES = 6
 
+/** Mezcla un color hacia el negro (para el segundo tono del degradado). */
+private fun darken(c: Color, factor: Float): Color = Color(
+    red = c.red * factor,
+    green = c.green * factor,
+    blue = c.blue * factor,
+    alpha = 1f
+)
+
 /** Texto negro o blanco según lo claro que sea el fondo. */
 private fun textOn(bg: Color): Color {
     val lum = 0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue
@@ -121,7 +131,7 @@ fun selectCardFontSize(lines: List<String>): TextUnit {
             )
         }
         val totalH = 64f + 24f + visual * size * 1.35f +
-            (lines.size - 1).coerceAtLeast(0) * 8f + 48f + 44f
+            (lines.size - 1).coerceAtLeast(0) * 8f + 48f + 70f
         if (totalH <= maxContentH) return size.sp
     }
     return 16.sp
@@ -149,16 +159,38 @@ fun LyricCardContent(
     val cardColor = lighten(background, 0.10f)
     Box(
         modifier = modifier
-            .background(background)
+            .background(
+                Brush.verticalGradient(
+                    listOf(background, darken(background, 0.62f))
+                )
+            )
             .padding(horizontal = 32.dp * scale, vertical = 48.dp * scale)
     ) {
-        Column(
+        // Tarjeta interior: la onda de Aural como marca de agua detrás
+        // del contenido (no suma alto: va dentro del tamaño del texto)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp * scale))
                 .background(cardColor)
-                .padding(32.dp * scale)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp * scale)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(240.dp * scale)
+                        .align(Alignment.CenterEnd)
+                        .alpha(0.10f),
+                    colorFilter = ColorFilter.tint(textColor)
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (coverBitmap != null) {
                     Image(
@@ -220,21 +252,32 @@ fun LyricCardContent(
                 )
             }
             Spacer(Modifier.height(48.dp * scale))
-            // Marca con protagonismo, como el logo de Spotify
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = null,
-                    modifier = Modifier.size(44.dp * scale),
-                    colorFilter = ColorFilter.tint(textColor)
-                )
-                Spacer(Modifier.width(10.dp * scale))
+            // Marca con protagonismo + eslogan de Aural
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier.size(44.dp * scale),
+                        colorFilter = ColorFilter.tint(textColor)
+                    )
+                    Spacer(Modifier.width(10.dp * scale))
+                    Text(
+                        text = "Aural",
+                        fontSize = 26.sp * scale,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = textColor
+                    )
+                }
+                Spacer(Modifier.height(6.dp * scale))
                 Text(
-                    text = "Aural",
-                    fontSize = 26.sp * scale,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = textColor
+                    text = "El sonido, sin ruido.",
+                    fontSize = 15.sp * scale,
+                    color = textColor.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(start = 54.dp * scale)
                 )
+            }
+                }
             }
         }
     }

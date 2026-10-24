@@ -253,8 +253,15 @@ fun DetailScreen(
         ) { uri ->
             uri?.let { viewModel.setPlaylistCover(playlistCoverId ?: return@rememberLauncherForActivityResult, it.toString()) }
         }
+        val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
+        val headerCoverUri = when {
+            playlistCoverId != null && playlistCovers[playlistCoverId] != null ->
+                playlistCovers[playlistCoverId]
+            else ->
+                songs.firstOrNull()?.let { customCovers[it.id] } ?: coverUri
+        }
         DetailHeader(
-            coverUri = coverUri,
+            coverUri = headerCoverUri,
             title = title,
             subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
             onPlay = { viewModel.playSongs(songs, 0) },

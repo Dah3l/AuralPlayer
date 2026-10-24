@@ -47,13 +47,18 @@ en GitHub salen de aquí.
   botón de compartir abre el selector de líneas (máx 6) y genera una
   tarjeta de 1440 px de ancho y alto ajustado al contenido (máximo
   3:4) con portada, título, artista, las líneas elegidas con su salto
-  completo y la marca Aural con protagonismo (logo grande + nombre);
-  el fondo es automático según la portada, con picker para elegir
-  cualquier tema. La fuente de los versos se elige según el contenido
-  (hasta 40sp) para que nunca se corte un verso ni quede hueco, y la
-  vista previa dibuja la tarjeta de forma nativa a escala exacta de
-  lo que se exporta. Se comparte como imagen por la hoja del sistema
-  (WhatsApp, Instagram, Telegram…).
+  completo y la marca Aural con protagonismo (logo grande + nombre +
+  eslogan "El sonido, sin ruido."); el fondo es un degradado de dos
+  tonos sacados de la portada (o del tema elegido en el picker) y la
+  onda de Aural aparece como marca de agua detrás de los versos. La
+  fuente de los versos se elige según el contenido (hasta 40sp) para
+  que nunca se corte un verso ni quede hueco, y la vista previa
+  dibuja la tarjeta de forma nativa a escala exacta de lo que se
+  exporta. Se comparte como imagen por la hoja del sistema (WhatsApp,
+  Instagram, Telegram…).
+- **Fix**: la foto de playlist elegida de la galería ahora se muestra
+  también dentro de la playlist, no solo en la lista (antes el detalle
+  seguía mostrando la portada de la primera canción).
 - **Cabecera de letras más grande** y difuminado bajo el header: las
   líneas se funden con el fondo al pasar por debajo.
 - **Favoritas se comporta como las demás**: su lista ya tiene drag para
