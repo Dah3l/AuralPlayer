@@ -7,11 +7,6 @@ en GitHub salen de aquí.
 ## v1.0.3 — 2026-10-23
 
 ### Novedades
-- **Salida de audio a tu elección**: cuando hay más de una salida
-  disponible (auriculares Bluetooth o de cable conectados), Now Playing
-  muestra un botón con la salida activa; al pulsarlo puedes cambiar entre
-  los auriculares y el altavoz del teléfono sin salir de la app. Si solo
-  hay una salida, el botón ni aparece: la pantalla se queda limpia.
 - **Tema nuevo: Nightly Sakura** — el rosa de Sakura en modo oscuro, para
   escucharlo de noche sin dejar tu color.
 
@@ -38,8 +33,6 @@ en GitHub salen de aquí.
   (antes salía negra y se perdía).
 
 ### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
-- **La salida de audio cambia al momento**: elegir otra fuente ahora
-  surte efecto al instante, sin esperar a la siguiente canción.
 - **Nightly Sakura, rebalanceado**: fondos carbón casi neutros para que
   el rosa sea el protagonista.
 - **7 temas claros nuevos** (16 en total): Royal Blue, Wine Red, Orange,
@@ -51,8 +44,10 @@ en GitHub salen de aquí.
 - **La app recuerda dónde estabas**: al volver atrás, las listas de
   álbumes, artistas, playlists y la vista de letra conservan su
   posición.
-- **Pull-to-refresh**: la biblioteca se actualiza tirando hacia abajo;
-  desaparece el botón de actualizar de la cabecera.
+- **Pull-to-refresh clásico**: la biblioteca se actualiza tirando hacia
+  abajo, con el indicador circular que gira mientras rescanea y
+  desaparece al terminar; desaparece el botón de actualizar de la
+  cabecera.
 
 ## v1.0.2 — 2026-10-23
 

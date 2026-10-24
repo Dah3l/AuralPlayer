@@ -28,6 +28,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -87,6 +90,7 @@ private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Des
  * (reproducir cola, abrir detalle, menú de canción).
  */
 @androidx.compose.material3.ExperimentalMaterial3Api
+@androidx.compose.material.ExperimentalMaterialApi
 @Composable
 fun LibraryScreen(
     viewModel: AuralViewModel,
@@ -136,7 +140,20 @@ fun LibraryScreen(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.importM3u(appContext, it) } }
     val refreshScope = rememberCoroutineScope()
-    val pullState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+    // Pull-to-refresh clásico de Material (método de Aguacero): su
+    // indicador gira de verdad y desaparece al terminar el rescan.
+    val pullState = androidx.compose.material.pullrefresh.rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = {
+            if (!isRefreshing) {
+                isRefreshing = true
+                refreshScope.launch {
+                    viewModel.rescan()
+                    isRefreshing = false
+                }
+            }
+        }
+    )
 
     Column(Modifier.fillMaxSize()) {
 
@@ -272,19 +289,10 @@ fun LibraryScreen(
         }
 
         // ---- Contenido por pestaña (con pull-to-refresh) ----
-        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                if (!isRefreshing) {
-                    isRefreshing = true
-                    refreshScope.launch {
-                        viewModel.rescan()
-                        isRefreshing = false
-                    }
-                }
-            },
-            state = pullState,
-            modifier = Modifier.fillMaxSize()
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pullRefresh(pullState)
         ) {
         when {
             library.isLoading -> BoxCentered {
@@ -366,6 +374,13 @@ fun LibraryScreen(
                 )
             }
         }
+            androidx.compose.material.pullrefresh.PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                contentColor = MaterialTheme.colorScheme.primary,
+                backgroundColor = MaterialTheme.colorScheme.surface
+            )
         }
     }
 
