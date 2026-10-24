@@ -123,7 +123,7 @@ fun LyricCardContent(
         lines.size <= 3 -> 28.sp
         lines.size <= 5 -> 24.sp
         else -> 22.sp
-    }.let { if (longest > 45) it - 2.sp else it }
+    }.let { if (longest > 45) (it.value - 2f).sp else it }
     Box(
         modifier = modifier
             .background(background)
