@@ -345,6 +345,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                         // Solo las playlists creadas tienen foto editable;
                         // Favoritas y Descargas conservan su identidad
                         playlistCoverId = if (isFavorites || isDownloads) null else s.id
+                        isDownloadsPlaylist = isDownloads,
+                        onGoToDownloadsTab = { libraryTab = 4; screen = Screen.Library }
                     )
                 }
 

@@ -234,7 +234,10 @@ fun DetailScreen(
     removableFromPlaylistId: String? = null,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     /** Id de playlist de usuario para cambiar su foto (null = sin foto editable). */
-    playlistCoverId: String? = null
+    playlistCoverId: String? = null,
+    /** La playlist Descargas vacía manda a la pestaña Descargas en vez de al picker. */
+    isDownloadsPlaylist: Boolean = false,
+    onGoToDownloadsTab: (() -> Unit)? = null
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -358,7 +361,10 @@ fun DetailScreen(
                 if (removableFromPlaylistId != null && removableFromPlaylistId != FAVORITES_ID) {
                     Spacer(Modifier.height(24.dp))
                     Button(
-                        onClick = { showPicker = true },
+                        onClick = {
+                            if (isDownloadsPlaylist) onGoToDownloadsTab?.invoke()
+                            else showPicker = true
+                        },
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.height(52.dp)
                     ) {

@@ -3,6 +3,9 @@ package com.aural.player.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -357,91 +360,110 @@ fun LibraryScreen(
 
             library.songs.isEmpty() -> EmptyState("No se encontraron canciones en el dispositivo")
 
-            else -> when (selectedTab) {
-                0 -> SongsTab(
-                    songs = songs,
-                    favorites = favorites,
-                    currentId = playerState.currentSong?.id,
-                    isPlaying = playerState.isPlaying,
-                    onPlay = { song ->
-                        val list = songs
-                        onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
-                    },
-                    onFavorite = viewModel::toggleFavorite,
-                    onMenu = onSongMenu,
-                    listState = songsListState,
-                    customCovers = customCovers,
-                    customMetadata = customMetadata,
-                    topPlaylists = topPlaylists,
-                    onOpenPlaylist = onOpenPlaylist,
-                    onPlayPlaylist = { id ->
-                        val toPlay = if (id == FAVORITES_ID) viewModel.favoriteSongs()
-                            else playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
-                                ?: emptyList()
-                        if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
-                    },
-                    onSeeAllPlaylists = { onTabSelected(3) }
-                )
-
-                1 -> ArtistsTab(
-                    artists = artists,
-                    onOpen = { name -> onOpenArtist(name) },
-                    gridState = artistsGridState
-                )
-
-                2 -> AlbumsTab(
-                    albums = albums,
-                    onOpen = { title -> onOpenAlbum(title) },
-                    gridState = albumsGridState
-                )
-
-                3 -> {
-                    val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
-                    PlaylistsTab(
-                        playlists = playlists,
-                        songCount = { viewModel.songsOfPlaylist(it).size },
-                        onCreate = { showNewPlaylist = true },
-                        onOpen = { pl -> onOpenPlaylist(pl.id) },
-                        onPlayPlaylist = { pl -> onPlayList(viewModel.songsOfPlaylist(pl), 0, pl.id) },
-                        onRename = { pl -> renameTarget = pl },
-                        onDelete = { pl -> deleteTarget = pl },
-                        onExport = { pl -> viewModel.exportPlaylist(appContext, pl.id) },
-                        onImport = { m3uPicker.launch("audio/x-mpegurl") },
-                        hasFavorites = favorites.isNotEmpty(),
-                        onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
-                        downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
-                        onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } },
-                        listState = playlistsListState,
-                        playlistCovers = playlistCovers,
-                        firstSongCover = { pl ->
-                            viewModel.songsOfPlaylist(pl).firstOrNull()?.let { song ->
-                                customCovers[song.id] ?: song.albumArtUri
-                            }
-                        },
-                        onRemoveCover = { pl -> viewModel.setPlaylistCover(pl.id, "") }
-                    )
-                }
-            4 -> {
-                    val ytm = youTubeManager
-                    if (ytm != null) {
-                        DownloadsScreen(
-                            youTubeManager = ytm,
-                            listState = downloadsListState,
-                            onDownloadComplete = { fileName, mediaId ->
-                                if (fileName != null) {
-                                    viewModel.addDownloadToPlaylist(fileName, mediaId)
-                                }
-                            }
-                        )
-                    } else {
-                        Text("YouTube no disponible")
+            else -> {
+                // Pager: el swipe horizontal cambia de pestaña; el tap en la pill mueve el pager
+                val pagerState = rememberPagerState(pageCount = { tabs.size })
+                LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
+                    if (!pagerState.isScrollInProgress && selectedTab != pagerState.currentPage) {
+                        onTabSelected(pagerState.currentPage)
                     }
                 }
-                5 -> FoldersTab(
-                    folders = folders,
-                    onPlay = { folder -> onPlayList(folder.songs, 0, null) },
-                    gridState = foldersGridState
-                )
+                LaunchedEffect(selectedTab) {
+                    if (pagerState.currentPage != selectedTab) {
+                        pagerState.animateScrollToPage(selectedTab)
+                    }
+                }
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    when (page) {
+                        0 -> SongsTab(
+                            songs = songs,
+                            favorites = favorites,
+                            currentId = playerState.currentSong?.id,
+                            isPlaying = playerState.isPlaying,
+                            onPlay = { song ->
+                                val list = songs
+                                onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
+                            },
+                            onFavorite = viewModel::toggleFavorite,
+                            onMenu = onSongMenu,
+                            listState = songsListState,
+                            customCovers = customCovers,
+                            customMetadata = customMetadata,
+                            topPlaylists = topPlaylists,
+                            onOpenPlaylist = onOpenPlaylist,
+                            onPlayPlaylist = { id ->
+                                val toPlay = if (id == FAVORITES_ID) viewModel.favoriteSongs()
+                                    else playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
+                                        ?: emptyList()
+                                if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
+                            },
+                            onSeeAllPlaylists = { onTabSelected(3) }
+                        )
+
+                        1 -> ArtistsTab(
+                            artists = artists,
+                            onOpen = { name -> onOpenArtist(name) },
+                            gridState = artistsGridState
+                        )
+
+                        2 -> AlbumsTab(
+                            albums = albums,
+                            onOpen = { title -> onOpenAlbum(title) },
+                            gridState = albumsGridState
+                        )
+
+                        3 -> {
+                            val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
+                            PlaylistsTab(
+                                playlists = playlists,
+                                songCount = { viewModel.songsOfPlaylist(it).size },
+                                onCreate = { showNewPlaylist = true },
+                                onOpen = { pl -> onOpenPlaylist(pl.id) },
+                                onPlayPlaylist = { pl -> onPlayList(viewModel.songsOfPlaylist(pl), 0, pl.id) },
+                                onRename = { pl -> renameTarget = pl },
+                                onDelete = { pl -> deleteTarget = pl },
+                                onExport = { pl -> viewModel.exportPlaylist(appContext, pl.id) },
+                                onImport = { m3uPicker.launch("audio/x-mpegurl") },
+                                hasFavorites = favorites.isNotEmpty(),
+                                onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
+                                downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
+                                onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } },
+                                listState = playlistsListState,
+                                playlistCovers = playlistCovers,
+                                firstSongCover = { pl ->
+                                    viewModel.songsOfPlaylist(pl).firstOrNull()?.let { song ->
+                                        customCovers[song.id] ?: song.albumArtUri
+                                    }
+                                },
+                                onRemoveCover = { pl -> viewModel.setPlaylistCover(pl.id, "") }
+                            )
+                        }
+                    4 -> {
+                            val ytm = youTubeManager
+                            if (ytm != null) {
+                                DownloadsScreen(
+                                    youTubeManager = ytm,
+                                    listState = downloadsListState,
+                                    onDownloadComplete = { fileName, mediaId ->
+                                        if (fileName != null) {
+                                            viewModel.addDownloadToPlaylist(fileName, mediaId)
+                                        }
+                                    }
+                                )
+                            } else {
+                                Text("YouTube no disponible")
+                            }
+                        }
+                        5 -> FoldersTab(
+                            folders = folders,
+                            onPlay = { folder -> onPlayList(folder.songs, 0, null) },
+                            gridState = foldersGridState
+                        )
+                    }
+                }
             }
         }
             androidx.compose.material.pullrefresh.PullRefreshIndicator(
