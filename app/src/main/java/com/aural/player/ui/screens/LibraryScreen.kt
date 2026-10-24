@@ -137,6 +137,8 @@ fun LibraryScreen(
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     playlistsListState: androidx.compose.foundation.lazy.LazyListState,
+    pagerState: androidx.compose.foundation.pager.PagerState =
+        rememberPagerState(pageCount = { tabs.size }),
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
@@ -156,6 +158,17 @@ fun LibraryScreen(
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
     val foldersGridState = rememberLazyGridState()
+    val pillsListState = rememberLazyListState()
+
+    // La fila de pills se desplaza sola para mostrar la pestaña activa
+    LaunchedEffect(selectedTab) {
+        val layout = pillsListState.layoutInfo
+        val item = layout.visibleItemsInfo.firstOrNull { it.index == selectedTab }
+        val fullyVisible = item != null &&
+            item.offset >= layout.viewportStartOffset &&
+            item.offset + item.size <= layout.viewportEndOffset
+        if (!fullyVisible) pillsListState.animateScrollToItem(selectedTab)
+    }
 
     var showNewPlaylist by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
@@ -315,7 +328,8 @@ fun LibraryScreen(
 
         // ---- Pills de filtros ----
         LazyRow(
-            Modifier.fillMaxWidth(),
+            state = pillsListState,
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
@@ -361,16 +375,27 @@ fun LibraryScreen(
             library.songs.isEmpty() -> EmptyState("No se encontraron canciones en el dispositivo")
 
             else -> {
-                // Pager: el swipe horizontal cambia de pestaña; el tap en la pill mueve el pager
-                val pagerState = rememberPagerState(pageCount = { tabs.size })
-                LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-                    if (!pagerState.isScrollInProgress && selectedTab != pagerState.currentPage) {
-                        onTabSelected(pagerState.currentPage)
+                // Pager: el swipe mueve la pill página por página; el tap en la pill mueve el pager.
+                // pagerTarget distingue el origen: si el movimiento viene de una pill, se ignoran
+                // las páginas intermedias de la animación; si viene del swipe, cada página actualiza la pill.
+                var pagerTarget by remember { mutableStateOf<Int?>(null) }
+                LaunchedEffect(pagerState.currentPage) {
+                    if (pagerTarget == null) {
+                        if (selectedTab != pagerState.currentPage) {
+                            onTabSelected(pagerState.currentPage)
+                        }
+                    } else if (pagerState.currentPage == pagerTarget) {
+                        pagerTarget = null
                     }
                 }
                 LaunchedEffect(selectedTab) {
                     if (pagerState.currentPage != selectedTab) {
-                        pagerState.animateScrollToPage(selectedTab)
+                        pagerTarget = selectedTab
+                        try {
+                            pagerState.animateScrollToPage(selectedTab)
+                        } finally {
+                            pagerTarget = null
+                        }
                     }
                 }
                 HorizontalPager(

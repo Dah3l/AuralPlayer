@@ -185,6 +185,8 @@ private fun AuralApp(viewModel: AuralViewModel,
     val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // El pager vive aquí para que al volver de un detalle siga en la misma pestaña
+    val libraryPagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 6 })
     val themesGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // Estados de scroll de cada detalle, por destino: al volver atrás la
     // lista queda donde estaba (cada álbum, artista y playlist por separado)
@@ -259,6 +261,25 @@ private fun AuralApp(viewModel: AuralViewModel,
             androidx.activity.compose.BackHandler(enabled = showNowPlaying) {
                 showNowPlaying = false
             }
+            // Atrás en la biblioteca -> doble confirmación para salir de la app
+            var lastBackPress by androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(0L)
+            }
+            androidx.activity.compose.BackHandler(
+                enabled = screen == Screen.Library && !showNowPlaying
+            ) {
+                val now = System.currentTimeMillis()
+                if (now - lastBackPress < 2000) {
+                    finish()
+                } else {
+                    lastBackPress = now
+                    android.widget.Toast.makeText(
+                        applicationContext,
+                        "Pulsa de nuevo para salir",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
             when (val s = screen) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
@@ -278,6 +299,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     albumsGridState = albumsGridState,
                     artistsGridState = artistsGridState,
                     playlistsListState = playlistsListState,
+                    pagerState = libraryPagerState,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
                         youTubeManager = youTubeManager,
