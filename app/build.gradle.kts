@@ -32,6 +32,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Paquete aparte (com.aural.player.debug): la build de prueba
+            // convive con la release instalada sin tocar ninguno de sus
+            // datos, para probar a fondo antes de lanzar la versión.
+            applicationIdSuffix = ".debug"
+            resValue("string", "app_name", "Aural DEBUG")
+        }
         release {
             // Firma con la keystore oficial cuando está disponible (CI)
             if (System.getenv("AURAL_KEYSTORE_PATH") != null) {
