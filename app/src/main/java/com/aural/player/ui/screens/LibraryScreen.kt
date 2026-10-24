@@ -35,10 +35,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -157,6 +160,7 @@ fun LibraryScreen(
 
     var isRefreshing by remember { mutableStateOf(false) }
     var showGeneralMenu by remember { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -256,7 +260,10 @@ fun LibraryScreen(
             )
         }
 
-        // ---- Búsqueda siempre visible (interior con degradado sutil) ----
+        // ---- Búsqueda siempre visible: fondo más oscuro en temas claros,
+        // en los oscuros queda como está (ahí ya se ve bien) ----
+        val darkBackground =
+            MaterialTheme.colorScheme.background.luminance() < 0.5f
         Box(
             Modifier
                 .fillMaxWidth()
@@ -264,11 +271,20 @@ fun LibraryScreen(
                 .clip(MaterialTheme.shapes.large)
                 .background(
                     Brush.verticalGradient(
-                        listOf(
+                        if (darkBackground) listOf(
                             MaterialTheme.colorScheme.surfaceContainer,
                             MaterialTheme.colorScheme.surface
+                        ) else listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceContainer
                         )
                     )
+                )
+                .border(
+                    width = if (searchFocused) 2.dp else 1.dp,
+                    color = if (searchFocused) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline,
+                    shape = MaterialTheme.shapes.large
                 )
         ) {
             OutlinedTextField(
@@ -294,7 +310,9 @@ fun LibraryScreen(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { searchFocused = it.isFocused }
             )
         }
 
@@ -310,17 +328,8 @@ fun LibraryScreen(
                     Modifier
                         .clip(CircleShape)
                         .background(
-                            if (selected) Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
-                                )
-                            ) else Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.surfaceContainer,
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            )
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
                         )
                         .clickable { onTabSelected(i) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -795,17 +804,22 @@ private fun MostPlayedSection(
                                 color = Color.White.copy(alpha = 0.85f)
                             )
                         }
+                        // Separación para que el texto no se pegue al botón
+                        Spacer(Modifier.width(8.dp))
                         if (tp.songCount > 0) {
                             IconButton(
                                 onClick = { onPlayPlaylist(tp.id) },
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .background(Color.White, CircleShape)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        CircleShape
+                                    )
                             ) {
                                 Icon(
                                     Icons.Rounded.PlayArrow,
                                     "Reproducir",
-                                    tint = Color.Black
+                                    tint = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
