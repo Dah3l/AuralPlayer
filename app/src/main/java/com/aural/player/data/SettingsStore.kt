@@ -31,6 +31,7 @@ class SettingsStore(private val context: Context) {
         val KEY_CUSTOM_COVERS = stringPreferencesKey("custom_covers_json")
         val KEY_FAVORITE_ORDER = stringPreferencesKey("favorite_order_json")
         val KEY_PLAYLIST_COVERS = stringPreferencesKey("playlist_covers_json")
+        val KEY_PLAYLIST_PLAY_COUNTS = stringPreferencesKey("playlist_play_counts_json")
         val KEY_CUSTOM_METADATA = stringPreferencesKey("custom_metadata_json")
         val KEY_DISMISSED_UPDATE = stringPreferencesKey("dismissed_update_version")
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_ms")
@@ -70,6 +71,20 @@ class SettingsStore(private val context: Context) {
                 current[playlistId] = coverUri
             }
             prefs[KEY_PLAYLIST_COVERS] = encodePlaylistCovers(current)
+        }
+    }
+
+    /** Reproducciones por playlist: playlistId -> veces que se puso a sonar. */
+    val playlistPlayCounts: Flow<Map<String, Long>> = context.dataStore.data.map { prefs ->
+        decodePlaylistPlayCounts(prefs[KEY_PLAYLIST_PLAY_COUNTS])
+    }
+
+    /** Suma una reproducción a la playlist indicada. */
+    suspend fun incrementPlaylistPlayCount(playlistId: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodePlaylistPlayCounts(prefs[KEY_PLAYLIST_PLAY_COUNTS]).toMutableMap()
+            current[playlistId] = (current[playlistId] ?: 0L) + 1L
+            prefs[KEY_PLAYLIST_PLAY_COUNTS] = encodePlaylistPlayCounts(current)
         }
     }
 
@@ -215,6 +230,28 @@ class SettingsStore(private val context: Context) {
     }
 
     private fun encodePlaylistCovers(map: Map<String, String>): String {
+        val obj = org.json.JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString()
+    }
+
+    private fun decodePlaylistPlayCounts(json: String?): Map<String, Long> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(json)
+            val map = mutableMapOf<String, Long>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k] = obj.optLong(k)
+            }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun encodePlaylistPlayCounts(map: Map<String, Long>): String {
         val obj = org.json.JSONObject()
         map.forEach { (k, v) -> obj.put(k, v) }
         return obj.toString()

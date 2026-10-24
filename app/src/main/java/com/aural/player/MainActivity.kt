@@ -262,8 +262,8 @@ private fun AuralApp(viewModel: AuralViewModel,
             when (val s = screen) {
                 Screen.Library -> LibraryScreen(
                     viewModel = viewModel,
-                    onPlayList = { songs, index ->
-                        viewModel.playSongs(songs, index)
+                    onPlayList = { songs, index, playlistId ->
+                        viewModel.playSongs(songs, index, fromPlaylistId = playlistId)
                         showNowPlaying = true
                     },
                     onOpenAlbum = { screen = Screen.Album(it) },

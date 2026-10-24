@@ -17,13 +17,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
@@ -31,6 +33,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clipToBounds
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
@@ -41,8 +44,6 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,7 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,7 +75,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.ScrollableTabRow
 import com.aural.player.youtube.YouTubeManager
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
@@ -90,6 +93,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -111,7 +115,7 @@ private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Des
 @Composable
 fun LibraryScreen(
     viewModel: AuralViewModel,
-    onPlayList: (songs: List<Song>, index: Int) -> Unit,
+    onPlayList: (songs: List<Song>, index: Int, playlistId: String?) -> Unit,
     onOpenAlbum: (albumTitle: String) -> Unit,
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
@@ -137,8 +141,10 @@ fun LibraryScreen(
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
+    val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
+    val downloadsListState = rememberLazyListState()
+    val foldersGridState = rememberLazyGridState()
 
-    var showSearch by remember { mutableStateOf(false) }
     var showNewPlaylist by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
@@ -177,56 +183,160 @@ fun LibraryScreen(
         }
     )
 
+    // Colapso de la cabecera al hacer scroll: 0 arriba del todo, 1 al bajar 120dp
+    val density = LocalDensity.current
+    val collapsePx = with(density) { 120.dp.toPx() }
+    val (firstVisibleIndex, firstVisibleOffset) = when (selectedTab) {
+        0 -> songsListState.firstVisibleItemIndex to songsListState.firstVisibleItemScrollOffset
+        1 -> artistsGridState.firstVisibleItemIndex to artistsGridState.firstVisibleItemScrollOffset
+        2 -> albumsGridState.firstVisibleItemIndex to albumsGridState.firstVisibleItemScrollOffset
+        3 -> playlistsListState.firstVisibleItemIndex to playlistsListState.firstVisibleItemScrollOffset
+        4 -> downloadsListState.firstVisibleItemIndex to downloadsListState.firstVisibleItemScrollOffset
+        else -> foldersGridState.firstVisibleItemIndex to foldersGridState.firstVisibleItemScrollOffset
+    }
+    val headerFraction = if (firstVisibleIndex > 0) 1f
+        else (firstVisibleOffset / collapsePx).coerceIn(0f, 1f)
+
+    // Las 2 playlists más reproducidas (sin datos todavía: Favoritas y Descargas)
+    val downloadsPlaylist = playlists.firstOrNull { it.name == "Descargas" }
+    val topPlaylists: List<TopPlaylist> = run {
+        fun entryOf(pl: Playlist): TopPlaylist {
+            val songsOfPl = viewModel.songsOfPlaylist(pl)
+            return TopPlaylist(
+                id = pl.id,
+                name = pl.name,
+                coverUri = playlistCovers[pl.id] ?: songsOfPl.firstOrNull()?.let {
+                    customCovers[it.id] ?: it.albumArtUri
+                },
+                songCount = songsOfPl.size
+            )
+        }
+        val favSongs = viewModel.favoriteSongs()
+        val favEntry = TopPlaylist(
+            id = FAVORITES_ID,
+            name = "Favoritas",
+            coverUri = favSongs.firstOrNull()?.let { customCovers[it.id] ?: it.albumArtUri },
+            songCount = favSongs.size
+        )
+        val dlEntry = downloadsPlaylist?.let { entryOf(it) }
+        if (playCounts.values.none { it > 0 }) {
+            listOfNotNull(favEntry, dlEntry)
+        } else {
+            (playlists.filter { it.name != "Descargas" }.map { entryOf(it) } +
+                listOfNotNull(dlEntry) + favEntry)
+                .sortedByDescending { playCounts[it.id] ?: 0L }
+                .take(2)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
 
-        // ---- Barra superior: título + búsqueda ----
-        Row(
-            modifier = Modifier
+        // ---- Cabecera: saludo + Aural, colapsa al hacer scroll ----
+        var expandedHeaderHeightPx by remember { mutableStateOf(0) }
+        // Bloque expandido: saludo y Aural grande (se encoge al bajar)
+        Box(
+            Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .then(
+                    if (expandedHeaderHeightPx == 0 || headerFraction == 0f) Modifier
+                    else Modifier
+                        .height(with(density) { (expandedHeaderHeightPx * (1f - headerFraction)).toDp() })
+                        .clipToBounds()
+                )
+                .alpha(1f - headerFraction)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { if (headerFraction == 0f) expandedHeaderHeightPx = it.height }
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp, bottom = 4.dp)
+            ) {
+                Text(
+                    text = greetingForHour(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
+                        contentDescription = "Logo",
+                        modifier = Modifier.size(44.dp),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                            MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Aural",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        // Bloque compacto: Aural pequeño (aparece al scrollear)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp * headerFraction)
+                .clipToBounds()
+                .alpha(headerFraction)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
                     painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
                     contentDescription = "Logo",
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(28.dp),
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                         MaterialTheme.colorScheme.primary
                     )
                 )
                 Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = "Aural",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = greetingForHour(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            // La barra no se oculta mientras tenga texto: primero se
-            // borra con la ✕ y luego se puede cerrar
-            IconButton(onClick = {
-                if (!(showSearch && library.query.isNotEmpty())) {
-                    showSearch = !showSearch
-                }
-            }) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = "Buscar",
-                    tint = if (showSearch) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface
+                Text(
+                    text = "Aural",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+
+        // ---- Búsqueda siempre visible + menú general ----
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = library.query,
+                onValueChange = viewModel::setQuery,
+                placeholder = { Text("Canciones, artistas o álbumes…") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                trailingIcon = {
+                    if (library.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setQuery("") }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Borrar búsqueda",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
             // ---- Menú general ⋮ ----
             Box {
                 IconButton(onClick = { showGeneralMenu = true }) {
@@ -289,50 +399,33 @@ fun LibraryScreen(
             }
         }
 
-        // ---- Campo de búsqueda local ----
-        if (showSearch) {
-            OutlinedTextField(
-                value = library.query,
-                onValueChange = viewModel::setQuery,
-                placeholder = { Text("Canciones, artistas o álbumes…") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large,
-                trailingIcon = {
-                    if (library.query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setQuery("") }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "Borrar búsqueda",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-        }
-
-        // ---- Pestañas ----
-        ScrollableTabRow(
-                edgePadding = 0.dp,
-            selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.primary
+        // ---- Pills de filtros ----
+        LazyRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            tabs.forEachIndexed { i, label ->
-                Tab(
-                    selected = selectedTab == i,
-                    onClick = { onTabSelected(i) },
-                    text = {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
+            items(tabs.size) { i ->
+                val selected = selectedTab == i
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
                         )
-                    }
-                )
+                        .clickable { onTabSelected(i) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tabs[i],
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -361,13 +454,16 @@ fun LibraryScreen(
                     isPlaying = playerState.isPlaying,
                     onPlay = { song ->
                         val list = songs
-                        onPlayList(list, list.indexOfFirst { it.id == song.id })
+                        onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
                     },
                     onFavorite = viewModel::toggleFavorite,
                     onMenu = onSongMenu,
                     listState = songsListState,
                     customCovers = customCovers,
-                    customMetadata = customMetadata
+                    customMetadata = customMetadata,
+                    topPlaylists = topPlaylists,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onSeeAllPlaylists = { onTabSelected(3) }
                 )
 
                 1 -> ArtistsTab(
@@ -389,7 +485,7 @@ fun LibraryScreen(
                         songCount = { viewModel.songsOfPlaylist(it).size },
                         onCreate = { showNewPlaylist = true },
                         onOpen = { pl -> onOpenPlaylist(pl.id) },
-                        onPlayPlaylist = { pl -> onPlayList(viewModel.songsOfPlaylist(pl), 0) },
+                        onPlayPlaylist = { pl -> onPlayList(viewModel.songsOfPlaylist(pl), 0, pl.id) },
                         onRename = { pl -> renameTarget = pl },
                         onDelete = { pl -> deleteTarget = pl },
                         onExport = { pl -> viewModel.exportPlaylist(appContext, pl.id) },
@@ -413,6 +509,7 @@ fun LibraryScreen(
                     if (ytm != null) {
                         DownloadsScreen(
                             youTubeManager = ytm,
+                            listState = downloadsListState,
                             onDownloadComplete = { fileName, mediaId ->
                                 if (fileName != null) {
                                     viewModel.addDownloadToPlaylist(fileName, mediaId)
@@ -425,7 +522,8 @@ fun LibraryScreen(
                 }
                 5 -> FoldersTab(
                     folders = folders,
-                    onPlay = { folder -> onPlayList(folder.songs, 0) }
+                    onPlay = { folder -> onPlayList(folder.songs, 0, null) },
+                    gridState = foldersGridState
                 )
             }
         }
@@ -627,6 +725,46 @@ private fun BoxCentered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
 
+/** Datos de una playlist para la sección "Más reproducidas". */
+private data class TopPlaylist(
+    val id: String,
+    val name: String,
+    val coverUri: String?,
+    val songCount: Int
+)
+
+/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas". */
+@Composable
+private fun MostPlayedSection(
+    topPlaylists: List<TopPlaylist>,
+    onOpenPlaylist: (String) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Más reproducidas",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onSeeAll) { Text("Ver todas") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            topPlaylists.forEach { tp ->
+                MediaGridCard(
+                    coverUri = tp.coverUri,
+                    title = tp.name,
+                    subtitle = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
+                    onClick = { onOpenPlaylist(tp.id) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
 // --------------------------- Pestaña: Canciones ---------------------------
 
 @Composable
@@ -640,7 +778,10 @@ private fun SongsTab(
     onMenu: (Song) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     customCovers: Map<Long, String> = emptyMap(),
-    customMetadata: Map<Long, Triple<String, String, String>> = emptyMap()
+    customMetadata: Map<Long, Triple<String, String, String>> = emptyMap(),
+    topPlaylists: List<TopPlaylist> = emptyList(),
+    onOpenPlaylist: (String) -> Unit = {},
+    onSeeAllPlaylists: () -> Unit = {}
 ) {
     if (songs.isEmpty()) {
         EmptyState("Sin resultados para tu búsqueda")
@@ -653,6 +794,16 @@ private fun SongsTab(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp, end = 32.dp)
         ) {
+            if (topPlaylists.isNotEmpty()) {
+                item {
+                    MostPlayedSection(
+                        topPlaylists = topPlaylists,
+                        onOpenPlaylist = onOpenPlaylist,
+                        onSeeAll = onSeeAllPlaylists,
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                    )
+                }
+            }
             items(songs, key = { it.id }) { song ->
                 val meta = customMetadata[song.id]
                 SongRow(
@@ -982,14 +1133,16 @@ private fun PlaylistsTab(
 @Composable
 private fun FoldersTab(
     folders: List<com.aural.player.data.Folder>,
-    onPlay: (com.aural.player.data.Folder) -> Unit
-,
+    onPlay: (com.aural.player.data.Folder) -> Unit,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState =
+        androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
     customCovers: Map<Long, String> = emptyMap()
 ) {
     if (folders.isEmpty()) {
         EmptyState("Sin carpetas"); return
     }
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(minSize = 150.dp),
         contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1069,8 +1222,8 @@ private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)
 private fun greetingForHour(): String {
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     return when (hour) {
-        in 5..11 -> "Buenos días ☀️"
-        in 12..17 -> "Buenas tardes 🌤️"
-        else -> "Buenas noches 🌙"
+        in 5..11 -> "Buenos días"
+        in 12..17 -> "Buenas tardes"
+        else -> "Buenas noches"
     }
 }

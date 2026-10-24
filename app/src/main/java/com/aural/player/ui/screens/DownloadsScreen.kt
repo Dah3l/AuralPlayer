@@ -41,6 +41,8 @@ private val YouTubeRedDark = Color(0xFFC93A3E)
 fun DownloadsScreen(
     youTubeManager: YouTubeManager,
     onDownloadComplete: (String?, Long) -> Unit = { _, _ -> },
+    listState: androidx.compose.foundation.lazy.LazyListState =
+        androidx.compose.foundation.lazy.rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
@@ -185,6 +187,7 @@ fun DownloadsScreen(
 
         // Resultados en tarjetas
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)

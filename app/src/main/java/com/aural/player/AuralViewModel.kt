@@ -126,6 +126,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setPlaylistCover(playlistId, coverUri) }
     }
 
+    /** Reproducciones por playlist: playlistId -> veces que se puso a sonar. */
+    val playlistPlayCounts: StateFlow<Map<String, Long>> = settings.playlistPlayCounts.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyMap()
+    )
+
     /** Metadatos personalizados: songId -> (título, artista, álbum). */
     val customMetadata: StateFlow<Map<Long, Triple<String, String, String>>> =
         settings.customMetadata.stateIn(
@@ -227,8 +232,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     // ----------------------------- Acciones -----------------------------
 
-    fun playSongs(songs: List<Song>, index: Int = 0, shuffle: Boolean = false) =
+    fun playSongs(
+        songs: List<Song>,
+        index: Int = 0,
+        shuffle: Boolean = false,
+        fromPlaylistId: String? = null
+    ) {
+        // Contar la reproducción para la sección "Más reproducidas"
+        if (fromPlaylistId != null) {
+            viewModelScope.launch { settings.incrementPlaylistPlayCount(fromPlaylistId) }
+        }
         playback.playQueue(songs, index, shuffle)
+    }
 
     fun toggleFavorite(songId: Long) {
         viewModelScope.launch { settings.toggleFavorite(songId) }

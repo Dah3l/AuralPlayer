@@ -459,8 +459,8 @@ fun DetailScreen(
                     coverUri = headerCoverUri,
                     title = title,
                     subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
-                    onPlay = { viewModel.playSongs(songs, 0) },
-                    onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) },
+                    onPlay = { viewModel.playSongs(songs, 0, fromPlaylistId = removableFromPlaylistId) },
+                    onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true, fromPlaylistId = removableFromPlaylistId) },
                     titleAlpha = bigTitleAlpha,
                     onImageHeightChanged = { imageHeightPx = it },
                     modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
@@ -475,7 +475,7 @@ fun DetailScreen(
                             coverUri = customCovers[song.id] ?: song.albumArtUri,
                             durationMs = song.durationMs,
                             isPlaying = song.id == playerState.currentSong?.id,
-                            onClick = { viewModel.playSongs(listSongs, index) },
+                            onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
                             modifier = Modifier.graphicsLayer {
                                 scaleX = if (isDragging) 1.03f else 1f
                                 scaleY = if (isDragging) 1.03f else 1f
@@ -507,7 +507,7 @@ fun DetailScreen(
                         coverUri = customCovers[song.id] ?: song.albumArtUri,
                         durationMs = song.durationMs,
                         isPlaying = song.id == playerState.currentSong?.id,
-                        onClick = { viewModel.playSongs(listSongs, index) },
+                        onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
                         trailing = {
                             TextButton(onClick = { onSongMenu(song) }) {
                                 Text("···", style = MaterialTheme.typography.titleMedium)
