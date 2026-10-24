@@ -288,7 +288,8 @@ class PlaybackManager(private val context: Context) {
         val speaker = firstOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
         val bluetooth = firstOf(
             AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-            AudioDeviceInfo.TYPE_LE_AUDIO,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_SPEAKER,
             AudioDeviceInfo.TYPE_BLUETOOTH_SCO
         )
         val wired = firstOf(
