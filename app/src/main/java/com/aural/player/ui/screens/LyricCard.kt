@@ -155,13 +155,15 @@ fun LyricCardContent(
     scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    val textColor = textOn(background)
-    val cardColor = lighten(background, 0.10f)
+    val cardColor = lighten(background, 0.22f)
+    // El texto se calcula sobre la tarjeta (donde realmente está),
+    // no sobre el color base, para no perder contraste al aclararla
+    val textColor = textOn(cardColor)
     Box(
         modifier = modifier
             .background(
                 Brush.verticalGradient(
-                    listOf(background, darken(background, 0.62f))
+                    listOf(darken(background, 0.80f), darken(background, 0.45f))
                 )
             )
             .padding(horizontal = 32.dp * scale, vertical = 48.dp * scale)

@@ -65,6 +65,10 @@ en GitHub salen de aquí.
   splash de inicio, que tampoco lo tenía. Revisadas el resto de
   vistas: hojas inferiores y diálogos ya consumen los toques fuera de
   ellos, y el propio Now Playing ya bloqueaba los de la biblioteca.
+- **Aural Cards**: más contraste entre el fondo y la tarjeta (la
+  tarjeta aclara un 22% y el degradado del fondo va de un 80% a un
+  45% del color base, para que no se fundan); el color del texto se
+  calcula ahora sobre la tarjeta, no sobre el color base.
 - **Cabecera de letras más grande** y difuminado bajo el header: las
   líneas se funden con el fondo al pasar por debajo.
 - **Favoritas se comporta como las demás**: su lista ya tiene drag para
