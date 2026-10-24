@@ -89,8 +89,10 @@ private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Des
  * Pantalla de biblioteca. Recibe callbacks para acciones globales
  * (reproducir cola, abrir detalle, menú de canción).
  */
-@androidx.compose.material3.ExperimentalMaterial3Api
-@androidx.compose.material.ExperimentalMaterialApi
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material.ExperimentalMaterialApi::class
+)
 @Composable
 fun LibraryScreen(
     viewModel: AuralViewModel,

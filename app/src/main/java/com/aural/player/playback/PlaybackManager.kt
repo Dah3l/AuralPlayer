@@ -37,6 +37,7 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
+    val isReady: Boolean = false
 )
 
 /**
