@@ -683,7 +683,6 @@ fun NowPlayingScreen(
                         customMetadata[it.id]?.second?.ifBlank { it.artist } ?: it.artist
                     } ?: "",
                     coverUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
-                    durationMs = state.durationMs,
                     currentPositionMs = { state.positionMs },
                     onBack = { showLyrics = false }
                 )

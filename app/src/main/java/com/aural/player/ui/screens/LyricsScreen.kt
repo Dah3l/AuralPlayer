@@ -31,7 +31,6 @@ fun LyricsScreen(
     title: String,
     artist: String,
     coverUri: String?,
-    durationMs: Long,
     currentPositionMs: () -> Long,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -126,19 +125,7 @@ fun LyricsScreen(
                 )
             }
         }
-        // Barra de progreso de la canción (se mueve con el ticker de 500ms)
-        val progress = if (durationMs > 0) {
-            (currentPositionMs().toFloat() / durationMs).coerceIn(0f, 1f)
-        } else 0f
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(3.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+
 
         when {
             loading -> {
