@@ -2,6 +2,7 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -34,8 +36,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -55,8 +57,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,7 +94,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -184,20 +185,6 @@ fun LibraryScreen(
         }
     )
 
-    // Colapso de la cabecera al hacer scroll: 0 arriba del todo, 1 al bajar 120dp
-    val density = LocalDensity.current
-    val collapsePx = with(density) { 120.dp.toPx() }
-    val (firstVisibleIndex, firstVisibleOffset) = when (selectedTab) {
-        0 -> songsListState.firstVisibleItemIndex to songsListState.firstVisibleItemScrollOffset
-        1 -> artistsGridState.firstVisibleItemIndex to artistsGridState.firstVisibleItemScrollOffset
-        2 -> albumsGridState.firstVisibleItemIndex to albumsGridState.firstVisibleItemScrollOffset
-        3 -> playlistsListState.firstVisibleItemIndex to playlistsListState.firstVisibleItemScrollOffset
-        4 -> downloadsListState.firstVisibleItemIndex to downloadsListState.firstVisibleItemScrollOffset
-        else -> foldersGridState.firstVisibleItemIndex to foldersGridState.firstVisibleItemScrollOffset
-    }
-    val headerFraction = if (firstVisibleIndex > 0) 1f
-        else (firstVisibleOffset / collapsePx).coerceIn(0f, 1f)
-
     // Las 2 playlists más reproducidas (sin datos todavía: Favoritas y Descargas)
     val downloadsPlaylist = playlists.firstOrNull { it.name == "Descargas" }
     val topPlaylists: List<TopPlaylist> = run {
@@ -233,70 +220,18 @@ fun LibraryScreen(
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
 
-        // ---- Cabecera: saludo + Aural, colapsa al hacer scroll ----
-        var expandedHeaderHeightPx by remember { mutableStateOf(0) }
-        // Bloque expandido: saludo y Aural grande (se encoge al bajar)
-        Box(
+        // ---- Cabecera fija: logo + Aural, saludo debajo ----
+        Column(
             Modifier
                 .fillMaxWidth()
-                .then(
-                    if (expandedHeaderHeightPx == 0 || headerFraction == 0f) Modifier
-                    else Modifier
-                        .height(with(density) { (expandedHeaderHeightPx * (1f - headerFraction)).toDp() })
-                        .clipToBounds()
-                )
-                .alpha(1f - headerFraction)
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp, bottom = 4.dp)
         ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { if (headerFraction == 0f) expandedHeaderHeightPx = it.height }
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 12.dp, bottom = 4.dp)
-            ) {
-                Text(
-                    text = greetingForHour(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(44.dp),
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                            MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Aural",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-        // Bloque compacto: Aural pequeño (aparece al scrollear)
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(64.dp * headerFraction)
-                .clipToBounds()
-                .alpha(headerFraction)
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(id = com.aural.player.R.drawable.ic_launcher_foreground),
                     contentDescription = "Logo",
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(44.dp),
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                         MaterialTheme.colorScheme.primary
                     )
@@ -304,101 +239,41 @@ fun LibraryScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "Aural",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = greetingForHour(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        // ---- Búsqueda siempre visible + menú general ----
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = library.query,
-                onValueChange = viewModel::setQuery,
-                placeholder = { Text("Canciones, artistas o álbumes…") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.large,
-                trailingIcon = {
-                    if (library.query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setQuery("") }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "Borrar búsqueda",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+        // ---- Búsqueda siempre visible ----
+        OutlinedTextField(
+            value = library.query,
+            onValueChange = viewModel::setQuery,
+            placeholder = { Text("Canciones, artistas o álbumes…") },
+            singleLine = true,
+            shape = MaterialTheme.shapes.large,
+            trailingIcon = {
+                if (library.query.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.setQuery("") }) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Borrar búsqueda",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            // ---- Menú general ⋮ ----
-            Box {
-                IconButton(onClick = { showGeneralMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Menú")
                 }
-                DropdownMenu(
-                    expanded = showGeneralMenu,
-                    onDismissRequest = { showGeneralMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Licencia") },
-                        onClick = { showGeneralMenu = false; showLicenseDialog = true }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Repositorio en GitHub") },
-                        onClick = {
-                            showGeneralMenu = false
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://github.com/Dah3l/AuralPlayer")
-                            )
-                            appContext.startActivity(intent)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Acerca de AuralPlayer") },
-                        onClick = { showGeneralMenu = false; showAboutDialog = true }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Buscar actualizaciones") },
-                        onClick = {
-                            showGeneralMenu = false
-                            if (!checkingUpdate) {
-                                checkingUpdate = true
-                                refreshScope.launch {
-                                    settingsStore.setLastUpdateCheckMs(
-                                        System.currentTimeMillis()
-                                    )
-                                    when (val result = checkForUpdate(appContext)) {
-                                        is UpdateCheckResult.Available ->
-                                            showUpdateDialog = result.info
-                                        is UpdateCheckResult.UpToDate ->
-                                            manualUpdateMessage =
-                                                "Ya tienes la última versión de Aural."
-                                        is UpdateCheckResult.Error ->
-                                            manualUpdateMessage =
-                                                "No se pudo comprobar la actualización. " +
-                                                "Revisa tu conexión e inténtalo de nuevo."
-                                    }
-                                    checkingUpdate = false
-                                }
-                            }
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Tema") },
-                        onClick = { showGeneralMenu = false; onOpenThemes() }
-                    )
-                }
-            }
-        }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+        )
 
         // ---- Pills de filtros ----
         LazyRow(
@@ -464,6 +339,12 @@ fun LibraryScreen(
                     customMetadata = customMetadata,
                     topPlaylists = topPlaylists,
                     onOpenPlaylist = onOpenPlaylist,
+                    onPlayPlaylist = { id ->
+                        val toPlay = if (id == FAVORITES_ID) viewModel.favoriteSongs()
+                            else playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
+                                ?: emptyList()
+                        if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
+                    },
                     onSeeAllPlaylists = { onTabSelected(3) }
                 )
 
@@ -581,6 +462,70 @@ fun LibraryScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Rounded.Mic, contentDescription = "Identificar canción")
+            }
+        }
+        // ---- Menú general ⋮ fijo arriba a la derecha, como antes ----
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 16.dp)
+        ) {
+            IconButton(onClick = { showGeneralMenu = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Menú")
+            }
+            DropdownMenu(
+                expanded = showGeneralMenu,
+                onDismissRequest = { showGeneralMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Licencia") },
+                    onClick = { showGeneralMenu = false; showLicenseDialog = true }
+                )
+                DropdownMenuItem(
+                    text = { Text("Repositorio en GitHub") },
+                    onClick = {
+                        showGeneralMenu = false
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/Dah3l/AuralPlayer")
+                        )
+                        appContext.startActivity(intent)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Acerca de AuralPlayer") },
+                    onClick = { showGeneralMenu = false; showAboutDialog = true }
+                )
+                DropdownMenuItem(
+                    text = { Text("Buscar actualizaciones") },
+                    onClick = {
+                        showGeneralMenu = false
+                        if (!checkingUpdate) {
+                            checkingUpdate = true
+                            refreshScope.launch {
+                                settingsStore.setLastUpdateCheckMs(
+                                    System.currentTimeMillis()
+                                )
+                                when (val result = checkForUpdate(appContext)) {
+                                    is UpdateCheckResult.Available ->
+                                        showUpdateDialog = result.info
+                                    is UpdateCheckResult.UpToDate ->
+                                        manualUpdateMessage =
+                                            "Ya tienes la última versión de Aural."
+                                    is UpdateCheckResult.Error ->
+                                        manualUpdateMessage =
+                                            "No se pudo comprobar la actualización. " +
+                                            "Revisa tu conexión e inténtalo de nuevo."
+                                }
+                                checkingUpdate = false
+                            }
+                        }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Tema") },
+                    onClick = { showGeneralMenu = false; onOpenThemes() }
+                )
             }
         }
     }
@@ -734,11 +679,12 @@ private data class TopPlaylist(
     val songCount: Int
 )
 
-/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas". */
+/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas" y ▶. */
 @Composable
 private fun MostPlayedSection(
     topPlaylists: List<TopPlaylist>,
     onOpenPlaylist: (String) -> Unit,
+    onPlayPlaylist: (String) -> Unit,
     onSeeAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -754,13 +700,65 @@ private fun MostPlayedSection(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             topPlaylists.forEach { tp ->
-                MediaGridCard(
-                    coverUri = tp.coverUri,
-                    title = tp.name,
-                    subtitle = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
-                    onClick = { onOpenPlaylist(tp.id) },
-                    modifier = Modifier.weight(1f)
-                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onOpenPlaylist(tp.id) }
+                        .padding(6.dp)
+                ) {
+                    // Portada cuadrada (nota musical si no hay imagen)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        if (!tp.coverUri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = android.net.Uri.parse(tp.coverUri),
+                                contentDescription = "Portada",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = tp.name,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // ▶ directo, como en cada fila de playlist
+                        if (tp.songCount > 0) {
+                            IconButton(onClick = { onPlayPlaylist(tp.id) }) {
+                                Icon(
+                                    Icons.Rounded.PlayArrow,
+                                    "Reproducir",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -782,6 +780,7 @@ private fun SongsTab(
     customMetadata: Map<Long, Triple<String, String, String>> = emptyMap(),
     topPlaylists: List<TopPlaylist> = emptyList(),
     onOpenPlaylist: (String) -> Unit = {},
+    onPlayPlaylist: (String) -> Unit = {},
     onSeeAllPlaylists: () -> Unit = {}
 ) {
     if (songs.isEmpty()) {
@@ -800,6 +799,7 @@ private fun SongsTab(
                     MostPlayedSection(
                         topPlaylists = topPlaylists,
                         onOpenPlaylist = onOpenPlaylist,
+                        onPlayPlaylist = onPlayPlaylist,
                         onSeeAll = onSeeAllPlaylists,
                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
                     )

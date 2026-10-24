@@ -8,12 +8,12 @@ en GitHub salen de aquí.
 
 ### Novedades
 - **Aural Cards: guardar en la galería** — además de compartir, la tarjeta ahora se puede guardar directo en la galería (carpeta Aural) con el botón "Guardar en galería".
-- **Home remodelado** — saludo según la hora en español y sin emojis, Aural grande con el logo al lado, búsqueda siempre visible, filtros en pills y header compacto sticky al hacer scroll.
-- **Más reproducidas** — nueva sección en el home con las 2 playlists que más suenan, en tarjetas estilo For You con botón "Ver todas" a la pantalla de playlists; sin datos todavía muestra Favoritas y Descargas.
-- **Detalle con imagen grande** — playlists, álbumes y artistas ahora abren con su portada en grande a lo ancho, con el título encima, y al subir la imagen se recoge con animación dejando solo la barra con el título y la flecha de volver.
-- **Recorte de portada 1:1** — al elegir una foto para una playlist, ahora se muestra un editor con cuadrícula para ajustar el recorte cuadrado (arrastrar y pellizcar) antes de guardarla.
+- **Home remodelado** — saludo según la hora en español y sin emojis, Aural grande con el logo al lado y el saludo debajo, búsqueda siempre visible, filtros en pills y header fijo (nada se encoge al scrollear); el menú ⋮ queda en la esquina superior derecha, como antes.
+- **Más reproducidas** — nueva sección en el home con las 2 playlists que más suenan, en tarjetas estilo For You con botón "Ver todas" a la pantalla de playlists; sin datos todavía muestra Favoritas y Descargas. Cada tarjeta trae su botón ▶ para sonar la playlist directo, como en cada fila de playlist.
 
 ### Mejoras
+- **Detalle con imagen grande** — playlists, álbumes y artistas ahora abren con su portada en grande a lo ancho, con el título encima, y al subir la imagen se recoge con animación dejando solo la barra con el título y la flecha de volver.
+- **Recorte de portada 1:1** — al elegir una foto para una playlist, ahora se muestra un editor con cuadrícula para ajustar el recorte cuadrado (arrastrar y pellizcar) antes de guardarla.
 - **Título del detalle con más peso** — y se desvanece cuando el scroll pasa el 75% de la imagen, para que no choque con el título de la barra al colapsar.
 - **Menú ⋮ para la foto de la playlist** — arriba a la derecha: agregar imagen o eliminar la actual (la foto ya no se cambia tocando la imagen). Sin foto, el detalle vuelve a su imagen por defecto.
 - **Barra colapsada más alta y a tono** — un poco más alta, con la tonalidad del Now Playing, y la franja del notch con su mismo color.
