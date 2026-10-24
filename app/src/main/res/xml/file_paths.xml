@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rutas que FileProvider puede compartir: tarjetas de letras en caché -->
+<paths>
+    <cache-path name="lyric_cards" path="lyric_cards/" />
+</paths>

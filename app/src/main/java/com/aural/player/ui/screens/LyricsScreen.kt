@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +47,7 @@ fun LyricsScreen(
     var skipFirstAutoScroll by remember {
         mutableStateOf(listState.firstVisibleItemIndex > 0)
     }
+    var showCardSheet by remember { mutableStateOf(false) }
 
     // Cargar y parsear el .lrc
     LaunchedEffect(lrcPath) {
@@ -95,7 +98,7 @@ fun LyricsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -105,12 +108,12 @@ fun LyricsScreen(
                     tint = MaterialTheme.colorScheme.onBackground
                 )
             }
-            CoverArt(uri = coverUri, size = 52.dp, cornerRadius = 10.dp)
+            CoverArt(uri = coverUri, size = 64.dp, cornerRadius = 12.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -118,11 +121,20 @@ fun LyricsScreen(
                 )
                 Text(
                     artist,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            if (lines.isNotEmpty()) {
+                IconButton(onClick = { showCardSheet = true }) {
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = "Compartir tarjeta de letra",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
             }
         }
 
@@ -148,29 +160,58 @@ fun LyricsScreen(
                 }
             }
             else -> {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = 24.dp,
-                        vertical = 32.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    itemsIndexed(lines) { index, line ->
-                        val isActive = index == activeIndex
-                        Text(
-                            line.text,
-                            fontSize = if (isActive) 22.sp else 17.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isActive) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                Box(Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            horizontal = 24.dp,
+                            vertical = 32.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        itemsIndexed(lines) { index, line ->
+                            val isActive = index == activeIndex
+                            Text(
+                                line.text,
+                                fontSize = if (isActive) 22.sp else 17.sp,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isActive) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
+                    // Sombra-difuminado: las líneas se funden con el fondo
+                    // al pasar por debajo del header
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.background,
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0f)
+                                    )
+                                )
+                            )
+                    )
                 }
             }
         }
+    }
+
+    // Hoja para crear la tarjeta de letra con las líneas elegidas
+    if (showCardSheet) {
+        LyricCardSheet(
+            title = title,
+            artist = artist,
+            coverUri = coverUri,
+            lines = lines.map { it.text }.filter { it.isNotBlank() },
+            onDismiss = { showCardSheet = false }
+        )
     }
 }

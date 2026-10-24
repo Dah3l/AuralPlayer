@@ -33,6 +33,14 @@ en GitHub salen de aquí.
   (antes salía negra y se perdía).
 
 ### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
+- **Tarjetas de letras para compartir**: desde la vista de letras, el
+  botón de compartir abre el selector de líneas (máx 6) y genera una
+  tarjeta 1080×1350 con portada, título, artista, las líneas elegidas y
+  la marca Aural; el fondo es automático según la portada, con picker
+  para elegir cualquier tema. Se comparte como imagen por la hoja del
+  sistema (WhatsApp, Instagram, Telegram…).
+- **Cabecera de letras más grande** y difuminado bajo el header: las
+  líneas se funden con el fondo al pasar por debajo.
 - **Favoritas se comporta como las demás**: su lista ya tiene drag para
   reordenar (el orden se guarda) y su menú ⋯ ofrece «Eliminar de la
   lista» para quitar el favorito.
