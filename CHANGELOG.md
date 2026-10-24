@@ -4,6 +4,11 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## Sin publicar (próxima versión)
+
+### Novedades
+- **Aural Cards: guardar en la galería** — además de compartir, la tarjeta ahora se puede guardar directo en la galería (carpeta Aural) con el botón "Guardar en galería".
+
 ## v1.0.3 — 2026-10-23
 
 ### Novedades

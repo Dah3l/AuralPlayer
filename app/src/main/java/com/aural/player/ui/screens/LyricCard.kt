@@ -2,8 +2,16 @@
 package com.aural.player.ui.screens
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.Manifest
+import android.media.MediaScannerConnection
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.view.View
@@ -32,8 +40,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.palette.graphics.Palette
 import coil.Coil
@@ -392,6 +404,57 @@ private suspend fun shareBitmap(context: Context, bitmap: Bitmap) {
     context.startActivity(Intent.createChooser(intent, "Compartir letra"))
 }
 
+/** Nombre de archivo seguro para la tarjeta (sin caracteres prohibidos). */
+private fun lyricFileName(title: String, artist: String): String {
+    val illegal = charArrayOf('/', ':', '*', '?', '"', '<', '>', '|', 0x5C.toChar())
+    val base = "Aural - $title - $artist".map { if (it in illegal) '-' else it }.joinToString("").trim()
+    return (base.ifEmpty { "Aural-lyric" }).take(100) + ".png"
+}
+
+/** Guarda el PNG en la galería (carpeta Aural) en Android 10+ (sin permiso). */
+private suspend fun saveBitmapToGallery(context: Context, bitmap: Bitmap, fileName: String): Boolean =
+    withContext(Dispatchers.IO) {
+        try {
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Aural")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return@withContext false
+            resolver.openOutputStream(uri)?.use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            } ?: return@withContext false
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+/** Guarda el PNG en Pictures/Aural en Android 9 y anteriores (requiere permiso). */
+private suspend fun saveBitmapLegacy(context: Context, bitmap: Bitmap, fileName: String): Boolean =
+    withContext(Dispatchers.IO) {
+        try {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                "Aural"
+            ).apply { mkdirs() }
+            val out = File(dir, fileName)
+            FileOutputStream(out).use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            }
+            MediaScannerConnection.scanFile(context, arrayOf(out.absolutePath), arrayOf("image/png"), null)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
 /**
  * Hoja de la tarjeta: paso 1 elegir líneas (máx 6), paso 2 vista previa
  * con picker de fondo (Auto = portada, o cualquier tema) y compartir.
@@ -413,6 +476,28 @@ fun LyricCardSheet(
     var autoBg by remember { mutableStateOf<Color?>(null) }
     var bgChoice by remember { mutableStateOf<CardBackground>(CardBackground.Auto) }
     var sharing by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var pendingSaveBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    // En Android 9 y anteriores, guardar en la galería exige permiso:
+    // si se concede, se guarda el PNG que quedó pendiente
+    val savePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val bmp = pendingSaveBitmap
+        pendingSaveBitmap = null
+        if (granted && bmp != null) {
+            scope.launch {
+                val ok = saveBitmapLegacy(context, bmp, lyricFileName(title, artist))
+                Toast.makeText(
+                    context,
+                    if (ok) "Guardada en la galería" else "No se pudo guardar",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else if (!granted) {
+            Toast.makeText(context, "Permiso denegado: no se pudo guardar", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Cargar portada y color dominante una sola vez
     LaunchedEffect(coverUri) {
@@ -594,6 +679,71 @@ fun LyricCardSheet(
                         } else {
                             Text("Compartir")
                         }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        if (saving) return@OutlinedButton
+                        saving = true
+                        scope.launch {
+                            try {
+                                val bitmap = captureLyricCard(
+                                    context = context,
+                                    title = title,
+                                    artist = artist,
+                                    coverBitmap = coverBitmap?.asImageBitmap(),
+                                    lines = selectedLines,
+                                    background = background,
+                                    lineFontSize = cardFont
+                                )
+                                val fileName = lyricFileName(title, artist)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val ok = saveBitmapToGallery(context, bitmap, fileName)
+                                    Toast.makeText(
+                                        context,
+                                        if (ok) "Guardada en la galería" else "No se pudo guardar",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    val ok = saveBitmapLegacy(context, bitmap, fileName)
+                                    Toast.makeText(
+                                        context,
+                                        if (ok) "Guardada en la galería" else "No se pudo guardar",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    // Android 9 y anteriores: pedir permiso y guardar al concederlo
+                                    pendingSaveBitmap = bitmap
+                                    savePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No se pudo guardar", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                saving = false
+                            }
+                        }
+                    },
+                    enabled = !saving,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (saving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        androidx.compose.material3.Icon(
+                            Icons.Rounded.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Guardar en galería")
                     }
                 }
                 Spacer(Modifier.height(16.dp))

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Escritura en galería solo en Android 9 y anteriores (en 10+ la guarda MediaStore sin permiso) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- Internet (necesario para TDLib/Telegram) -->
     <uses-permission android:name="android.permission.INTERNET" />
