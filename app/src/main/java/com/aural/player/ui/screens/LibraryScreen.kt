@@ -260,8 +260,8 @@ fun LibraryScreen(
             )
         }
 
-        // ---- Búsqueda siempre visible: fondo más oscuro en temas claros,
-        // en los oscuros queda como está (ahí ya se ve bien) ----
+        // ---- Búsqueda siempre visible: color sólido (sin degradado) ----
+        // Más oscuro en temas claros; en los oscuros queda el tono de antes.
         val darkBackground =
             MaterialTheme.colorScheme.background.luminance() < 0.5f
         Box(
@@ -269,16 +269,10 @@ fun LibraryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
                 .clip(MaterialTheme.shapes.large)
+                // Color sólido: más oscuro en temas claros, igual que antes en los oscuros
                 .background(
-                    Brush.verticalGradient(
-                        if (darkBackground) listOf(
-                            MaterialTheme.colorScheme.surfaceContainer,
-                            MaterialTheme.colorScheme.surface
-                        ) else listOf(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            MaterialTheme.colorScheme.surfaceContainer
-                        )
-                    )
+                    if (darkBackground) MaterialTheme.colorScheme.surfaceContainer
+                    else MaterialTheme.colorScheme.surfaceVariant
                 )
                 .border(
                     width = if (searchFocused) 2.dp else 1.dp,
