@@ -14,6 +14,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.aural.player.R
 import com.aural.player.data.SettingsStore
@@ -123,16 +124,22 @@ class MusicService : MediaSessionService() {
         }
         session.setCustomLayout(
             listOf(
-                CommandButton.Builder(cycleIcon)
+                CommandButton.Builder()
+                    .setIconResId(cycleIcon)
                     .setDisplayName("Modo de reproducción")
-                    .setCustomAction(ACTION_CYCLE_PLAY_MODE)
+                    .setSessionCommand(
+                        SessionCommand(ACTION_CYCLE_PLAY_MODE, Bundle.EMPTY)
+                    )
                     .build(),
-                CommandButton.Builder(
-                    if (isFav) R.drawable.ic_notif_favorite
-                    else R.drawable.ic_notif_favorite_border
-                )
+                CommandButton.Builder()
+                    .setIconResId(
+                        if (isFav) R.drawable.ic_notif_favorite
+                        else R.drawable.ic_notif_favorite_border
+                    )
                     .setDisplayName("Favorito")
-                    .setCustomAction(ACTION_TOGGLE_FAVORITE)
+                    .setSessionCommand(
+                        SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY)
+                    )
                     .build()
             )
         )
@@ -143,10 +150,10 @@ class MusicService : MediaSessionService() {
         override fun onCustomCommand(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
-            customAction: String,
+            customAction: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            when (customAction) {
+            when (customAction.customAction) {
                 ACTION_TOGGLE_FAVORITE -> {
                     val songId = session.player.currentMediaItem?.mediaId?.toLongOrNull()
                     if (songId != null) {
