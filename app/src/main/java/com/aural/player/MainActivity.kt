@@ -265,16 +265,17 @@ private fun AuralApp(viewModel: AuralViewModel,
             var lastBackPress by androidx.compose.runtime.remember {
                 androidx.compose.runtime.mutableStateOf(0L)
             }
+            val backContext = androidx.compose.ui.platform.LocalContext.current
             androidx.activity.compose.BackHandler(
                 enabled = screen == Screen.Library && !showNowPlaying
             ) {
                 val now = System.currentTimeMillis()
                 if (now - lastBackPress < 2000) {
-                    finish()
+                    (backContext as? android.app.Activity)?.finish()
                 } else {
                     lastBackPress = now
                     android.widget.Toast.makeText(
-                        applicationContext,
+                        backContext,
                         "Pulsa de nuevo para salir",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
