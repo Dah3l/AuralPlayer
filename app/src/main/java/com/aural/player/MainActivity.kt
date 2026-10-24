@@ -2,7 +2,9 @@
 package com.aural.player
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -24,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,12 @@ import com.aural.player.ui.screens.ThemesScreen
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.data.SettingsStore
+import com.aural.player.data.UpdateCheckResult
+import com.aural.player.data.UpdateInfo
+import com.aural.player.data.checkForUpdate
+import com.aural.player.ui.components.UpdateAvailableDialog
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.aural.player.ui.components.SplashScreen
@@ -104,7 +113,7 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 } else {
-                    AuralApp(viewModel, youTubeManager = youTubeManager)
+                    AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore)
                 }
             }
         }
@@ -162,7 +171,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AuralApp(viewModel: AuralViewModel,
-    youTubeManager: com.aural.player.youtube.YouTubeManager?) {
+    youTubeManager: com.aural.player.youtube.YouTubeManager?,
+    settingsStore: SettingsStore) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga)
@@ -197,6 +207,24 @@ private fun AuralApp(viewModel: AuralViewModel,
         val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+
+    // ---- Aviso de nueva versión: una vez al día, en silencio si falla ----
+    val updateContext = LocalContext.current
+    val updateScope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    LaunchedEffect(Unit) {
+        val dismissed = settingsStore.dismissedUpdateVersion.first()
+        val lastCheck = settingsStore.lastUpdateCheckMs.first()
+        val now = System.currentTimeMillis()
+        if (now - lastCheck < 24L * 60L * 60L * 1000L) return@LaunchedEffect
+        settingsStore.setLastUpdateCheckMs(now)
+        when (val result = checkForUpdate(updateContext)) {
+            is UpdateCheckResult.Available -> {
+                if (result.info.version != dismissed) updateInfo = result.info
+            }
+            else -> {}
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -252,7 +280,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     playlistsListState = playlistsListState,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
-                        youTubeManager = youTubeManager
+                        youTubeManager = youTubeManager,
+                        settingsStore = settingsStore
                     )
 
                 is Screen.Album -> {
@@ -426,6 +455,25 @@ private fun AuralApp(viewModel: AuralViewModel,
             onDismiss = {
                 com.aural.player.AuralApp.clearCrashReport(appCtx)
                 crashReport = null
+            }
+        )
+    }
+
+    // ---- Diálogo de nueva versión (chequeo automático al abrir) ----
+    updateInfo?.let { info ->
+        UpdateAvailableDialog(
+            info = info,
+            onDownload = {
+                updateInfo = null
+                updateContext.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(info.url))
+                )
+            },
+            onLater = {
+                updateInfo = null
+                updateScope.launch {
+                    settingsStore.setDismissedUpdateVersion(info.version)
+                }
             }
         )
     }

@@ -33,6 +33,16 @@ en GitHub salen de aquí.
   (antes salía negra y se perdía).
 
 ### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
+- **Aviso de nueva versión**: al abrir la app (máximo una vez al día)
+  Aural consulta el último release en GitHub y, si hay uno más nuevo
+  que la versión instalada, muestra un diálogo con "Descargar" (abre
+  la página del release en el navegador) y "Más tarde" (no vuelve a
+  avisar por esa versión). En el menú ⋮ hay "Buscar actualizaciones"
+  para comprobar a mano, con aviso de "Ya tienes la última versión"
+  o de error si no hay conexión. Sin backend ni permisos nuevos; si
+  GitHub no responde, el chequeo automático no muestra nada. La
+  versión de "Acerca de" ahora se lee del build, no está escrita a
+  mano.
 - **Tarjetas de letras para compartir**: desde la vista de letras, el
   botón de compartir abre el selector de líneas (máx 6) y genera una
   tarjeta de 1440 px de ancho y alto ajustado al contenido (máximo

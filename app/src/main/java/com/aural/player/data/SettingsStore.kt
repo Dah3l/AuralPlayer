@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +32,8 @@ class SettingsStore(private val context: Context) {
         val KEY_FAVORITE_ORDER = stringPreferencesKey("favorite_order_json")
         val KEY_PLAYLIST_COVERS = stringPreferencesKey("playlist_covers_json")
         val KEY_CUSTOM_METADATA = stringPreferencesKey("custom_metadata_json")
+        val KEY_DISMISSED_UPDATE = stringPreferencesKey("dismissed_update_version")
+        val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_ms")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -85,6 +88,28 @@ class SettingsStore(private val context: Context) {
     }
 
     /** Portadas personalizadas: songId -> URL de portada. */
+    /** Última versión descartada con "Más tarde" (no se vuelve a avisar). */
+    val dismissedUpdateVersion: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DISMISSED_UPDATE]
+    }
+
+    suspend fun setDismissedUpdateVersion(version: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DISMISSED_UPDATE] = version
+        }
+    }
+
+    /** Momento del último chequeo automático (milisegundos). */
+    val lastUpdateCheckMs: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_UPDATE_CHECK] ?: 0L
+    }
+
+    suspend fun setLastUpdateCheckMs(millis: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_UPDATE_CHECK] = millis
+        }
+    }
+
     val customCovers: Flow<Map<Long, String>> = context.dataStore.data.map { prefs ->
         decodeCovers(prefs[KEY_CUSTOM_COVERS])
     }

@@ -78,6 +78,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import com.aural.player.data.SettingsStore
+import com.aural.player.data.UpdateCheckResult
+import com.aural.player.data.UpdateInfo
+import com.aural.player.data.checkForUpdate
+import com.aural.player.data.installedVersionName
+import com.aural.player.ui.components.UpdateAvailableDialog
 import androidx.compose.material.icons.filled.Download
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -117,7 +123,8 @@ fun LibraryScreen(
     playlistsListState: androidx.compose.foundation.lazy.LazyListState,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    youTubeManager: com.aural.player.youtube.YouTubeManager? = null
+    youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
+    settingsStore: SettingsStore
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -140,6 +147,9 @@ fun LibraryScreen(
     var showGeneralMenu by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf<UpdateInfo?>(null) }
+    var manualUpdateMessage by remember { mutableStateOf<String?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
@@ -244,6 +254,32 @@ fun LibraryScreen(
                     DropdownMenuItem(
                         text = { Text("Acerca de AuralPlayer") },
                         onClick = { showGeneralMenu = false; showAboutDialog = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Buscar actualizaciones") },
+                        onClick = {
+                            showGeneralMenu = false
+                            if (!checkingUpdate) {
+                                checkingUpdate = true
+                                refreshScope.launch {
+                                    settingsStore.setLastUpdateCheckMs(
+                                        System.currentTimeMillis()
+                                    )
+                                    when (val result = checkForUpdate(appContext)) {
+                                        is UpdateCheckResult.Available ->
+                                            showUpdateDialog = result.info
+                                        is UpdateCheckResult.UpToDate ->
+                                            manualUpdateMessage =
+                                                "Ya tienes la última versión de Aural."
+                                        is UpdateCheckResult.Error ->
+                                            manualUpdateMessage =
+                                                "No se pudo comprobar la actualización. " +
+                                                "Revisa tu conexión e inténtalo de nuevo."
+                                    }
+                                    checkingUpdate = false
+                                }
+                            }
+                        }
                     )
                     DropdownMenuItem(
                         text = { Text("Tema") },
@@ -520,11 +556,61 @@ fun LibraryScreen(
                         "Reproductor minimalista con descargas de YouTube, " +
                         "letras sincronizadas, ecualizador, reconocimiento de " +
                         "canciones estilo Shazam y 16 temas para hacerlo tuyo.\n\n" +
-                        "Versión 1.0.3\nHecho con ❤️ y Jetpack Compose"
+                        "Versión ${installedVersionName(appContext)}\nHecho con ❤️ y Jetpack Compose"
                 )
             },
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) { Text("Cerrar") }
+            }
+        )
+    }
+
+    // ---- Diálogo de nueva versión (chequeo manual) ----
+    showUpdateDialog?.let { info ->
+        UpdateAvailableDialog(
+            info = info,
+            onDownload = {
+                showUpdateDialog = null
+                appContext.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(info.url))
+                )
+            },
+            onLater = {
+                showUpdateDialog = null
+                refreshScope.launch {
+                    settingsStore.setDismissedUpdateVersion(info.version)
+                }
+            }
+        )
+    }
+
+    // ---- Buscando… (chequeo manual en curso) ----
+    if (checkingUpdate) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = {}) {
+            androidx.compose.material3.Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Row(
+                    modifier = Modifier.padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                    Spacer(Modifier.width(16.dp))
+                    Text("Buscando actualizaciones…")
+                }
+            }
+        }
+    }
+
+    // ---- Resultado del chequeo manual ----
+    manualUpdateMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { manualUpdateMessage = null },
+            title = { Text("Actualizaciones") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { manualUpdateMessage = null }) { Text("Cerrar") }
             }
         )
     }
