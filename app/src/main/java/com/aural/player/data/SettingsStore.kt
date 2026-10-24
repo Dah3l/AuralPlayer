@@ -28,6 +28,8 @@ class SettingsStore(private val context: Context) {
         val KEY_LRC_MAP = stringPreferencesKey("lrc_map_json")
         val KEY_THEME = stringPreferencesKey("app_theme")
         val KEY_CUSTOM_COVERS = stringPreferencesKey("custom_covers_json")
+        val KEY_FAVORITE_ORDER = stringPreferencesKey("favorite_order_json")
+        val KEY_PLAYLIST_COVERS = stringPreferencesKey("playlist_covers_json")
         val KEY_CUSTOM_METADATA = stringPreferencesKey("custom_metadata_json")
     }
 
@@ -39,6 +41,33 @@ class SettingsStore(private val context: Context) {
     /** Flujo reactivo del conjunto de canciones favoritas. */
     val favorites: Flow<Set<Long>> = context.dataStore.data.map { prefs ->
         decodeFavorites(prefs[KEY_FAVORITES])
+    }
+
+    /**
+     * Orden de favoritos elegido por el usuario (drag en la lista).
+     * La pertenencia sigue viviendo en el conjunto de favoritos: los
+     * favoritos que aún no están en esta lista van al final, en orden
+     * de biblioteca, así ningún favorito se pierde al migrar.
+     */
+    val favoriteOrder: Flow<List<Long>> = context.dataStore.data.map { prefs ->
+        decodeFavoriteOrder(prefs[KEY_FAVORITE_ORDER])
+    }
+
+    /** Fotos de playlists creadas: playlistId -> URI de la foto. */
+    val playlistCovers: Flow<Map<String, String>> = context.dataStore.data.map { prefs ->
+        decodePlaylistCovers(prefs[KEY_PLAYLIST_COVERS])
+    }
+
+    suspend fun setPlaylistCover(playlistId: String, coverUri: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodePlaylistCovers(prefs[KEY_PLAYLIST_COVERS]).toMutableMap()
+            if (coverUri.isBlank()) {
+                current.remove(playlistId)
+            } else {
+                current[playlistId] = coverUri
+            }
+            prefs[KEY_PLAYLIST_COVERS] = encodePlaylistCovers(current)
+        }
     }
 
     // ------------------------- Playlists -------------------------
@@ -134,6 +163,38 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    private fun decodeFavoriteOrder(json: String?): List<Long> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { arr.getLong(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun decodePlaylistCovers(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(json)
+            val map = mutableMapOf<String, String>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k] = obj.optString(k)
+            }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun encodePlaylistCovers(map: Map<String, String>): String {
+        val obj = org.json.JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString()
+    }
+
     private fun encodeCovers(map: Map<Long, String>): String {
         val obj = org.json.JSONObject()
         for ((k, v) in map) obj.put(k.toString(), v)
@@ -212,8 +273,24 @@ class SettingsStore(private val context: Context) {
     suspend fun toggleFavorite(songId: Long) {
         context.dataStore.edit { prefs ->
             val current = decodeFavorites(prefs[KEY_FAVORITES]).toMutableSet()
-            if (!current.add(songId)) current.remove(songId)
+            val order = decodeFavoriteOrder(prefs[KEY_FAVORITE_ORDER]).toMutableList()
+            if (!current.add(songId)) {
+                current.remove(songId)
+                order.remove(songId)
+            } else if (songId !in order && order.isNotEmpty()) {
+                // Solo se alimenta el orden una vez el usuario ha
+                // reordenado alguna vez; si no, manda el orden de biblioteca
+                order.add(songId)
+            }
             prefs[KEY_FAVORITES] = JSONArray(current.toList()).toString()
+            prefs[KEY_FAVORITE_ORDER] = JSONArray(order).toString()
+        }
+    }
+
+    /** Guarda el orden completo de favoritos (la UI reordena en local y confirma al soltar). */
+    suspend fun setFavoriteOrder(songIds: List<Long>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FAVORITE_ORDER] = JSONArray(songIds).toString()
         }
     }
 

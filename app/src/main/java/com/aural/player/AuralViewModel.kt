@@ -108,6 +108,24 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setCustomCover(songId, coverUrl) }
     }
 
+    /** Orden de favoritos elegido con drag (vacío = orden de biblioteca). */
+    val favoriteOrder: StateFlow<List<Long>> = settings.favoriteOrder.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyList()
+    )
+
+    fun setFavoriteOrder(songIds: List<Long>) {
+        viewModelScope.launch { settings.setFavoriteOrder(songIds) }
+    }
+
+    /** Fotos de playlists creadas: playlistId -> URI. */
+    val playlistCovers: StateFlow<Map<String, String>> = settings.playlistCovers.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyMap()
+    )
+
+    fun setPlaylistCover(playlistId: String, coverUri: String) {
+        viewModelScope.launch { settings.setPlaylistCover(playlistId, coverUri) }
+    }
+
     /** Metadatos personalizados: songId -> (título, artista, álbum). */
     val customMetadata: StateFlow<Map<Long, Triple<String, String, String>>> =
         settings.customMetadata.stateIn(
@@ -192,8 +210,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         .map { repository.groupByFolder(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun favoriteSongs(): List<Song> =
-        _library.value.songs.filter { favorites.value.contains(it.id) }
+    fun favoriteSongs(): List<Song> {
+        val order = favoriteOrder.value.withIndex().associate { it.value to it.index }
+        return _library.value.songs
+            .filter { favorites.value.contains(it.id) }
+            .sortedWith(
+                compareBy<Song> { order[it.id] ?: Int.MAX_VALUE }
+                    .thenBy { _library.value.songs.indexOf(it) }
+            )
+    }
 
     fun songsOfPlaylist(playlist: Playlist): List<Song> {
         val byId = _library.value.songs.associateBy { it.id }
@@ -384,6 +409,41 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val content = context.contentResolver.openInputStream(uri)
                     ?.bufferedReader()?.readText() ?: return@launch
+                // Nombre: el del archivo elegido (sin extensión); si el
+                // archivo trae título #PLAYLIST, ese; si no, fecha.
+                val fileName = try {
+                    context.contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null, null, null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+                } catch (e: Exception) { null }
+                    ?.let {
+                        if (it.endsWith(".m3u", ignoreCase = true) ||
+                            it.endsWith(".m3u8", ignoreCase = true)
+                        ) it.substringBeforeLast(".") else it
+                    }
+                    ?.takeIf { it.isNotBlank() }
+                val playlistTitle = content.lineSequence()
+                    .firstOrNull { it.startsWith("#PLAYLIST:") }
+                    ?.removePrefix("#PLAYLIST:")?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val baseName = fileName ?: playlistTitle ?: run {
+                    val date = java.text.SimpleDateFormat(
+                        "dd/MM", java.util.Locale.getDefault()
+                    ).format(java.util.Date())
+                    "Importada $date"
+                }
+                // Evitar mezclar: si el nombre existe, «Nombre 2», «Nombre 3»…
+                var playlistName = baseName
+                var suffix = 2
+                val existingNames = playlists.value.map { it.name }.toSet()
+                while (playlistName in existingNames) {
+                    playlistName = "$baseName $suffix"
+                    suffix++
+                }
                 val entries = parseM3u(content)
                 if (entries.isEmpty()) {
                     toastOnMain(context, "No se encontraron canciones en el archivo")
@@ -402,10 +462,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                     toastOnMain(context, "Ninguna canción del archivo está en tu biblioteca")
                     return@launch
                 }
-                val date = java.text.SimpleDateFormat(
-                    "dd/MM", java.util.Locale.getDefault()
-                ).format(java.util.Date())
-                val newId = settings.createPlaylist("Importada $date")
+                val newId = settings.createPlaylist(playlistName)
                 matchedIds.forEach { settings.addToPlaylist(newId, it) }
                 toastOnMain(
                     context,

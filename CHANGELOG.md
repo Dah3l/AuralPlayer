@@ -33,6 +33,19 @@ en GitHub salen de aquí.
   (antes salía negra y se perdía).
 
 ### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
+- **Favoritas se comporta como las demás**: su lista ya tiene drag para
+  reordenar (el orden se guarda) y su menú ⋯ ofrece «Eliminar de la
+  lista» para quitar el favorito.
+- **Importar con su nombre**: la playlist importada se llama como el
+  archivo elegido (o su título #PLAYLIST), no «Importada 23/10»; si el
+  nombre existe, se numera («Nombre 2», «Nombre 3»…).
+- **Fotos en tus playlists**: tocar la portada en el detalle de una
+  playlist abre el selector de foto; esa foto se ve en la miniatura de
+  la lista. Favoritas y Descargas conservan su corazón y su símbolo de
+  descarga, sin cambios.
+- **La búsqueda no se esconde con texto**: la barra solo se cierra
+  cuando el campo está vacío.
+- **Temas sin subtítulo**: las tarjetas muestran solo el nombre del tema.
 - **Botón flotante de reconocimiento**: el micrófono se muda de la barra
   superior a un botón flotante abajo a la derecha, alineado a 16dp del
   borde y del mini-reproductor, con un anillo que pulsa suavemente.

@@ -77,7 +77,8 @@ private fun DetailHeader(
     title: String,
     subtitle: String,
     onPlay: () -> Unit,
-    onShuffle: () -> Unit
+    onShuffle: () -> Unit,
+    onCoverClick: (() -> Unit)? = null
 ) {
     Column(
         Modifier
@@ -85,7 +86,14 @@ private fun DetailHeader(
             .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CoverArt(uri = coverUri, size = 190.dp, cornerRadius = 16.dp)
+        if (onCoverClick != null) {
+            CoverArt(
+                uri = coverUri, size = 190.dp, cornerRadius = 16.dp,
+                modifier = Modifier.clickable { onCoverClick() }
+            )
+        } else {
+            CoverArt(uri = coverUri, size = 190.dp, cornerRadius = 16.dp)
+        }
         Spacer(Modifier.height(16.dp))
         Text(
             text = title,
@@ -140,7 +148,9 @@ fun DetailScreen(
     onBack: () -> Unit,
     onSongMenu: (Song) -> Unit,
     removableFromPlaylistId: String? = null,
-    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    /** Id de playlist de usuario para cambiar su foto (null = sin foto editable). */
+    playlistCoverId: String? = null
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -209,7 +219,7 @@ fun DetailScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (removableFromPlaylistId != null) {
+                if (removableFromPlaylistId != null && removableFromPlaylistId != FAVORITES_ID) {
                     Spacer(Modifier.height(24.dp))
                     Button(
                         onClick = { showPicker = true },
@@ -237,12 +247,21 @@ fun DetailScreen(
             return@Column
         }
 
+        // Foto de playlist: tocar la portada abre el selector de imágenes
+        val coverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        ) { uri ->
+            uri?.let { viewModel.setPlaylistCover(playlistCoverId ?: return@rememberLauncherForActivityResult, it.toString()) }
+        }
         DetailHeader(
             coverUri = coverUri,
             title = title,
             subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
             onPlay = { viewModel.playSongs(songs, 0) },
-            onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) }
+            onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) },
+            onCoverClick = if (playlistCoverId != null) {
+                { coverPicker.launch("image/*") }
+            } else null
         )
 
         Spacer(Modifier.height(8.dp))
@@ -287,7 +306,11 @@ fun DetailScreen(
             if (!reorderableState.isAnyItemDragging && pid != null &&
                 displaySongs.map { it.id } != songs.map { it.id }
             ) {
-                viewModel.setPlaylistOrder(pid, displaySongs.map { it.id })
+                if (pid == FAVORITES_ID) {
+                    viewModel.setFavoriteOrder(displaySongs.map { it.id })
+                } else {
+                    viewModel.setPlaylistOrder(pid, displaySongs.map { it.id })
+                }
             }
         }
         val listSongs = if (reorderable) displaySongs else songs

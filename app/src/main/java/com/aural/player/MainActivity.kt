@@ -294,6 +294,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                 is Screen.Playlist -> {
                     val isFavorites = s.id == FAVORITES_ID
                     val playlist = playlists.find { it.id == s.id }
+                    val isDownloads = playlist?.name == "Descargas"
                     val songs = if (isFavorites) viewModel.favoriteSongs()
                     else playlist?.let { viewModel.songsOfPlaylist(it) } ?: emptyList()
 
@@ -307,9 +308,14 @@ private fun AuralApp(viewModel: AuralViewModel,
                         onBack = { screen = Screen.Library },
                         onSongMenu = { song ->
                             songMenuTarget = song
-                            songMenuPlaylistId = if (isFavorites) null else s.id
+                            // Favoritas se comporta como las demás: su menú
+                            // ofrece «Eliminar de la lista» (quitar favorito)
+                            songMenuPlaylistId = s.id
                         },
-                        removableFromPlaylistId = if (isFavorites) null else s.id
+                        removableFromPlaylistId = s.id,
+                        // Solo las playlists creadas tienen foto editable;
+                        // Favoritas y Descargas conservan su identidad
+                        playlistCoverId = if (isFavorites || isDownloads) null else s.id
                     )
                 }
 
@@ -396,7 +402,12 @@ private fun AuralApp(viewModel: AuralViewModel,
                 songMenuPlaylistId = null
             },
             onRemoveFromPlaylist = {
-                songMenuPlaylistId?.let { viewModel.removeFromPlaylist(it, song.id) }
+                val pid = songMenuPlaylistId
+                if (pid == FAVORITES_ID) {
+                    viewModel.toggleFavorite(song.id)
+                } else {
+                    pid?.let { viewModel.removeFromPlaylist(it, song.id) }
+                }
                 songMenuTarget = null
                 songMenuPlaylistId = null
             }

@@ -129,6 +129,7 @@ fun LibraryScreen(
     val albums by viewModel.albumsFlow.collectAsStateWithLifecycle()
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
 
     var showSearch by remember { mutableStateOf(false) }
     var showNewPlaylist by remember { mutableStateOf(false) }
@@ -202,7 +203,13 @@ fun LibraryScreen(
                     )
                 }
             }
-            IconButton(onClick = { showSearch = !showSearch }) {
+            // La barra no se oculta mientras tenga texto: primero se
+            // borra con la ✕ y luego se puede cerrar
+            IconButton(onClick = {
+                if (!(showSearch && library.query.isNotEmpty())) {
+                    showSearch = !showSearch
+                }
+            }) {
                 Icon(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "Buscar",
@@ -355,7 +362,14 @@ fun LibraryScreen(
                         onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
                         downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
                         onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } },
-                        listState = playlistsListState
+                        listState = playlistsListState,
+                        playlistCovers = playlistCovers,
+                        firstSongCover = { pl ->
+                            viewModel.songsOfPlaylist(pl).firstOrNull()?.let { song ->
+                                customCovers[song.id] ?: song.albumArtUri
+                            }
+                        },
+                        onRemoveCover = { pl -> viewModel.setPlaylistCover(pl.id, "") }
                     )
                 }
             4 -> {
@@ -671,7 +685,10 @@ private fun PlaylistsTab(
     onOpenFavorites: () -> Unit,
     downloadsCount: Int,
     onOpenDownloads: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    playlistCovers: Map<String, String>,
+    firstSongCover: (Playlist) -> String?,
+    onRemoveCover: (Playlist) -> Unit
 ) {
     LazyColumn(
             state = listState,
@@ -810,7 +827,7 @@ private fun PlaylistsTab(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CoverArt(uri = null, size = 48.dp)
+                    CoverArt(uri = playlistCovers[pl.id] ?: firstSongCover(pl), size = 48.dp)
                     Column(
                         Modifier
                             .weight(1f)
@@ -857,6 +874,15 @@ private fun PlaylistsTab(
                                     onExport(pl)
                                 }
                             )
+                            if (playlistCovers.containsKey(pl.id)) {
+                                DropdownMenuItem(
+                                    text = { Text("Quitar foto") },
+                                    onClick = {
+                                        showMenu = false
+                                        onRemoveCover(pl)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

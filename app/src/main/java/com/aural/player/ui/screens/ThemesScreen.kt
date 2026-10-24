@@ -155,11 +155,6 @@ private fun ThemeCard(
                 color = scheme.onBackground,
                 maxLines = 1
             )
-            Text(
-                text = if (scheme.background.luminanceIsLight()) "Tema claro" else "Tema oscuro",
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant
-            )
         }
         if (selected) {
             Box(
@@ -180,7 +175,3 @@ private fun ThemeCard(
         }
     }
 }
-
-/** ¿El color es claro? (para etiquetar la tarjeta sin mirar el esquema). */
-private fun androidx.compose.ui.graphics.Color.luminanceIsLight(): Boolean =
-    (0.299f * red + 0.587f * green + 0.114f * blue) > 0.6f
