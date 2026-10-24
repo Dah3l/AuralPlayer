@@ -33,6 +33,13 @@ en GitHub salen de aquí.
   (antes salía negra y se perdía).
 
 ### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
+- **Botón flotante de reconocimiento**: el micrófono se muda de la barra
+  superior a un botón flotante abajo a la derecha, alineado a 16dp del
+  borde y del mini-reproductor, con un anillo que pulsa suavemente.
+  Un toque y abre «Identificar canción».
+- **Letras tipo Spotify**: la ventana de letras muestra ahora la portada,
+  el título y el artista de la canción, con una barra de progreso
+  debajo que avanza mientras suena.
 - **Nightly Sakura, rebalanceado**: fondos carbón casi neutros para que
   el rosa sea el protagonista.
 - **7 temas claros nuevos** (16 en total): Royal Blue, Wine Red, Orange,

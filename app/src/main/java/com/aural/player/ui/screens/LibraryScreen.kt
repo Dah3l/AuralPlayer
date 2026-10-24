@@ -24,7 +24,15 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -157,6 +165,7 @@ fun LibraryScreen(
         }
     )
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
 
         // ---- Barra superior: título + búsqueda ----
@@ -198,13 +207,6 @@ fun LibraryScreen(
                     contentDescription = "Buscar",
                     tint = if (showSearch) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface
-                )
-            }
-            IconButton(onClick = { viewModel.openAudioSearch() }) {
-                Icon(
-                    imageVector = Icons.Rounded.Mic,
-                    contentDescription = "Identificar canción",
-                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             // ---- Menú general ⋮ ----
@@ -383,6 +385,53 @@ fun LibraryScreen(
                 contentColor = MaterialTheme.colorScheme.primary,
                 backgroundColor = MaterialTheme.colorScheme.surface
             )
+        }
+    }
+
+        // ---- Botón flotante de reconocimiento (opción A) ----
+        // Alineado a 16dp del borde derecho y del mini-reproductor, con
+        // un anillo que pulsa suavemente para llamar la atención.
+        val fabPulse = rememberInfiniteTransition(label = "fab_pulse")
+        val fabPulseScale by fabPulse.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.3f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "fab_pulse_scale"
+        )
+        val fabPulseAlpha by fabPulse.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "fab_pulse_alpha"
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .scale(fabPulseScale)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = fabPulseAlpha),
+                        CircleShape
+                    )
+            )
+            FloatingActionButton(
+                onClick = { viewModel.openAudioSearch() },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Rounded.Mic, contentDescription = "Identificar canción")
+            }
         }
     }
 

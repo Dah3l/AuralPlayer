@@ -676,6 +676,14 @@ fun NowPlayingScreen(
             ) {
                 LyricsScreen(
                     lrcPath = lrcPath,
+                    title = song?.let {
+                        customMetadata[it.id]?.first?.ifBlank { it.title } ?: it.title
+                    } ?: "",
+                    artist = song?.let {
+                        customMetadata[it.id]?.second?.ifBlank { it.artist } ?: it.artist
+                    } ?: "",
+                    coverUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
+                    durationMs = state.durationMs,
                     currentPositionMs = { state.positionMs },
                     onBack = { showLyrics = false }
                 )

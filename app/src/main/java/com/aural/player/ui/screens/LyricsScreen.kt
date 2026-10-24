@@ -17,8 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.aural.player.data.LrcLine
 import com.aural.player.data.LrcParser
+import com.aural.player.ui.components.CoverArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -26,6 +28,10 @@ import java.io.File
 @Composable
 fun LyricsScreen(
     lrcPath: String,
+    title: String,
+    artist: String,
+    coverUri: String?,
+    durationMs: Long,
     currentPositionMs: () -> Long,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -84,12 +90,13 @@ fun LyricsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header (con margen de la barra de estado para que no quede pegado)
+        // Cabecera tipo Spotify (con margen de la barra de estado para
+        // que no quede pegada): portada + título + artista de la canción
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -99,13 +106,39 @@ fun LyricsScreen(
                     tint = MaterialTheme.colorScheme.onBackground
                 )
             }
-            Text(
-                "Letra",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            CoverArt(uri = coverUri, size = 52.dp, cornerRadius = 10.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
+        // Barra de progreso de la canción (se mueve con el ticker de 500ms)
+        val progress = if (durationMs > 0) {
+            (currentPositionMs().toFloat() / durationMs).coerceIn(0f, 1f)
+        } else 0f
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
 
         when {
             loading -> {
