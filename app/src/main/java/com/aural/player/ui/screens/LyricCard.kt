@@ -18,13 +18,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,8 +53,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
@@ -66,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.core.content.FileProvider
 import androidx.palette.graphics.Palette
 import coil.Coil
@@ -106,14 +103,36 @@ private fun lighten(c: Color, fraction: Float): Color = Color(
 )
 
 /**
+ * Elige la fuente de los versos para el ancho de exportación (592 dp
+ * útiles): la mayor que hace que cada verso ocupe como mucho 2 líneas
+ * visuales y que el alto total no pase del máximo 3:4 (800 dp de
+ * contenido). Así la tarjeta nunca queda con huecos enormes ni corta
+ * un verso.
+ */
+fun selectCardFontSize(lines: List<String>): TextUnit {
+    val contentW = 592f
+    val maxContentH = 800f
+    for (size in listOf(40f, 36f, 32f, 28f, 24f, 22f, 20f, 18f, 16f)) {
+        val visual = lines.sumOf { line ->
+            minOf(
+                3,
+                ceil(line.length * 0.58f * size / contentW)
+                    .toInt().coerceAtLeast(1)
+            )
+        }
+        val totalH = 64f + 24f + visual * size * 1.35f +
+            (lines.size - 1).coerceAtLeast(0) * 8f + 48f + 44f
+        if (totalH <= maxContentH) return size.sp
+    }
+    return 16.sp
+}
+
+/**
  * La tarjeta en sí: fondo de color, tarjeta interior más clara,
- * portada + título + artista arriba, líneas en negrita y marca Aural.
- * Es el mismo diseño en la vista previa y en el PNG exportado.
- *
- * La fuente de las líneas se auto-ajusta: estima cuántas líneas
- * visuales ocupa cada verso en el ancho real de la tarjeta y elige
- * el tamaño mayor que cabe junto con la cabecera y la marca, para
- * que nunca se corte un verso ni se salga el logo.
+ * portada + título + artista arriba, versos en negrita y marca Aural.
+ * El alto se ajusta al contenido (sin huecos): la tarjeta termina
+ * justo después de la marca. `scale` permite dibujarla más pequeña
+ * en la vista previa con las mismas proporciones exactas.
  */
 @Composable
 fun LyricCardContent(
@@ -122,6 +141,8 @@ fun LyricCardContent(
     coverBitmap: androidx.compose.ui.graphics.ImageBitmap?,
     lines: List<String>,
     background: Color,
+    lineFontSize: TextUnit,
+    scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val textColor = textOn(background)
@@ -129,109 +150,91 @@ fun LyricCardContent(
     Box(
         modifier = modifier
             .background(background)
-            .padding(horizontal = 32.dp, vertical = 48.dp)
+            .padding(horizontal = 32.dp * scale, vertical = 48.dp * scale)
     ) {
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(28.dp))
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp * scale))
                 .background(cardColor)
-                .padding(32.dp)
+                .padding(32.dp * scale)
         ) {
-            // Ancho útil y alto disponible para los versos
-            val contentW = (maxWidth - 64.dp).value.coerceAtLeast(100f)
-            val budgetH = (maxHeight - 64.dp - 64.dp - 24.dp - 56.dp
-                - ((lines.size - 1).coerceAtLeast(0) * 8).dp).value
-            val lineSize = listOf(30f, 28f, 26f, 24f, 22f, 20f, 18f)
-                .firstOrNull { size ->
-                    val visual = lines.sumOf { line ->
-                        minOf(
-                            3,
-                            ceil(line.length * 0.58f * size / contentW)
-                                .toInt().coerceAtLeast(1)
-                        )
-                    }
-                    visual * size * 1.35f <= budgetH
-                }?.sp ?: 18.sp
-
-            Column(Modifier.fillMaxSize()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (coverBitmap != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (coverBitmap != null) {
+                    Image(
+                        bitmap = coverBitmap,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(64.dp * scale)
+                            .clip(RoundedCornerShape(14.dp * scale)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp * scale)
+                            .clip(RoundedCornerShape(14.dp * scale))
+                            .background(textColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Image(
-                            bitmap = coverBitmap,
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
                             contentDescription = null,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(14.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(textColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                contentDescription = null,
-                                modifier = Modifier.size(44.dp),
-                                colorFilter = ColorFilter.tint(textColor)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textColor,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = artist,
-                            fontSize = 20.sp,
-                            color = textColor.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.size(44.dp * scale),
+                            colorFilter = ColorFilter.tint(textColor)
                         )
                     }
                 }
-                Spacer(Modifier.height(24.dp))
-                lines.forEachIndexed { index, line ->
-                    if (index > 0) Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.width(12.dp * scale))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = line,
-                        fontSize = lineSize,
+                        text = title,
+                        fontSize = 26.sp * scale,
                         fontWeight = FontWeight.ExtraBold,
                         color = textColor,
-                        lineHeight = lineSize * 1.35f,
-                        // Wrap completo; el tope de 3 líneas visuales
-                        // solo entra en casos extremos
-                        maxLines = 3,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = artist,
+                        fontSize = 20.sp * scale,
+                        color = textColor.copy(alpha = 0.7f),
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                // Marca con protagonismo, como el logo de Spotify
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                        contentDescription = null,
-                        modifier = Modifier.size(44.dp),
-                        colorFilter = ColorFilter.tint(textColor)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "Aural",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textColor
-                    )
-                }
+            }
+            Spacer(Modifier.height(24.dp * scale))
+            lines.forEachIndexed { index, line ->
+                if (index > 0) Spacer(Modifier.height(8.dp * scale))
+                Text(
+                    text = line,
+                    fontSize = lineFontSize * scale,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = textColor,
+                    lineHeight = lineFontSize * scale * 1.35f,
+                    // Wrap completo; el tope de 3 líneas visuales
+                    // solo entra en casos extremos
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(48.dp * scale))
+            // Marca con protagonismo, como el logo de Spotify
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp * scale),
+                    colorFilter = ColorFilter.tint(textColor)
+                )
+                Spacer(Modifier.width(10.dp * scale))
+                Text(
+                    text = "Aural",
+                    fontSize = 26.sp * scale,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = textColor
+                )
             }
         }
     }
@@ -264,10 +267,11 @@ private suspend fun dominantColorOf(bitmap: Bitmap?): Color? {
 }
 
 /**
- * Renderiza la tarjeta a un PNG de 1440×1920 (3:4). La vista se monta invisible
- * sobre la actividad para que la composición corra y luego se dibuja.
- * Se usa una densidad fija (320 dpi) para que el diseño sea idéntico
- * en cualquier teléfono: 1440x1920 px = 720x960 dp siempre.
+ * Renderiza la tarjeta a un PNG de 1440 px de ancho y alto ajustado
+ * al contenido (máximo 1920, proporción 3:4). La vista se monta
+ * invisible sobre la actividad para que la composición corra y luego
+ * se dibuja. Se usa una densidad fija (320 dpi) para que el diseño
+ * sea idéntico en cualquier teléfono: 1440 px = 720 dp siempre.
  */
 private suspend fun captureLyricCard(
     context: Context,
@@ -275,7 +279,8 @@ private suspend fun captureLyricCard(
     artist: String,
     coverBitmap: androidx.compose.ui.graphics.ImageBitmap?,
     lines: List<String>,
-    background: Color
+    background: Color,
+    lineFontSize: TextUnit
 ): Bitmap = suspendCancellableCoroutine { cont ->
     val activity = context as? Activity
     if (activity == null) {
@@ -283,7 +288,6 @@ private suspend fun captureLyricCard(
         return@suspendCancellableCoroutine
     }
     val width = 1440
-    val height = 1920
     val fixedConfig = android.content.res.Configuration(context.resources.configuration).apply {
         densityDpi = 320
         fontScale = 1f
@@ -297,23 +301,25 @@ private suspend fun captureLyricCard(
             coverBitmap = coverBitmap,
             lines = lines,
             background = background,
-            modifier = Modifier.fillMaxSize()
+            lineFontSize = lineFontSize,
+            modifier = Modifier.fillMaxWidth()
         )
     }
     val decor = activity.window.decorView as ViewGroup
     composeView.visibility = View.INVISIBLE
-    decor.addView(composeView, width, height)
+    decor.addView(composeView, width, ViewGroup.LayoutParams.WRAP_CONTENT)
     composeView.post {
         try {
             val widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
-            val heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+            val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             composeView.measure(widthSpec, heightSpec)
+            val height = composeView.measuredHeight.coerceIn(1, 1920)
             composeView.layout(0, 0, width, height)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             composeView.draw(android.graphics.Canvas(bitmap))
             cont.resume(bitmap)
         } catch (e: Exception) {
-            cont.resume(Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888))
+            cont.resume(Bitmap.createBitmap(width, 1920, Bitmap.Config.ARGB_8888))
         } finally {
             decor.removeView(composeView)
         }
@@ -376,6 +382,7 @@ fun LyricCardSheet(
         is CardBackground.Theme -> choice.theme.colorScheme().primary
     }
     val selectedLines = selected.sorted().map { lines[it] }
+    val cardFont = selectCardFontSize(selectedLines)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -452,35 +459,24 @@ fun LyricCardSheet(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // Vista previa: la tarjeta se compone a su tamaño
-                    // real de exportación (720x960 dp) y se escala al
-                    // ancho disponible, para que lo que ves sea
-                    // exactamente lo que se exporta
+                    // Vista previa: la misma tarjeta, dibujada de
+                    // forma nativa con todas las medidas a escala del
+                    // ancho disponible, para que lo que ves sea lo
+                    // que se exporta (sin trucos de capa)
                     BoxWithConstraints(
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(3f / 4f)
-                            .clip(RoundedCornerShape(16.dp))
+                        Modifier.fillMaxWidth()
                     ) {
                         val scale = maxWidth.value / 720f
-                        Box(
-                            Modifier
-                                .requiredSize(720.dp, 960.dp)
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    transformOrigin = TransformOrigin(0f, 0f)
-                                )
-                        ) {
-                            LyricCardContent(
-                                title = title,
-                                artist = artist,
-                                coverBitmap = coverBitmap?.asImageBitmap(),
-                                lines = selectedLines,
-                                background = background,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        LyricCardContent(
+                            title = title,
+                            artist = artist,
+                            coverBitmap = coverBitmap?.asImageBitmap(),
+                            lines = selectedLines,
+                            background = background,
+                            lineFontSize = cardFont,
+                            scale = scale,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Spacer(Modifier.height(16.dp))
                     Text(
@@ -532,7 +528,8 @@ fun LyricCardSheet(
                                         artist = artist,
                                         coverBitmap = coverBitmap?.asImageBitmap(),
                                         lines = selectedLines,
-                                        background = background
+                                        background = background,
+                                        lineFontSize = cardFont
                                     )
                                     shareBitmap(context, bitmap)
                                 } catch (e: Exception) {
