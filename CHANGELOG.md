@@ -4,6 +4,39 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.3 — 2026-10-23
+
+### Novedades
+- **Salida de audio a tu elección**: cuando hay más de una salida
+  disponible (auriculares Bluetooth o de cable conectados), Now Playing
+  muestra un botón con la salida activa; al pulsarlo puedes cambiar entre
+  los auriculares y el altavoz del teléfono sin salir de la app. Si solo
+  hay una salida, el botón ni aparece: la pantalla se queda limpia.
+- **Tema nuevo: Nightly Sakura** — el rosa de Sakura en modo oscuro, para
+  escucharlo de noche sin dejar tu color.
+
+### Mejoras
+- **Los temas se visten de catálogo**: nombres nuevos en inglés estilo
+  Pantone (Aural Classic, Abyssal Indigo, Solar Amber, Prism, Neon Prime,
+  Lunar Pearl, Sakura, Nightly Sakura, Midnight X) y cada tema con su
+  propio icono en el selector, en vez de emojis. La lista del selector
+  ahora tiene scroll: hay 9 temas y vienen más.
+- **El ▶ de cada playlist reproduce**: antes abría la lista; ahora la
+  música empieza al momento, desde la primera canción.
+- **Textos más claros en Playlists**: «Importar playlist» y «Exportar
+  lista» (adiós a los «.m3u» en pantalla).
+- **Se nota lo que tocas**: todos los tiles y tarjetas responden al
+  pulsarlos con su efecto visual.
+- **Botones de Now Playing con vida**: play/pause, favorito y el botón de
+  modo (repetir/aleatorio) cambian de estado con animación.
+- **Menús a tono**: hojas, menús y diálogos toman los colores completos
+  del tema activo en los 9 temas.
+
+### Correcciones
+- **Vista de letra legible**: el encabezado ya no queda pegado a la barra
+  de notificaciones y la flecha de volver se ve sobre el fondo oscuro
+  (antes salía negra y se perdía).
+
 ## v1.0.2 — 2026-10-23
 
 ### Novedades

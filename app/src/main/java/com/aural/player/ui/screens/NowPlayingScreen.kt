@@ -90,6 +90,18 @@ import com.aural.player.ui.components.CoverPickerDialog
 import com.aural.player.ui.components.EditMetadataDialog
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import com.aural.player.playback.AudioOutputKind
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.launch
@@ -122,7 +134,8 @@ fun NowPlayingScreen(
     onToggleFavorite: () -> Unit,
     onPlayQueueItem: (Int) -> Unit,
     onRemoveFromQueue: (Int) -> Unit,
-    onMoveQueueItem: (Int, Int) -> Unit
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onSelectAudioOutput: (AudioOutputKind) -> Unit
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
@@ -131,6 +144,7 @@ fun NowPlayingScreen(
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
+    var showAudioOutputs by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val queueHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
 
@@ -237,6 +251,21 @@ fun NowPlayingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.weight(1f))
+                // Salida de audio: solo aparece cuando hay más de una
+                // salida disponible (p. ej. auriculares conectados)
+                if (state.audioOutputs.size >= 2) {
+                    IconButton(onClick = { showAudioOutputs = true }) {
+                        Icon(
+                            imageVector = when (state.activeOutput) {
+                                AudioOutputKind.BLUETOOTH -> Icons.Rounded.Bluetooth
+                                AudioOutputKind.WIRED -> Icons.Rounded.Headphones
+                                AudioOutputKind.SPEAKER -> Icons.Rounded.Speaker
+                            },
+                            contentDescription = "Salida de audio",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
                 Box {
                     IconButton(onClick = { showMenu = true }) {
                         Icon(Icons.Rounded.MoreVert, contentDescription = "Opciones",
@@ -368,14 +397,23 @@ fun NowPlayingScreen(
                     )
                 }
                 IconButton(onClick = onToggleFavorite) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Rounded.Favorite
-                        else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Favorito",
-                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(30.dp)
-                    )
+                    AnimatedContent(
+                        targetState = isFavorite,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.6f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.6f, animationSpec = tween(120)))
+                        },
+                        label = "favorito"
+                    ) { fav ->
+                        Icon(
+                            imageVector = if (fav) Icons.Rounded.Favorite
+                            else Icons.Rounded.FavoriteBorder,
+                            contentDescription = "Favorito",
+                            tint = if (fav) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -456,19 +494,34 @@ fun NowPlayingScreen(
             ) {
                 // Modo: sin repetir → repetir todo → repetir uno → aleatorio
                 IconButton(onClick = onCycleRepeat) {
-                    when {
-                        state.shuffleEnabled -> Icon(Icons.Rounded.Shuffle, "Aleatorio",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp))
-                        state.repeatMode == RepeatMode.ONE -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp))
-                        state.repeatMode == RepeatMode.ALL -> Icon(Icons.Rounded.Repeat, "Repetir todas",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp))
-                        else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp))
+                    val modeKey = when {
+                        state.shuffleEnabled -> 3
+                        state.repeatMode == RepeatMode.ONE -> 2
+                        state.repeatMode == RepeatMode.ALL -> 1
+                        else -> 0
+                    }
+                    AnimatedContent(
+                        targetState = modeKey,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
+                        },
+                        label = "modo"
+                    ) { mode ->
+                        when (mode) {
+                            3 -> Icon(Icons.Rounded.Shuffle, "Aleatorio",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp))
+                            2 -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp))
+                            1 -> Icon(Icons.Rounded.Repeat, "Repetir todas",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp))
+                            else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp))
+                        }
                     }
                 }
                 // Anterior
@@ -487,13 +540,22 @@ fun NowPlayingScreen(
                             CircleShape
                         )
                 ) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Rounded.Pause
-                        else Icons.Rounded.PlayArrow,
-                        contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    AnimatedContent(
+                        targetState = state.isPlaying,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
+                        },
+                        label = "play_pause"
+                    ) { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Rounded.Pause
+                            else Icons.Rounded.PlayArrow,
+                            contentDescription = if (playing) "Pausar" else "Reproducir",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
                 // Siguiente
                 IconButton(onClick = onNext) {
@@ -514,6 +576,61 @@ fun NowPlayingScreen(
                     .height(48.dp)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             )
+        }
+    }
+
+    // ---- Selector de salida de audio ----
+    if (showAudioOutputs) {
+        ModalBottomSheet(
+            onDismissRequest = { showAudioOutputs = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(Modifier.padding(bottom = 32.dp)) {
+                Text(
+                    "Salida de audio",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 24.dp, bottom = 8.dp)
+                )
+                state.audioOutputs.forEach { output ->
+                    val isActive = output.kind == state.activeOutput
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectAudioOutput(output.kind)
+                                showAudioOutputs = false
+                            }
+                            .padding(horizontal = 24.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = when (output.kind) {
+                                AudioOutputKind.BLUETOOTH -> Icons.Rounded.Bluetooth
+                                AudioOutputKind.WIRED -> Icons.Rounded.Headphones
+                                AudioOutputKind.SPEAKER -> Icons.Rounded.Speaker
+                            },
+                            contentDescription = null,
+                            tint = if (isActive) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            output.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isActive) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isActive) {
+                            Icon(
+                                Icons.Rounded.Check,
+                                contentDescription = "Salida activa",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 

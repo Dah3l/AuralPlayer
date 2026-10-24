@@ -330,7 +330,8 @@ private fun AuralApp(viewModel: AuralViewModel,
             },
             onPlayQueueItem = viewModel.playback::playAt,
             onRemoveFromQueue = viewModel.playback::removeFromQueue,
-            onMoveQueueItem = viewModel.playback::moveInQueue
+            onMoveQueueItem = viewModel.playback::moveInQueue,
+            onSelectAudioOutput = viewModel.playback::setAudioOutput
         )
     }
     // ---- Splash de bienvenida ----

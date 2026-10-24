@@ -53,6 +53,7 @@ import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -73,6 +74,10 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import com.aural.player.ui.theme.AppTheme
 import androidx.compose.material3.RadioButton
 
@@ -328,6 +333,7 @@ fun LibraryScreen(
                         songCount = { viewModel.songsOfPlaylist(it).size },
                         onCreate = { showNewPlaylist = true },
                         onOpen = { pl -> onOpenPlaylist(pl.id) },
+                        onPlayPlaylist = { pl -> onPlayList(viewModel.songsOfPlaylist(pl), 0) },
                         onRename = { pl -> renameTarget = pl },
                         onDelete = { pl -> deleteTarget = pl },
                         onExport = { pl -> viewModel.exportPlaylist(appContext, pl.id) },
@@ -430,8 +436,8 @@ fun LibraryScreen(
                     "AuralPlayer — tu música, sin ruido.\n\n" +
                         "Reproductor minimalista con descargas de YouTube, " +
                         "letras sincronizadas, ecualizador, reconocimiento de " +
-                        "canciones estilo Shazam y 8 temas para hacerlo tuyo.\n\n" +
-                        "Versión 1.0.0\nHecho con ❤️ y Jetpack Compose"
+                        "canciones estilo Shazam y 9 temas para hacerlo tuyo.\n\n" +
+                        "Versión 1.0.3\nHecho con ❤️ y Jetpack Compose"
                 )
             },
             confirmButton = {
@@ -457,53 +463,6 @@ fun LibraryScreen(
     }
 }
 
-
-/** Diálogo selector de temas de la app. */
-@Composable
-private fun ThemeDialog(
-    currentTheme: AppTheme,
-    onSelect: (AppTheme) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tema de la app") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                AppTheme.entries.forEach { theme ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(theme) }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            theme.emoji,
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(end = 12.dp)
-                        )
-                        Text(
-                            theme.displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        RadioButton(
-                            selected = theme == currentTheme,
-                            onClick = { onSelect(theme) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cerrar") }
-        }
-    )
-}
 
 /** ID virtual para la lista de favoritos dentro de las playlists. */
 const val FAVORITES_ID = "favorites"
@@ -649,6 +608,7 @@ private fun PlaylistsTab(
     songCount: (Playlist) -> Int,
     onCreate: () -> Unit,
     onOpen: (Playlist) -> Unit,
+    onPlayPlaylist: (Playlist) -> Unit,
     onRename: (Playlist) -> Unit,
     onDelete: (Playlist) -> Unit,
     onExport: (Playlist) -> Unit,
@@ -667,10 +627,20 @@ private fun PlaylistsTab(
         }
         // Entrada fija de Favoritos
         item {
+            val favInteraction = remember { MutableInteractionSource() }
+            val favPressed by favInteraction.collectIsPressedAsState()
+            val favScale by animateFloatAsState(
+                targetValue = if (favPressed) 0.98f else 1f,
+                label = "fav_press"
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onOpenFavorites() }
+                    .scale(favScale)
+                    .clickable(
+                        interactionSource = favInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenFavorites() }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -698,10 +668,20 @@ private fun PlaylistsTab(
         }
         // Entrada fija de Descargas
         item {
+            val dlInteraction = remember { MutableInteractionSource() }
+            val dlPressed by dlInteraction.collectIsPressedAsState()
+            val dlScale by animateFloatAsState(
+                targetValue = if (dlPressed) 0.98f else 1f,
+                label = "dl_press"
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onOpenDownloads() }
+                    .scale(dlScale)
+                    .clickable(
+                        interactionSource = dlInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenDownloads() }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -748,7 +728,7 @@ private fun PlaylistsTab(
                 }
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onImport) {
-                    Text("Importar .m3u", style = MaterialTheme.typography.titleMedium)
+                    Text("Importar playlist", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -757,10 +737,20 @@ private fun PlaylistsTab(
             item { EmptyState("Todavía no has creado playlists") }
         } else {
             items(playlists.filter { it.name != "Descargas" }, key = { it.id }) { pl ->
+                val rowInteraction = remember { MutableInteractionSource() }
+                val rowPressed by rowInteraction.collectIsPressedAsState()
+                val rowScale by animateFloatAsState(
+                    targetValue = if (rowPressed) 0.98f else 1f,
+                    label = "playlist_press"
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onOpen(pl) }
+                        .scale(rowScale)
+                        .clickable(
+                            interactionSource = rowInteraction,
+                            indication = androidx.compose.foundation.LocalIndication.current
+                        ) { onOpen(pl) }
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -777,7 +767,7 @@ private fun PlaylistsTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = { onOpen(pl) }) {
+                    IconButton(onClick = { onPlayPlaylist(pl) }) {
                         Icon(Icons.Rounded.PlayArrow, "Reproducir",
                             tint = MaterialTheme.colorScheme.primary)
                     }
@@ -805,7 +795,7 @@ private fun PlaylistsTab(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Exportar .m3u") },
+                                text = { Text("Exportar lista") },
                                 onClick = {
                                     showMenu = false
                                     onExport(pl)

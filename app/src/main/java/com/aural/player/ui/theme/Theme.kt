@@ -11,17 +11,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.aural.player.R
 
-/** Temas disponibles en la app. */
-enum class AppTheme(val displayName: String, val emoji: String) {
-    BOSQUE("Bosque", "🌿"),
-    OCEANO("Océano", "🌊"),
-    ATARDECER("Atardecer", "🌅"),
-    CLARO("Claro", "☀️"),
-    NEON("Neón", "🌃"),
-    PERLA("Perla", "🤍"),
-    ROSA("Rosa", "🌸"),
-    MEDIANOCHE("Medianoche", "🌌")
+/** Temas disponibles en la app (nombre de catálogo + icono propio del repo). */
+enum class AppTheme(val displayName: String, val iconRes: Int) {
+    BOSQUE("Aural Classic", R.drawable.ic_launcher_foreground),
+    OCEANO("Abyssal Indigo", R.drawable.ic_launcher_foreground_oceano),
+    ATARDECER("Solar Amber", R.drawable.ic_launcher_foreground_atardecer),
+    CLARO("Prism", R.drawable.ic_launcher_foreground_claro),
+    NEON("Neon Prime", R.drawable.ic_launcher_foreground_neon),
+    PERLA("Lunar Pearl", R.drawable.ic_launcher_foreground_perla),
+    ROSA("Sakura", R.drawable.ic_launcher_foreground_rosa),
+    NIGHTLY_SAKURA("Nightly Sakura", R.drawable.ic_launcher_foreground_sakura_nightly),
+    MEDIANOCHE("Midnight X", R.drawable.ic_launcher_foreground_medianoche)
 }
 
 // ---- Tema Bosque: el original (oscuro + verde turquesa) ----
@@ -37,7 +39,14 @@ private val BosqueColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFF9AA1B0),
     outline = Color(0xFF2A2E38),
     outlineVariant = Color(0xFF232733),
-    error = Color(0xFFF2555A)
+    error = Color(0xFFF2555A),
+    surfaceDim = Color(0xFF0E0F13),
+    surfaceBright = Color(0xFF2A2E38),
+    surfaceContainerLowest = Color(0xFF090A0D),
+    surfaceContainerLow = Color(0xFF121317),
+    surfaceContainer = Color(0xFF16181D),
+    surfaceContainerHigh = Color(0xFF1B1E25),
+    surfaceContainerHighest = Color(0xFF1E2129)
 )
 
 // ---- Tema Océano: oscuro + azul ----
@@ -53,7 +62,14 @@ private val OceanoColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFF9AA8B8),
     outline = Color(0xFF28323F),
     outlineVariant = Color(0xFF212A36),
-    error = Color(0xFFF2555A)
+    error = Color(0xFFF2555A),
+    surfaceDim = Color(0xFF0D1117),
+    surfaceBright = Color(0xFF28323F),
+    surfaceContainerLowest = Color(0xFF080B0F),
+    surfaceContainerLow = Color(0xFF11161E),
+    surfaceContainer = Color(0xFF151B24),
+    surfaceContainerHigh = Color(0xFF192029),
+    surfaceContainerHighest = Color(0xFF1C2532)
 )
 
 // ---- Tema Atardecer: oscuro + naranja ----
@@ -69,7 +85,14 @@ private val AtardecerColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFFB0A094),
     outline = Color(0xFF38302A),
     outlineVariant = Color(0xFF2E2823),
-    error = Color(0xFFF2555A)
+    error = Color(0xFFF2555A),
+    surfaceDim = Color(0xFF12100E),
+    surfaceBright = Color(0xFF38302A),
+    surfaceContainerLowest = Color(0xFF0C0A09),
+    surfaceContainerLow = Color(0xFF171310),
+    surfaceContainer = Color(0xFF1B1714),
+    surfaceContainerHigh = Color(0xFF201B17),
+    surfaceContainerHighest = Color(0xFF241E18)
 )
 
 // ---- Tema Claro: claro completo ----
@@ -85,7 +108,14 @@ private val ClaroColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF64748B),
     outline = Color(0xFFE2E8F0),
     outlineVariant = Color(0xFFCBD5E1),
-    error = Color(0xFFDC2626)
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFE8EDF2),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFDFEFF),
+    surfaceContainer = Color(0xFFF8FAFC),
+    surfaceContainerHigh = Color(0xFFF1F5F9),
+    surfaceContainerHighest = Color(0xFFE8EEF4)
 )
 
 /** Tipografía limpia con pesos ligeros y espaciado amplio en etiquetas. */
@@ -150,6 +180,7 @@ fun AuralTheme(
         AppTheme.NEON -> NeonColorScheme
         AppTheme.PERLA -> PerlaColorScheme
         AppTheme.ROSA -> RosaColorScheme
+        AppTheme.NIGHTLY_SAKURA -> NightlySakuraColorScheme
         AppTheme.MEDIANOCHE -> MedianocheColorScheme
     }
     MaterialTheme(
@@ -172,7 +203,14 @@ private val NeonColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFFA0A0C0),
     outline = Color(0xFF2A2A45),
     outlineVariant = Color(0xFF20203A),
-    error = Color(0xFFFF3366)
+    error = Color(0xFFFF3366),
+    surfaceDim = Color(0xFF0A0A12),
+    surfaceBright = Color(0xFF2A2A45),
+    surfaceContainerLowest = Color(0xFF06060C),
+    surfaceContainerLow = Color(0xFF0E0E18),
+    surfaceContainer = Color(0xFF12121E),
+    surfaceContainerHigh = Color(0xFF161624),
+    surfaceContainerHighest = Color(0xFF1A1A2E)
 )
 
 // ---- Tema Perla: claro + grises suaves ----
@@ -188,7 +226,14 @@ private val PerlaColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF6E6E73),
     outline = Color(0xFFD1D1D6),
     outlineVariant = Color(0xFFE5E5EA),
-    error = Color(0xFFFF3B30)
+    error = Color(0xFFFF3B30),
+    surfaceDim = Color(0xFFE3E3E8),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFBFBFD),
+    surfaceContainer = Color(0xFFF5F5F7),
+    surfaceContainerHigh = Color(0xFFEEF0F2),
+    surfaceContainerHighest = Color(0xFFE8E8ED)
 )
 
 // ---- Tema Rosa: claro + rosas ----
@@ -204,7 +249,14 @@ private val RosaColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF8A5A6B),
     outline = Color(0xFFF5C6D6),
     outlineVariant = Color(0xFFFFD6E3),
-    error = Color(0xFFFF3B30)
+    error = Color(0xFFFF3B30),
+    surfaceDim = Color(0xFFF3E0E6),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFFFBFC),
+    surfaceContainer = Color(0xFFFFF5F7),
+    surfaceContainerHigh = Color(0xFFFFEDF2),
+    surfaceContainerHighest = Color(0xFFFFE8EE)
 )
 
 // ---- Tema Medianoche: oscuro + grises y violeta ----
@@ -220,5 +272,35 @@ private val MedianocheColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFF9A9AA5),
     outline = Color(0xFF2E2E3A),
     outlineVariant = Color(0xFF26262F),
-    error = Color(0xFFFF5555)
+    error = Color(0xFFFF5555),
+    surfaceDim = Color(0xFF121216),
+    surfaceBright = Color(0xFF2E2E3A),
+    surfaceContainerLowest = Color(0xFF0C0C0F),
+    surfaceContainerLow = Color(0xFF16161A),
+    surfaceContainer = Color(0xFF1A1A20),
+    surfaceContainerHigh = Color(0xFF1E1E26),
+    surfaceContainerHighest = Color(0xFF23232C)
+)
+
+// ---- Tema Nightly Sakura: el rosa de Sakura en modo oscuro ----
+private val NightlySakuraColorScheme = darkColorScheme(
+    primary = Color(0xFFFF6FA5),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFFFF8AB5),
+    background = Color(0xFF160D13),
+    onBackground = Color(0xFFF7E9EF),
+    surface = Color(0xFF1F141B),
+    onSurface = Color(0xFFF7E9EF),
+    surfaceVariant = Color(0xFF2A1B24),
+    onSurfaceVariant = Color(0xFFB48E9E),
+    outline = Color(0xFF40303C),
+    outlineVariant = Color(0xFF33222C),
+    error = Color(0xFFFF5555),
+    surfaceDim = Color(0xFF160D13),
+    surfaceBright = Color(0xFF40303C),
+    surfaceContainerLowest = Color(0xFF100810),
+    surfaceContainerLow = Color(0xFF1A1016),
+    surfaceContainer = Color(0xFF1F141B),
+    surfaceContainerHigh = Color(0xFF251820),
+    surfaceContainerHighest = Color(0xFF2A1B24)
 )

@@ -20,6 +20,16 @@ import com.aural.player.R
 @UnstableApi
 class MusicService : MediaSessionService() {
 
+    companion object {
+        /**
+         * Referencia al reproductor en proceso, para ajustes que el
+         * MediaController no expone (p. ej. fijar el dispositivo de
+         * salida de audio desde Now Playing).
+         */
+        @Volatile
+        var playerRef: ExoPlayer? = null
+    }
+
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
@@ -36,6 +46,7 @@ class MusicService : MediaSessionService() {
             )
             .setWakeMode(C.WAKE_MODE_NETWORK) // permite seguir reproduciendo con pantalla apagada
             .build()
+        playerRef = player
 
         // Ecualizador y normalización atados a la sesión de audio
         EqualizerManager.init(this, player.audioSessionId)
@@ -65,6 +76,7 @@ class MusicService : MediaSessionService() {
     /** Liberar recursos cuando el servicio se destruye. */
     override fun onDestroy() {
         EqualizerManager.release()
+        if (playerRef === mediaSession?.player) playerRef = null
         mediaSession?.run {
             player.release()
             release()

@@ -3,6 +3,11 @@ package com.aural.player.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -25,6 +30,16 @@ import kotlinx.coroutines.withContext
 /** Modos de repetición del reproductor. */
 enum class RepeatMode { OFF, ONE, ALL }
 
+/** Tipos de salida de audio que Now Playing puede ofrecer. */
+enum class AudioOutputKind { SPEAKER, BLUETOOTH, WIRED }
+
+/** Una salida de audio seleccionable (con su dispositivo del sistema). */
+data class AudioOutput(
+    val kind: AudioOutputKind,
+    val label: String,
+    val device: AudioDeviceInfo?
+)
+
 /** Estado observable de la reproducción que consume la interfaz. */
 data class PlayerUiState(
     val currentSong: Song? = null,
@@ -35,7 +50,11 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val isReady: Boolean = false
+    val isReady: Boolean = false,
+    /** Salidas de audio disponibles ahora mismo (altavoz + externos). */
+    val audioOutputs: List<AudioOutput> = emptyList(),
+    /** Salida por la que está sonando (o sonaría) la música. */
+    val activeOutput: AudioOutputKind = AudioOutputKind.SPEAKER
 )
 
 /**
@@ -47,6 +66,23 @@ class PlaybackManager(private val context: Context) {
 
     private var controller: MediaController? = null
     private val settings = SettingsStore(context)
+
+    private val audioManager: AudioManager? =
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    /** Salida fijada por el usuario en Now Playing (null = ruta automática). */
+    private var forcedOutput: AudioOutputKind? = null
+
+    /** Refresca las salidas cuando se conecta/desconecta un dispositivo. */
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            refreshAudioOutputs()
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            refreshAudioOutputs()
+        }
+    }
 
     /** Caché de metadatos personalizados: songId -> (título, artista, álbum). */
     private var customMetadataCache: Map<Long, Triple<String, String, String>> = emptyMap()
@@ -141,6 +177,12 @@ class PlaybackManager(private val context: Context) {
             result.addListener(playerListener)
             _state.value = _state.value.copy(isReady = true)
             publishState()
+            try {
+                audioManager?.registerAudioDeviceCallback(
+                    deviceCallback, Handler(Looper.getMainLooper())
+                )
+            } catch (e: Exception) { }
+            refreshAudioOutputs()
         }
     }
 
@@ -230,6 +272,54 @@ class PlaybackManager(private val context: Context) {
 
     fun setPlaybackSpeed(speed: Float) {
         controller?.setPlaybackSpeed(speed)
+    }
+
+    // ------------------------- Salida de audio -------------------------
+
+    /** Recalcula las salidas disponibles y cuál está activa. */
+    private fun refreshAudioOutputs() {
+        val am = audioManager ?: return
+        val devices = try {
+            am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        } catch (e: Exception) {
+            return
+        }
+        fun firstOf(vararg types: Int) = devices.firstOrNull { it.type in types }
+        val speaker = firstOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+        val bluetooth = firstOf(
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_LE_AUDIO,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        )
+        val wired = firstOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_USB_HEADSET
+        )
+        val outputs = buildList {
+            bluetooth?.let { add(AudioOutput(AudioOutputKind.BLUETOOTH, "Auriculares Bluetooth", it)) }
+            wired?.let { add(AudioOutput(AudioOutputKind.WIRED, "Auriculares", it)) }
+            speaker?.let { add(AudioOutput(AudioOutputKind.SPEAKER, "Altavoz del teléfono", it)) }
+        }
+        // Si la salida fijada dejó de existir, volver a la ruta automática
+        if (forcedOutput != null && outputs.none { it.kind == forcedOutput }) {
+            forcedOutput = null
+        }
+        val active = forcedOutput
+            ?: outputs.firstOrNull { it.kind == AudioOutputKind.BLUETOOTH }?.kind
+            ?: outputs.firstOrNull { it.kind == AudioOutputKind.WIRED }?.kind
+            ?: AudioOutputKind.SPEAKER
+        _state.value = _state.value.copy(audioOutputs = outputs, activeOutput = active)
+    }
+
+    /** Fija la salida de audio elegida por el usuario en Now Playing. */
+    fun setAudioOutput(kind: AudioOutputKind) {
+        val output = _state.value.audioOutputs.firstOrNull { it.kind == kind } ?: return
+        try {
+            MusicService.playerRef?.setPreferredAudioDevice(output.device)
+        } catch (e: Exception) { }
+        forcedOutput = kind
+        _state.value = _state.value.copy(activeOutput = kind)
     }
 
     fun toggleShuffle() {
