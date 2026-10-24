@@ -378,8 +378,13 @@ fun LibraryScreen(
                 // Pager: el swipe mueve la pill página por página; el tap en la pill mueve el pager.
                 // pagerTarget distingue el origen: si el movimiento viene de una pill, se ignoran
                 // las páginas intermedias de la animación; si viene del swipe, cada página actualiza la pill.
+                // pagerReady evita la carrera al montar: al volver de un detalle, la pestaña manda
+                // (p. ej. Descargas=4) y el pager se sincroniza a ella al instante, sin que el efecto
+                // de la página vieja la devuelva a la pestaña anterior.
                 var pagerTarget by remember { mutableStateOf<Int?>(null) }
+                var pagerReady by remember { mutableStateOf(false) }
                 LaunchedEffect(pagerState.currentPage) {
+                    if (!pagerReady) return@LaunchedEffect
                     if (pagerTarget == null) {
                         if (selectedTab != pagerState.currentPage) {
                             onTabSelected(pagerState.currentPage)
@@ -389,13 +394,21 @@ fun LibraryScreen(
                     }
                 }
                 LaunchedEffect(selectedTab) {
-                    if (pagerState.currentPage != selectedTab) {
-                        pagerTarget = selectedTab
-                        try {
-                            pagerState.animateScrollToPage(selectedTab)
-                        } finally {
-                            pagerTarget = null
+                    try {
+                        if (pagerState.currentPage != selectedTab) {
+                            if (pagerReady) {
+                                pagerTarget = selectedTab
+                                try {
+                                    pagerState.animateScrollToPage(selectedTab)
+                                } finally {
+                                    pagerTarget = null
+                                }
+                            } else {
+                                pagerState.scrollToPage(selectedTab)
+                            }
                         }
+                    } finally {
+                        pagerReady = true
                     }
                 }
                 HorizontalPager(
