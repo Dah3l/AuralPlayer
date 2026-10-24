@@ -2,8 +2,10 @@
 // Pantallas de detalle: álbum, artista, playlist y favoritas
 package com.aural.player.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,8 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -42,14 +46,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Song
-import com.aural.player.ui.components.CoverArt
+import coil.compose.AsyncImage
+import com.aural.player.ui.components.CropImageDialog
+import com.aural.player.ui.components.saveCroppedCover
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.components.formatDuration
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.material.icons.filled.Add
@@ -68,8 +81,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 
 /**
- * Cabecera común de detalle con portada grande, título, subtítulo
- * y botones de reproducir/aleatorio.
+ * Cabecera de detalle con imagen GRANDE: portada cuadrada a lo ancho
+ * con el título encima (abajo a la izquierda) y los botones debajo.
+ * Se reutiliza para Álbum, Artista, Playlist y Favoritas.
  */
 @Composable
 private fun DetailHeader(
@@ -78,37 +92,95 @@ private fun DetailHeader(
     subtitle: String,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
-    onCoverClick: (() -> Unit)? = null
+    onCoverClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (onCoverClick != null) {
-            CoverArt(
-                uri = coverUri, size = 190.dp, cornerRadius = 16.dp,
-                modifier = Modifier.clickable { onCoverClick() }
+    Column(modifier) {
+        // Imagen cuadrada a lo ancho; tocarla cambia la portada (solo playlists)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .then(if (onCoverClick != null) Modifier.clickable { onCoverClick() } else Modifier)
+        ) {
+            if (!coverUri.isNullOrBlank()) {
+                AsyncImage(
+                    model = Uri.parse(coverUri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(96.dp)
+                    )
+                }
+            }
+            // Sombra superior para que la flecha de atrás se lea sobre la foto
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Transparent
+                            )
+                        )
+                    )
             )
-        } else {
-            CoverArt(uri = coverUri, size = 190.dp, cornerRadius = 16.dp)
+            // Sombra inferior + título y subtítulo sobre la imagen
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.8f)
+                            )
+                        )
+                    )
+            )
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
         }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Botón principal redondo de acento: reproducir todo
+        // Botones: los mismos de siempre (reproducir + aleatorio)
+        Row(
+            Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             IconButton(
                 onClick = onPlay,
                 modifier = Modifier
@@ -119,7 +191,6 @@ private fun DetailHeader(
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(28.dp))
             }
-            // Botón secundario redondo: reproducción aleatoria
             IconButton(
                 onClick = onShuffle,
                 modifier = Modifier
@@ -157,27 +228,38 @@ fun DetailScreen(
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
-    Column(Modifier.fillMaxSize()) {
-        // ---- Barra superior con volver ----
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, "Volver")
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+    // Colapso del header: al subir, la imagen se va y la barra superior
+    // muestra solo título + flecha (el título no se duplica: cuando el
+    // header está expandido vive sobre la imagen, no en la barra)
+    var headerHeightPx by remember { mutableStateOf(1) }
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset / headerHeightPx.toFloat()).coerceIn(0f, 1f)
         }
+    }
 
-        if (songs.isEmpty()) {
+    if (songs.isEmpty()) {
+        Column(Modifier.fillMaxSize()) {
+            // ---- Barra superior con volver ----
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, "Volver")
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
             var showPicker by remember { mutableStateOf(false) }
             // Placeholder premium para listas vacías
             Column(
@@ -244,14 +326,19 @@ fun DetailScreen(
                     }
                 )
             }
-            return@Column
         }
+        return
+    }
 
-        // Foto de playlist: tocar la portada abre el selector de imágenes
+        // Foto de playlist: tocar la portada abre el selector de imágenes;
+        // la imagen elegida pasa por el editor de recorte 1:1 antes de guardarse
+        var pendingCropUri by remember { mutableStateOf<String?>(null) }
+        val cropScope = rememberCoroutineScope()
+        val cropContext = LocalContext.current
         val coverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.GetContent()
         ) { uri ->
-            uri?.let { viewModel.setPlaylistCover(playlistCoverId ?: return@rememberLauncherForActivityResult, it.toString()) }
+            uri?.let { pendingCropUri = it.toString() }
         }
         val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
         val headerCoverUri = when {
@@ -260,18 +347,6 @@ fun DetailScreen(
             else ->
                 songs.firstOrNull()?.let { customCovers[it.id] } ?: coverUri
         }
-        DetailHeader(
-            coverUri = headerCoverUri,
-            title = title,
-            subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
-            onPlay = { viewModel.playSongs(songs, 0) },
-            onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) },
-            onCoverClick = if (playlistCoverId != null) {
-                { coverPicker.launch("image/*") }
-            } else null
-        )
-
-        Spacer(Modifier.height(8.dp))
 
         // ---- Lista de canciones (reordenable en playlists) ----
         // El estado viene de fuera: sobrevive a la navegación y la lista
@@ -296,8 +371,9 @@ fun DetailScreen(
             listState,
             scrollThresholdPadding = PaddingValues(bottom = 96.dp)
         ) { from, to ->
-            if (reorderable) {
-                moveLocal(from.index, to.index)
+            // El header ocupa el índice 0 de la lista: las canciones van +1
+            if (reorderable && from.index >= 1 && to.index >= 1) {
+                moveLocal(from.index - 1, to.index - 1)
                 detailHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         }
@@ -322,11 +398,25 @@ fun DetailScreen(
         }
         val listSongs = if (reorderable) displaySongs else songs
 
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
+            item {
+                DetailHeader(
+                    coverUri = headerCoverUri,
+                    title = title,
+                    subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
+                    onPlay = { viewModel.playSongs(songs, 0) },
+                    onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) },
+                    onCoverClick = if (playlistCoverId != null) {
+                        { coverPicker.launch("image/*") }
+                    } else null,
+                    modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
+                )
+            }
             itemsIndexed(listSongs, key = { _, song -> song.id }) { index, song ->
                 if (reorderable) {
                     ReorderableItem(reorderableState, key = song.id) { isDragging ->
@@ -378,7 +468,57 @@ fun DetailScreen(
                 }
             }
         }
-    }
+            // Barra superior superpuesta: fondo y título aparecen solo
+            // cuando el header se colapsa al subir
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = collapseFraction)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Rounded.ArrowBack,
+                        "Volver",
+                        tint = lerp(
+                            Color.White,
+                            MaterialTheme.colorScheme.onSurface,
+                            collapseFraction
+                        )
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .alpha(collapseFraction),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        // Editor de recorte tras elegir imagen en la galería
+        pendingCropUri?.let { cropUri ->
+            val pid = playlistCoverId
+            if (pid != null) {
+                CropImageDialog(
+                    imageUri = cropUri,
+                    onDismiss = { pendingCropUri = null },
+                    onConfirm = { cropped ->
+                        pendingCropUri = null
+                        cropScope.launch {
+                            val saved = saveCroppedCover(cropContext, pid, cropped)
+                            if (saved != null) viewModel.setPlaylistCover(pid, saved)
+                        }
+                    }
+                )
+            }
+        }
 }
 
 
