@@ -11,6 +11,11 @@ en GitHub salen de aquí.
 - **Detalle con imagen grande** — playlists, álbumes y artistas ahora abren con su portada en grande a lo ancho, con el título encima, y al subir la imagen se recoge con animación dejando solo la barra con el título y la flecha de volver.
 - **Recorte de portada 1:1** — al elegir una foto para una playlist, ahora se muestra un editor con cuadrícula para ajustar el recorte cuadrado (arrastrar y pellizcar) antes de guardarla.
 
+### Mejoras
+- **Título del detalle con más peso** — y se desvanece cuando el scroll pasa el 75% de la imagen, para que no choque con el título de la barra al colapsar.
+- **Menú ⋮ para la foto de la playlist** — arriba a la derecha: agregar imagen o eliminar la actual (la foto ya no se cambia tocando la imagen). Sin foto, el detalle vuelve a su imagen por defecto.
+- **Barra colapsada más alta y a tono** — un poco más alta, con la tonalidad del Now Playing, y la franja del notch con su mismo color.
+
 ## v1.0.3 — 2026-10-23
 
 ### Novedades

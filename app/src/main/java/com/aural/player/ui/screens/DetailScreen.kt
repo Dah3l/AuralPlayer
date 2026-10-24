@@ -2,14 +2,18 @@
 // Pantallas de detalle: álbum, artista, playlist y favoritas
 package com.aural.player.ui.screens
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -68,6 +73,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.clickable
@@ -92,16 +99,17 @@ private fun DetailHeader(
     subtitle: String,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
-    onCoverClick: (() -> Unit)? = null,
+    titleAlpha: Float = 1f,
+    onImageHeightChanged: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier) {
-        // Imagen cuadrada a lo ancho; tocarla cambia la portada (solo playlists)
+        // Imagen cuadrada a lo ancho (la portada se cambia desde el menú ⋮)
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .then(if (onCoverClick != null) Modifier.clickable { onCoverClick() } else Modifier)
+                .onSizeChanged { onImageHeightChanged(it.height) }
         ) {
             if (!coverUri.isNullOrBlank()) {
                 AsyncImage(
@@ -159,11 +167,12 @@ private fun DetailHeader(
                 Modifier
                     .align(Alignment.BottomStart)
                     .padding(horizontal = 20.dp, vertical = 20.dp)
+                    .alpha(titleAlpha)
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -238,6 +247,38 @@ fun DetailScreen(
             else (listState.firstVisibleItemScrollOffset / headerHeightPx.toFloat()).coerceIn(0f, 1f)
         }
     }
+    // El título grande se desvanece cuando el scroll pasa el 75% de la
+    // imagen: así no choca con el título de la barra al colapsar
+    var imageHeightPx by remember { mutableStateOf(1) }
+    val imageScrollFraction =
+        if (listState.firstVisibleItemIndex > 0) 1f
+        else (listState.firstVisibleItemScrollOffset / imageHeightPx.toFloat()).coerceIn(0f, 1f)
+    val bigTitleAlpha = if (imageScrollFraction < 0.75f) 1f
+        else (1f - (imageScrollFraction - 0.75f) / 0.25f).coerceIn(0f, 1f)
+
+    // Foto de playlist: el menú ⋮ abre el selector de imágenes;
+    // la imagen elegida pasa por el editor de recorte 1:1 antes de guardarse
+    var pendingCropUri by remember { mutableStateOf<String?>(null) }
+    val cropScope = rememberCoroutineScope()
+    val cropContext = LocalContext.current
+    val coverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { pendingCropUri = it.toString() }
+    }
+    val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
+    // Confirmar el recorte: guarda el cuadrado y lo pone de portada
+    val cropConfirm: (Bitmap) -> Unit = { cropped ->
+        pendingCropUri = null
+        val pid = playlistCoverId
+        cropScope.launch {
+            val saved = if (pid != null) saveCroppedCover(cropContext, pid, cropped) else null
+            if (saved != null && pid != null) viewModel.setPlaylistCover(pid, saved)
+        }
+    }
+    // Alto de la barra de estado: la barra colapsada se extiende hacia
+    // arriba para cubrir la franja del notch con su mismo color
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     if (songs.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
@@ -258,6 +299,15 @@ fun DetailScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (playlistCoverId != null) {
+                    val pid = playlistCoverId
+                    CoverMenuButton(
+                        hasCustomCover = !playlistCovers[pid].isNullOrBlank(),
+                        iconTint = MaterialTheme.colorScheme.onSurface,
+                        onAddImage = { coverPicker.launch("image/*") },
+                        onRemoveImage = { viewModel.setPlaylistCover(pid, "") }
+                    )
+                }
             }
 
             var showPicker by remember { mutableStateOf(false) }
@@ -326,21 +376,17 @@ fun DetailScreen(
                     }
                 )
             }
+            // Editor de recorte tras elegir imagen en la galería
+            CropDialogHost(
+                pendingCropUri = pendingCropUri,
+                playlistCoverId = playlistCoverId,
+                onDismiss = { pendingCropUri = null },
+                onConfirm = cropConfirm
+            )
         }
         return
     }
 
-        // Foto de playlist: tocar la portada abre el selector de imágenes;
-        // la imagen elegida pasa por el editor de recorte 1:1 antes de guardarse
-        var pendingCropUri by remember { mutableStateOf<String?>(null) }
-        val cropScope = rememberCoroutineScope()
-        val cropContext = LocalContext.current
-        val coverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.GetContent()
-        ) { uri ->
-            uri?.let { pendingCropUri = it.toString() }
-        }
-        val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
         val headerCoverUri = when {
             playlistCoverId != null && playlistCovers[playlistCoverId] != null ->
                 playlistCovers[playlistCoverId]
@@ -411,9 +457,8 @@ fun DetailScreen(
                     subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
                     onPlay = { viewModel.playSongs(songs, 0) },
                     onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true) },
-                    onCoverClick = if (playlistCoverId != null) {
-                        { coverPicker.launch("image/*") }
-                    } else null,
+                    titleAlpha = bigTitleAlpha,
+                    onImageHeightChanged = { imageHeightPx = it },
                     modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
                 )
             }
@@ -469,56 +514,122 @@ fun DetailScreen(
             }
         }
             // Barra superior superpuesta: fondo y título aparecen solo
-            // cuando el header se colapsa al subir
-            Row(
+            // cuando el header se colapsa al subir. La columna sube hasta
+            // el borde de la pantalla para que la franja del notch tenga
+            // el mismo color que la barra (surface, como el Now Playing)
+            Column(
                 Modifier
                     .fillMaxWidth()
+                    .offset(y = -statusBarTop)
                     .background(
                         MaterialTheme.colorScheme.surface.copy(alpha = collapseFraction)
                     )
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.Rounded.ArrowBack,
-                        "Volver",
-                        tint = lerp(
-                            Color.White,
-                            MaterialTheme.colorScheme.onSurface,
-                            collapseFraction
+                Spacer(Modifier.fillMaxWidth().height(statusBarTop))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.Rounded.ArrowBack,
+                            "Volver",
+                            tint = lerp(
+                                Color.White,
+                                MaterialTheme.colorScheme.onSurface,
+                                collapseFraction
+                            )
                         )
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .alpha(collapseFraction),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (playlistCoverId != null) {
+                        val pid = playlistCoverId
+                        CoverMenuButton(
+                            hasCustomCover = !playlistCovers[pid].isNullOrBlank(),
+                            iconTint = lerp(
+                                Color.White,
+                                MaterialTheme.colorScheme.onSurface,
+                                collapseFraction
+                            ),
+                            onAddImage = { coverPicker.launch("image/*") },
+                            onRemoveImage = { viewModel.setPlaylistCover(pid, "") }
+                        )
+                    }
                 }
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .alpha(collapseFraction),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
         }
         // Editor de recorte tras elegir imagen en la galería
-        pendingCropUri?.let { cropUri ->
-            val pid = playlistCoverId
-            if (pid != null) {
-                CropImageDialog(
-                    imageUri = cropUri,
-                    onDismiss = { pendingCropUri = null },
-                    onConfirm = { cropped ->
-                        pendingCropUri = null
-                        cropScope.launch {
-                            val saved = saveCroppedCover(cropContext, pid, cropped)
-                            if (saved != null) viewModel.setPlaylistCover(pid, saved)
-                        }
-                    }
+        CropDialogHost(
+            pendingCropUri = pendingCropUri,
+            playlistCoverId = playlistCoverId,
+            onDismiss = { pendingCropUri = null },
+            onConfirm = cropConfirm
+        )
+}
+
+
+/**
+ * Menú ⋮ de portada (solo playlists): agregar imagen o eliminar la
+ * actual. Sin foto personalizada, el header vuelve a su imagen por
+ * defecto (portada de la primera canción o la nota musical).
+ */
+@Composable
+private fun CoverMenuButton(
+    hasCustomCover: Boolean,
+    iconTint: Color,
+    onAddImage: () -> Unit,
+    onRemoveImage: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Rounded.MoreVert, "Opciones de portada", tint = iconTint)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Agregar imagen") },
+                onClick = { expanded = false; onAddImage() }
+            )
+            if (hasCustomCover) {
+                DropdownMenuItem(
+                    text = { Text("Eliminar imagen") },
+                    onClick = { expanded = false; onRemoveImage() }
                 )
             }
         }
+    }
+}
+
+/** Muestra el editor de recorte cuando hay una imagen pendiente. */
+@Composable
+private fun CropDialogHost(
+    pendingCropUri: String?,
+    playlistCoverId: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (Bitmap) -> Unit
+) {
+    val pid = playlistCoverId
+    if (pendingCropUri != null && pid != null) {
+        CropImageDialog(
+            imageUri = pendingCropUri,
+            onDismiss = onDismiss,
+            onConfirm = onConfirm
+        )
+    }
 }
 
 
