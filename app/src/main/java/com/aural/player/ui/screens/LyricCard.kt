@@ -116,23 +116,25 @@ fun LyricCardContent(
 ) {
     val textColor = textOn(background)
     val cardColor = lighten(background, 0.10f)
-    // Letra más pequeña cuantas más líneas, para que quepan sin cortarse
+    // Letra más pequeña cuantas más líneas (y si son largas), para que
+    // quepan con su salto de línea completo, sin cortar con «…»
+    val longest = lines.maxOfOrNull { it.length } ?: 0
     val lineSize = when {
-        lines.size <= 3 -> 30.sp
-        lines.size <= 5 -> 26.sp
-        else -> 24.sp
-    }
+        lines.size <= 3 -> 28.sp
+        lines.size <= 5 -> 24.sp
+        else -> 22.sp
+    }.let { if (longest > 45) it - 2.sp else it }
     Box(
         modifier = modifier
             .background(background)
-            .padding(horizontal = 40.dp, vertical = 56.dp)
+            .padding(horizontal = 32.dp, vertical = 48.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(40.dp))
+                .clip(RoundedCornerShape(36.dp))
                 .background(cardColor)
-                .padding(40.dp)
+                .padding(32.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (coverBitmap != null) {
@@ -140,31 +142,31 @@ fun LyricCardContent(
                         bitmap = coverBitmap,
                         contentDescription = null,
                         modifier = Modifier
-                            .size(88.dp)
-                            .clip(RoundedCornerShape(18.dp)),
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(88.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(textColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground),
                             contentDescription = null,
-                            modifier = Modifier.size(56.dp),
+                            modifier = Modifier.size(48.dp),
                             colorFilter = ColorFilter.tint(textColor)
                         )
                     }
                 }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = title,
-                        fontSize = 28.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor,
                         maxLines = 2,
@@ -172,22 +174,24 @@ fun LyricCardContent(
                     )
                     Text(
                         text = artist,
-                        fontSize = 22.sp,
+                        fontSize = 20.sp,
                         color = textColor.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
             lines.forEach { line ->
                 Text(
                     text = line,
                     fontSize = lineSize,
                     fontWeight = FontWeight.Bold,
                     color = textColor,
-                    lineHeight = lineSize * 1.3f,
-                    maxLines = 2,
+                    lineHeight = lineSize * 1.35f,
+                    // Wrap completo; el tope de 3 líneas visuales solo
+                    // entra en casos extremos para no sacar la marca
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -196,13 +200,13 @@ fun LyricCardContent(
                 Image(
                     painter = painterResource(id = R.drawable.ic_launcher_foreground),
                     contentDescription = null,
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(32.dp),
                     colorFilter = ColorFilter.tint(textColor)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "Aural",
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = textColor
                 )
@@ -251,11 +255,11 @@ private suspend fun captureLyricCard(
 ): Bitmap = suspendCancellableCoroutine { cont ->
     val activity = context as? Activity
     if (activity == null) {
-        cont.resume(Bitmap.createBitmap(1080, 1350, Bitmap.Config.ARGB_8888))
+        cont.resume(Bitmap.createBitmap(1080, 1920, Bitmap.Config.ARGB_8888))
         return@suspendCancellableCoroutine
     }
     val width = 1080
-    val height = 1350
+    val height = 1920
     val composeView = ComposeView(context)
     composeView.setContent {
         LyricCardContent(
@@ -423,7 +427,7 @@ fun LyricCardSheet(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .aspectRatio(4f / 5f)
+                            .aspectRatio(9f / 16f)
                             .clip(RoundedCornerShape(16.dp))
                     ) {
                         LyricCardContent(
