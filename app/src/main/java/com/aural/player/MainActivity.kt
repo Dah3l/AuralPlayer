@@ -46,6 +46,7 @@ import com.aural.player.ui.screens.DetailScreen
 import com.aural.player.ui.screens.FAVORITES_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
+import com.aural.player.ui.screens.ThemesScreen
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.data.SettingsStore
@@ -58,6 +59,7 @@ import com.aural.player.data.OnboardingPrefs
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
     data object Library : Screen()
+    data object Themes : Screen()
     data class Album(val title: String) : Screen()
     data class Artist(val name: String) : Screen()
     data class Playlist(val id: String) : Screen()
@@ -172,6 +174,15 @@ private fun AuralApp(viewModel: AuralViewModel,
     val songsListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val themesGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    // Estados de scroll de cada detalle, por destino: al volver atrás la
+    // lista queda donde estaba (cada álbum, artista y playlist por separado)
+    val detailListStates = remember {
+        mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>()
+    }
+    fun detailListState(key: String) =
+        detailListStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var showNowPlaying by remember { mutableStateOf(false) }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
@@ -230,6 +241,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenAlbum = { screen = Screen.Album(it) },
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
+                    onOpenThemes = { screen = Screen.Themes },
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
@@ -237,6 +249,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     songsListState = songsListState,
                     albumsGridState = albumsGridState,
                     artistsGridState = artistsGridState,
+                    playlistsListState = playlistsListState,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
                         youTubeManager = youTubeManager
@@ -251,6 +264,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                         subtitle = songs.firstOrNull()?.artist ?: "",
                         songs = songs.sortedBy { it.trackNumber },
                         coverUri = songs.firstOrNull()?.albumArtUri,
+                        listState = detailListState("album:${s.title}"),
                         onBack = { screen = Screen.Library },
                         onSongMenu = { song ->
                             songMenuTarget = song
@@ -268,6 +282,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                         subtitle = "Artista",
                         songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
+                        listState = detailListState("artist:${s.name}"),
                         onBack = { screen = Screen.Library },
                         onSongMenu = { song ->
                             songMenuTarget = song
@@ -288,12 +303,28 @@ private fun AuralApp(viewModel: AuralViewModel,
                         subtitle = if (isFavorites) "Tus preferidas" else "Playlist",
                         songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
+                        listState = detailListState("playlist:${s.id}"),
                         onBack = { screen = Screen.Library },
                         onSongMenu = { song ->
                             songMenuTarget = song
                             songMenuPlaylistId = if (isFavorites) null else s.id
                         },
                         removableFromPlaylistId = if (isFavorites) null else s.id
+                    )
+                }
+
+                Screen.Themes -> {
+                    val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
+                    val currentTheme = try {
+                        AppTheme.valueOf(themeName)
+                    } catch (e: Exception) {
+                        AppTheme.BOSQUE
+                    }
+                    ThemesScreen(
+                        currentTheme = currentTheme,
+                        onSelect = { theme -> viewModel.setAppTheme(theme.name) },
+                        onBack = { screen = Screen.Library },
+                        gridState = themesGridState
                     )
                 }
             }

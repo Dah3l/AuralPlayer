@@ -23,7 +23,14 @@ enum class AppTheme(val displayName: String, val iconRes: Int) {
     PERLA("Lunar Pearl", R.drawable.ic_launcher_foreground_perla),
     ROSA("Sakura", R.drawable.ic_launcher_foreground_rosa),
     NIGHTLY_SAKURA("Nightly Sakura", R.drawable.ic_launcher_foreground_sakura_nightly),
-    MEDIANOCHE("Midnight X", R.drawable.ic_launcher_foreground_medianoche)
+    MEDIANOCHE("Midnight X", R.drawable.ic_launcher_foreground_medianoche),
+    ROYAL_BLUE("Royal Blue", R.drawable.ic_launcher_foreground_royal_blue),
+    WINE_RED("Wine Red", R.drawable.ic_launcher_foreground_wine_red),
+    ORANGE("Orange", R.drawable.ic_launcher_foreground_orange),
+    PLUM("Plum", R.drawable.ic_launcher_foreground_plum),
+    MIDNIGHT_INDIGO("Midnight Indigo", R.drawable.ic_launcher_foreground_midnight_indigo),
+    CHERRY("Cherry", R.drawable.ic_launcher_foreground_cherry),
+    FOREST("Forest", R.drawable.ic_launcher_foreground_forest)
 }
 
 // ---- Tema Bosque: el original (oscuro + verde turquesa) ----
@@ -118,6 +125,27 @@ private val ClaroColorScheme = lightColorScheme(
     surfaceContainerHighest = Color(0xFFE8EEF4)
 )
 
+/** Esquema de colores de cada tema (lo usa la pantalla de temas para
+ *  pintar cada tarjeta con los colores de su propio tema). */
+fun AppTheme.colorScheme(): androidx.compose.material3.ColorScheme = when (this) {
+    AppTheme.BOSQUE -> BosqueColorScheme
+    AppTheme.OCEANO -> OceanoColorScheme
+    AppTheme.ATARDECER -> AtardecerColorScheme
+    AppTheme.CLARO -> ClaroColorScheme
+    AppTheme.NEON -> NeonColorScheme
+    AppTheme.PERLA -> PerlaColorScheme
+    AppTheme.ROSA -> RosaColorScheme
+    AppTheme.NIGHTLY_SAKURA -> NightlySakuraColorScheme
+    AppTheme.MEDIANOCHE -> MedianocheColorScheme
+    AppTheme.ROYAL_BLUE -> RoyalBlueColorScheme
+    AppTheme.WINE_RED -> WineRedColorScheme
+    AppTheme.ORANGE -> OrangeColorScheme
+    AppTheme.PLUM -> PlumColorScheme
+    AppTheme.MIDNIGHT_INDIGO -> MidnightIndigoColorScheme
+    AppTheme.CHERRY -> CherryColorScheme
+    AppTheme.FOREST -> ForestColorScheme
+}
+
 /** Tipografía limpia con pesos ligeros y espaciado amplio en etiquetas. */
 private val AuralTypography = Typography(
     displayLarge = TextStyle(
@@ -172,17 +200,7 @@ fun AuralTheme(
     theme: AppTheme = AppTheme.BOSQUE,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when (theme) {
-        AppTheme.BOSQUE -> BosqueColorScheme
-        AppTheme.OCEANO -> OceanoColorScheme
-        AppTheme.ATARDECER -> AtardecerColorScheme
-        AppTheme.CLARO -> ClaroColorScheme
-        AppTheme.NEON -> NeonColorScheme
-        AppTheme.PERLA -> PerlaColorScheme
-        AppTheme.ROSA -> RosaColorScheme
-        AppTheme.NIGHTLY_SAKURA -> NightlySakuraColorScheme
-        AppTheme.MEDIANOCHE -> MedianocheColorScheme
-    }
+    val colorScheme = theme.colorScheme()
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AuralTypography,
@@ -287,20 +305,181 @@ private val NightlySakuraColorScheme = darkColorScheme(
     primary = Color(0xFFFF6FA5),
     onPrimary = Color(0xFFFFFFFF),
     secondary = Color(0xFFFF8AB5),
-    background = Color(0xFF160D13),
-    onBackground = Color(0xFFF7E9EF),
-    surface = Color(0xFF1F141B),
-    onSurface = Color(0xFFF7E9EF),
-    surfaceVariant = Color(0xFF2A1B24),
-    onSurfaceVariant = Color(0xFFB48E9E),
-    outline = Color(0xFF40303C),
-    outlineVariant = Color(0xFF33222C),
+    background = Color(0xFF121013),
+    onBackground = Color(0xFFF5EEF2),
+    surface = Color(0xFF1A171B),
+    onSurface = Color(0xFFF5EEF2),
+    surfaceVariant = Color(0xFF262027),
+    onSurfaceVariant = Color(0xFFAEA0AA),
+    outline = Color(0xFF37303A),
+    outlineVariant = Color(0xFF2A242E),
     error = Color(0xFFFF5555),
-    surfaceDim = Color(0xFF160D13),
-    surfaceBright = Color(0xFF40303C),
-    surfaceContainerLowest = Color(0xFF100810),
-    surfaceContainerLow = Color(0xFF1A1016),
-    surfaceContainer = Color(0xFF1F141B),
-    surfaceContainerHigh = Color(0xFF251820),
-    surfaceContainerHighest = Color(0xFF2A1B24)
+    surfaceDim = Color(0xFF121013),
+    surfaceBright = Color(0xFF37303A),
+    surfaceContainerLowest = Color(0xFF0D0B0E),
+    surfaceContainerLow = Color(0xFF161317),
+    surfaceContainer = Color(0xFF1A171B),
+    surfaceContainerHigh = Color(0xFF201A21),
+    surfaceContainerHighest = Color(0xFF262027)
+)
+
+// ---- Tema Royal Blue: claro, crema y azul royal (dúo de diseño) ----
+private val RoyalBlueColorScheme = lightColorScheme(
+    primary = Color(0xFF014BAA),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFF3E74C4),
+    background = Color(0xFFF8F3F0),
+    onBackground = Color(0xFF1C2430),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1C2430),
+    surfaceVariant = Color(0xFFEDE6E0),
+    onSurfaceVariant = Color(0xFF5C6672),
+    outline = Color(0xFFDCD2C8),
+    outlineVariant = Color(0xFFE7DFD7),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFE3DAD2),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFDFBF9),
+    surfaceContainer = Color(0xFFF8F3F0),
+    surfaceContainerHigh = Color(0xFFF1EAE4),
+    surfaceContainerHighest = Color(0xFFEDE6E0)
+)
+
+// ---- Tema Wine Red: claro, arena y rojo vino ----
+private val WineRedColorScheme = lightColorScheme(
+    primary = Color(0xFF7F011F),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFFA63A50),
+    background = Color(0xFFF5EBD0),
+    onBackground = Color(0xFF2E1A1C),
+    surface = Color(0xFFFFFAF0),
+    onSurface = Color(0xFF2E1A1C),
+    surfaceVariant = Color(0xFFEEDFC0),
+    onSurfaceVariant = Color(0xFF6E5250),
+    outline = Color(0xFFDCC9A3),
+    outlineVariant = Color(0xFFE8D9B8),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFE7D8B4),
+    surfaceBright = Color(0xFFFFFAF0),
+    surfaceContainerLowest = Color(0xFFFFFDF6),
+    surfaceContainerLow = Color(0xFFFAF1DC),
+    surfaceContainer = Color(0xFFF5EBD0),
+    surfaceContainerHigh = Color(0xFFF0E3C4),
+    surfaceContainerHighest = Color(0xFFEEDFC0)
+)
+
+// ---- Tema Orange: claro, leche y naranja quemado ----
+private val OrangeColorScheme = lightColorScheme(
+    primary = Color(0xFFEC5E27),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFFF08A54),
+    background = Color(0xFFFDFDF1),
+    onBackground = Color(0xFF2B2118),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF2B2118),
+    surfaceVariant = Color(0xFFF3F0DC),
+    onSurfaceVariant = Color(0xFF6B5D4F),
+    outline = Color(0xFFE4DFC4),
+    outlineVariant = Color(0xFFEDEAD2),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFECE9D2),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFEFEF8),
+    surfaceContainer = Color(0xFFFDFDF1),
+    surfaceContainerHigh = Color(0xFFF6F3E2),
+    surfaceContainerHighest = Color(0xFFF3F0DC)
+)
+
+// ---- Tema Plum: claro, leche rosada y ciruela profundo ----
+private val PlumColorScheme = lightColorScheme(
+    primary = Color(0xFF381932),
+    onPrimary = Color(0xFFFFF3E6),
+    secondary = Color(0xFF6E4466),
+    background = Color(0xFFFFF3E6),
+    onBackground = Color(0xFF2A1426),
+    surface = Color(0xFFFFFAF5),
+    onSurface = Color(0xFF2A1426),
+    surfaceVariant = Color(0xFFF7E4D2),
+    onSurfaceVariant = Color(0xFF71596A),
+    outline = Color(0xFFEBD3BE),
+    outlineVariant = Color(0xFFF2E2CE),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFF0DCC4),
+    surfaceBright = Color(0xFFFFFAF5),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFFF8EF),
+    surfaceContainer = Color(0xFFFFF3E6),
+    surfaceContainerHigh = Color(0xFFF9EADA),
+    surfaceContainerHighest = Color(0xFFF7E4D2)
+)
+
+// ---- Tema Midnight Indigo: claro, vainilla e índigo noche ----
+private val MidnightIndigoColorScheme = lightColorScheme(
+    primary = Color(0xFF282B4A),
+    onPrimary = Color(0xFFF5F2E4),
+    secondary = Color(0xFF565B85),
+    background = Color(0xFFEEEBDA),
+    onBackground = Color(0xFF1E2033),
+    surface = Color(0xFFF8F6EC),
+    onSurface = Color(0xFF1E2033),
+    surfaceVariant = Color(0xFFE2DEC9),
+    onSurfaceVariant = Color(0xFF5A5C6B),
+    outline = Color(0xFFD3CFB6),
+    outlineVariant = Color(0xFFE0DCC6),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFDCD8C2),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFF8F6EC),
+    surfaceContainerLow = Color(0xFFF4F1E2),
+    surfaceContainer = Color(0xFFEEEBDA),
+    surfaceContainerHigh = Color(0xFFE6E2CE),
+    surfaceContainerHighest = Color(0xFFE2DEC9)
+)
+
+// ---- Tema Cherry: claro, alabastro y cereza ----
+private val CherryColorScheme = lightColorScheme(
+    primary = Color(0xFF890149),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFFB83A75),
+    background = Color(0xFFF3F3E7),
+    onBackground = Color(0xFF2E1220),
+    surface = Color(0xFFFDFDF8),
+    onSurface = Color(0xFF2E1220),
+    surfaceVariant = Color(0xFFE9E7D2),
+    onSurfaceVariant = Color(0xFF6E5560),
+    outline = Color(0xFFDBD8BE),
+    outlineVariant = Color(0xFFE6E4CC),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFE0DEC6),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF8F8EE),
+    surfaceContainer = Color(0xFFF3F3E7),
+    surfaceContainerHigh = Color(0xFFECEAD8),
+    surfaceContainerHighest = Color(0xFFE9E7D2)
+)
+
+// ---- Tema Forest: claro, hoja y verde bosque ----
+private val ForestColorScheme = lightColorScheme(
+    primary = Color(0xFF064734),
+    onPrimary = Color(0xFFE0FFC2),
+    secondary = Color(0xFF2E7D5F),
+    background = Color(0xFFE0FFC2),
+    onBackground = Color(0xFF0C2B1E),
+    surface = Color(0xFFF6FFEA),
+    onSurface = Color(0xFF0C2B1E),
+    surfaceVariant = Color(0xFFCDF2A4),
+    onSurfaceVariant = Color(0xFF44604F),
+    outline = Color(0xFFBFE392),
+    outlineVariant = Color(0xFFD8F7B4),
+    error = Color(0xFFDC2626),
+    surfaceDim = Color(0xFFCFF0A2),
+    surfaceBright = Color(0xFFF6FFEA),
+    surfaceContainerLowest = Color(0xFFF9FFF0),
+    surfaceContainerLow = Color(0xFFE9FFD0),
+    surfaceContainer = Color(0xFFE0FFC2),
+    surfaceContainerHigh = Color(0xFFD9FAB2),
+    surfaceContainerHighest = Color(0xFFCDF2A4)
 )

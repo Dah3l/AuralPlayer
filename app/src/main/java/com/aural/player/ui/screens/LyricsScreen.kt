@@ -5,7 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -31,7 +32,14 @@ fun LyricsScreen(
 ) {
     var lines by remember { mutableStateOf<List<LrcLine>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    val listState = rememberLazyListState()
+    // Estado guardable: al cerrar y reabrir la letra, la lista vuelve a
+    // la posición donde la dejó el usuario.
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    // Si había una posición restaurada, el primer auto-scroll no debe
+    // pisarla (los siguientes sí siguen a la canción como siempre)
+    var skipFirstAutoScroll by remember {
+        mutableStateOf(listState.firstVisibleItemIndex > 0)
+    }
 
     // Cargar y parsear el .lrc
     LaunchedEffect(lrcPath) {
@@ -60,6 +68,10 @@ fun LyricsScreen(
     }
     // Auto-scroll cuando cambia la línea activa
     LaunchedEffect(activeIndex) {
+        if (skipFirstAutoScroll) {
+            skipFirstAutoScroll = false
+            return@LaunchedEffect
+        }
         if (lines.isNotEmpty()) {
             try {
                 listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))

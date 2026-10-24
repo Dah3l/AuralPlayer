@@ -37,6 +37,23 @@ en GitHub salen de aquí.
   de notificaciones y la flecha de volver se ve sobre el fondo oscuro
   (antes salía negra y se perdía).
 
+### Ronda de ajustes (antes de publicar, probada en la build DEBUG)
+- **La salida de audio cambia al momento**: elegir otra fuente ahora
+  surte efecto al instante, sin esperar a la siguiente canción.
+- **Nightly Sakura, rebalanceado**: fondos carbón casi neutros para que
+  el rosa sea el protagonista.
+- **7 temas claros nuevos** (16 en total): Royal Blue, Wine Red, Orange,
+  Plum, Midnight Indigo, Cherry y Forest — crema de fondo y color fuerte
+  de acento, salidos de dúos de diseño.
+- **Temas a pantalla completa**: el selector es ahora una pantalla con
+  tarjetas tipo splash (icono grande sobre el fondo de cada tema), en
+  vez del diálogo modal.
+- **La app recuerda dónde estabas**: al volver atrás, las listas de
+  álbumes, artistas, playlists y la vista de letra conservan su
+  posición.
+- **Pull-to-refresh**: la biblioteca se actualiza tirando hacia abajo;
+  desaparece el botón de actualizar de la cabecera.
+
 ## v1.0.2 — 2026-10-23
 
 ### Novedades

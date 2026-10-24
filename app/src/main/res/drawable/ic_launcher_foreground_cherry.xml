@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono vector del lanzador: onda sonora minimalista (tema Cherry) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#890149"
+        android:pathData="M34,46m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+    <path
+        android:fillColor="#890149"
+        android:pathData="M46,38h6v32h-6z" />
+    <path
+        android:fillColor="#890149"
+        android:pathData="M58,30h6v48h-6z" />
+    <path
+        android:fillColor="#890149"
+        android:pathData="M70,40h6v28h-6z" />
+</vector>

@@ -321,6 +321,20 @@ class PlaybackManager(private val context: Context) {
         } catch (e: Exception) { }
         forcedOutput = kind
         _state.value = _state.value.copy(activeOutput = kind)
+        // La preferencia de dispositivo solo se aplica al (re)preparar una
+        // pista: re-preparar la actual conservando cola, índice, posición
+        // exacta y estado de reproducción, para que el cambio sea inmediato.
+        val c = controller ?: return
+        if (c.mediaItemCount > 0) {
+            val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }
+            val index = c.currentMediaItemIndex
+            val position = c.currentPosition.coerceAtLeast(0)
+            val wasPlayWhenReady = c.playWhenReady
+            c.setMediaItems(items, index, position)
+            c.prepare()
+            c.playWhenReady = wasPlayWhenReady
+            publishState()
+        }
     }
 
     fun toggleShuffle() {

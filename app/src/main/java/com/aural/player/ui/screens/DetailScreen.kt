@@ -139,7 +139,8 @@ fun DetailScreen(
     coverUri: String?,
     onBack: () -> Unit,
     onSongMenu: (Song) -> Unit,
-    removableFromPlaylistId: String? = null
+    removableFromPlaylistId: String? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -247,7 +248,8 @@ fun DetailScreen(
         Spacer(Modifier.height(8.dp))
 
         // ---- Lista de canciones (reordenable en playlists) ----
-        val listState = rememberLazyListState()
+        // El estado viene de fuera: sobrevive a la navegación y la lista
+        // queda donde estaba al volver atrás.
         val detailHaptics = LocalHapticFeedback.current
         // En playlists el reorden es LOCAL e instantáneo, como la cola (que vive
         // en memoria): el orden definitivo se guarda una sola vez, al soltar.

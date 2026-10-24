@@ -53,7 +53,6 @@ import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
-import com.aural.player.ui.components.ThemeDialog
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -78,7 +77,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
-import com.aural.player.ui.theme.AppTheme
 import androidx.compose.material3.RadioButton
 
 /** Pestañas de la biblioteca. */
@@ -88,6 +86,7 @@ private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Des
  * Pantalla de biblioteca. Recibe callbacks para acciones globales
  * (reproducir cola, abrir detalle, menú de canción).
  */
+@androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 fun LibraryScreen(
     viewModel: AuralViewModel,
@@ -95,10 +94,12 @@ fun LibraryScreen(
     onOpenAlbum: (albumTitle: String) -> Unit,
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
+    onOpenThemes: () -> Unit,
     onSongMenu: (song: Song) -> Unit,
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    playlistsListState: androidx.compose.foundation.lazy.LazyListState,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null
@@ -123,7 +124,6 @@ fun LibraryScreen(
     var showGeneralMenu by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
-    var showThemeDialog by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
@@ -136,6 +136,7 @@ fun LibraryScreen(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.importM3u(appContext, it) } }
     val refreshScope = rememberCoroutineScope()
+    val pullState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
 
     Column(Modifier.fillMaxSize()) {
 
@@ -187,21 +188,6 @@ fun LibraryScreen(
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
-            IconButton(
-                onClick = {
-                    isRefreshing = true
-                    refreshScope.launch {
-                        viewModel.rescan()
-                        isRefreshing = false
-                    }
-                }
-            ) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
-                }
-            }
             // ---- Menú general ⋮ ----
             Box {
                 IconButton(onClick = { showGeneralMenu = true }) {
@@ -232,7 +218,7 @@ fun LibraryScreen(
                     )
                     DropdownMenuItem(
                         text = { Text("Tema") },
-                        onClick = { showGeneralMenu = false; showThemeDialog = true }
+                        onClick = { showGeneralMenu = false; onOpenThemes() }
                     )
                 }
             }
@@ -285,7 +271,21 @@ fun LibraryScreen(
             }
         }
 
-        // ---- Contenido por pestaña ----
+        // ---- Contenido por pestaña (con pull-to-refresh) ----
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                if (!isRefreshing) {
+                    isRefreshing = true
+                    refreshScope.launch {
+                        viewModel.rescan()
+                        isRefreshing = false
+                    }
+                }
+            },
+            state = pullState,
+            modifier = Modifier.fillMaxSize()
+        ) {
         when {
             library.isLoading -> BoxCentered {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -341,7 +341,8 @@ fun LibraryScreen(
                         hasFavorites = favorites.isNotEmpty(),
                         onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
                         downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
-                        onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } }
+                        onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } },
+                        listState = playlistsListState
                     )
                 }
             4 -> {
@@ -364,6 +365,7 @@ fun LibraryScreen(
                     onPlay = { folder -> onPlayList(folder.songs, 0) }
                 )
             }
+        }
         }
     }
 
@@ -436,7 +438,7 @@ fun LibraryScreen(
                     "AuralPlayer — tu música, sin ruido.\n\n" +
                         "Reproductor minimalista con descargas de YouTube, " +
                         "letras sincronizadas, ecualizador, reconocimiento de " +
-                        "canciones estilo Shazam y 9 temas para hacerlo tuyo.\n\n" +
+                        "canciones estilo Shazam y 16 temas para hacerlo tuyo.\n\n" +
                         "Versión 1.0.3\nHecho con ❤️ y Jetpack Compose"
                 )
             },
@@ -446,21 +448,6 @@ fun LibraryScreen(
         )
     }
 
-    if (showThemeDialog) {
-        val currentThemeName by viewModel.appTheme.collectAsStateWithLifecycle()
-        val currentTheme = try {
-            AppTheme.valueOf(currentThemeName)
-        } catch (e: Exception) {
-            AppTheme.BOSQUE
-        }
-        ThemeDialog(
-            currentTheme = currentTheme,
-            onSelect = { theme ->
-                viewModel.setAppTheme(theme.name)
-            },
-            onDismiss = { showThemeDialog = false }
-        )
-    }
 }
 
 
@@ -616,9 +603,11 @@ private fun PlaylistsTab(
     hasFavorites: Boolean,
     onOpenFavorites: () -> Unit,
     downloadsCount: Int,
-    onOpenDownloads: () -> Unit
+    onOpenDownloads: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
 ) {
     LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
