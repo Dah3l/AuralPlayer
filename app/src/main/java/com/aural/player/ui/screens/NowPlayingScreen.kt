@@ -673,6 +673,18 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    // Bloquea toques para que no lleguen al Now Playing
+                    // detrás (el botón ⋮ está casi en el mismo sitio que
+                    // el de compartir de la cabecera de letras)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown().consume()
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
             ) {
                 LyricsScreen(
                     lrcPath = lrcPath,

@@ -59,6 +59,12 @@ en GitHub salen de aquí.
 - **Fix**: la foto de playlist elegida de la galería ahora se muestra
   también dentro de la playlist, no solo en la lista (antes el detalle
   seguía mostrando la portada de la primera canción).
+- **Fix**: la vista de letras ya no deja pasar toques al Now Playing
+  de detrás (al pulsar junto al botón de compartir se abría el menú ⋮,
+  que está casi en el mismo sitio). El mismo bloqueo se aplicó al
+  splash de inicio, que tampoco lo tenía. Revisadas el resto de
+  vistas: hojas inferiores y diálogos ya consumen los toques fuera de
+  ellos, y el propio Now Playing ya bloqueaba los de la biblioteca.
 - **Cabecera de letras más grande** y difuminado bajo el header: las
   líneas se funden con el fondo al pasar por debajo.
 - **Favoritas se comporta como las demás**: su lista ya tiene drag para
