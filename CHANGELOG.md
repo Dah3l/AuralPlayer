@@ -15,6 +15,7 @@ en GitHub salen de aquí.
 - **Título del detalle con más peso** — y se desvanece cuando el scroll pasa el 75% de la imagen, para que no choque con el título de la barra al colapsar.
 - **Menú ⋮ para la foto de la playlist** — arriba a la derecha: agregar imagen o eliminar la actual (la foto ya no se cambia tocando la imagen). Sin foto, el detalle vuelve a su imagen por defecto.
 - **Barra colapsada más alta y a tono** — un poco más alta, con la tonalidad del Now Playing, y la franja del notch con su mismo color.
+- **Barra colapsada ya no deja pasar los toques** — antes un toque en la barra caía en la lista de detrás (podía sonar una canción sin querer); ahora la barra consume sus propios toques.
 
 ## v1.0.3 — 2026-10-23
 

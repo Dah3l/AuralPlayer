@@ -5,6 +5,8 @@ package com.aural.player.ui.screens
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -69,6 +71,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.material.icons.filled.Add
@@ -525,6 +528,17 @@ fun DetailScreen(
                     .background(
                         MaterialTheme.colorScheme.surface.copy(alpha = collapseFraction)
                     )
+                    // La barra consume sus toques: sin esto, un toque en
+                    // la barra cae en la lista que queda detrás
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown().consume()
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
             ) {
                 Spacer(Modifier.fillMaxWidth().height(statusBarTop))
                 Row(
