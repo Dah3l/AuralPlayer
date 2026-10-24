@@ -36,6 +36,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +52,7 @@ import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -252,28 +256,47 @@ fun LibraryScreen(
             )
         }
 
-        // ---- Búsqueda siempre visible ----
-        OutlinedTextField(
-            value = library.query,
-            onValueChange = viewModel::setQuery,
-            placeholder = { Text("Canciones, artistas o álbumes…") },
-            singleLine = true,
-            shape = MaterialTheme.shapes.large,
-            trailingIcon = {
-                if (library.query.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.setQuery("") }) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "Borrar búsqueda",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            modifier = Modifier
+        // ---- Búsqueda siempre visible (interior con degradado sutil) ----
+        Box(
+            Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
-        )
+                .clip(MaterialTheme.shapes.large)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceContainer,
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+        ) {
+            OutlinedTextField(
+                value = library.query,
+                onValueChange = viewModel::setQuery,
+                placeholder = { Text("Canciones, artistas o álbumes…") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                trailingIcon = {
+                    if (library.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setQuery("") }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Borrar búsqueda",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         // ---- Pills de filtros ----
         LazyRow(
@@ -287,8 +310,17 @@ fun LibraryScreen(
                     Modifier
                         .clip(CircleShape)
                         .background(
-                            if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            if (selected) Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+                                )
+                            ) else Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceContainer,
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
                         )
                         .clickable { onTabSelected(i) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -444,7 +476,7 @@ fun LibraryScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
+                .padding(start = 16.dp, top = 16.dp, end = 24.dp, bottom = 16.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -679,7 +711,7 @@ private data class TopPlaylist(
     val songCount: Int
 )
 
-/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas" y ▶. */
+/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas" y título + ▶ dentro de la portada. */
 @Composable
 private fun MostPlayedSection(
     topPlaylists: List<TopPlaylist>,
@@ -700,60 +732,80 @@ private fun MostPlayedSection(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             topPlaylists.forEach { tp ->
-                Column(
+                // Tarjeta = solo la portada, con título y ▶ dentro (como la referencia)
+                Box(
                     Modifier
                         .weight(1f)
+                        .aspectRatio(1f)
+                        .shadow(4.dp, RoundedCornerShape(14.dp))
                         .clip(RoundedCornerShape(14.dp))
-                        .clickable { onOpenPlaylist(tp.id) }
-                        .padding(6.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { onOpenPlaylist(tp.id) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Portada cuadrada (nota musical si no hay imagen)
+                    // Nota musical si no hay imagen
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    if (!tp.coverUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = android.net.Uri.parse(tp.coverUri),
+                            contentDescription = "Portada",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    // Degradado oscuro abajo para que el título blanco se lea siempre
                     Box(
                         Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        if (!tp.coverUri.isNullOrBlank()) {
-                            AsyncImage(
-                                model = android.net.Uri.parse(tp.coverUri),
-                                contentDescription = "Portada",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0f to Color.Transparent,
+                                        0.55f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.8f)
+                                    )
+                                )
                             )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    )
+                    // Título + ▶ dentro de la portada, abajo
+                    Row(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = tp.name,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
-                        // ▶ directo, como en cada fila de playlist
                         if (tp.songCount > 0) {
-                            IconButton(onClick = { onPlayPlaylist(tp.id) }) {
+                            IconButton(
+                                onClick = { onPlayPlaylist(tp.id) },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color.White, CircleShape)
+                            ) {
                                 Icon(
                                     Icons.Rounded.PlayArrow,
                                     "Reproducir",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = Color.Black
                                 )
                             }
                         }
