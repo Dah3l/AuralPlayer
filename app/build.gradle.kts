@@ -28,6 +28,10 @@ android {
                 keyAlias = System.getenv("AURAL_KEY_ALIAS")
                 keyPassword = System.getenv("AURAL_KEY_PASSWORD")
             }
+            // Apklis exige firma v1 (JAR) para validar la llave: con minSdk 26
+            // Gradle la omite por defecto, así que se fuerza explícitamente.
+            isV1SigningEnabled = true
+            isV2SigningEnabled = true
         }
     }
 
