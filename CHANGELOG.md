@@ -4,6 +4,11 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.5 — 2026-10-25
+
+### Novedades
+- **Compatibilidad con Apklis** — el APK ahora se firma con firma v1 (JAR) y v2, como exigen las tiendas: la v1.0.4 solo traía firma v2 y Apklis la rechazaba. Sin cambios de funciones en esta versión.
+
 ## v1.0.4 — 2026-10-24
 
 ### Novedades
