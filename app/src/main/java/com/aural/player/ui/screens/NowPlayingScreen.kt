@@ -72,8 +72,10 @@ import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.formatDuration
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -277,6 +279,11 @@ fun NowPlayingScreen(
             }
 
             // ---- Carátula grande (responsiva) ----
+            // Deslizar sobre la portada cambia de canción (v1.0.6):
+            // izquierda = siguiente, derecha = anterior, igual que los
+            // botones. Solo el gesto horizontal: un toque simple o un
+            // arrastre vertical no hacen nada aquí.
+            val coverSwipeThresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
@@ -302,7 +309,23 @@ fun NowPlayingScreen(
                         shape = RoundedCornerShape(artSize / 6),
                         ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                         spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                    ),
+                    )
+                    .pointerInput(onNext, onPrevious, coverSwipeThresholdPx) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { _, dragAmount ->
+                                totalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                when {
+                                    totalDrag < -coverSwipeThresholdPx -> onNext()
+                                    totalDrag > coverSwipeThresholdPx -> onPrevious()
+                                }
+                                totalDrag = 0f
+                            },
+                            onDragCancel = { totalDrag = 0f }
+                        )
+                    },
                     cornerRadius = 16.dp
                 )
             }
