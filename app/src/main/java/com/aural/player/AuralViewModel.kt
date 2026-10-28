@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -157,6 +158,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             val songs = repository.scanSongs()
             playback.setLibrary(songs)
             _library.value = _library.value.copy(songs = songs, isLoading = false)
+            tryRestoreLastPlayback(songs)
+        }
+    }
+
+    /** La restauración al abrir solo se intenta una vez por proceso. */
+    private var resumeAttempted = false
+
+    /**
+     * Reanudar al abrir (v1.0.6): si hay una última reproducción guardada
+     * y la canción sigue en la biblioteca, carga su cola en pausa para que
+     * el mini reproductor aparezca sin sonar. Si la canción ya no existe,
+     * no se hace nada (sin crash).
+     */
+    private fun tryRestoreLastPlayback(songs: List<Song>) {
+        if (resumeAttempted) return
+        resumeAttempted = true
+        if (playback.state.value.currentSong != null) return
+        viewModelScope.launch {
+            val last = try {
+                settings.lastPlayback.first()
+            } catch (e: Exception) {
+                null
+            } ?: return@launch
+            // Si el usuario ya puso algo a sonar mientras se leía, no pisarlo
+            if (playback.state.value.currentSong != null) return@launch
+            val byId = songs.associateBy { it.id }
+            val song = byId[last.songId] ?: return@launch
+            val queue = last.queueIds.mapNotNull { byId[it] }
+            val index = queue.indexOf(song)
+            if (index < 0) return@launch
+            playback.restoreQueue(queue, index)
         }
     }
 
@@ -238,7 +270,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         shuffle: Boolean = false,
         fromPlaylistId: String? = null
     ) {
-        // Contar la reproducción para la sección "Más reproducidas"
+        // Contar la reproducción para la sección "Para ti"
         if (fromPlaylistId != null) {
             viewModelScope.launch { settings.incrementPlaylistPlayCount(fromPlaylistId) }
         }
