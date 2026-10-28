@@ -4,6 +4,13 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.6 — 2026-10-28
+
+### Novedades
+- **"Para ti" en el home** — la sección "Más reproducidas" ahora se llama "Para ti", porque ya no solo muestra lo más sonado.
+- **Deslizar en la portada cambia de canción** — en la pantalla de Now Playing, desliza la portada a la izquierda para pasar a la siguiente canción o a la derecha para volver a la anterior, igual que los botones de siguiente/anterior.
+- **La app recuerda dónde te quedaste** — si cierras la app por completo y la vuelves a abrir, el mini reproductor aparece con la última canción que sonaba y su lista, en pausa y lista para reproducir (nunca suena sola al abrir). Si esa canción ya no está en tu biblioteca, simplemente no se muestra nada.
+
 ## v1.0.5 — 2026-10-25
 
 ### Novedades
