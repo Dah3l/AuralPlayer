@@ -35,6 +35,7 @@ class SettingsStore(private val context: Context) {
         val KEY_CUSTOM_METADATA = stringPreferencesKey("custom_metadata_json")
         val KEY_DISMISSED_UPDATE = stringPreferencesKey("dismissed_update_version")
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_ms")
+        val KEY_LAST_PLAYBACK = stringPreferencesKey("last_playback_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -122,6 +123,23 @@ class SettingsStore(private val context: Context) {
     suspend fun setLastUpdateCheckMs(millis: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_UPDATE_CHECK] = millis
+        }
+    }
+
+    // ------------------------- Última reproducción -------------------------
+
+    /** Última canción que sonó + la cola que tenía en ese momento. */
+    data class LastPlayback(val songId: Long, val queueIds: List<Long>)
+
+    /** Flujo reactivo de la última reproducción guardada (null si no hay). */
+    val lastPlayback: Flow<LastPlayback?> = context.dataStore.data.map { prefs ->
+        decodeLastPlayback(prefs[KEY_LAST_PLAYBACK])
+    }
+
+    /** Guarda la última canción y su cola (se llama al cambiar de tema). */
+    suspend fun setLastPlayback(songId: Long, queueIds: List<Long>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_PLAYBACK] = encodeLastPlayback(songId, queueIds)
         }
     }
 
@@ -232,6 +250,27 @@ class SettingsStore(private val context: Context) {
     private fun encodePlaylistCovers(map: Map<String, String>): String {
         val obj = org.json.JSONObject()
         map.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString()
+    }
+
+    private fun decodeLastPlayback(json: String?): LastPlayback? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            val obj = JSONObject(json)
+            val songId = obj.optLong("song", -1L)
+            if (songId < 0L) return null
+            val arr = obj.optJSONArray("queue") ?: return null
+            val ids = (0 until arr.length()).map { arr.getLong(it) }
+            LastPlayback(songId, ids)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun encodeLastPlayback(songId: Long, queueIds: List<Long>): String {
+        val obj = JSONObject()
+        obj.put("song", songId)
+        obj.put("queue", JSONArray(queueIds))
         return obj.toString()
     }
 
