@@ -209,7 +209,7 @@ fun LibraryScreen(
         }
     )
 
-    // Las 2 playlists más reproducidas (sin datos todavía: Favoritas y Descargas)
+    // Las 2 playlists de "Para ti" (sin datos todavía: Favoritas y Descargas)
     val downloadsPlaylist = playlists.firstOrNull { it.name == "Descargas" }
     val topPlaylists: List<TopPlaylist> = run {
         fun entryOf(pl: Playlist): TopPlaylist {
@@ -766,7 +766,7 @@ private fun BoxCentered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
 
-/** Datos de una playlist para la sección "Más reproducidas". */
+/** Datos de una playlist para la sección "Para ti". */
 private data class TopPlaylist(
     val id: String,
     val name: String,
@@ -774,7 +774,7 @@ private data class TopPlaylist(
     val songCount: Int
 )
 
-/** Sección "Más reproducidas": las 2 playlists que más suenan, con "Ver todas" y título + ▶ dentro de la portada. */
+/** Sección "Para ti": las 2 playlists que más suenan, con "Ver todas" y título + ▶ dentro de la portada. */
 @Composable
 private fun MostPlayedSection(
     topPlaylists: List<TopPlaylist>,
@@ -786,7 +786,7 @@ private fun MostPlayedSection(
     Column(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Más reproducidas",
+                text = "Para ti",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
