@@ -116,6 +116,12 @@ class PlaybackManager(private val context: Context) {
     /** Canciones conocidas por id, para reconstruir la cola desde MediaItems. */
     private var libraryById: Map<Long, Song> = emptyMap()
 
+    /** Última reproducción guardada (canción + cola), para no escribir de más. */
+    private var lastSavedPlayback: Pair<Long, List<Long>>? = null
+
+    /** Restauración pendiente si el controlador aún no estaba listo. */
+    private var pendingRestore: Pair<List<Song>, Int>? = null
+
     private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private var tickerJob: kotlinx.coroutines.Job? = null
 
@@ -143,6 +149,12 @@ class PlaybackManager(private val context: Context) {
             result.addListener(playerListener)
             _state.value = _state.value.copy(isReady = true)
             publishState()
+            // Si la restauración al abrir llegó antes que el controlador,
+            // se aplica ahora (sin pisar nada que ya esté sonando).
+            pendingRestore?.let { (songs, index) ->
+                pendingRestore = null
+                applyRestore(songs, index)
+            }
         }
     }
 
@@ -163,6 +175,30 @@ class PlaybackManager(private val context: Context) {
         c.shuffleModeEnabled = shuffle
         c.prepare()
         c.playWhenReady = true
+        publishState()
+    }
+
+    /**
+     * Restaura una cola en pausa (reanudar al abrir): deja la canción
+     * indicada cargada y lista, sin sonar. Si el controlador aún no está
+     * listo, queda pendiente y se aplica al conectar. Nunca pisa una
+     * cola que ya tenga algo en reproducción.
+     */
+    fun restoreQueue(songs: List<Song>, startIndex: Int) {
+        if (songs.isEmpty() || startIndex !in songs.indices) return
+        if (controller == null) {
+            pendingRestore = songs to startIndex
+            return
+        }
+        applyRestore(songs, startIndex)
+    }
+
+    private fun applyRestore(songs: List<Song>, startIndex: Int) {
+        val c = controller ?: return
+        if (c.mediaItemCount > 0) return
+        c.setMediaItems(songs.map { it.toMediaItem() }, startIndex, 0L)
+        c.prepare()
+        c.playWhenReady = false
         publishState()
     }
 
@@ -310,6 +346,22 @@ class PlaybackManager(private val context: Context) {
                 else -> RepeatMode.OFF
             }
         )
+        // Guardar última reproducción (solo cuando cambia la canción o la cola,
+        // para no escribir en cada evento del reproductor).
+        if (current != null && items.isNotEmpty()) {
+            val queueIds = items.map { it.id }
+            val snapshot = current.id to queueIds
+            if (snapshot != lastSavedPlayback) {
+                lastSavedPlayback = snapshot
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        settings.setLastPlayback(current.id, queueIds)
+                    } catch (e: Exception) {
+                        // No bloquear la reproducción si falla el guardado
+                    }
+                }
+            }
+        }
     }
 
     /** Actualiza la posición cada 500 ms mientras suena. */
