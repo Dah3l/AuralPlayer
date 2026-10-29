@@ -8,13 +8,17 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.aural.player.R
 
-/** Temas disponibles en la app (nombre de catálogo + icono propio del repo). */
+/** Temas disponibles en la app (nombre de catálogo + icono propio del repo).
+ * HALLOWEEN es un tema de temporada: solo aparece en el picker durante su
+ * ventana (27-oct..1-nov) y se auto-activa al primer arranque en ella. */
 enum class AppTheme(val displayName: String, val iconRes: Int) {
+    HALLOWEEN("Halloween", R.drawable.ic_launcher_foreground),
     BOSQUE("Aural Classic", R.drawable.ic_launcher_foreground),
     OCEANO("Abyssal Indigo", R.drawable.ic_launcher_foreground_oceano),
     ATARDECER("Solar Amber", R.drawable.ic_launcher_foreground_atardecer),
@@ -32,6 +36,13 @@ enum class AppTheme(val displayName: String, val iconRes: Int) {
     CHERRY("Cherry", R.drawable.ic_launcher_foreground_cherry),
     FOREST("Forest", R.drawable.ic_launcher_foreground_forest)
 }
+
+/**
+ * Tipografía de terror (Creepster, SIL OFL): se aplica SOLO cuando el tema
+ * Halloween está activo (título "Aural" del home y del splash). Requiere el
+ * archivo app/src/main/res/font/halloween.ttf en el repo.
+ */
+val HalloweenFontFamily = FontFamily(Font(R.font.halloween))
 
 // ---- Tema Bosque: el original (oscuro + verde turquesa) ----
 private val BosqueColorScheme = darkColorScheme(
@@ -128,6 +139,7 @@ private val ClaroColorScheme = lightColorScheme(
 /** Esquema de colores de cada tema (lo usa la pantalla de temas para
  *  pintar cada tarjeta con los colores de su propio tema). */
 fun AppTheme.colorScheme(): androidx.compose.material3.ColorScheme = when (this) {
+    AppTheme.HALLOWEEN -> HalloweenColorScheme
     AppTheme.BOSQUE -> BosqueColorScheme
     AppTheme.OCEANO -> OceanoColorScheme
     AppTheme.ATARDECER -> AtardecerColorScheme
@@ -193,22 +205,61 @@ private val AuralTypography = Typography(
 )
 
 /**
- * Tema raíz de la aplicación. El tema se elige en ajustes.
- * En ventana de temporada (Halloween 27-oct..1-nov) se aplica la paleta
- * de temporada sobre el tema elegido, automáticamente por fecha.
+ * Tema raíz de la aplicación. El tema se elige en ajustes (pantalla Temas);
+ * Halloween es un tema más del menú durante su ventana (27-oct..1-nov).
  */
 @Composable
 fun AuralTheme(
     theme: AppTheme = AppTheme.BOSQUE,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = seasonalColorScheme(theme.colorScheme())
+    val colorScheme = theme.colorScheme()
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AuralTypography,
         content = content
     )
 }
+
+// ---- Tema Halloween: temporada 27-oct..1-nov (oscuro + naranja calabaza) ----
+private val HalloweenColorScheme = darkColorScheme(
+    primary = HalloweenPumpkin,
+    onPrimary = Color(0xFF1A0D02),
+    primaryContainer = Color(0xFF4A2408),
+    onPrimaryContainer = Color(0xFFFFD9B3),
+    secondary = HalloweenPurple,
+    onSecondary = Color(0xFF0E0A1A),
+    secondaryContainer = Color(0xFF2A1E4A),
+    onSecondaryContainer = Color(0xFFD6C9FF),
+    tertiary = Color(0xFFE8A33D),
+    onTertiary = Color(0xFF1A1002),
+    tertiaryContainer = Color(0xFF4A2E08),
+    onTertiaryContainer = Color(0xFFFFE3B3),
+    background = Color(0xFF0A0A0D),
+    onBackground = HalloweenGhost,
+    surface = Color(0xFF141114),
+    onSurface = HalloweenGhost,
+    surfaceVariant = Color(0xFF1E1A1E),
+    onSurfaceVariant = Color(0xFFB9B0AE),
+    surfaceTint = HalloweenPumpkin,
+    inverseSurface = HalloweenGhost,
+    inverseOnSurface = Color(0xFF141114),
+    inversePrimary = Color(0xFFB34E00),
+    surfaceDim = Color(0xFF0A0A0D),
+    surfaceBright = Color(0xFF2E2626),
+    surfaceContainerLowest = Color(0xFF060607),
+    surfaceContainerLow = Color(0xFF100D10),
+    surfaceContainer = Color(0xFF141114),
+    surfaceContainerHigh = Color(0xFF1A161A),
+    surfaceContainerHighest = Color(0xFF1E1A1E),
+    outline = Color(0xFF3A2E2A),
+    outlineVariant = Color(0xFF2A2226),
+    scrim = Color(0xFF000000),
+    error = Color(0xFFFF6B6B),
+    onError = Color(0xFF1A0505),
+    errorContainer = Color(0xFF4A1414),
+    onErrorContainer = Color(0xFFFFD0D0)
+)
 
 // ---- Tema Neón: oscuro + cian/magenta brillante ----
 private val NeonColorScheme = darkColorScheme(
