@@ -194,13 +194,15 @@ private val AuralTypography = Typography(
 
 /**
  * Tema raíz de la aplicación. El tema se elige en ajustes.
+ * En ventana de temporada (Halloween 27-oct..1-nov) se aplica la paleta
+ * de temporada sobre el tema elegido, automáticamente por fecha.
  */
 @Composable
 fun AuralTheme(
     theme: AppTheme = AppTheme.BOSQUE,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = theme.colorScheme()
+    val colorScheme = seasonalColorScheme(theme.colorScheme())
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AuralTypography,
