@@ -45,6 +45,7 @@ import androidx.compose.ui.text.AnnotatedString
 import android.app.Application
 import com.aural.player.data.Song
 import com.aural.player.ui.components.MiniPlayer
+import com.aural.player.ui.components.PeekingSkull
 import com.aural.player.ui.screens.DetailScreen
 import com.aural.player.ui.screens.FAVORITES_ID
 import com.aural.player.ui.screens.DAILY_PLAYLIST_ID
@@ -506,6 +507,12 @@ private fun AuralApp(viewModel: AuralViewModel,
                 crashReport = null
             }
         )
+    }
+
+    // ---- Calavera esporádica (Halloween): se asoma por un costado en
+    // cualquier vista; no consume toques ----
+    if (splashThemeName == AppTheme.HALLOWEEN.name && !showSplash) {
+        PeekingSkull(Modifier.fillMaxSize())
     }
 
     // ---- Diálogo de nueva versión (chequeo automático al abrir) ----
