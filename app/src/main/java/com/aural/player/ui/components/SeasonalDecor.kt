@@ -119,7 +119,9 @@ private fun GhostDrift(
 }
 
 // ===========================================================================
-// TELARAÑA (Home): esquina superior, con brillo y mecedora sutiles.
+// TELARAÑA (Home): esquina superior derecha, diseño clásico de orbe —
+// hilos radiales desde la esquina + espiral con leve comba, como la imagen
+// de referencia. Con brillo y mecedora sutiles.
 // ===========================================================================
 
 @Composable
@@ -135,42 +137,47 @@ private fun SpiderWeb(modifier: Modifier = Modifier) {
         label = "shimmer"
     )
     val swayDeg by t.animateFloat(
-        initialValue = -1.6f,
-        targetValue = 1.6f,
+        initialValue = -1.4f,
+        targetValue = 1.4f,
         animationSpec = infiniteRepeatable(
             animation = tween(5200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "sway"
     )
-    Canvas(modifier.size(140.dp)) {
+    Canvas(modifier.size(170.dp)) {
         val anchor = Offset(size.width, 0f)
         rotate(swayDeg, anchor) {
             val col = Color.White.copy(alpha = shimmer)
-            val maxR = size.minDimension
-            val spokes = 6
-            // hilos radiales: de 90° (abajo) a 180° (izquierda)
-            for (i in 0..spokes) {
-                val aDeg = 90f + 90f * i / spokes
-                val a = Math.toRadians(aDeg.toDouble())
-                val end = anchor + Offset(
-                    cos(a).toFloat() * maxR,
-                    sin(a).toFloat() * maxR
-                )
-                drawLine(col, anchor, end, strokeWidth = 1.6f)
+            val lineStyle = Stroke(width = 1.8f, cap = StrokeCap.Round)
+            val maxR = size.minDimension * 1.04f
+            val spokes = 8
+            // hilos radiales: de 90° (abajo) a 180° (izquierda), en abanico
+            val spokeEnds = (0..spokes).map { i ->
+                val a = Math.toRadians(90.0 + 90.0 * i / spokes)
+                anchor + Offset(cos(a).toFloat() * maxR, sin(a).toFloat() * maxR)
             }
-            // espiral: arcos concéntricos
-            for (k in 1..4) {
-                val r = maxR * k / 4.5f
-                drawArc(
-                    color = col,
-                    startAngle = 90f,
-                    sweepAngle = 90f,
-                    useCenter = false,
-                    topLeft = anchor - Offset(r, r),
-                    size = Size(r * 2f, r * 2f),
-                    style = Stroke(width = 1.4f)
-                )
+            for (end in spokeEnds) {
+                drawLine(col, anchor, end, strokeWidth = 1.8f, cap = StrokeCap.Round)
+            }
+            // espiral: anillos unidos entre radiales consecutivos con comba
+            // hacia el ancla (la seda cuelga un poco, como en la referencia)
+            val ringFractions = listOf(0.20f, 0.34f, 0.48f, 0.62f, 0.76f, 0.90f)
+            for (f in ringFractions) {
+                for (i in 0 until spokeEnds.size - 1) {
+                    val p0 = anchor + (spokeEnds[i] - anchor) * f
+                    val p1 = anchor + (spokeEnds[i + 1] - anchor) * f
+                    val mid = (p0 + p1) / 2f
+                    val toAnchor = anchor - mid
+                    val dist = toAnchor.getDistance()
+                    val sag = (p1 - p0).getDistance() * 0.12f
+                    val ctrl = if (dist > 0f) mid + toAnchor / dist * sag else mid
+                    val path = Path().apply {
+                        moveTo(p0.x, p0.y)
+                        quadraticBezierTo(ctrl.x, ctrl.y, p1.x, p1.y)
+                    }
+                    drawPath(path, col, style = lineStyle)
+                }
             }
         }
     }
