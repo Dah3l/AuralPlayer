@@ -98,6 +98,8 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -294,13 +296,15 @@ fun NowPlayingScreen(
             // franjas laterales. Cada página ocupa TODO el ancho del viewport:
             // en reposo se ve UNA portada limpia; al deslizar, la portada sale
             // por un borde y la otra entra por el otro, recorriendo el viewport
-            // completo. Se mantiene la estética (esquinas redondeadas, sombra).
+            // completo. La portada va centrada con margen lateral para que su
+            // sombra nunca se recorte en los bordes del viewport.
             // - Ventana [vecinoAnterior?, actual, vecinoSiguiente?] con índices
             //   SIEMPRE del timeline (un solo espacio de índices en la app).
-            // - El cambio de canción lo dispara el observador de release al
-            //   SOLTAR (umbral 80 dp o fling > 1000 px/s), sin esperar al
-            //   asentamiento del pager: un fallo visual nunca puede tragarse
-            //   el cambio. Izquierda = siguiente, derecha = anterior.
+            // - Al SOLTAR pasando el umbral (80 dp o fling > 1000 px/s):
+            //   PRIMERO se anima el pager hasta la página destino
+            //   (deslizamiento visible a ancho completo) y recién al terminar
+            //   la animación se cambia la canción. Izquierda = siguiente,
+            //   derecha = anterior. Sin el umbral, el pager vuelve solo.
             // - Cambio directo al media item, sin la regla de 3 s del botón
             //   anterior. Con aleatorio, los vecinos siguen el orden aleatorio.
             BoxWithConstraints(
@@ -319,6 +323,9 @@ fun NowPlayingScreen(
                     )
             ) {
                 val pageWidth = maxWidth
+                // Margen lateral para que la sombra de la portada (24 dp)
+                // nunca se recorte en los bordes del viewport.
+                val coverSideMargin = 32.dp
                 // Ventana del carrusel: índices del timeline. Un vecino
                 // INDEX_UNSET o igual al actual se trata como inexistente
                 // (el pager rebota en los extremos, sin wrap).
@@ -351,10 +358,18 @@ fun NowPlayingScreen(
                 val swipeThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
                 val flingThresholdPxPerSec = 1000f
 
+                // Alcance para la animación programada del cambio + bandera
+                // anti-doble-disparo: mientras un cambio está en vuelo se
+                // ignoran nuevos triggers de release.
+                val coverScope = rememberCoroutineScope()
+                val swipeChangeInFlight = remember { mutableStateOf(false) }
+
                 // Carrusel -> reproductor (SOLO vía release): al soltar pasando
-                // el umbral o con fling, cambio directo al vecino en esa
-                // dirección. NO consume: el pager hace su animación nativa en
-                // paralelo con el mismo gesto.
+                // el umbral o con fling, PRIMERO se anima el pager hasta la
+                // página destino (deslizamiento visible a ancho completo) y
+                // recién al terminar la animación se cambia la canción.
+                // NO consume: el pager sigue el dedo en vivo durante el
+                // arrastre; al soltar, nuestra animación toma el control.
                 val releaseObserver = Modifier.pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -370,12 +385,45 @@ fun NowPlayingScreen(
                                     abs(vx) >= flingThresholdPxPerSec -> vx < 0
                                     else -> null
                                 }
-                                if (toNext != null) {
+                                if (toNext != null && !swipeChangeInFlight.value) {
+                                    val window = latestCoverWindow
                                     val (prevN, nextN) = latestNeighbors
                                     val cur = latestCurrentIndex
-                                    val target = if (toNext) nextN else prevN
-                                    if (target != C.INDEX_UNSET && target != cur) {
-                                        latestOnPlayQueueItem(target)
+                                    val targetIndex = if (toNext) nextN else prevN
+                                    val targetPage = window.indexOf(targetIndex)
+                                    val pageCount = coverPagerState.pageCount
+                                    if (targetIndex != C.INDEX_UNSET && targetIndex != cur
+                                        && targetPage in 0 until pageCount
+                                    ) {
+                                        swipeChangeInFlight.value = true
+                                        coverScope.launch {
+                                            try {
+                                                // 1. Deslizamiento visible a ancho completo.
+                                                coverPagerState.animateScrollToPage(targetPage)
+                                                // 2. Chequeo fresco: cambiar solo si sigue
+                                                //    haciendo falta.
+                                                if (targetIndex != latestCurrentIndex) {
+                                                    latestOnPlayQueueItem(targetIndex)
+                                                    // 3. Esperar el cambio real (timeout defensivo).
+                                                    withTimeoutOrNull(2000) {
+                                                        snapshotFlow { latestCurrentIndex }
+                                                            .first { it == targetIndex }
+                                                    }
+                                                    // 4. Recentrado de seguridad sobre la misma
+                                                    //    portada (sin salto visible).
+                                                    val w = latestCoverWindow
+                                                    val c = w.indexOf(latestCurrentIndex)
+                                                    if (c in w.indices
+                                                        && !coverPagerState.isScrollInProgress
+                                                        && coverPagerState.currentPage != c
+                                                    ) {
+                                                        coverPagerState.scrollToPage(c)
+                                                    }
+                                                }
+                                            } finally {
+                                                swipeChangeInFlight.value = false
+                                            }
+                                        }
                                     }
                                 }
                                 break
@@ -390,11 +438,12 @@ fun NowPlayingScreen(
 
                 // Asentamiento -> solo recentrado visual (NUNCA cambia la
                 // canción): si el pager quedó en una página que no es la del
-                // tema actual, vuelve al centro con animación.
+                // tema actual, vuelve al centro con animación. No pelea con
+                // la animación programada del swipe (bandera anti-doble-disparo).
                 LaunchedEffect(coverPagerState) {
                     snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
                         .collect { (page, scrolling) ->
-                            if (!scrolling) {
+                            if (!scrolling && !swipeChangeInFlight.value) {
                                 val center = latestCenterPage
                                 if (page != center && center < latestCoverWindow.size) {
                                     coverPagerState.animateScrollToPage(center)
@@ -426,17 +475,28 @@ fun NowPlayingScreen(
                     // portada se resuelve igual que en el reproductor.
                     val timelineIndex = latestCoverWindow.getOrNull(page)
                     val coverSong = timelineIndex?.let { viewModel.playback.songAtTimelineIndex(it) }
-                    CoverArt(
-                        uri = coverSong?.let { customCovers[it.id] ?: it.albumArtUri },
-                        size = pageWidth,
-                        modifier = Modifier.shadow(
-                            elevation = 24.dp,
-                            shape = RoundedCornerShape(16.dp),
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        ),
-                        cornerRadius = 16.dp
-                    )
+                    // La página ocupa todo el ancho; la portada va centrada
+                    // con margen lateral para que su sombra NUNCA se recorte
+                    // en los bordes del viewport (en reposo: una portada
+                    // limpia con su sombra completa, sin franjas).
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(pageWidth),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CoverArt(
+                            uri = coverSong?.let { customCovers[it.id] ?: it.albumArtUri },
+                            size = pageWidth - coverSideMargin * 2,
+                            modifier = Modifier.shadow(
+                                elevation = 24.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            ),
+                            cornerRadius = 16.dp
+                        )
+                    }
                 }
             }
 
