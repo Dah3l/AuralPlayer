@@ -74,6 +74,9 @@ import com.aural.player.ui.components.formatDuration
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.abs
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -220,13 +223,16 @@ fun NowPlayingScreen(
                     )
                 )
             )
-            // Bloquea toques para que no lleguen a la lista detrás
+            // Bloquea toques para que no lleguen a la lista detrás.
+            // Solo consume lo que los hijos NO consumieron: los hijos
+            // (botones, slider, letra clicable, carrusel) ven cada evento
+            // primero y sin consumir, así sus gestos no se roban; lo que
+            // nadie usó se consume aquí y no baja a la lista detrás.
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown().consume()
                     do {
                         val event = awaitPointerEvent()
-                        event.changes.forEach { it.consume() }
+                        event.changes.forEach { if (!it.isConsumed) it.consume() }
                     } while (event.changes.any { it.pressed })
                 }
             }
@@ -283,64 +289,20 @@ fun NowPlayingScreen(
                 return@Column
             }
 
-            // ---- Carátula grande (responsiva) ----
-            // Carrusel simple (v1.0.6): las portadas se deslizan como
-            // fotos con un HorizontalPager, el mismo de la biblioteca.
-            // Deslizar a la izquierda = siguiente canción, a la derecha =
-            // anterior. El cambio es directo al media item (sin la regla
-            // de 3 s del botón anterior). Con el aleatorio activado, las
-            // tarjetas vecinas siguen el orden aleatorio (no el de la
-            // cola); con el aleatorio desactivado son currentIndex±1. En
-            // los extremos el pager rebota: no se puede pasar más allá
-            // (sin wrap: el wrap es lógica de repeat, no del carrusel).
-            val coverQueue = state.queue
-            // Ventana del carrusel: [vecinoAnterior?, actual, vecinoSiguiente?].
-            // Un vecino INDEX_UNSET o igual al actual se trata como inexistente.
-            val coverWindow = remember(
-                state.currentIndex, state.prevNeighborIndex,
-                state.nextNeighborIndex, coverQueue.size
-            ) {
-                buildList {
-                    val cur = state.currentIndex
-                    val prev = state.prevNeighborIndex
-                    if (prev != C.INDEX_UNSET && prev != cur && prev in coverQueue.indices) add(prev)
-                    if (cur in coverQueue.indices) add(cur)
-                    val next = state.nextNeighborIndex
-                    if (next != C.INDEX_UNSET && next != cur && next in coverQueue.indices) add(next)
-                }
-            }
-            val coverCenterPage = coverWindow.indexOf(state.currentIndex).coerceAtLeast(0)
-            val latestCoverWindow by rememberUpdatedState(coverWindow)
-            val latestCoverCenterPage by rememberUpdatedState(coverCenterPage)
-            val coverPagerState = rememberPagerState(
-                initialPage = coverCenterPage,
-                pageCount = { latestCoverWindow.size }
-            )
-            // Carrusel -> reproductor: al asentarse en otra página, saltar
-            // directo al media item de esa página.
-            val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
-            val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
-            LaunchedEffect(coverPagerState) {
-                snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
-                    .collect { (page, scrolling) ->
-                        val target = latestCoverWindow.getOrNull(page)
-                        if (!scrolling && target != null && target != latestCurrentIndex) {
-                            latestOnPlayQueueItem(target)
-                        }
-                    }
-            }
-            // Reproductor -> carrusel: si la canción cambia por otra vía
-            // (botones, avance automático), reconstruir la ventana y volver
-            // a la página central.
-            LaunchedEffect(coverWindow, state.currentIndex) {
-                val count = latestCoverWindow.size
-                if (count > 0) {
-                    val target = latestCoverCenterPage.coerceIn(0, count - 1)
-                    if (!coverPagerState.isScrollInProgress && coverPagerState.currentPage != target) {
-                        coverPagerState.scrollToPage(target)
-                    }
-                }
-            }
+            // ---- Carátula grande a ancho completo ----
+            // Carrusel reconstruido (v1.0.6): pager de borde a borde, sin
+            // franjas laterales. Cada página ocupa TODO el ancho del viewport:
+            // en reposo se ve UNA portada limpia; al deslizar, la portada sale
+            // por un borde y la otra entra por el otro, recorriendo el viewport
+            // completo. Se mantiene la estética (esquinas redondeadas, sombra).
+            // - Ventana [vecinoAnterior?, actual, vecinoSiguiente?] con índices
+            //   SIEMPRE del timeline (un solo espacio de índices en la app).
+            // - El cambio de canción lo dispara el observador de release al
+            //   SOLTAR (umbral 80 dp o fling > 1000 px/s), sin esperar al
+            //   asentamiento del pager: un fallo visual nunca puede tragarse
+            //   el cambio. Izquierda = siguiente, derecha = anterior.
+            // - Cambio directo al media item, sin la regla de 3 s del botón
+            //   anterior. Con aleatorio, los vecinos siguen el orden aleatorio.
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
@@ -354,31 +316,127 @@ fun NowPlayingScreen(
                             ),
                             radius = 600f
                         )
-                    ),
-                contentAlignment = Alignment.Center
+                    )
             ) {
-                val artSize = (maxWidth * 0.96f).coerceAtMost(420.dp).coerceAtLeast(220.dp)
-                val coverShadow = Modifier.shadow(
-                    elevation = 24.dp,
-                    shape = RoundedCornerShape(artSize / 6),
-                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                val pageWidth = maxWidth
+                // Ventana del carrusel: índices del timeline. Un vecino
+                // INDEX_UNSET o igual al actual se trata como inexistente
+                // (el pager rebota en los extremos, sin wrap).
+                val coverWindow = remember(
+                    state.currentIndex, state.prevNeighborIndex,
+                    state.nextNeighborIndex
+                ) {
+                    buildList {
+                        val cur = state.currentIndex
+                        val prev = state.prevNeighborIndex
+                        if (prev != C.INDEX_UNSET && prev != cur && prev >= 0) add(prev)
+                        if (cur >= 0) add(cur)
+                        val next = state.nextNeighborIndex
+                        if (next != C.INDEX_UNSET && next != cur && next >= 0) add(next)
+                    }
+                }
+                val coverCenterPage = coverWindow.indexOf(state.currentIndex).coerceAtLeast(0)
+                val latestCoverWindow by rememberUpdatedState(coverWindow)
+                val latestCenterPage by rememberUpdatedState(coverCenterPage)
+                val coverPagerState = rememberPagerState(
+                    initialPage = coverCenterPage,
+                    pageCount = { latestCoverWindow.size }
                 )
+                // Estado fresco para los observadores (ninguna recomposición
+                // los corta ni les deja valores viejos).
+                val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
+                val latestNeighbors by rememberUpdatedState(state.prevNeighborIndex to state.nextNeighborIndex)
+                val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
+                val density = LocalDensity.current
+                val swipeThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
+                val flingThresholdPxPerSec = 1000f
+
+                // Carrusel -> reproductor (SOLO vía release): al soltar pasando
+                // el umbral o con fling, cambio directo al vecino en esa
+                // dirección. NO consume: el pager hace su animación nativa en
+                // paralelo con el mismo gesto.
+                val releaseObserver = Modifier.pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var maxDx = 0f
+                        val tracker = VelocityTracker()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                val vx = tracker.calculateVelocity().x
+                                val toNext: Boolean? = when {
+                                    abs(maxDx) >= swipeThresholdPx -> maxDx < 0
+                                    abs(vx) >= flingThresholdPxPerSec -> vx < 0
+                                    else -> null
+                                }
+                                if (toNext != null) {
+                                    val (prevN, nextN) = latestNeighbors
+                                    val cur = latestCurrentIndex
+                                    val target = if (toNext) nextN else prevN
+                                    if (target != C.INDEX_UNSET && target != cur) {
+                                        latestOnPlayQueueItem(target)
+                                    }
+                                }
+                                break
+                            }
+                            val dx = change.position.x - down.position.x
+                            if (abs(dx) > abs(maxDx)) maxDx = dx
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            // Sin consume(): el gesto sigue limpio para el pager.
+                        }
+                    }
+                }
+
+                // Asentamiento -> solo recentrado visual (NUNCA cambia la
+                // canción): si el pager quedó en una página que no es la del
+                // tema actual, vuelve al centro con animación.
+                LaunchedEffect(coverPagerState) {
+                    snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
+                        .collect { (page, scrolling) ->
+                            if (!scrolling) {
+                                val center = latestCenterPage
+                                if (page != center && center < latestCoverWindow.size) {
+                                    coverPagerState.animateScrollToPage(center)
+                                }
+                            }
+                        }
+                }
+                // Reproductor -> carrusel: si la canción cambia por otra vía
+                // (botones, avance automático, aleatorio), reconstruir la
+                // ventana y volver a la página central.
+                LaunchedEffect(coverWindow, state.currentIndex) {
+                    val count = latestCoverWindow.size
+                    if (count > 0) {
+                        val target = latestCenterPage.coerceIn(0, count - 1)
+                        if (!coverPagerState.isScrollInProgress && coverPagerState.currentPage != target) {
+                            coverPagerState.scrollToPage(target)
+                        }
+                    }
+                }
+
                 HorizontalPager(
                     state = coverPagerState,
-                    modifier = Modifier.size(artSize)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(releaseObserver)
                 ) { page ->
                     // La página es una posición de la ventana; se traduce a
-                    // índice de la cola para buscar la canción.
-                    val coverSong = coverWindow.getOrNull(page)?.let { coverQueue.getOrNull(it) }
-                    if (coverSong != null) {
-                        CoverArt(
-                            uri = customCovers[coverSong.id] ?: coverSong.albumArtUri,
-                            size = artSize,
-                            modifier = coverShadow,
-                            cornerRadius = 16.dp
-                        )
-                    }
+                    // índice del timeline (un solo espacio de índices) y la
+                    // portada se resuelve igual que en el reproductor.
+                    val timelineIndex = latestCoverWindow.getOrNull(page)
+                    val coverSong = timelineIndex?.let { viewModel.playback.songAtTimelineIndex(it) }
+                    CoverArt(
+                        uri = coverSong?.let { customCovers[it.id] ?: it.albumArtUri },
+                        size = pageWidth,
+                        modifier = Modifier.shadow(
+                            elevation = 24.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        ),
+                        cornerRadius = 16.dp
+                    )
                 }
             }
 
