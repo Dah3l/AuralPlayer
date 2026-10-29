@@ -255,6 +255,18 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /**
+     * Resuelve el [Song] de un índice del timeline de Media3 (o null si ese
+     * item no está en la biblioteca). Misma resolución que [publishState]:
+     * UN SOLO espacio de índices en toda la app (el del timeline), sin
+     * mezclar con listas filtradas.
+     */
+    fun songAtTimelineIndex(index: Int): Song? {
+        val c = controller ?: return null
+        if (index !in 0 until c.mediaItemCount) return null
+        return c.getMediaItemAt(index).mediaId.toLongOrNull()?.let { libraryById[it] }
+    }
+
     /** Elimina un elemento de la cola. */
     fun removeFromQueue(index: Int) {
         val c = controller ?: return
