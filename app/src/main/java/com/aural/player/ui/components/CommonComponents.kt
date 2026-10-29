@@ -295,7 +295,8 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 fun AlphabetFastScroller(
     keys: List<String>,
     onJumpToIndex: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDraggingChange: (Boolean) -> Unit = {}
 ) {
     val letterMap = remember(keys) {
         val map = mutableMapOf<Char, Int>()
@@ -337,14 +338,17 @@ fun AlphabetFastScroller(
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
+                            onDraggingChange(true)
                             letterAtY(offset.y)?.let { jumpTo(it) }
                         },
                         onDragEnd = {
                             isDragging = false
+                            onDraggingChange(false)
                             activeLetter = null
                         },
                         onDragCancel = {
                             isDragging = false
+                            onDraggingChange(false)
                             activeLetter = null
                         },
                         onVerticalDrag = { change, _ ->
@@ -405,8 +409,8 @@ fun AlphabetFastScroller(
 
 /**
  * Pantalla de bienvenida: logo de la app con animación de entrada.
- * Con el tema Halloween activo muestra la escena de tumbas + mano zombi
- * (más grande) y el splash dura ~2.8s en vez de 1.8s.
+ * Con el tema Halloween activo, el "Aural" usa la fuente de terror
+ * (Creepster). Dura 1.8s.
  */
 @Composable
 fun SplashScreen(isHalloween: Boolean = false) {
@@ -474,19 +478,6 @@ fun SplashScreen(isHalloween: Boolean = false) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
-            )
-        }
-        // Escena Halloween abajo: tumbas + mano zombi animada + niebla
-        // (escena grande, ~300 dp; el splash dura ~2.8s con este tema).
-        // El bloqueador de toques del splash se queda como está.
-        // Navidad (diciembre): enganchar escena navideña aquí (theme == CHRISTMAS).
-        if (isHalloween) {
-            HalloweenSplashScene(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .graphicsLayer { this.alpha = alpha }
             )
         }
     }
