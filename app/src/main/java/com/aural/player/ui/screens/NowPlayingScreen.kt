@@ -388,7 +388,7 @@ fun NowPlayingScreen(
                                 } else {
                                     coverDragOffset = baseOffset + (slop.position.x - down.position.x)
                                     val ended = horizontalDrag(slop.id) { change ->
-                                        val dx = change.positionChange.x
+                                        val dx = (change.position - change.previousPosition).x
                                         if (dx != 0f) {
                                             change.consume()
                                             tracker.addPosition(change.uptimeMillis, change.position)
