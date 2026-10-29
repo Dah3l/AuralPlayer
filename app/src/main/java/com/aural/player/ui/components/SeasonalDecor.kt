@@ -401,7 +401,7 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
     var peek by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(Random.nextLong(25000L, 45001L))
+            delay(Random.nextLong(60000L, 120001L))
             side = if (Random.nextBoolean()) -1f else 1f
             peek = true
             delay(1200L)
