@@ -295,8 +295,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 fun AlphabetFastScroller(
     keys: List<String>,
     onJumpToIndex: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    onDraggingChange: (Boolean) -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
     val letterMap = remember(keys) {
         val map = mutableMapOf<Char, Int>()
@@ -338,17 +337,14 @@ fun AlphabetFastScroller(
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
-                            onDraggingChange(true)
                             letterAtY(offset.y)?.let { jumpTo(it) }
                         },
                         onDragEnd = {
                             isDragging = false
-                            onDraggingChange(false)
                             activeLetter = null
                         },
                         onDragCancel = {
                             isDragging = false
-                            onDraggingChange(false)
                             activeLetter = null
                         },
                         onVerticalDrag = { change, _ ->
