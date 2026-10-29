@@ -452,6 +452,7 @@ fun NowPlayingScreen(
                 currentSongId = song.id,
                 dominantColors = dominantCache,
                 fallbackDominant = fallbackDominant,
+                isHalloweenTheme = isHalloweenTheme,
                 modifier = Modifier.fillMaxWidth()
             )
             // ---- Línea actual de la letra (debajo de la carátula) ----
@@ -1195,6 +1196,7 @@ private fun CoverCarousel(
     currentSongId: Long,
     dominantColors: Map<Long, Pair<String?, Color>>,
     fallbackDominant: Color,
+    isHalloweenTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
     // Lecturas del scroll: limitadas a este scope.
