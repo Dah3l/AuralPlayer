@@ -83,7 +83,11 @@ import androidx.compose.ui.unit.dp
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
+import com.aural.player.ui.components.HalloweenBats
 import com.aural.player.ui.components.formatDuration
+import com.aural.player.ui.theme.HalloweenPumpkin
+import com.aural.player.ui.theme.SeasonalTheme
+import com.aural.player.ui.theme.currentSeasonalTheme
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -248,6 +252,11 @@ fun NowPlayingScreen(
                     }
                 }
         )
+        // Murciélagos de temporada (27-oct..1-nov): al fondo, dibujo puro.
+        // Navidad (diciembre): enganchar decoración navideña aquí.
+        if (currentSeasonalTheme() == SeasonalTheme.Halloween) {
+            HalloweenBats(Modifier.fillMaxSize())
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -1206,13 +1215,17 @@ private fun CoverCarousel(
             incomingPage = p
         }
     }
-    val glowColor = if (incomingPage < 0) {
+    val glowBase = if (incomingPage < 0) {
         currentDominant
     } else {
         val incomingDominant = coverItems.getOrNull(incomingPage)?.id
             ?.let { dominantColors[it]?.second } ?: currentDominant
         lerp(currentDominant, incomingDominant, (1f - incomingD).coerceIn(0f, 1f))
     }
+    // En Halloween el glow se tiñe más naranja calabaza.
+    val glowColor =
+        if (currentSeasonalTheme() == SeasonalTheme.Halloween) lerp(glowBase, HalloweenPumpkin, 0.45f)
+        else glowBase
 
     BoxWithConstraints(
         modifier
