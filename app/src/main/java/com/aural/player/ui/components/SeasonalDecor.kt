@@ -1,9 +1,10 @@
-// Decoración de temporada dibujada en código (Canvas/vector, SIN imágenes).
+// Decoración de temporada dibujada en código (SIN imágenes externas).
 //
 // Halloween (27-oct..1-nov): fantasmas, telaraña, araña, murciélagos,
-// calabaza, tumbas con mano zombi. Todo ANIMADO de verdad con
-// infiniteTransition (barato: pocos valores animados, dibujo vectorial).
-// Elegante y sutil: ambiente, no carnaval. Ningún decorado consume toques.
+// calavera. Cada personaje se DIBUJA UNA SOLA VEZ a un bitmap offscreen
+// (a 2x para nitidez) y todo el movimiento va en Modifier.graphicsLayer
+// (transforms resueltos por el GPU/RenderThread): cero redibujo por frame,
+// fluido incluso en gamas medias. Ningún decorado consume toques.
 //
 // Navidad (20-26 dic): STUB — ver punto de enganche al final del archivo.
 package com.aural.player.ui.components
@@ -15,34 +16,38 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.random.Random
 import com.aural.player.ui.theme.HalloweenGhost
@@ -53,7 +58,26 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 // ===========================================================================
-// FANTASMAS (Home): cruzan la pantalla flotando, aparecen y se desvanecen.
+// PRE-RENDER: dibuja UNA VEZ a un bitmap offscreen (2x para nitidez).
+// El movimiento posterior es solo graphicsLayer: cero redibujo por frame.
+// ===========================================================================
+
+@Composable
+fun rememberRenderedBitmap(widthPx: Int, heightPx: Int, draw: DrawScope.() -> Unit): ImageBitmap {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    return remember(widthPx, heightPx) {
+        ImageBitmap(widthPx, heightPx).also { bmp ->
+            CanvasDrawScope().draw(
+                density, layoutDirection, Canvas(bmp),
+                Size(widthPx.toFloat(), heightPx.toFloat())
+            ) { draw() }
+        }
+    }
+}
+
+// ===========================================================================
+// FANTASMA: figura vectorial (espacio 100x100, alfa 1 — el fade va en capa).
 // ===========================================================================
 
 private fun DrawScope.drawGhostFigure(cx: Float, cy: Float, s: Float, color: Color, alpha: Float) {
@@ -85,309 +109,380 @@ private fun DrawScope.drawGhostFigure(cx: Float, cy: Float, s: Float, color: Col
     drawOval(dark, Offset(cx - w * 0.05f, top + h * 0.46f), Size(w * 0.10f, h * 0.08f))
 }
 
-// ===========================================================================
-// RELOJ AMBIENTAL COMPARTIDO (~24 fps): todos los decorados de temporada
-// leen el mismo tiempo en segundos. A 24 fps el movimiento ambiental lento
-// se ve fluido y cada decorado redibuja menos de la mitad de veces que a
-// 60 fps — el movimiento nunca se detiene, solo se actualiza menos.
-// ===========================================================================
-
-@Composable
-fun rememberAmbientSeconds(): State<Float> {
-    val t = remember { mutableStateOf(0f) }
-    LaunchedEffect(Unit) {
-        val start = withFrameNanos { it }
-        while (true) {
-            val now = withFrameNanos { it }
-            t.value = (now - start) / 1_000_000_000f
-            delay(41L) // ~24 fps
-        }
-    }
-    return t
+private fun DrawScope.drawGhostAssembly() {
+    // espacio 100x100
+    drawGhostFigure(50f, 50f, 66f, HalloweenGhost, 1f)
 }
 
 // ===========================================================================
-// FANTASMAS (Home): deriva continua, sin detenerse nunca.
+// TELARAÑA: diseño clásico de orbe (espacio 170x170, alfa 1 — el brillo y la
+// mecedora van en capa). Hilos radiales + espiral con leve comba.
 // ===========================================================================
 
-@Composable
-private fun GhostDrift(
-    travelDurationMs: Int,
-    delayMs: Int,
-    sizeDp: Dp,
-    baseYFraction: Float,
-    direction: Float,
-    maxAlpha: Float,
-    tSec: Float
-) {
-    // Fase 0→1 en travelDurationMs, derivada del reloj compartido (24 fps).
-    val p = (tSec * 1000f / travelDurationMs) % 1f
-    val density = LocalDensity.current
-    val sizePx = with(density) { sizeDp.toPx() }
-    val delayFrac = delayMs / travelDurationMs.toFloat()
-    Canvas(Modifier.fillMaxSize()) {
-        val phase = (p + delayFrac) % 1f
-        val w = size.width
-        val h = size.height
-        val x = if (direction > 0) -140f + phase * (w + 280f)
-        else w + 140f - phase * (w + 280f)
-        val y = baseYFraction * h + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
-        val alpha = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
-        drawGhostFigure(x, y, sizePx, HalloweenGhost, alpha)
+private fun DrawScope.drawWebAssembly() {
+    val boxPx = 170f
+    val anchor = Offset(boxPx, 0f)
+    val col = Color.White
+    val lineStyle = Stroke(width = 1.8f, cap = StrokeCap.Round)
+    val maxR = boxPx * 1.04f
+    val spokes = 8
+    // hilos radiales: de 90° (abajo) a 180° (izquierda), en abanico
+    val spokeEnds = (0..spokes).map { i ->
+        val a = Math.toRadians(90.0 + 90.0 * i / spokes)
+        anchor + Offset(cos(a).toFloat() * maxR, sin(a).toFloat() * maxR)
     }
-}
-
-// ===========================================================================
-// TELARAÑA (Home): esquina superior derecha, diseño clásico de orbe —
-// hilos radiales desde la esquina + espiral con leve comba, como la imagen
-// de referencia. Con brillo y mecedora sutiles.
-// ===========================================================================
-
-@Composable
-private fun SpiderWeb(modifier: Modifier = Modifier, tSec: Float) {
-    // Brillo (periodo 3.8 s) y mecedora (periodo 5.2 s) como ondas
-    // triangulares suavizadas — igual que el easing de antes, pero leídas
-    // del reloj compartido (24 fps).
-    val shimPhase = (tSec / 3.8f) % 2f
-    val shimTri = (if (shimPhase < 1f) shimPhase else 2f - shimPhase).coerceIn(0f, 1f)
-    val shimSmooth = shimTri * shimTri * (3f - 2f * shimTri)
-    val shimmer = 0.14f + shimSmooth * 0.16f
-    val swayPhase = (tSec / 5.2f) % 2f
-    val swayTri = (if (swayPhase < 1f) swayPhase else 2f - swayPhase).coerceIn(0f, 1f)
-    val swaySmooth = swayTri * swayTri * (3f - 2f * swayTri)
-    val swayDeg = -1.4f + swaySmooth * 2.8f
-    Canvas(modifier.size(170.dp)) {
-        val anchor = Offset(size.width, 0f)
-        rotate(swayDeg, anchor) {
-            val col = Color.White.copy(alpha = shimmer)
-            val lineStyle = Stroke(width = 1.8f, cap = StrokeCap.Round)
-            val maxR = size.minDimension * 1.04f
-            val spokes = 8
-            // hilos radiales: de 90° (abajo) a 180° (izquierda), en abanico
-            val spokeEnds = (0..spokes).map { i ->
-                val a = Math.toRadians(90.0 + 90.0 * i / spokes)
-                anchor + Offset(cos(a).toFloat() * maxR, sin(a).toFloat() * maxR)
+    for (end in spokeEnds) {
+        drawLine(col, anchor, end, strokeWidth = 1.8f, cap = StrokeCap.Round)
+    }
+    // espiral: anillos unidos entre radiales consecutivos con comba
+    // hacia el ancla (la seda cuelga un poco, como en la referencia)
+    val ringFractions = listOf(0.20f, 0.34f, 0.48f, 0.62f, 0.76f, 0.90f)
+    for (f in ringFractions) {
+        for (i in 0 until spokeEnds.size - 1) {
+            val p0 = anchor + (spokeEnds[i] - anchor) * f
+            val p1 = anchor + (spokeEnds[i + 1] - anchor) * f
+            val mid = (p0 + p1) / 2f
+            val toAnchor = anchor - mid
+            val dist = toAnchor.getDistance()
+            val sag = (p1 - p0).getDistance() * 0.12f
+            val ctrl = if (dist > 0f) mid + toAnchor / dist * sag else mid
+            val path = Path().apply {
+                moveTo(p0.x, p0.y)
+                quadraticBezierTo(ctrl.x, ctrl.y, p1.x, p1.y)
             }
-            for (end in spokeEnds) {
-                drawLine(col, anchor, end, strokeWidth = 1.8f, cap = StrokeCap.Round)
-            }
-            // espiral: anillos unidos entre radiales consecutivos con comba
-            // hacia el ancla (la seda cuelga un poco, como en la referencia)
-            val ringFractions = listOf(0.20f, 0.34f, 0.48f, 0.62f, 0.76f, 0.90f)
-            for (f in ringFractions) {
-                for (i in 0 until spokeEnds.size - 1) {
-                    val p0 = anchor + (spokeEnds[i] - anchor) * f
-                    val p1 = anchor + (spokeEnds[i + 1] - anchor) * f
-                    val mid = (p0 + p1) / 2f
-                    val toAnchor = anchor - mid
-                    val dist = toAnchor.getDistance()
-                    val sag = (p1 - p0).getDistance() * 0.12f
-                    val ctrl = if (dist > 0f) mid + toAnchor / dist * sag else mid
-                    val path = Path().apply {
-                        moveTo(p0.x, p0.y)
-                        quadraticBezierTo(ctrl.x, ctrl.y, p1.x, p1.y)
-                    }
-                    drawPath(path, col, style = lineStyle)
-                }
-            }
+            drawPath(path, col, style = lineStyle)
         }
     }
 }
 
 // ===========================================================================
-// ARAÑA (Home): baja por su hilo, se balancea, mueve las patas y sube.
+// ARAÑA: conjunto hilo + cuerpo (espacio 96x220). El hilo ocupa todo el
+// alto; el cuerpo cuelga al final. Dos poses de patas (bitmaps A/B).
 // ===========================================================================
 
-@Composable
-private fun SpiderDrop(modifier: Modifier = Modifier, tSec: Float) {
-    // Ciclo de 15 s (baja/cuelga/sube) derivado del reloj compartido.
-    // El meneo de patas queda en 0.8 Hz igual que antes (12 ciclos por
-    // periodo de 15 s) — sin cambios visuales, solo menos redibujos.
-    val p = (tSec / 15f) % 1f
-    val density = LocalDensity.current
-    val dropMaxPx = with(density) { 150.dp.toPx() }
-    Canvas(modifier.size(96.dp, 220.dp)) {
-        val w = size.width
-        // fases: baja 0→0.32, cuelga y se mece 0.32→0.68, sube 0.68→1
-        val dropPx = dropMaxPx * when {
-            p < 0.32f -> p / 0.32f
-            p < 0.68f -> 1f
-            else -> 1f - (p - 0.68f) / 0.32f
+private fun DrawScope.drawSpiderAssembly(legsUp: Boolean) {
+    val w = 96f
+    val h = 220f
+    val cx = w / 2f
+    val bodyY = h - 32f
+    val col = Color(0xFF17121F)
+    // hilo
+    drawLine(col, Offset(cx, 0f), Offset(cx, bodyY - 12f), strokeWidth = 2f)
+    // 8 patas: dos poses (arriba/abajo)
+    val legSign = if (legsUp) 1f else -1f
+    for (side in listOf(-1f, 1f)) {
+        for (i in 0..3) {
+            val wob = legSign * (5f + i * 2.5f)
+            val hipX = cx + side * 7f
+            val hipY = bodyY - 10f + i * 6.5f
+            val kneeX = cx + side * (14f + wob * 0.4f)
+            val kneeY = hipY - 8f + i * 1.5f
+            val footX = cx + side * (26f + i * 5f + wob)
+            val footY = kneeY + 13f
+            drawLine(
+                col, Offset(hipX, hipY), Offset(kneeX, kneeY),
+                strokeWidth = 2.6f, cap = StrokeCap.Round
+            )
+            drawLine(
+                col, Offset(kneeX, kneeY), Offset(footX, footY),
+                strokeWidth = 2.6f, cap = StrokeCap.Round
+            )
         }
-        val alpha = when {
-            p < 0.04f -> p / 0.04f
-            p > 0.96f -> (1f - p) / 0.04f
-            else -> 1f
-        }.coerceIn(0f, 1f)
-        val hanging = p in 0.32f..0.68f
-        val swayX =
-            if (hanging) sin((p - 0.32f) / 0.36f * 2f * PI.toFloat() * 2f) * 18f else 0f
-        val cx = w / 2f + swayX
-        val bodyY = 8f + dropPx
-        val col = Color(0xFF17121F).copy(alpha = alpha)
-        // hilo
-        drawLine(col, Offset(cx, 0f), Offset(cx, bodyY - 12f), strokeWidth = 2f)
-        // 8 patas con meneo
-        val wig = sin(p * 2f * PI.toFloat() * 12f)
-        for (side in listOf(-1f, 1f)) {
-            for (i in 0..3) {
-                val wob = wig * (5f + i * 2.5f)
-                val hipX = cx + side * 7f
-                val hipY = bodyY - 10f + i * 6.5f
-                val kneeX = cx + side * (14f + wob * 0.4f)
-                val kneeY = hipY - 8f + i * 1.5f
-                val footX = cx + side * (26f + i * 5f + wob)
-                val footY = kneeY + 13f
-                drawLine(
-                    col, Offset(hipX, hipY), Offset(kneeX, kneeY),
-                    strokeWidth = 2.6f, cap = StrokeCap.Round
+    }
+    // cuerpo: abdomen + cabeza
+    drawOval(col, Offset(cx - 11f, bodyY - 2f), Size(22f, 30f))
+    drawOval(col, Offset(cx - 8f, bodyY - 18f), Size(16f, 18f))
+    // ojitos naranja
+    drawCircle(HalloweenPumpkin, 2.4f, Offset(cx - 4f, bodyY - 22f))
+    drawCircle(HalloweenPumpkin, 2.4f, Offset(cx + 4f, bodyY - 22f))
+}
+
+// ===========================================================================
+// MURCIÉLAGO: caricatura vista frontal (espacio 150x150, s=100, alfa 1).
+// Cuerpo regordete, alas anchas con borde ondeado de 3 ondas, orejas
+// picudas, ojazos con pupila. El bateo de alas va en capa (scaleY).
+// ===========================================================================
+
+private fun DrawScope.drawBatAssembly() {
+    val x = 75f
+    val y = 72f
+    val s = 100f
+    val col = Color(0xFF201419)
+    // cuerpo regordete
+    drawOval(col, Offset(x - s * 0.16f, y - s * 0.20f), Size(s * 0.32f, s * 0.40f))
+    // orejas picudas
+    for (side in listOf(-1f, 1f)) {
+        val ear = Path().apply {
+            moveTo(x + side * s * 0.06f, y - s * 0.16f)
+            lineTo(x + side * s * 0.13f, y - s * 0.34f)
+            lineTo(x + side * s * 0.20f, y - s * 0.15f)
+            close()
+        }
+        drawPath(ear, col)
+    }
+    // alas anchas con borde ondeado (3 ondas), en reposo (alas niveladas)
+    for (side in listOf(-1f, 1f)) {
+        val shoulder = Offset(x + side * s * 0.10f, y - s * 0.02f)
+        val wingSpan = s * 0.55f
+        val wing = Path().apply {
+            moveTo(shoulder.x, shoulder.y)
+            quadraticBezierTo(
+                shoulder.x + side * wingSpan * 0.5f, shoulder.y - s * 0.28f,
+                shoulder.x + side * wingSpan, shoulder.y - s * 0.10f
+            )
+            val waves = 3
+            var px = shoulder.x + side * wingSpan
+            var py = shoulder.y - s * 0.10f
+            for (k in 1..waves) {
+                val nx = shoulder.x + side * wingSpan * (1f - k / waves.toFloat())
+                val ny = shoulder.y + s * 0.02f
+                quadraticBezierTo(
+                    (px + nx) / 2f + side * s * 0.02f, (py + ny) / 2f + s * 0.10f,
+                    nx, ny
                 )
-                drawLine(
-                    col, Offset(kneeX, kneeY), Offset(footX, footY),
-                    strokeWidth = 2.6f, cap = StrokeCap.Round
-                )
+                px = nx
+                py = ny
             }
+            close()
         }
-        // cuerpo: abdomen + cabeza
-        drawOval(col, Offset(cx - 11f, bodyY - 2f), Size(22f, 30f))
-        drawOval(col, Offset(cx - 8f, bodyY - 18f), Size(16f, 18f))
-        // ojitos naranja
-        val eyeA = (alpha * 0.95f).coerceIn(0f, 1f)
-        drawCircle(HalloweenPumpkin.copy(alpha = eyeA), 2.4f, Offset(cx - 4f, bodyY - 22f))
-        drawCircle(HalloweenPumpkin.copy(alpha = eyeA), 2.4f, Offset(cx + 4f, bodyY - 22f))
+        drawPath(wing, col)
+    }
+    // ojazos blancos con pupila
+    val eyeCol = Color(0xFFFFF6E0)
+    val pupCol = Color(0xFF14100E)
+    for (side in listOf(-1f, 1f)) {
+        val ex = x + side * s * 0.07f
+        val ey = y - s * 0.08f
+        drawCircle(eyeCol, s * 0.055f, Offset(ex, ey))
+        drawCircle(pupCol, s * 0.022f, Offset(ex + s * 0.012f, ey + s * 0.008f))
     }
 }
 
 // ===========================================================================
-// AMBIENTE HOME: fantasmas + telaraña + araña (dibujo puro, sin toques).
-// Todos leen el mismo reloj ambiental (~24 fps): el movimiento nunca se
-// detiene, solo se redibuja menos para no competir con la lista.
+// CALAVERA: cráneo + mandíbula + dientes (espacio 100x100, alfa 1).
+// ===========================================================================
+
+private fun DrawScope.drawSkullAssembly() {
+    val s = 100f
+    val bone = Color(0xFFE8E4D8)
+    val dark = Color(0xFF1A1512)
+    // cráneo
+    drawOval(bone, Offset(s * 0.18f, s * 0.06f), Size(s * 0.64f, s * 0.58f))
+    // mandíbula
+    drawRoundRect(
+        bone, Offset(s * 0.28f, s * 0.52f), Size(s * 0.44f, s * 0.36f),
+        CornerRadius(s * 0.10f, s * 0.10f)
+    )
+    // cuencas de los ojos
+    drawOval(dark, Offset(s * 0.30f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
+    drawOval(dark, Offset(s * 0.55f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
+    // nariz triangular
+    val nose = Path().apply {
+        moveTo(s * 0.50f, s * 0.58f)
+        lineTo(s * 0.44f, s * 0.68f)
+        lineTo(s * 0.56f, s * 0.68f)
+        close()
+    }
+    drawPath(nose, dark)
+    // dientes
+    for (i in 0..3) {
+        val tx = s * (0.34f + i * 0.107f)
+        drawLine(
+            dark, Offset(tx, s * 0.70f), Offset(tx, s * 0.84f),
+            strokeWidth = s * 0.022f, cap = StrokeCap.Round
+        )
+    }
+}
+
+// ===========================================================================
+// AMBIENTE HOME: fantasmas + telaraña + araña.
+// Movimiento 100% en graphicsLayer (GPU): la pantalla nunca se redibuja.
 // ===========================================================================
 
 @Composable
 fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
-    val tSec by rememberAmbientSeconds()
-    Box(modifier) {
-        GhostDrift(
-            travelDurationMs = 26000, delayMs = 0, sizeDp = 58.dp,
-            baseYFraction = 0.20f, direction = 1f, maxAlpha = 0.42f,
-            tSec = tSec
+    val t = rememberInfiniteTransition(label = "hw")
+    // Los valores animados solo alimentan graphicsLayer (cero redibujo).
+    val g1p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(26000), RepeatMode.Restart), label = "g1p")
+    val g2p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(33000), RepeatMode.Restart), label = "g2p")
+    val webRot by t.animateFloat(-1.4f, 1.4f, infiniteRepeatable(tween(2600), RepeatMode.Reverse), label = "webRot")
+    val webAl by t.animateFloat(0.14f, 0.30f, infiniteRepeatable(tween(1900), RepeatMode.Reverse), label = "webAl")
+    val spP by t.animateFloat(0f, 1f, infiniteRepeatable(tween(15000), RepeatMode.Restart), label = "spP")
+    val legFlip by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Restart), label = "legFlip")
+
+    val density = LocalDensity.current
+    val u = density.density // px por dp
+
+    // ---- Bitmaps: se renderizan UNA VEZ ----
+    val ghostPx = (58f * u * 2f).toInt()
+    val ghostBmp = rememberRenderedBitmap(ghostPx, ghostPx) {
+        scale(ghostPx / 100f, ghostPx / 100f) { drawGhostAssembly() }
+    }
+    val webPx = (170f * u * 2f).toInt()
+    val webBmp = rememberRenderedBitmap(webPx, webPx) {
+        scale(webPx / 170f, webPx / 170f) { drawWebAssembly() }
+    }
+    val spiderWPx = (96f * u * 2f).toInt()
+    val spiderHPx = (220f * u * 2f).toInt()
+    val spiderBmpA = rememberRenderedBitmap(spiderWPx, spiderHPx) {
+        scale(spiderWPx / 96f, spiderHPx / 220f) { drawSpiderAssembly(legsUp = true) }
+    }
+    val spiderBmpB = rememberRenderedBitmap(spiderWPx, spiderHPx) {
+        scale(spiderWPx / 96f, spiderHPx / 220f) { drawSpiderAssembly(legsUp = false) }
+    }
+
+    BoxWithConstraints(modifier) {
+        val maxWpx = with(density) { maxWidth.toPx() }
+        val maxHpx = with(density) { maxHeight.toPx() }
+
+        // ---- Fantasma 1: deriva continua, aparece y se desvanece ----
+        run {
+            val phase = g1p % 1f
+            val gx = -140f + phase * (maxWpx + 280f)
+            val gy = 0.20f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
+            val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.42f
+            val dispPx = 58f * u
+            Image(
+                bitmap = ghostBmp,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(58.dp)
+                    .graphicsLayer {
+                        translationX = gx - dispPx / 2f
+                        translationY = gy - dispPx / 2f
+                        alpha = ga
+                    }
+            )
+        }
+        // ---- Fantasma 2 ----
+        run {
+            val phase = (g2p + 11000f / 33000f) % 1f
+            val gx = maxWpx + 140f - phase * (maxWpx + 280f)
+            val gy = 0.52f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
+            val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.32f
+            val dispPx = 42f * u
+            Image(
+                bitmap = ghostBmp,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(42.dp)
+                    .graphicsLayer {
+                        translationX = gx - dispPx / 2f
+                        translationY = gy - dispPx / 2f
+                        alpha = ga
+                    }
+            )
+        }
+        // ---- Telaraña: fija arriba a la derecha; mecedora + brillo en capa ----
+        Image(
+            bitmap = webBmp,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(170.dp)
+                .graphicsLayer {
+                    rotationZ = webRot
+                    transformOrigin = TransformOrigin(1f, 0f)
+                    alpha = webAl
+                }
         )
-        GhostDrift(
-            travelDurationMs = 33000, delayMs = 11000, sizeDp = 42.dp,
-            baseYFraction = 0.52f, direction = -1f, maxAlpha = 0.32f,
-            tSec = tSec
-        )
-        SpiderWeb(Modifier.align(Alignment.TopEnd), tSec = tSec)
-        SpiderDrop(
-            Modifier.align(Alignment.TopCenter).offset(x = 110.dp),
-            tSec = tSec
-        )
+        // ---- Araña: baja/sube por el hilo (el bitmap lleva el hilo completo;
+        // se traslada en Y para simular la bajada), balanceo + patas A/B ----
+        run {
+            val dropMaxPx = 150f * u
+            val dropPx = dropMaxPx * when {
+                spP < 0.32f -> spP / 0.32f
+                spP < 0.68f -> 1f
+                else -> 1f - (spP - 0.68f) / 0.32f
+            }
+            val spAlpha = when {
+                spP < 0.04f -> spP / 0.04f
+                spP > 0.96f -> (1f - spP) / 0.04f
+                else -> 1f
+            }.coerceIn(0f, 1f)
+            val hanging = spP in 0.32f..0.68f
+            val swayX =
+                if (hanging) sin((spP - 0.32f) / 0.36f * 2f * PI.toFloat() * 2f) * 18f else 0f
+            // el cuerpo está dibujado a 188dp del borde superior del bitmap
+            val transY = (8f * u + dropPx) - (188f * u)
+            Image(
+                bitmap = if (legFlip < 0.5f) spiderBmpA else spiderBmpB,
+                contentDescription = null,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(x = 110.dp)
+                    .size(96.dp, 220.dp)
+                    .graphicsLayer {
+                        translationY = transY
+                        translationX = swayX
+                        alpha = spAlpha
+                    }
+            )
+        }
     }
 }
 
 // ===========================================================================
 // MURCIÉLAGOS (Now Playing): caricatura — cuerpo regordete, alas anchas con
 // borde ondeado de 3 ondas, orejas picudas, ojazos con pupila. Cruzan a
-// distintas alturas, uno en dirección contraria.
+// distintas alturas, uno en dirección contraria. Vuelo en translation,
+// bateo de alas en scaleY (vista frontal), todo en graphicsLayer.
 // ===========================================================================
 
 @Composable
-private fun BatFlight(
-    travelDurationMs: Int,
-    delayMs: Int,
-    yFraction: Float,
-    sizeDp: Dp,
-    maxAlpha: Float = 0.85f,
-    fromRight: Boolean = false,
-    tSec: Float
-) {
-    // Viaje y aleteo derivados del reloj compartido (24 fps); la velocidad
-    // y el ritmo del aleteo quedan idénticos a antes.
-    val p = (tSec * 1000f / travelDurationMs) % 1f
-    val density = LocalDensity.current
-    val sizePx = with(density) { sizeDp.toPx() }
-    val delayFrac = delayMs / travelDurationMs.toFloat()
-    Canvas(Modifier.fillMaxSize()) {
-        val phase = (p + delayFrac) % 1f
-        val w = size.width
-        val h = size.height
-        val dir = if (fromRight) -1f else 1f
-        val x = if (fromRight) w + 100f - phase * (w + 200f) else -100f + phase * (w + 200f)
-        val y = yFraction * h + sin(phase * 2f * PI.toFloat() * 3f) * 22f
-        val alpha = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
-        val flap = sin(phase * 2f * PI.toFloat() * 8f)
-        val col = Color(0xFF201419).copy(alpha = alpha)
-        val s = sizePx
-        // cuerpo regordete
-        drawOval(col, Offset(x - s * 0.16f, y - s * 0.20f), Size(s * 0.32f, s * 0.40f))
-        // orejas picudas
-        for (side in listOf(-1f, 1f)) {
-            val ear = Path().apply {
-                moveTo(x + side * s * 0.06f, y - s * 0.16f)
-                lineTo(x + side * s * 0.13f, y - s * 0.34f)
-                lineTo(x + side * s * 0.20f, y - s * 0.15f)
-                close()
-            }
-            drawPath(ear, col)
-        }
-        // alas anchas con borde ondeado (3 ondas), batiendo
-        for (side in listOf(-1f, 1f)) {
-            val shoulder = Offset(x + side * s * 0.10f, y - s * 0.02f)
-            val wingSpan = s * 0.55f
-            val lift = flap * s * 0.18f
-            val wing = Path().apply {
-                moveTo(shoulder.x, shoulder.y)
-                quadraticBezierTo(
-                    shoulder.x + side * wingSpan * 0.5f, shoulder.y - s * 0.28f - lift,
-                    shoulder.x + side * wingSpan, shoulder.y - s * 0.10f - lift
-                )
-                val waves = 3
-                var px = shoulder.x + side * wingSpan
-                var py = shoulder.y - s * 0.10f - lift
-                for (k in 1..waves) {
-                    val nx = shoulder.x + side * wingSpan * (1f - k / waves.toFloat())
-                    val ny = shoulder.y + s * 0.02f
-                    quadraticBezierTo(
-                        (px + nx) / 2f + side * s * 0.02f, (py + ny) / 2f + s * 0.10f,
-                        nx, ny
-                    )
-                    px = nx
-                    py = ny
-                }
-                close()
-            }
-            drawPath(wing, col)
-        }
-        // ojazos blancos con pupila (miran hacia donde vuela)
-        val eyeCol = Color(0xFFFFF6E0).copy(alpha = alpha)
-        val pupCol = Color(0xFF14100E).copy(alpha = alpha)
-        for (side in listOf(-1f, 1f)) {
-            val ex = x + side * s * 0.07f
-            val ey = y - s * 0.08f
-            drawCircle(eyeCol, s * 0.055f, Offset(ex, ey))
-            drawCircle(pupCol, s * 0.022f, Offset(ex + dir * s * 0.012f, ey + s * 0.008f))
-        }
-    }
-}
-
-@Composable
 fun HalloweenBats(modifier: Modifier = Modifier) {
-    val tSec by rememberAmbientSeconds()
-    Box(modifier) {
-        BatFlight(
-            travelDurationMs = 14000, delayMs = 0,
-            yFraction = 0.14f, sizeDp = 84.dp, tSec = tSec
-        )
-        BatFlight(
-            travelDurationMs = 19000, delayMs = 6000,
-            yFraction = 0.48f, sizeDp = 64.dp, maxAlpha = 0.7f, fromRight = true,
-            tSec = tSec
-        )
-        BatFlight(
-            travelDurationMs = 16000, delayMs = 11000,
-            yFraction = 0.74f, sizeDp = 76.dp, maxAlpha = 0.8f, tSec = tSec
-        )
+    val t = rememberInfiniteTransition(label = "bats")
+    val b1p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(14000), RepeatMode.Restart), label = "b1p")
+    val b2p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(19000), RepeatMode.Restart), label = "b2p")
+    val b3p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(16000), RepeatMode.Restart), label = "b3p")
+
+    val density = LocalDensity.current
+    val u = density.density
+
+    val batPx = (84f * u * 2f).toInt()
+    val batBmp = rememberRenderedBitmap(batPx, batPx) {
+        scale(batPx / 150f, batPx / 150f) { drawBatAssembly() }
+    }
+
+    BoxWithConstraints(modifier) {
+        val maxWpx = with(density) { maxWidth.toPx() }
+        val maxHpx = with(density) { maxHeight.toPx() }
+
+        @Composable
+        fun Bat(
+            p: Float,
+            delayMs: Int,
+            travelMs: Int,
+            yFraction: Float,
+            sizeDp: Dp,
+            maxAlpha: Float,
+            fromRight: Boolean
+        ) {
+            val phase = (p + delayMs / travelMs.toFloat()) % 1f
+            val x = if (fromRight) maxWpx + 100f - phase * (maxWpx + 200f)
+            else -100f + phase * (maxWpx + 200f)
+            val y = yFraction * maxHpx + sin(phase * 2f * PI.toFloat() * 3f) * 22f
+            val a = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
+            val flap = sin(phase * 2f * PI.toFloat() * 8f)
+            val dispPx = sizeDp.value * u
+            Image(
+                bitmap = batBmp,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(sizeDp)
+                    .graphicsLayer {
+                        translationX = x - dispPx / 2f
+                        translationY = y - dispPx / 2f
+                        // bateo de alas en vista frontal
+                        scaleY = 1f - 0.45f * (0.5f + 0.5f * flap)
+                        alpha = a
+                    }
+            )
+        }
+
+        Bat(b1p, 0, 14000, 0.14f, 84.dp, 0.85f, false)
+        Bat(b2p, 6000, 19000, 0.48f, 64.dp, 0.7f, true)
+        Bat(b3p, 11000, 16000, 0.74f, 76.dp, 0.8f, false)
     }
 }
 
@@ -395,7 +490,7 @@ fun HalloweenBats(modifier: Modifier = Modifier) {
 // CALAVERA ESPORÁDICA (global, cualquier vista): cada 1-2 min (aleatorio) se
 // desliza desde un costado (izquierda o derecha, aleatorio), se asoma ~60%,
 // se queda 1.6 s con un leve meneo y se vuelve a esconder. Solo con el tema
-// Halloween; nunca consume toques.
+// Halloween; nunca consume toques. Asomo y meneo en graphicsLayer.
 // ===========================================================================
 
 @Composable
@@ -428,51 +523,26 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
     )
     if (peekAnim > 0.01f) {
         val density = LocalDensity.current
-        val skullDp = 88.dp
-        val skullPx = with(density) { skullDp.toPx() }
+        val u = density.density
+        val skullPx = (88f * u * 2f).toInt()
+        val skullBmp = rememberRenderedBitmap(skullPx, skullPx) {
+            scale(skullPx / 100f, skullPx / 100f) { drawSkullAssembly() }
+        }
+        val dispPx = 88f * u
         Box(modifier.fillMaxSize()) {
-            Canvas(
-                Modifier
-                    .size(skullDp)
+            Image(
+                bitmap = skullBmp,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(88.dp)
                     .align(if (side < 0f) Alignment.CenterStart else Alignment.CenterEnd)
-                    .offset {
+                    .graphicsLayer {
                         // escondida: toda fuera; asomada: ~60% visible
-                        val off = side * skullPx * (1f - 0.60f * peekAnim)
-                        IntOffset(off.toInt(), 0)
+                        translationX = side * dispPx * (1f - 0.60f * peekAnim)
+                        rotationZ = wig * peekAnim
+                        alpha = peekAnim
                     }
-            ) {
-                val s = size.width
-                val bone = Color(0xFFE8E4D8).copy(alpha = peekAnim)
-                val dark = Color(0xFF1A1512).copy(alpha = peekAnim)
-                rotate(wig * peekAnim) {
-                    // cráneo
-                    drawOval(bone, Offset(s * 0.18f, s * 0.06f), Size(s * 0.64f, s * 0.58f))
-                    // mandíbula
-                    drawRoundRect(
-                        bone, Offset(s * 0.28f, s * 0.52f), Size(s * 0.44f, s * 0.36f),
-                        CornerRadius(s * 0.10f, s * 0.10f)
-                    )
-                    // cuencas de los ojos
-                    drawOval(dark, Offset(s * 0.30f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
-                    drawOval(dark, Offset(s * 0.55f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
-                    // nariz triangular
-                    val nose = Path().apply {
-                        moveTo(s * 0.50f, s * 0.58f)
-                        lineTo(s * 0.44f, s * 0.68f)
-                        lineTo(s * 0.56f, s * 0.68f)
-                        close()
-                    }
-                    drawPath(nose, dark)
-                    // dientes
-                    for (i in 0..3) {
-                        val tx = s * (0.34f + i * 0.107f)
-                        drawLine(
-                            dark, Offset(tx, s * 0.70f), Offset(tx, s * 0.84f),
-                            strokeWidth = s * 0.022f, cap = StrokeCap.Round
-                        )
-                    }
-                }
-            }
+            )
         }
     }
 }
@@ -487,8 +557,9 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
 //   - Auto-aplicado: flag "christmas_applied_<año>" + "theme_before_christmas"
 //     (mismo runSeasonalAutoTheme de SettingsStore, generalizado).
 //   - Aquí mismo:
-//       ChristmasHomeAmbient(): nieve cayendo, luces de colores parpadeantes.
-//       ChristmasSplashScene(): gorro navideño / árbol / nieve.
+//       ChristmasHomeAmbient(): cada motivo navideño se pre-renderiza con
+//       rememberRenderedBitmap y se anima SOLO con graphicsLayer
+//       (translation/rotation/alpha), igual que el Halloween.
 //   - En cada pantalla, el decorado se muestra cuando el tema activo ==
 //     CHRISTMAS (if (themeName == AppTheme.CHRISTMAS.name)).
 // ---------------------------------------------------------------------------
