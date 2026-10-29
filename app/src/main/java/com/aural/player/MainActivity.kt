@@ -47,6 +47,7 @@ import com.aural.player.data.Song
 import com.aural.player.ui.components.MiniPlayer
 import com.aural.player.ui.screens.DetailScreen
 import com.aural.player.ui.screens.FAVORITES_ID
+import com.aural.player.ui.screens.DAILY_PLAYLIST_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.screens.ThemesScreen
@@ -345,15 +346,21 @@ private fun AuralApp(viewModel: AuralViewModel,
 
                 is Screen.Playlist -> {
                     val isFavorites = s.id == FAVORITES_ID
+                    val isDaily = s.id == DAILY_PLAYLIST_ID
                     val playlist = playlists.find { it.id == s.id }
                     val isDownloads = playlist?.name == "Descargas"
                     val songs = if (isFavorites) viewModel.favoriteSongs()
+                    else if (isDaily) viewModel.dailyPlaylistSongs()
                     else playlist?.let { viewModel.songsOfPlaylist(it) } ?: emptyList()
 
                     DetailScreen(
                         viewModel = viewModel,
-                        title = if (isFavorites) "Canciones favoritas" else playlist?.name ?: "",
-                        subtitle = if (isFavorites) "Tus preferidas" else "Playlist",
+                        title = if (isFavorites) "Canciones favoritas"
+                        else if (isDaily) "Playlist del día"
+                        else playlist?.name ?: "",
+                        subtitle = if (isFavorites) "Tus preferidas"
+                        else if (isDaily) "Se renueva cada día"
+                        else "Playlist",
                         songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         listState = detailListState("playlist:${s.id}"),
@@ -364,10 +371,12 @@ private fun AuralApp(viewModel: AuralViewModel,
                             // ofrece «Eliminar de la lista» (quitar favorito)
                             songMenuPlaylistId = s.id
                         },
-                        removableFromPlaylistId = s.id,
+                        // La Playlist del día es auto-generada: sus canciones
+                        // no se pueden quitar a mano (rota sola cada día)
+                        removableFromPlaylistId = if (isDaily) null else s.id,
                         // Solo las playlists creadas tienen foto editable;
-                        // Favoritas y Descargas conservan su identidad
-                        playlistCoverId = if (isFavorites || isDownloads) null else s.id,
+                        // Favoritas, Descargas y la del día conservan su identidad
+                        playlistCoverId = if (isFavorites || isDownloads || isDaily) null else s.id,
                         isDownloadsPlaylist = isDownloads,
                         onGoToDownloadsTab = { libraryTab = 4; screen = Screen.Library }
                     )
