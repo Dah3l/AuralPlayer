@@ -263,9 +263,6 @@ fun LibraryScreen(
     // (tema real del menú, no por fecha sola).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
     val isHalloween = themeName == AppTheme.HALLOWEEN.name
-    // Arrastre en la barra A-Z: congela el ambiente Halloween para no
-    // relentizar la lista mientras se desliza el dedo.
-    var azDragging by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
@@ -813,16 +810,7 @@ fun LibraryScreen(
     // ---- Ambiente Halloween (tema activo): dibujo puro, no consume toques ----
     // Navidad (diciembre): enganchar ChristmasHomeAmbient() con theme == CHRISTMAS.
     if (isHalloween) {
-        // El ambiente se congela mientras haya scroll o arrastre en la
-        // biblioteca, para que la lista no dé tirones.
-        val hwScrolling = azDragging ||
-            songsListState.isScrollInProgress ||
-            artistsGridState.isScrollInProgress ||
-            albumsGridState.isScrollInProgress ||
-            playlistsListState.isScrollInProgress ||
-            downloadsListState.isScrollInProgress ||
-            foldersGridState.isScrollInProgress
-        HalloweenHomeAmbient(Modifier.fillMaxSize(), isScrolling = hwScrolling)
+        HalloweenHomeAmbient(Modifier.fillMaxSize())
     }
 
 }
@@ -1020,7 +1008,6 @@ private fun SongsTab(
             keys = songs.map { it.title },
             onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
-            onDraggingChange = { azDragging = it }
         )
     }
 }
@@ -1059,7 +1046,6 @@ private fun ArtistsTab(
             keys = artists.map { it.name },
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
-            onDraggingChange = { azDragging = it }
         )
     }
 }
@@ -1098,7 +1084,6 @@ private fun AlbumsTab(
             keys = albums.map { it.title },
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
-            onDraggingChange = { azDragging = it }
         )
     }
 }
