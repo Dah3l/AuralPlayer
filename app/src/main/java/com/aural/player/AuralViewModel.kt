@@ -9,6 +9,7 @@ import com.aural.player.data.Artist
 import com.aural.player.data.Folder
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
+import com.aural.player.data.SettingsStore
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
 import android.content.ContentValues
