@@ -1229,8 +1229,8 @@ private fun CoverCarousel(
             )
     ) {
         val pageWidth = maxWidth
-        // Margen lateral para que la sombra de la portada (24 dp) nunca se
-        // recorte en los bordes del viewport.
+        // Margen lateral de la portada (el resplandor dibujado vive dentro
+        // de la página y nunca se recorta).
         val coverSideMargin = 20.dp
         HorizontalPager(
             state = coverPagerState,
@@ -1242,9 +1242,12 @@ private fun CoverCarousel(
             val d = abs((coverPagerState.currentPage - page) + coverPagerState.currentPageOffsetFraction)
                 .coerceIn(0f, 1f)
             val item = coverItems.getOrNull(page)
-            // La página ocupa todo el ancho; la portada va centrada con
-            // margen lateral para que su sombra NUNCA se recorte en los
-            // bordes del viewport.
+            // La página ocupa todo el ancho; la portada va centrada.
+            // El resplandor se dibuja A MANO detrás de la tarjeta y vive
+            // DENTRO de la página: nada lo puede recortar jamás (la sombra
+            // del sistema se salía de los bordes y el pager la cortaba).
+            // Al estar dentro del graphicsLayer, escala y se atenúa junto
+            // con la portada durante el arrastre.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1257,15 +1260,25 @@ private fun CoverCarousel(
                     },
                 contentAlignment = Alignment.Center
             ) {
+                // Resplandor: degradado radial con el color dominante
+                // (sigue el lerp del arrastre vía glowColor), de alpha
+                // 0.35 en el centro a transparente en el borde.
+                Box(
+                    Modifier
+                        .size(pageWidth - coverSideMargin * 2 + 32.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    glowColor.copy(alpha = 0.35f),
+                                    glowColor.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
                 com.aural.player.ui.components.CoverArt(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
-                    modifier = Modifier.shadow(
-                        elevation = 24.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                    ),
                     cornerRadius = 16.dp
                 )
             }
