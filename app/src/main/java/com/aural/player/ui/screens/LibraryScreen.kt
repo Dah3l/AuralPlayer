@@ -154,6 +154,7 @@ fun LibraryScreen(
     val albums by viewModel.albumsFlow.collectAsStateWithLifecycle()
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
@@ -171,6 +172,7 @@ fun LibraryScreen(
     }
 
     var showNewPlaylist by remember { mutableStateOf(false) }
+    var showSaveDaily by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
@@ -455,6 +457,7 @@ fun LibraryScreen(
 
                         3 -> {
                             val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
+                            val dailySongs = viewModel.dailyPlaylistSongs()
                             PlaylistsTab(
                                 playlists = playlists,
                                 songCount = { viewModel.songsOfPlaylist(it).size },
@@ -469,6 +472,15 @@ fun LibraryScreen(
                                 onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
                                 downloadsCount = downloadsPl?.let { viewModel.songsOfPlaylist(it).size } ?: 0,
                                 onOpenDownloads = { downloadsPl?.let { onOpenPlaylist(it.id) } },
+                                dailySongCount = dailySongs.size,
+                                dailyCoverUri = dailySongs.firstOrNull()?.let { song ->
+                                    customCovers[song.id] ?: song.albumArtUri
+                                },
+                                onOpenDaily = { onOpenPlaylist(DAILY_PLAYLIST_ID) },
+                                onPlayDaily = {
+                                    if (dailySongs.isNotEmpty()) onPlayList(dailySongs, 0, DAILY_PLAYLIST_ID)
+                                },
+                                onSaveDailyPermanent = { showSaveDaily = true },
                                 listState = playlistsListState,
                                 playlistCovers = playlistCovers,
                                 firstSongCover = { pl ->
@@ -664,6 +676,17 @@ fun LibraryScreen(
         )
     }
 
+    // ---- Diálogo para guardar la Playlist del día como permanente ----
+    if (showSaveDaily) {
+        SaveDailyPlaylistDialog(
+            onDismiss = { showSaveDaily = false },
+            onConfirm = { name ->
+                viewModel.saveDailyPlaylistAsPermanent(name)
+                showSaveDaily = false
+            }
+        )
+    }
+
     // ---- Diálogo de licencia ----
     if (showLicenseDialog) {
         AlertDialog(
@@ -759,6 +782,9 @@ fun LibraryScreen(
 
 /** ID virtual para la lista de favoritos dentro de las playlists. */
 const val FAVORITES_ID = "favorites"
+
+/** ID virtual para la Playlist del día dentro de las playlists. */
+const val DAILY_PLAYLIST_ID = "daily_playlist"
 
 /** Contenedor centrado simple. */
 @Composable
@@ -1043,6 +1069,11 @@ private fun PlaylistsTab(
     onOpenFavorites: () -> Unit,
     downloadsCount: Int,
     onOpenDownloads: () -> Unit,
+    dailySongCount: Int,
+    dailyCoverUri: String?,
+    onOpenDaily: () -> Unit,
+    onPlayDaily: () -> Unit,
+    onSaveDailyPermanent: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     playlistCovers: Map<String, String>,
     firstSongCover: (Playlist) -> String?,
@@ -1136,6 +1167,67 @@ private fun PlaylistsTab(
                 IconButton(onClick = onOpenDownloads) {
                     Icon(Icons.Default.Download, "Abrir descargas",
                         tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        // Entrada fija de Playlist del día (UNA sola instancia; rota a diario)
+        item {
+            val dailyInteraction = remember { MutableInteractionSource() }
+            val dailyPressed by dailyInteraction.collectIsPressedAsState()
+            val dailyScale by animateFloatAsState(
+                targetValue = if (dailyPressed) 0.98f else 1f,
+                label = "daily_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(dailyScale)
+                    .clickable(
+                        interactionSource = dailyInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenDaily() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = dailyCoverUri, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Playlist del día", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (dailySongCount > 0)
+                            "$dailySongCount ${if (dailySongCount == 1) "canción aleatoria" else "canciones aleatorias"} · se renueva cada día"
+                        else "Se genera al abrir la app",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onPlayDaily) {
+                    Icon(Icons.Rounded.PlayArrow, "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+                var showDailyMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showDailyMenu = true }) {
+                        Icon(Icons.Default.MoreVert, "Opciones")
+                    }
+                    DropdownMenu(
+                        expanded = showDailyMenu,
+                        onDismissRequest = { showDailyMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Guardar como permanente") },
+                            onClick = {
+                                showDailyMenu = false
+                                onSaveDailyPermanent()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1329,6 +1421,33 @@ private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)
         confirmButton = {
             TextButton(onClick = { onCreate(name) }, enabled = name.isNotBlank()) {
                 Text("Crear", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+/** Diálogo para guardar la Playlist del día como permanente (nombre editable). */
+@Composable
+private fun SaveDailyPlaylistDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var name by remember { mutableStateOf("Playlist del día") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Guardar como permanente") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Nombre") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) {
+                Text("Guardar", color = MaterialTheme.colorScheme.primary)
             }
         },
         dismissButton = {
