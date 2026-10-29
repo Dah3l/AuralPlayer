@@ -232,20 +232,22 @@ fun NowPlayingScreen(
                     )
                 )
             )
-            // Bloquea toques para que no lleguen a la lista detrás.
-            // Solo consume lo que los hijos NO consumieron: los hijos
-            // (botones, slider, letra clicable, carrusel) ven cada evento
-            // primero y sin consumir, así sus gestos no se roban; lo que
-            // nadie usó se consume aquí y no baja a la lista detrás.
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    do {
-                        val event = awaitPointerEvent()
-                        event.changes.forEach { if (!it.isConsumed) it.consume() }
-                    } while (event.changes.any { it.pressed })
-                }
-            }
     ) {
+        // Scrim hermano: bloquea los toques para que no lleguen a la lista
+        // detrás. Al estar DETRÁS del contenido (no ser su padre), solo ve
+        // lo que nadie usó y JAMÁS compite con los gestos de los hijos
+        // (carrusel, slider, botones): el contenido siempre los ve primero.
+        // (El bloqueador anterior era padre del carrusel y se tragaba los
+        // eventos del swipe: por eso la mayoría de los swipes morían.)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown().consume()
+                    }
+                }
+        )
         Column(
             Modifier
                 .fillMaxSize()
@@ -794,19 +796,20 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
-                    // Bloquea toques para que no lleguen al Now Playing
-                    // detrás (el botón ⋮ está casi en el mismo sitio que
-                    // el de compartir de la cabecera de letras)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown().consume()
-                            do {
-                                val event = awaitPointerEvent()
-                                event.changes.forEach { it.consume() }
-                            } while (event.changes.any { it.pressed })
-                        }
-                    }
             ) {
+                // Scrim hermano: bloquea lo que LyricsScreen no consumió
+                // (el botón ⋮ está casi en el mismo sitio que el de
+                // compartir de la cabecera de letras), sin robarle sus
+                // gestos internos.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown().consume()
+                            }
+                        }
+                )
                 LyricsScreen(
                     lrcPath = lrcPath,
                     title = song?.let {
