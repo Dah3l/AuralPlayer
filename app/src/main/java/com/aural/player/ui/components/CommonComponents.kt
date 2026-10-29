@@ -57,6 +57,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
+import com.aural.player.ui.theme.SeasonalTheme
+import com.aural.player.ui.theme.currentSeasonalTheme
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -470,6 +472,18 @@ fun SplashScreen() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
+            )
+        }
+        // Escena Halloween abajo: tumbas + mano zombi animada + niebla.
+        // El bloqueador de toques del splash se queda como está.
+        // Navidad (diciembre): enganchar escena navideña aquí.
+        if (currentSeasonalTheme() == SeasonalTheme.Halloween) {
+            HalloweenSplashScene(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .graphicsLayer { this.alpha = alpha }
             )
         }
     }
