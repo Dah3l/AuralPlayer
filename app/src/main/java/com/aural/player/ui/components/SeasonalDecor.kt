@@ -9,7 +9,6 @@
 package com.aural.player.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -23,10 +22,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -84,6 +85,31 @@ private fun DrawScope.drawGhostFigure(cx: Float, cy: Float, s: Float, color: Col
     drawOval(dark, Offset(cx - w * 0.05f, top + h * 0.46f), Size(w * 0.10f, h * 0.08f))
 }
 
+// ===========================================================================
+// RELOJ AMBIENTAL COMPARTIDO (~24 fps): todos los decorados de temporada
+// leen el mismo tiempo en segundos. A 24 fps el movimiento ambiental lento
+// se ve fluido y cada decorado redibuja menos de la mitad de veces que a
+// 60 fps — el movimiento nunca se detiene, solo se actualiza menos.
+// ===========================================================================
+
+@Composable
+fun rememberAmbientSeconds(): State<Float> {
+    val t = remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        val start = withFrameNanos { it }
+        while (true) {
+            val now = withFrameNanos { it }
+            t.value = (now - start) / 1_000_000_000f
+            delay(41L) // ~24 fps
+        }
+    }
+    return t
+}
+
+// ===========================================================================
+// FANTASMAS (Home): deriva continua, sin detenerse nunca.
+// ===========================================================================
+
 @Composable
 private fun GhostDrift(
     travelDurationMs: Int,
@@ -92,20 +118,10 @@ private fun GhostDrift(
     baseYFraction: Float,
     direction: Float,
     maxAlpha: Float,
-    frozen: Boolean = false
+    tSec: Float
 ) {
-    // Congelado (p. ej. scroll en la biblioteca): un frame fijo, sin
-    // animación corriendo, para no robarle cuadros a la lista.
-    val t = if (frozen) null else rememberInfiniteTransition(label = "ghost")
-    val p = t?.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(travelDurationMs, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "gp"
-    )?.value ?: 0.5f
+    // Fase 0→1 en travelDurationMs, derivada del reloj compartido (24 fps).
+    val p = (tSec * 1000f / travelDurationMs) % 1f
     val density = LocalDensity.current
     val sizePx = with(density) { sizeDp.toPx() }
     val delayFrac = delayMs / travelDurationMs.toFloat()
@@ -128,27 +144,18 @@ private fun GhostDrift(
 // ===========================================================================
 
 @Composable
-private fun SpiderWeb(modifier: Modifier = Modifier, frozen: Boolean = false) {
-    // Congelado (scroll): frame fijo sin animación corriendo.
-    val t = if (frozen) null else rememberInfiniteTransition(label = "web")
-    val shimmer = t?.animateFloat(
-        initialValue = 0.14f,
-        targetValue = 0.30f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shimmer"
-    )?.value ?: 0.22f
-    val swayDeg = t?.animateFloat(
-        initialValue = -1.4f,
-        targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(5200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sway"
-    )?.value ?: 0f
+private fun SpiderWeb(modifier: Modifier = Modifier, tSec: Float) {
+    // Brillo (periodo 3.8 s) y mecedora (periodo 5.2 s) como ondas
+    // triangulares suavizadas — igual que el easing de antes, pero leídas
+    // del reloj compartido (24 fps).
+    val shimPhase = (tSec / 3.8f) % 2f
+    val shimTri = (if (shimPhase < 1f) shimPhase else 2f - shimPhase).coerceIn(0f, 1f)
+    val shimSmooth = shimTri * shimTri * (3f - 2f * shimTri)
+    val shimmer = 0.14f + shimSmooth * 0.16f
+    val swayPhase = (tSec / 5.2f) % 2f
+    val swayTri = (if (swayPhase < 1f) swayPhase else 2f - swayPhase).coerceIn(0f, 1f)
+    val swaySmooth = swayTri * swayTri * (3f - 2f * swayTri)
+    val swayDeg = -1.4f + swaySmooth * 2.8f
     Canvas(modifier.size(170.dp)) {
         val anchor = Offset(size.width, 0f)
         rotate(swayDeg, anchor) {
@@ -192,18 +199,11 @@ private fun SpiderWeb(modifier: Modifier = Modifier, frozen: Boolean = false) {
 // ===========================================================================
 
 @Composable
-private fun SpiderDrop(modifier: Modifier = Modifier, frozen: Boolean = false) {
-    // Congelado (scroll): araña colgando quieta, sin animación corriendo.
-    val t = if (frozen) null else rememberInfiniteTransition(label = "spider")
-    val p = t?.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(15000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sp"
-    )?.value ?: 0.5f
+private fun SpiderDrop(modifier: Modifier = Modifier, tSec: Float) {
+    // Ciclo de 15 s (baja/cuelga/sube) derivado del reloj compartido.
+    // El meneo de patas queda en 0.8 Hz igual que antes (12 ciclos por
+    // periodo de 15 s) — sin cambios visuales, solo menos redibujos.
+    val p = (tSec / 15f) % 1f
     val density = LocalDensity.current
     val dropMaxPx = with(density) { 150.dp.toPx() }
     Canvas(modifier.size(96.dp, 220.dp)) {
@@ -260,28 +260,28 @@ private fun SpiderDrop(modifier: Modifier = Modifier, frozen: Boolean = false) {
 
 // ===========================================================================
 // AMBIENTE HOME: fantasmas + telaraña + araña (dibujo puro, sin toques).
-// [isScrolling]: durante el scroll los decorados se congelan en un frame
-// fijo (sin animaciones corriendo) para no relentizar la lista; al soltar,
-// la animación continúa donde iba.
+// Todos leen el mismo reloj ambiental (~24 fps): el movimiento nunca se
+// detiene, solo se redibuja menos para no competir con la lista.
 // ===========================================================================
 
 @Composable
-fun HalloweenHomeAmbient(modifier: Modifier = Modifier, isScrolling: Boolean = false) {
+fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
+    val tSec by rememberAmbientSeconds()
     Box(modifier) {
         GhostDrift(
             travelDurationMs = 26000, delayMs = 0, sizeDp = 58.dp,
             baseYFraction = 0.20f, direction = 1f, maxAlpha = 0.42f,
-            frozen = isScrolling
+            tSec = tSec
         )
         GhostDrift(
             travelDurationMs = 33000, delayMs = 11000, sizeDp = 42.dp,
             baseYFraction = 0.52f, direction = -1f, maxAlpha = 0.32f,
-            frozen = isScrolling
+            tSec = tSec
         )
-        SpiderWeb(Modifier.align(Alignment.TopEnd), frozen = isScrolling)
+        SpiderWeb(Modifier.align(Alignment.TopEnd), tSec = tSec)
         SpiderDrop(
             Modifier.align(Alignment.TopCenter).offset(x = 110.dp),
-            frozen = isScrolling
+            tSec = tSec
         )
     }
 }
@@ -299,18 +299,12 @@ private fun BatFlight(
     yFraction: Float,
     sizeDp: Dp,
     maxAlpha: Float = 0.85f,
-    fromRight: Boolean = false
+    fromRight: Boolean = false,
+    tSec: Float
 ) {
-    val t = rememberInfiniteTransition(label = "bat")
-    val p by t.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(travelDurationMs, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "bp"
-    )
+    // Viaje y aleteo derivados del reloj compartido (24 fps); la velocidad
+    // y el ritmo del aleteo quedan idénticos a antes.
+    val p = (tSec * 1000f / travelDurationMs) % 1f
     val density = LocalDensity.current
     val sizePx = with(density) { sizeDp.toPx() }
     val delayFrac = delayMs / travelDurationMs.toFloat()
@@ -379,18 +373,20 @@ private fun BatFlight(
 
 @Composable
 fun HalloweenBats(modifier: Modifier = Modifier) {
+    val tSec by rememberAmbientSeconds()
     Box(modifier) {
         BatFlight(
             travelDurationMs = 14000, delayMs = 0,
-            yFraction = 0.14f, sizeDp = 84.dp
+            yFraction = 0.14f, sizeDp = 84.dp, tSec = tSec
         )
         BatFlight(
             travelDurationMs = 19000, delayMs = 6000,
-            yFraction = 0.48f, sizeDp = 64.dp, maxAlpha = 0.7f, fromRight = true
+            yFraction = 0.48f, sizeDp = 64.dp, maxAlpha = 0.7f, fromRight = true,
+            tSec = tSec
         )
         BatFlight(
             travelDurationMs = 16000, delayMs = 11000,
-            yFraction = 0.74f, sizeDp = 76.dp, maxAlpha = 0.8f
+            yFraction = 0.74f, sizeDp = 76.dp, maxAlpha = 0.8f, tSec = tSec
         )
     }
 }
