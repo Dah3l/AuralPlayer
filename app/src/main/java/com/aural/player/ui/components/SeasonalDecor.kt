@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -246,32 +247,6 @@ private fun SpiderDrop(modifier: Modifier = Modifier) {
 }
 
 // ===========================================================================
-// CALABAZA (Home): acento junto al título.
-// ===========================================================================
-
-@Composable
-fun PumpkinMark(modifier: Modifier = Modifier) {
-    Canvas(modifier.size(26.dp)) {
-        val w = size.width
-        val h = size.height
-        val body = Color(0xFFFF7A1A)
-        val shade = Color(0xFFB34E0A)
-        // cuerpo: elipses superpuestas
-        drawOval(shade, Offset(w * 0.06f, h * 0.20f), Size(w * 0.88f, h * 0.70f))
-        drawOval(body, Offset(w * 0.20f, h * 0.14f), Size(w * 0.60f, h * 0.72f))
-        drawOval(body, Offset(w * 0.38f, h * 0.12f), Size(w * 0.24f, h * 0.76f))
-        // gajos
-        drawLine(shade, Offset(w * 0.32f, h * 0.18f), Offset(w * 0.30f, h * 0.86f), strokeWidth = 2f)
-        drawLine(shade, Offset(w * 0.68f, h * 0.18f), Offset(w * 0.70f, h * 0.86f), strokeWidth = 2f)
-        // tallo
-        drawRoundRect(
-            Color(0xFF4A7C2F), Offset(w * 0.45f, 0f), Size(w * 0.10f, h * 0.20f),
-            CornerRadius(3f, 3f)
-        )
-    }
-}
-
-// ===========================================================================
 // AMBIENTE HOME: fantasmas + telaraña + araña (dibujo puro, sin toques).
 // ===========================================================================
 
@@ -409,37 +384,42 @@ private fun DrawScope.drawZombieHand(
     cx: Float,
     groundY: Float,
     risePx: Float,
-    wig: Float
+    wig: Float,
+    s: Float = 1f
 ) {
     val green = Color(0xFF6F9B3F)
     val gDark = Color(0xFF557A2E)
     translate(0f, -risePx) {
-        // antebrazo
-        drawRoundRect(green, Offset(cx - 15f, groundY - 70f), Size(30f, 80f), CornerRadius(14f, 14f))
-        drawRoundRect(
-            gDark, Offset(cx - 15f, groundY - 70f), Size(10f, 80f),
-            CornerRadius(5f, 5f)
-        )
-        // palma
-        drawRoundRect(green, Offset(cx - 22f, groundY - 92f), Size(44f, 28f), CornerRadius(12f, 12f))
-        // 4 dedos con meneo individual
-        val fingerDX = listOf(-15f, -5f, 5f, 15f)
-        fingerDX.forEachIndexed { i, dx ->
-            val ang = dx * 0.9f + wig * (7f + i * 3f)
-            rotate(ang, Offset(cx + dx, groundY - 92f)) {
+        // La mano se dibuja escalada (s) con pivote en la base: la subida
+        // (risePx) no se escala, solo el tamaño de la mano.
+        scale(s, s, Offset(cx, groundY)) {
+            // antebrazo
+            drawRoundRect(green, Offset(cx - 15f, groundY - 70f), Size(30f, 80f), CornerRadius(14f, 14f))
+            drawRoundRect(
+                gDark, Offset(cx - 15f, groundY - 70f), Size(10f, 80f),
+                CornerRadius(5f, 5f)
+            )
+            // palma
+            drawRoundRect(green, Offset(cx - 22f, groundY - 92f), Size(44f, 28f), CornerRadius(12f, 12f))
+            // 4 dedos con meneo individual
+            val fingerDX = listOf(-15f, -5f, 5f, 15f)
+            fingerDX.forEachIndexed { i, dx ->
+                val ang = dx * 0.9f + wig * (7f + i * 3f)
+                rotate(ang, Offset(cx + dx, groundY - 92f)) {
+                    drawRoundRect(
+                        green, Offset(cx + dx - 5f, groundY - 124f), Size(10f, 36f),
+                        CornerRadius(5f, 5f)
+                    )
+                }
+            }
+            // pulgar
+            rotate(38f + wig * 6f, Offset(cx - 20f, groundY - 78f)) {
                 drawRoundRect(
-                    green, Offset(cx + dx - 5f, groundY - 124f), Size(10f, 36f),
+                    green, Offset(cx - 31f, groundY - 100f), Size(10f, 26f),
                     CornerRadius(5f, 5f)
                 )
             }
-        }
-        // pulgar
-        rotate(38f + wig * 6f, Offset(cx - 20f, groundY - 78f)) {
-            drawRoundRect(
-                green, Offset(cx - 31f, groundY - 100f), Size(10f, 26f),
-                CornerRadius(5f, 5f)
-            )
-        }
+        } // scale(s)
     }
 }
 
@@ -447,14 +427,14 @@ private fun DrawScope.drawZombieHand(
 fun HalloweenSplashScene(modifier: Modifier = Modifier) {
     var rise by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(300)
+        delay(200)
         rise = true
     }
     val density = LocalDensity.current
-    val maxRisePx = with(density) { 110.dp.toPx() }
+    val maxRisePx = with(density) { 170.dp.toPx() }
     val risePx by animateFloatAsState(
         targetValue = if (rise) maxRisePx else 0f,
-        animationSpec = tween(1100, easing = FastOutSlowInEasing),
+        animationSpec = tween(900, easing = FastOutSlowInEasing),
         label = "handrise"
     )
     val t = rememberInfiniteTransition(label = "splashfx")
@@ -482,37 +462,37 @@ fun HalloweenSplashScene(modifier: Modifier = Modifier) {
         val groundY = h * 0.98f
         // niebla a la deriva (muy sutil)
         for (i in 0..2) {
-            val fx = ((fogP + i * 0.37f) % 1f) * (w + 400f) - 200f
+            val fx = ((fogP + i * 0.37f) % 1f) * (w + 560f) - 280f
             drawOval(
-                Color.White.copy(alpha = 0.045f),
-                Offset(fx - 190f, groundY - 52f + i * 13f),
-                Size(380f, 46f)
+                Color.White.copy(alpha = 0.05f),
+                Offset(fx - 260f, groundY - 70f + i * 18f),
+                Size(520f, 62f)
             )
         }
         // montículo
-        drawOval(Color(0xFF0C0C10), Offset(-w * 0.15f, groundY - 30f), Size(w * 1.3f, 90f))
-        // tumbas laterales
-        drawTombstone(w * 0.18f, groundY, 74f, 110f, -7f, Color(0xFF4C4C55))
-        drawTombstone(w * 0.84f, groundY, 66f, 96f, 6f, Color(0xFF43434C))
-        // mano zombi saliendo detrás de la tumba central
-        drawZombieHand(w * 0.52f, groundY + 6f, risePx, wig)
+        drawOval(Color(0xFF0C0C10), Offset(-w * 0.15f, groundY - 44f), Size(w * 1.3f, 130f))
+        // tumbas laterales (más grandes)
+        drawTombstone(w * 0.16f, groundY, 115f, 172f, -7f, Color(0xFF4C4C55))
+        drawTombstone(w * 0.86f, groundY, 105f, 152f, 6f, Color(0xFF43434C))
+        // mano zombi saliendo detrás de la tumba central (más grande)
+        drawZombieHand(w * 0.52f, groundY + 8f, risePx, wig, s = 1.6f)
         // tumba central (delante de la muñeca)
-        drawTombstone(w * 0.52f, groundY, 84f, 122f, 0f, Color(0xFF55555E))
+        drawTombstone(w * 0.52f, groundY, 132f, 192f, 0f, Color(0xFF55555E))
     }
 }
 
 // ---------------------------------------------------------------------------
-// NAVIDAD (20-26 dic): PUNTO DE ENGANCHE.
+// NAVIDAD (20-26 dic): PUNTO DE ENGANCHE (mismo patrón que Halloween).
 //
-// El pack navideño se construye en diciembre aquí mismo:
-//   - ChristmasHomeAmbient(): nieve cayendo, luces de colores parpadeantes.
-//   - ChristmasSplashScene(): gorro navideño / árbol / nieve.
-//   - Paleta: withChristmas() en Seasonal.kt (enganche listo en
-//     seasonalColorScheme()).
-// Y en cada pantalla, el dispatch ya prevé la rama:
-//   when (season) {
-//       SeasonalTheme.Halloween -> HalloweenHomeAmbient(...)
-//       SeasonalTheme.Christmas -> ChristmasHomeAmbient() // diciembre
-//       SeasonalTheme.None -> {}
-//   }
+// El pack navideño se construye en diciembre:
+//   - AppTheme.CHRISTMAS("Navidad", icono) + ChristmasColorScheme en Theme.kt
+//     (ver "PATRÓN NAVIDAD" en ui/theme/Seasonal.kt).
+//   - En ThemesScreen: mostrarlo solo si isChristmasWindow().
+//   - Auto-aplicado: flag "christmas_applied_<año>" + "theme_before_christmas"
+//     (mismo runSeasonalAutoTheme de SettingsStore, generalizado).
+//   - Aquí mismo:
+//       ChristmasHomeAmbient(): nieve cayendo, luces de colores parpadeantes.
+//       ChristmasSplashScene(): gorro navideño / árbol / nieve.
+//   - En cada pantalla, el decorado se muestra cuando el tema activo ==
+//     CHRISTMAS (if (themeName == AppTheme.CHRISTMAS.name)).
 // ---------------------------------------------------------------------------
