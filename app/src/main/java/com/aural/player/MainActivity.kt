@@ -65,6 +65,9 @@ import androidx.compose.runtime.getValue
 import com.aural.player.ui.components.SplashScreen
 import com.aural.player.ui.screens.OnboardingScreen
 import com.aural.player.data.OnboardingPrefs
+import androidx.lifecycle.lifecycleScope
+import com.aural.player.ui.theme.isHalloweenWindow
+import java.time.LocalDate
 
 /** Pantallas navegables de la app (navegación simple por estado). */
 private sealed class Screen {
@@ -93,6 +96,15 @@ class MainActivity : ComponentActivity() {
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         enableEdgeToEdge()
         requestNeededPermissions()
+
+        // Auto-aplicado del tema de temporada (una vez por arranque, antes
+        // de pintar): dentro de la ventana de Halloween activa el tema solo
+        // la primera vez; fuera de la ventana restaura el tema previo.
+        lifecycleScope.launch {
+            SettingsStore(this@MainActivity).runSeasonalAutoTheme(
+                isHalloweenWindow(), LocalDate.now().year
+            )
+        }
 
         setContent {
             val settingsStore = SettingsStore(this@MainActivity)
@@ -176,9 +188,12 @@ private fun AuralApp(viewModel: AuralViewModel,
     settingsStore: SettingsStore) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
-    // El splash se oculta tras 1.8s (cortina mientras carga)
+    // El tema activo decide la duración del splash: 1.8s normal (cortina
+    // mientras carga), ~2.8s con Halloween para que se vea la escena.
+    val splashThemeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
+    val splashHalloween = splashThemeName == AppTheme.HALLOWEEN.name
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(1800)
+        kotlinx.coroutines.delay(if (splashHalloween) 2800L else 1800L)
         showSplash = false
     }
     // Estados elevados: sobreviven a la navegación para recordar posición
@@ -435,7 +450,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     }
     // ---- Splash de bienvenida ----
     if (showSplash) {
-        SplashScreen()
+        SplashScreen(isHalloween = splashHalloween)
     }
 
     // ---- Menú contextual de canción: añadir a playlist / favoritos ----
