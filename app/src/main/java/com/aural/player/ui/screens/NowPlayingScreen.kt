@@ -72,11 +72,8 @@ import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.formatDuration
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -97,12 +94,8 @@ import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -121,6 +114,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.rounded.Search
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -286,53 +283,41 @@ fun NowPlayingScreen(
             }
 
             // ---- Carátula grande (responsiva) ----
-            // Deslizar sobre la portada cambia de canción (v1.0.6, pulido):
-            // la portada sigue al dedo con la misma sensación del pager de
-            // la biblioteca (la siguiente/anterior entra por el borde) y
-            // al soltar, si se pasó el umbral o fue un fling, termina la
-            // transición y cambia la canción; si no, rebota al centro sin
-            // cambiar nada. Solo se anima la portada: título, controles y
-            // fondo quedan quietos.
-            // Por qué el swipe a veces no cambiaba la canción: el detector
-            // anterior usaba onNext/onPrevious como llaves de pointerInput
-            // y MainActivity los pasa como referencias de método, que se
-            // recrean en cada recomposición (la posición se actualiza cada
-            // 500 ms). Cualquier tick a mitad del gesto reiniciaba el
-            // detector y el arrastre se cancelaba en silencio. Ahora la
-            // llave es estable (Unit) y los callbacks se leen con
-            // rememberUpdatedState: ninguna recomposición corta el gesto.
-            // Además, antes solo contaba la distancia (80 dp): un fling
-            // rápido y corto no llegaba al umbral y tampoco cambiaba nada.
-            // Ahora también cuenta la velocidad, como el pager.
-            val coverSwipeThresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
-            val coverFlingVelocityPx = 1000f
-            val latestState by rememberUpdatedState(state)
-            val latestOnNext by rememberUpdatedState(onNext)
-            val latestOnPrevious by rememberUpdatedState(onPrevious)
-            val coverScope = rememberCoroutineScope()
-            var coverDragOffset by remember { mutableStateOf(0f) }
-            var coverSettleJob by remember { mutableStateOf<Job?>(null) }
-            // Al cambiar de canción, la portada vuelve al centro (el
-            // índice cambia aunque la misma canción se repita en la cola).
-            LaunchedEffect(state.currentIndex, song?.id) { coverDragOffset = 0f }
-            // Adyacente en cada dirección (con vuelta al inicio/fin solo
-            // en modo repetir todo, igual que Media3). Sin adyacente, el
-            // gesto rebota sin cambiar nada.
-            fun adjacentOf(st: PlayerUiState, dir: Int): Song? {
-                val q = st.queue
-                val i = st.currentIndex
-                if (q.isEmpty() || i !in q.indices) return null
-                val j = i + dir
-                if (j in q.indices) return q[j]
-                if (st.repeatMode == RepeatMode.ALL) return if (dir > 0) q.first() else q.last()
-                return null
+            // Carrusel simple (v1.0.6): las portadas se deslizan como
+            // fotos con un HorizontalPager, el mismo de la biblioteca.
+            // Deslizar a la izquierda = siguiente canción, a la derecha =
+            // anterior. El cambio es directo al índice de la cola (sin la
+            // regla de 3 s del botón anterior) y en orden aunque el
+            // aleatorio esté activado. En los extremos de la cola el pager
+            // rebota: no se puede pasar más allá.
+            val coverQueue = state.queue
+            val latestCoverQueue by rememberUpdatedState(coverQueue)
+            val coverPagerState = rememberPagerState(
+                initialPage = state.currentIndex.coerceAtLeast(0),
+                pageCount = { latestCoverQueue.size }
+            )
+            // Carrusel -> reproductor: al asentarse en otra página, saltar
+            // directo a esa canción de la cola.
+            val latestCoverIndex by rememberUpdatedState(state.currentIndex)
+            val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
+            LaunchedEffect(coverPagerState) {
+                snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
+                    .collect { (page, scrolling) ->
+                        if (!scrolling && page != latestCoverIndex && page in latestCoverQueue.indices) {
+                            latestOnPlayQueueItem(page)
+                        }
+                    }
             }
-            val nextSong = adjacentOf(state, 1)
-            val prevSong = adjacentOf(state, -1)
-            // Con shuffle, el siguiente real lo decide Media3 y no coincide
-            // con el orden de la cola: no se muestra portada entrante (la
-            // actual igual desliza y al confirmar aparece la nueva).
-            val showPeeks = !state.shuffleEnabled
+            // Reproductor -> carrusel: si la canción cambia por otra vía
+            // (botones, avance automático), llevar el pager a su página.
+            LaunchedEffect(state.currentIndex, coverQueue.size) {
+                val target = state.currentIndex
+                if (coverQueue.isNotEmpty() && target in coverQueue.indices &&
+                    coverPagerState.currentPage != target && !coverPagerState.isScrollInProgress
+                ) {
+                    coverPagerState.scrollToPage(target)
+                }
+            }
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
@@ -350,120 +335,25 @@ fun NowPlayingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 val artSize = (maxWidth * 0.96f).coerceAtMost(420.dp).coerceAtLeast(220.dp)
-                val artSizePx = with(LocalDensity.current) { artSize.toPx() }
-                val latestArtSizePx by rememberUpdatedState(artSizePx)
-                val latestThresholdPx by rememberUpdatedState(coverSwipeThresholdPx)
                 val coverShadow = Modifier.shadow(
                     elevation = 24.dp,
                     shape = RoundedCornerShape(artSize / 6),
                     ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                     spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 )
-                // Escenario fijo del tamaño de la portada: las portadas
-                // deslizan dentro de él y el gesto se detecta aquí, en una
-                // zona estable aunque la portada se mueva bajo el dedo.
-                Box(
-                    Modifier
-                        .size(artSize)
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                val down = awaitFirstDown()
-                                coverSettleJob?.cancel()
-                                coverSettleJob = null
-                                val baseOffset = coverDragOffset
-                                val tracker = VelocityTracker()
-                                tracker.addPosition(down.uptimeMillis, down.position)
-                                val slop = awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
-                                    change.consume()
-                                    tracker.addPosition(change.uptimeMillis, change.position)
-                                }
-                                if (slop == null) {
-                                    if (coverDragOffset != 0f) {
-                                        coverSettleJob = coverScope.launch {
-                                            animate(coverDragOffset, 0f, animationSpec = spring()) { v, _ ->
-                                                coverDragOffset = v
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    coverDragOffset = baseOffset + (slop.position.x - down.position.x)
-                                    val ended = horizontalDrag(slop.id) { change ->
-                                        val dx = (change.position - change.previousPosition).x
-                                        if (dx != 0f) {
-                                            change.consume()
-                                            tracker.addPosition(change.uptimeMillis, change.position)
-                                            coverDragOffset += dx
-                                        }
-                                    }
-                                    if (!ended) {
-                                        coverSettleJob = coverScope.launch {
-                                            animate(coverDragOffset, 0f, animationSpec = spring()) { v, _ ->
-                                                coverDragOffset = v
-                                            }
-                                        }
-                                    } else {
-                                        val velocityX = runCatching { tracker.calculateVelocity().x }.getOrDefault(0f)
-                                        val offset = coverDragOffset
-                                        val threshold = latestThresholdPx
-                                        val width = latestArtSizePx
-                                        val goNext = (offset < -threshold || velocityX < -coverFlingVelocityPx) &&
-                                            adjacentOf(latestState, 1) != null
-                                        val goPrev = (offset > threshold || velocityX > coverFlingVelocityPx) &&
-                                            adjacentOf(latestState, -1) != null
-                                        coverSettleJob = coverScope.launch {
-                                            when {
-                                                goNext -> {
-                                                    animate(offset, -width, animationSpec = spring()) { v, _ ->
-                                                        coverDragOffset = v
-                                                    }
-                                                    latestOnNext()
-                                                }
-                                                goPrev -> {
-                                                    animate(offset, width, animationSpec = spring()) { v, _ ->
-                                                        coverDragOffset = v
-                                                    }
-                                                    latestOnPrevious()
-                                                }
-                                                else -> {
-                                                    animate(offset, 0f, animationSpec = spring()) { v, _ ->
-                                                        coverDragOffset = v
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                ) {
-                    if (showPeeks && prevSong != null) {
+                HorizontalPager(
+                    state = coverPagerState,
+                    modifier = Modifier.size(artSize)
+                ) { page ->
+                    val coverSong = coverQueue.getOrNull(page)
+                    if (coverSong != null) {
                         CoverArt(
-                            uri = customCovers[prevSong.id] ?: prevSong.albumArtUri,
+                            uri = customCovers[coverSong.id] ?: coverSong.albumArtUri,
                             size = artSize,
-                            modifier = coverShadow.graphicsLayer {
-                                translationX = coverDragOffset - artSizePx
-                            },
+                            modifier = coverShadow,
                             cornerRadius = 16.dp
                         )
                     }
-                    if (showPeeks && nextSong != null) {
-                        CoverArt(
-                            uri = customCovers[nextSong.id] ?: nextSong.albumArtUri,
-                            size = artSize,
-                            modifier = coverShadow.graphicsLayer {
-                                translationX = coverDragOffset + artSizePx
-                            },
-                            cornerRadius = 16.dp
-                        )
-                    }
-                    CoverArt(
-                        uri = customCovers[song.id] ?: song.albumArtUri,
-                        size = artSize,
-                        modifier = coverShadow.graphicsLayer {
-                            translationX = coverDragOffset
-                        },
-                        cornerRadius = 16.dp
-                    )
                 }
             }
 
