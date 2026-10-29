@@ -8,9 +8,7 @@ en GitHub salen de aquí.
 
 ### Novedades
 - **"Para ti" en el home** — la sección "Más reproducidas" ahora se llama "Para ti", porque ya no solo muestra lo más sonado.
-- **Deslizar en la portada cambia de canción** — en la pantalla de Now Playing, desliza la portada a la izquierda para pasar a la siguiente canción o a la derecha para volver a la anterior, igual que los botones de siguiente/anterior.
-- **Animación al cambiar con swipe** — ahora la portada sigue al dedo y la siguiente/anterior entra por el borde, con la misma sensación del cambio de pestañas de la biblioteca; si no llegas al final, rebota al centro sin cambiar nada. Solo se anima la portada, el resto de la pantalla queda quieto.
-- **Swipe de portada arreglado** — antes, deslizar a veces no cambiaba la canción; ahora el gesto ya no se corta a mitad del movimiento y los movimientos rápidos también cuentan, no solo los largos.
+- **La portada ahora se desliza como un carrusel** — en la pantalla de Now Playing, las portadas de la cola se pasan como fotos: desliza a la izquierda para ir a la siguiente canción o a la derecha para volver a la anterior. El cambio es directo entre canciones.
 - **La app recuerda dónde te quedaste** — si cierras la app por completo y la vuelves a abrir, el mini reproductor aparece con la última canción que sonaba y su lista, en pausa y lista para reproducir (nunca suena sola al abrir). Si esa canción ya no está en tu biblioteca, simplemente no se muestra nada.
 
 ## v1.0.5 — 2026-10-25
