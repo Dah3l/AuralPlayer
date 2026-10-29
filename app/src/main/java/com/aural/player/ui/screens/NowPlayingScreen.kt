@@ -103,6 +103,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import kotlinx.coroutines.Job
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -387,7 +388,7 @@ fun NowPlayingScreen(
                                 } else {
                                     coverDragOffset = baseOffset + (slop.position.x - down.position.x)
                                     val ended = horizontalDrag(slop.id) { change ->
-                                        val dx = change.positionChange().x
+                                        val dx = change.positionChange.x
                                         if (dx != 0f) {
                                             change.consume()
                                             tracker.addPosition(change.uptimeMillis, change.position)
