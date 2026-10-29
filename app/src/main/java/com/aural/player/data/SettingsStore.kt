@@ -36,6 +36,7 @@ class SettingsStore(private val context: Context) {
         val KEY_DISMISSED_UPDATE = stringPreferencesKey("dismissed_update_version")
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_ms")
         val KEY_LAST_PLAYBACK = stringPreferencesKey("last_playback_json")
+        val KEY_DAILY_PLAYLIST = stringPreferencesKey("daily_playlist_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -366,6 +367,44 @@ class SettingsStore(private val context: Context) {
             val current = decodePlaylists(prefs[KEY_PLAYLISTS])
             prefs[KEY_PLAYLISTS] = encodePlaylists(block(current))
         }
+    }
+
+    // ------------------------- Playlist del día -------------------------
+
+    /**
+     * UNA sola "Playlist del día": { fecha (yyyy-MM-dd, hora local del
+     * dispositivo), ids de canciones }. Al abrirse la app en un día
+     * distinto al guardado se REGENERA y la anterior desaparece (sin
+     * historial, sin versiones acumuladas). Solo sobrevive si el usuario
+     * la guardó como permanente (copia estática en playlists normales).
+     */
+    data class DailyPlaylist(val date: String, val songIds: List<Long>)
+
+    /** Flujo reactivo de la Playlist del día (null si aún no se generó). */
+    val dailyPlaylist: Flow<DailyPlaylist?> = context.dataStore.data.map { prefs ->
+        decodeDailyPlaylist(prefs[KEY_DAILY_PLAYLIST])
+    }
+
+    /** Guarda (o regenera) la Playlist del día con la fecha indicada. */
+    suspend fun setDailyPlaylist(date: String, songIds: List<Long>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DAILY_PLAYLIST] = JSONObject()
+                .put("date", date)
+                .put("songs", JSONArray(songIds))
+                .toString()
+        }
+    }
+
+    private fun decodeDailyPlaylist(json: String?): DailyPlaylist? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            val obj = JSONObject(json)
+            val ids = obj.getJSONArray("songs")
+            DailyPlaylist(
+                date = obj.getString("date"),
+                songIds = (0 until ids.length()).map { i -> ids.getLong(i) }
+            )
+        } catch (_: Exception) { null }
     }
 
     // ------------------------- Favoritos -------------------------
