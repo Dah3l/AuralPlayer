@@ -43,7 +43,9 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.random.Random
 import com.aural.player.ui.theme.HalloweenGhost
 import com.aural.player.ui.theme.HalloweenPumpkin
 import kotlinx.coroutines.delay
@@ -278,7 +280,9 @@ fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
 }
 
 // ===========================================================================
-// MURCIÉLAGOS (Now Playing): cruzan de vez en cuando batiendo las alas.
+// MURCIÉLAGOS (Now Playing): caricatura — cuerpo regordete, alas anchas con
+// borde ondeado de 3 ondas, orejas picudas, ojazos con pupila. Cruzan a
+// distintas alturas, uno en dirección contraria.
 // ===========================================================================
 
 @Composable
@@ -287,7 +291,8 @@ private fun BatFlight(
     delayMs: Int,
     yFraction: Float,
     sizeDp: Dp,
-    maxAlpha: Float = 0.8f
+    maxAlpha: Float = 0.85f,
+    fromRight: Boolean = false
 ) {
     val t = rememberInfiniteTransition(label = "bat")
     val p by t.animateFloat(
@@ -306,33 +311,61 @@ private fun BatFlight(
         val phase = (p + delayFrac) % 1f
         val w = size.width
         val h = size.height
-        val x = -80f + phase * (w + 160f)
-        val y = yFraction * h + sin(phase * 2f * PI.toFloat() * 3f) * 18f
+        val dir = if (fromRight) -1f else 1f
+        val x = if (fromRight) w + 100f - phase * (w + 200f) else -100f + phase * (w + 200f)
+        val y = yFraction * h + sin(phase * 2f * PI.toFloat() * 3f) * 22f
         val alpha = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
-        // aleteo rápido (2 frames)
-        val flap = sin(phase * 2f * PI.toFloat() * 9f)
-        val col = Color(0xFF2E2440).copy(alpha = alpha)
+        val flap = sin(phase * 2f * PI.toFloat() * 8f)
+        val col = Color(0xFF201419).copy(alpha = alpha)
         val s = sizePx
-        // cuerpo + cabeza
-        drawOval(col, Offset(x - s * 0.07f, y - s * 0.10f), Size(s * 0.14f, s * 0.20f))
-        drawCircle(col, s * 0.055f, Offset(x, y - s * 0.11f))
-        // alas
+        // cuerpo regordete
+        drawOval(col, Offset(x - s * 0.16f, y - s * 0.20f), Size(s * 0.32f, s * 0.40f))
+        // orejas picudas
         for (side in listOf(-1f, 1f)) {
-            val tipX = x + side * s * 0.5f
-            val tipY = y - s * 0.06f - flap * s * 0.22f
+            val ear = Path().apply {
+                moveTo(x + side * s * 0.06f, y - s * 0.16f)
+                lineTo(x + side * s * 0.13f, y - s * 0.34f)
+                lineTo(x + side * s * 0.20f, y - s * 0.15f)
+                close()
+            }
+            drawPath(ear, col)
+        }
+        // alas anchas con borde ondeado (3 ondas), batiendo
+        for (side in listOf(-1f, 1f)) {
+            val shoulder = Offset(x + side * s * 0.10f, y - s * 0.02f)
+            val wingSpan = s * 0.55f
+            val lift = flap * s * 0.18f
             val wing = Path().apply {
-                moveTo(x + side * s * 0.05f, y - s * 0.04f)
+                moveTo(shoulder.x, shoulder.y)
                 quadraticBezierTo(
-                    x + side * s * 0.28f, y - s * 0.16f - flap * s * 0.12f,
-                    tipX, tipY
+                    shoulder.x + side * wingSpan * 0.5f, shoulder.y - s * 0.28f - lift,
+                    shoulder.x + side * wingSpan, shoulder.y - s * 0.10f - lift
                 )
-                quadraticBezierTo(
-                    x + side * s * 0.30f, y + s * 0.02f,
-                    x + side * s * 0.10f, y + s * 0.06f
-                )
+                val waves = 3
+                var px = shoulder.x + side * wingSpan
+                var py = shoulder.y - s * 0.10f - lift
+                for (k in 1..waves) {
+                    val nx = shoulder.x + side * wingSpan * (1f - k / waves.toFloat())
+                    val ny = shoulder.y + s * 0.02f
+                    quadraticBezierTo(
+                        (px + nx) / 2f + side * s * 0.02f, (py + ny) / 2f + s * 0.10f,
+                        nx, ny
+                    )
+                    px = nx
+                    py = ny
+                }
                 close()
             }
             drawPath(wing, col)
+        }
+        // ojazos blancos con pupila (miran hacia donde vuela)
+        val eyeCol = Color(0xFFFFF6E0).copy(alpha = alpha)
+        val pupCol = Color(0xFF14100E).copy(alpha = alpha)
+        for (side in listOf(-1f, 1f)) {
+            val ex = x + side * s * 0.07f
+            val ey = y - s * 0.08f
+            drawCircle(eyeCol, s * 0.055f, Offset(ex, ey))
+            drawCircle(pupCol, s * 0.022f, Offset(ex + dir * s * 0.012f, ey + s * 0.008f))
         }
     }
 }
@@ -341,13 +374,103 @@ private fun BatFlight(
 fun HalloweenBats(modifier: Modifier = Modifier) {
     Box(modifier) {
         BatFlight(
-            travelDurationMs = 12000, delayMs = 0,
-            yFraction = 0.10f, sizeDp = 44.dp
+            travelDurationMs = 14000, delayMs = 0,
+            yFraction = 0.14f, sizeDp = 84.dp
         )
         BatFlight(
-            travelDurationMs = 17000, delayMs = 8000,
-            yFraction = 0.18f, sizeDp = 34.dp, maxAlpha = 0.65f
+            travelDurationMs = 19000, delayMs = 6000,
+            yFraction = 0.48f, sizeDp = 64.dp, maxAlpha = 0.7f, fromRight = true
         )
+        BatFlight(
+            travelDurationMs = 16000, delayMs = 11000,
+            yFraction = 0.74f, sizeDp = 76.dp, maxAlpha = 0.8f
+        )
+    }
+}
+
+// ===========================================================================
+// CALAVERA ESPORÁDICA (global, cualquier vista): cada 25-45 s (aleatorio) se
+// desliza desde un costado (izquierda o derecha, aleatorio), se asoma ~1/3,
+// se queda 1.2 s con un leve meneo y se vuelve a esconder. Solo con el tema
+// Halloween; nunca consume toques.
+// ===========================================================================
+
+@Composable
+fun PeekingSkull(modifier: Modifier = Modifier) {
+    var side by remember { mutableStateOf(if (Random.nextBoolean()) -1f else 1f) }
+    var peek by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(Random.nextLong(25000L, 45001L))
+            side = if (Random.nextBoolean()) -1f else 1f
+            peek = true
+            delay(1200L)
+            peek = false
+        }
+    }
+    val peekAnim by animateFloatAsState(
+        targetValue = if (peek) 1f else 0f,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "peek"
+    )
+    val t = rememberInfiniteTransition(label = "skullwig")
+    val wig by t.animateFloat(
+        initialValue = -3f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "wig"
+    )
+    if (peekAnim > 0.01f) {
+        val density = LocalDensity.current
+        val skullDp = 72.dp
+        val skullPx = with(density) { skullDp.toPx() }
+        Box(modifier.fillMaxSize()) {
+            Canvas(
+                Modifier
+                    .size(skullDp)
+                    .align(if (side < 0f) Alignment.CenterStart else Alignment.CenterEnd)
+                    .offset {
+                        // escondida: toda fuera; asomada: ~1/3 visible
+                        val off = side * skullPx * (1f - 0.33f * peekAnim)
+                        IntOffset(off.toInt(), 0)
+                    }
+            ) {
+                val s = size.width
+                val bone = Color(0xFFE8E4D8).copy(alpha = peekAnim)
+                val dark = Color(0xFF1A1512).copy(alpha = peekAnim)
+                rotate(wig * peekAnim) {
+                    // cráneo
+                    drawOval(bone, Offset(s * 0.18f, s * 0.06f), Size(s * 0.64f, s * 0.58f))
+                    // mandíbula
+                    drawRoundRect(
+                        bone, Offset(s * 0.28f, s * 0.52f), Size(s * 0.44f, s * 0.36f),
+                        CornerRadius(s * 0.10f, s * 0.10f)
+                    )
+                    // cuencas de los ojos
+                    drawOval(dark, Offset(s * 0.30f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
+                    drawOval(dark, Offset(s * 0.55f, s * 0.36f), Size(s * 0.15f, s * 0.19f))
+                    // nariz triangular
+                    val nose = Path().apply {
+                        moveTo(s * 0.50f, s * 0.58f)
+                        lineTo(s * 0.44f, s * 0.68f)
+                        lineTo(s * 0.56f, s * 0.68f)
+                        close()
+                    }
+                    drawPath(nose, dark)
+                    // dientes
+                    for (i in 0..3) {
+                        val tx = s * (0.34f + i * 0.107f)
+                        drawLine(
+                            dark, Offset(tx, s * 0.70f), Offset(tx, s * 0.84f),
+                            strokeWidth = s * 0.022f, cap = StrokeCap.Round
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
