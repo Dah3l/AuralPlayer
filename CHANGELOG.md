@@ -8,7 +8,7 @@ en GitHub salen de aquí.
 
 ### Novedades
 - **"Para ti" en el home** — la sección "Más reproducidas" ahora se llama "Para ti", porque ya no solo muestra lo más sonado.
-- **La portada ahora se desliza como un carrusel a ancho completo** — en la pantalla de Now Playing, la portada ocupa todo el ancho y se desliza de borde a borde: desliza a la izquierda para ir a la siguiente canción o a la derecha para volver a la anterior. El cambio es directo y siempre ocurre al soltar, sin depender de la animación. Con el aleatorio activado, las tarjetas vecinas siguen el orden aleatorio.
+- **La portada ahora se desliza como un carrusel a ancho completo** — en la pantalla de Now Playing, la portada ocupa todo el ancho y se desliza de borde a borde: desliza a la izquierda para ir a la siguiente canción o a la derecha para volver a la anterior. El deslizamiento ahora siempre se ve completo y la sombra de la portada ya no se recorta en los bordes. El cambio es directo y siempre ocurre al soltar. Con el aleatorio activado, las tarjetas vecinas siguen el orden aleatorio.
 - **La app recuerda dónde te quedaste** — si cierras la app por completo y la vuelves a abrir, el mini reproductor aparece con la última canción que sonaba y su lista, en pausa y lista para reproducir (nunca suena sola al abrir). Si esa canción ya no está en tu biblioteca, simplemente no se muestra nada.
 
 ## v1.0.5 — 2026-10-25
