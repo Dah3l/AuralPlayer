@@ -85,9 +85,8 @@ import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.HalloweenBats
 import com.aural.player.ui.components.formatDuration
+import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.HalloweenPumpkin
-import com.aural.player.ui.theme.SeasonalTheme
-import com.aural.player.ui.theme.currentSeasonalTheme
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -163,6 +162,9 @@ fun NowPlayingScreen(
     val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    // Decoración Halloween: solo si el tema activo es Halloween (tema real del menú).
+    val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
+    val isHalloweenTheme = themeName == AppTheme.HALLOWEEN.name
     val song = state.currentSong
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -252,9 +254,9 @@ fun NowPlayingScreen(
                     }
                 }
         )
-        // Murciélagos de temporada (27-oct..1-nov): al fondo, dibujo puro.
-        // Navidad (diciembre): enganchar decoración navideña aquí.
-        if (currentSeasonalTheme() == SeasonalTheme.Halloween) {
+        // Murciélagos (tema Halloween activo): al fondo, dibujo puro.
+        // Navidad (diciembre): enganchar decoración navideña con theme == CHRISTMAS.
+        if (isHalloweenTheme) {
             HalloweenBats(Modifier.fillMaxSize())
         }
         Column(
@@ -1222,9 +1224,9 @@ private fun CoverCarousel(
             ?.let { dominantColors[it]?.second } ?: currentDominant
         lerp(currentDominant, incomingDominant, (1f - incomingD).coerceIn(0f, 1f))
     }
-    // En Halloween el glow se tiñe más naranja calabaza.
+    // Con el tema Halloween el glow se tiñe más naranja calabaza.
     val glowColor =
-        if (currentSeasonalTheme() == SeasonalTheme.Halloween) lerp(glowBase, HalloweenPumpkin, 0.45f)
+        if (isHalloweenTheme) lerp(glowBase, HalloweenPumpkin, 0.45f)
         else glowBase
 
     BoxWithConstraints(
