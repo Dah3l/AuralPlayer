@@ -74,9 +74,6 @@ import com.aural.player.ui.components.formatDuration
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.platform.LocalDensity
-import kotlin.math.abs
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -97,8 +94,6 @@ import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Check
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -348,119 +343,44 @@ fun NowPlayingScreen(
                     initialPage = coverCenterPage,
                     pageCount = { latestCoverWindow.size }
                 )
-                // Estado fresco para los observadores (ninguna recomposición
-                // los corta ni les deja valores viejos).
+                // Estado fresco para el watcher de asentamiento (ninguna
+                // recomposición le deja valores viejos).
                 val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
-                val latestNeighbors by rememberUpdatedState(state.prevNeighborIndex to state.nextNeighborIndex)
                 val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
-                val density = LocalDensity.current
-                val swipeThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
-                val flingThresholdPxPerSec = 1000f
 
-                // Bandera anti-doble-disparo: mientras un cambio está en vuelo
-                // se ignoran nuevos triggers de release. El trabajo suspend
-                // (animación + cambio) NO puede vivir dentro del pointerInput
-                // (scope restringido): se entrega vía pendingSwipe y lo ejecuta
-                // un LaunchedEffect fuera del gesto.
-                val swipeChangeInFlight = remember { mutableStateOf(false) }
-                var pendingSwipe by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-
-                // Carrusel -> reproductor (SOLO vía release): al soltar pasando
-                // el umbral o con fling, PRIMERO se anima el pager hasta la
-                // página destino (deslizamiento visible a ancho completo) y
-                // recién al terminar la animación se cambia la canción.
-                // NO consume: el pager sigue el dedo en vivo durante el
-                // arrastre; al soltar, nuestra animación toma el control.
-                val releaseObserver = Modifier.pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var maxDx = 0f
-                        val tracker = VelocityTracker()
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) {
-                                val vx = tracker.calculateVelocity().x
-                                val toNext: Boolean? = when {
-                                    abs(maxDx) >= swipeThresholdPx -> maxDx < 0
-                                    abs(vx) >= flingThresholdPxPerSec -> vx < 0
-                                    else -> null
-                                }
-                                if (toNext != null && !swipeChangeInFlight.value && pendingSwipe == null) {
-                                    val window = latestCoverWindow
-                                    val (prevN, nextN) = latestNeighbors
-                                    val cur = latestCurrentIndex
-                                    val targetIndex = if (toNext) nextN else prevN
-                                    val targetPage = window.indexOf(targetIndex)
-                                    val pageCount = coverPagerState.pageCount
-                                    if (targetIndex != C.INDEX_UNSET && targetIndex != cur
-                                        && targetPage in 0 until pageCount
-                                    ) {
-                                        // Handoff fuera del pointerInput (scope
-                                        // restringido): el LaunchedEffect
-                                        // (pendingSwipe) ejecuta la animación
-                                        // + el cambio.
-                                        swipeChangeInFlight.value = true
-                                        pendingSwipe = targetPage to targetIndex
-                                    }
-                                }
-                                break
-                            }
-                            val dx = change.position.x - down.position.x
-                            if (abs(dx) > abs(maxDx)) maxDx = dx
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            // Sin consume(): el gesto sigue limpio para el pager.
-                        }
-                    }
-                }
-
-                // Ejecuta el cambio programado FUERA del pointerInput (scope
-                // no restringido): 1. deslizamiento visible, 2. cambio con
-                // chequeo fresco, 3. espera del cambio real, 4. recentrado
-                // de seguridad sobre la misma portada (sin salto visible).
-                LaunchedEffect(pendingSwipe) {
-                    val (targetPage, targetIndex) = pendingSwipe ?: return@LaunchedEffect
-                    try {
-                        // 1. Deslizamiento visible a ancho completo.
-                        coverPagerState.animateScrollToPage(targetPage)
-                        // 2. Chequeo fresco: cambiar solo si sigue haciendo falta.
-                        if (targetIndex != latestCurrentIndex) {
-                            latestOnPlayQueueItem(targetIndex)
-                            // 3. Esperar el cambio real (timeout defensivo).
-                            withTimeoutOrNull(2000) {
-                                snapshotFlow { latestCurrentIndex }.first { it == targetIndex }
-                            }
-                            // 4. Recentrado de seguridad.
-                            val w = latestCoverWindow
-                            val c = w.indexOf(latestCurrentIndex)
-                            if (c in w.indices
-                                && !coverPagerState.isScrollInProgress
-                                && coverPagerState.currentPage != c
-                            ) {
-                                coverPagerState.scrollToPage(c)
-                            }
-                        }
-                    } finally {
-                        swipeChangeInFlight.value = false
-                        pendingSwipe = null
-                    }
-                }
-
-                // Asentamiento -> solo recentrado visual (NUNCA cambia la
-                // canción): si el pager quedó en una página que no es la del
-                // tema actual, vuelve al centro con animación. No pelea con
-                // la animación programada del swipe (bandera anti-doble-disparo).
+                // Modelo GALERÍA: sin observadores custom de release. El pager
+                // sigue el dedo 1:1 con su física nativa; al soltar, si el
+                // arrastre/fling lo llevó a una portada vecina, la animación
+                // se completa sola (y si no, vuelve sola a su sitio).
+                // La canción cambia SOLO cuando el pager SE ASIENTA quieto
+                // en la vecina: el deslizamiento de salida/entrada nunca se
+                // interrumpe y siempre se ve completo. NUNCA se dispara el
+                // cambio con el pager en movimiento.
                 LaunchedEffect(coverPagerState) {
                     snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
                         .collect { (page, scrolling) ->
-                            if (!scrolling && !swipeChangeInFlight.value) {
+                            if (!scrolling) {
                                 val center = latestCenterPage
-                                if (page != center && center < latestCoverWindow.size) {
-                                    coverPagerState.animateScrollToPage(center)
+                                if (page != center) {
+                                    // Página vecina: resolver su índice del
+                                    // timeline y cambiar la canción (directo,
+                                    // sin regla de 3 s; respeta el shuffle).
+                                    val targetIndex = latestCoverWindow.getOrNull(page)
+                                    if (targetIndex != null
+                                        && targetIndex != C.INDEX_UNSET
+                                        && targetIndex != latestCurrentIndex
+                                    ) {
+                                        latestOnPlayQueueItem(targetIndex)
+                                    } else if (center < latestCoverWindow.size) {
+                                        // Red de seguridad: si no hay cambio
+                                        // válido, volver al centro.
+                                        coverPagerState.animateScrollToPage(center)
+                                    }
                                 }
                             }
                         }
                 }
+
                 // Reproductor -> carrusel: si la canción cambia por otra vía
                 // (botones, avance automático, aleatorio), reconstruir la
                 // ventana y volver a la página central.
@@ -476,9 +396,7 @@ fun NowPlayingScreen(
 
                 HorizontalPager(
                     state = coverPagerState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(releaseObserver)
+                    modifier = Modifier.fillMaxWidth()
                 ) { page ->
                     // La página es una posición de la ventana; se traduce a
                     // índice del timeline (un solo espacio de índices) y la
