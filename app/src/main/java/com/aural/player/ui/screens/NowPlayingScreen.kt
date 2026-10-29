@@ -118,6 +118,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collect
+import androidx.media3.common.C
 
 /**
  * Pantalla completa de reproducción con degradado sutil de fondo,
@@ -286,36 +287,58 @@ fun NowPlayingScreen(
             // Carrusel simple (v1.0.6): las portadas se deslizan como
             // fotos con un HorizontalPager, el mismo de la biblioteca.
             // Deslizar a la izquierda = siguiente canción, a la derecha =
-            // anterior. El cambio es directo al índice de la cola (sin la
-            // regla de 3 s del botón anterior) y en orden aunque el
-            // aleatorio esté activado. En los extremos de la cola el pager
-            // rebota: no se puede pasar más allá.
+            // anterior. El cambio es directo al media item (sin la regla
+            // de 3 s del botón anterior). Con el aleatorio activado, las
+            // tarjetas vecinas siguen el orden aleatorio (no el de la
+            // cola); con el aleatorio desactivado son currentIndex±1. En
+            // los extremos el pager rebota: no se puede pasar más allá
+            // (sin wrap: el wrap es lógica de repeat, no del carrusel).
             val coverQueue = state.queue
-            val latestCoverQueue by rememberUpdatedState(coverQueue)
+            // Ventana del carrusel: [vecinoAnterior?, actual, vecinoSiguiente?].
+            // Un vecino INDEX_UNSET o igual al actual se trata como inexistente.
+            val coverWindow = remember(
+                state.currentIndex, state.prevNeighborIndex,
+                state.nextNeighborIndex, coverQueue.size
+            ) {
+                buildList {
+                    val cur = state.currentIndex
+                    val prev = state.prevNeighborIndex
+                    if (prev != C.INDEX_UNSET && prev != cur && prev in coverQueue.indices) add(prev)
+                    if (cur in coverQueue.indices) add(cur)
+                    val next = state.nextNeighborIndex
+                    if (next != C.INDEX_UNSET && next != cur && next in coverQueue.indices) add(next)
+                }
+            }
+            val coverCenterPage = coverWindow.indexOf(state.currentIndex).coerceAtLeast(0)
+            val latestCoverWindow by rememberUpdatedState(coverWindow)
+            val latestCoverCenterPage by rememberUpdatedState(coverCenterPage)
             val coverPagerState = rememberPagerState(
-                initialPage = state.currentIndex.coerceAtLeast(0),
-                pageCount = { latestCoverQueue.size }
+                initialPage = coverCenterPage,
+                pageCount = { latestCoverWindow.size }
             )
             // Carrusel -> reproductor: al asentarse en otra página, saltar
-            // directo a esa canción de la cola.
-            val latestCoverIndex by rememberUpdatedState(state.currentIndex)
+            // directo al media item de esa página.
+            val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
             val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
             LaunchedEffect(coverPagerState) {
                 snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
                     .collect { (page, scrolling) ->
-                        if (!scrolling && page != latestCoverIndex && page in latestCoverQueue.indices) {
-                            latestOnPlayQueueItem(page)
+                        val target = latestCoverWindow.getOrNull(page)
+                        if (!scrolling && target != null && target != latestCurrentIndex) {
+                            latestOnPlayQueueItem(target)
                         }
                     }
             }
             // Reproductor -> carrusel: si la canción cambia por otra vía
-            // (botones, avance automático), llevar el pager a su página.
-            LaunchedEffect(state.currentIndex, coverQueue.size) {
-                val target = state.currentIndex
-                if (coverQueue.isNotEmpty() && target in coverQueue.indices &&
-                    coverPagerState.currentPage != target && !coverPagerState.isScrollInProgress
-                ) {
-                    coverPagerState.scrollToPage(target)
+            // (botones, avance automático), reconstruir la ventana y volver
+            // a la página central.
+            LaunchedEffect(coverWindow, state.currentIndex) {
+                val count = latestCoverWindow.size
+                if (count > 0) {
+                    val target = latestCoverCenterPage.coerceIn(0, count - 1)
+                    if (!coverPagerState.isScrollInProgress && coverPagerState.currentPage != target) {
+                        coverPagerState.scrollToPage(target)
+                    }
                 }
             }
             BoxWithConstraints(
@@ -345,7 +368,9 @@ fun NowPlayingScreen(
                     state = coverPagerState,
                     modifier = Modifier.size(artSize)
                 ) { page ->
-                    val coverSong = coverQueue.getOrNull(page)
+                    // La página es una posición de la ventana; se traduce a
+                    // índice de la cola para buscar la canción.
+                    val coverSong = coverWindow.getOrNull(page)?.let { coverQueue.getOrNull(it) }
                     if (coverSong != null) {
                         CoverArt(
                             uri = customCovers[coverSong.id] ?: coverSong.albumArtUri,
