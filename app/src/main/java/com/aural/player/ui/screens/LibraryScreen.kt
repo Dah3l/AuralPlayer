@@ -211,7 +211,9 @@ fun LibraryScreen(
         }
     )
 
-    // Las 2 playlists de "Para ti" (sin datos todavía: Favoritas y Descargas)
+    // "Para ti": la Playlist del día VA PRIMERA (si tiene canciones);
+    // después, las más sonadas. Siempre 2 tarjetas. Sin datos todavía:
+    // Favoritas y Descargas.
     val downloadsPlaylist = playlists.firstOrNull { it.name == "Descargas" }
     val topPlaylists: List<TopPlaylist> = run {
         fun entryOf(pl: Playlist): TopPlaylist {
@@ -233,14 +235,24 @@ fun LibraryScreen(
             songCount = favSongs.size
         )
         val dlEntry = downloadsPlaylist?.let { entryOf(it) }
-        if (playCounts.values.none { it > 0 }) {
+        // Playlist del día primera en la lista (si tiene canciones).
+        val dailySongs = viewModel.dailyPlaylistSongs()
+        val dailyEntry = dailySongs.takeIf { it.isNotEmpty() }?.let { ds ->
+            TopPlaylist(
+                id = DAILY_PLAYLIST_ID,
+                name = "Playlist del día",
+                coverUri = ds.firstOrNull()?.let { customCovers[it.id] ?: it.albumArtUri },
+                songCount = ds.size
+            )
+        }
+        val rest = if (playCounts.values.none { it > 0 }) {
             listOfNotNull(favEntry, dlEntry)
         } else {
             (playlists.filter { it.name != "Descargas" }.map { entryOf(it) } +
                 listOfNotNull(dlEntry) + favEntry)
                 .sortedByDescending { playCounts[it.id] ?: 0L }
-                .take(2)
         }
+        listOfNotNull(dailyEntry) + rest.take(if (dailyEntry != null) 1 else 2)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -435,9 +447,12 @@ fun LibraryScreen(
                             topPlaylists = topPlaylists,
                             onOpenPlaylist = onOpenPlaylist,
                             onPlayPlaylist = { id ->
-                                val toPlay = if (id == FAVORITES_ID) viewModel.favoriteSongs()
-                                    else playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
+                                val toPlay = when (id) {
+                                    FAVORITES_ID -> viewModel.favoriteSongs()
+                                    DAILY_PLAYLIST_ID -> viewModel.dailyPlaylistSongs()
+                                    else -> playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
                                         ?: emptyList()
+                                }
                                 if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
                             },
                             onSeeAllPlaylists = { onTabSelected(3) }
