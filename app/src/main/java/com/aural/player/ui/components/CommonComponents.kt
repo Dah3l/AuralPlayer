@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import com.aural.player.ui.theme.HalloweenFontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,8 +58,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
-import com.aural.player.ui.theme.SeasonalTheme
-import com.aural.player.ui.theme.currentSeasonalTheme
 
 /** Formatea milisegundos como "m:ss" o "h:mm:ss". */
 fun formatDuration(ms: Long): String {
@@ -406,9 +405,11 @@ fun AlphabetFastScroller(
 
 /**
  * Pantalla de bienvenida: logo de la app con animación de entrada.
+ * Con el tema Halloween activo muestra la escena de tumbas + mano zombi
+ * (más grande) y el splash dura ~2.8s en vez de 1.8s.
  */
 @Composable
-fun SplashScreen() {
+fun SplashScreen(isHalloween: Boolean = false) {
     var visible by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)
@@ -463,6 +464,7 @@ fun SplashScreen() {
                 text = "Aural",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
+                fontFamily = if (isHalloween) HalloweenFontFamily else null,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
             )
@@ -474,15 +476,16 @@ fun SplashScreen() {
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
             )
         }
-        // Escena Halloween abajo: tumbas + mano zombi animada + niebla.
+        // Escena Halloween abajo: tumbas + mano zombi animada + niebla
+        // (escena grande, ~300 dp; el splash dura ~2.8s con este tema).
         // El bloqueador de toques del splash se queda como está.
-        // Navidad (diciembre): enganchar escena navideña aquí.
-        if (currentSeasonalTheme() == SeasonalTheme.Halloween) {
+        // Navidad (diciembre): enganchar escena navideña aquí (theme == CHRISTMAS).
+        if (isHalloween) {
             HalloweenSplashScene(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(300.dp)
                     .graphicsLayer { this.alpha = alpha }
             )
         }
