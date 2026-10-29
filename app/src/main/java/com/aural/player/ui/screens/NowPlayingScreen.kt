@@ -24,6 +24,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.abs
+import coil.Coil
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import androidx.core.graphics.drawable.toBitmap
+import androidx.palette.graphics.Palette
+import android.graphics.Bitmap
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.aural.player.data.Song
@@ -285,149 +298,149 @@ fun NowPlayingScreen(
                 return@Column
             }
 
-            // ---- Carátula grande a ancho completo ----
-            // Carrusel reconstruido (v1.0.6): pager de borde a borde, sin
-            // franjas laterales. Cada página ocupa TODO el ancho del viewport:
-            // en reposo se ve UNA portada limpia; al deslizar, la portada sale
-            // por un borde y la otra entra por el otro, recorriendo el viewport
-            // completo. La portada va centrada con margen lateral para que su
-            // sombra nunca se recorte en los bordes del viewport.
-            // - Ventana [vecinoAnterior?, actual, vecinoSiguiente?] con índices
-            //   SIEMPRE del timeline (un solo espacio de índices en la app).
-            // - Al SOLTAR pasando el umbral (80 dp o fling > 1000 px/s):
-            //   PRIMERO se anima el pager hasta la página destino
-            //   (deslizamiento visible a ancho completo) y recién al terminar
-            //   la animación se cambia la canción. Izquierda = siguiente,
-            //   derecha = anterior. Sin el umbral, el pager vuelve solo.
-            // - Cambio directo al media item, sin la regla de 3 s del botón
-            //   anterior. Con aleatorio, los vecinos siguen el orden aleatorio.
-            BoxWithConstraints(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                                androidx.compose.ui.graphics.Color.Transparent
-                            ),
-                            radius = 600f
-                        )
-                    )
+            // ---- Carátula grande: carrusel con efecto por distancia ----
+            // En REPOSO es idéntico al diseño anterior: una sola portada
+            // centrada y limpia, sin franjas (la transformación por distancia
+            // vale 0). En MOVIMIENTO cada portada se escala (mín 0.85) y se
+            // atenúa (mín 0.4) según su distancia al centro; el glow del fondo
+            // funde entre los colores dominantes; el título/artista se
+            // desvanece y cambia al cruzar el 50%.
+            // - Ventana [vecinoAnterior?, actual, vecinoSiguiente?] con
+            //   índices SIEMPRE del timeline (un solo espacio de índices).
+            //   Sin wrap: en los extremos el pager rebota.
+            // - La canción cambia SOLO al asentarse el pager en una vecina
+            //   (directo, sin regla de 3 s; respeta el shuffle).
+            val coverWindow = remember(
+                state.currentIndex, state.prevNeighborIndex,
+                state.nextNeighborIndex
             ) {
-                val pageWidth = maxWidth
-                // Margen lateral para que la sombra de la portada (24 dp)
-                // nunca se recorte en los bordes del viewport.
-                val coverSideMargin = 32.dp
-                // Ventana del carrusel: índices del timeline. Un vecino
-                // INDEX_UNSET o igual al actual se trata como inexistente
-                // (el pager rebota en los extremos, sin wrap).
-                val coverWindow = remember(
-                    state.currentIndex, state.prevNeighborIndex,
-                    state.nextNeighborIndex
-                ) {
-                    buildList {
-                        val cur = state.currentIndex
-                        val prev = state.prevNeighborIndex
-                        if (prev != C.INDEX_UNSET && prev != cur && prev >= 0) add(prev)
-                        if (cur >= 0) add(cur)
-                        val next = state.nextNeighborIndex
-                        if (next != C.INDEX_UNSET && next != cur && next >= 0) add(next)
-                    }
+                buildList {
+                    val cur = state.currentIndex
+                    val prev = state.prevNeighborIndex
+                    if (prev != C.INDEX_UNSET && prev != cur && prev >= 0) add(prev)
+                    if (cur >= 0) add(cur)
+                    val next = state.nextNeighborIndex
+                    if (next != C.INDEX_UNSET && next != cur && next >= 0) add(next)
                 }
-                val coverCenterPage = coverWindow.indexOf(state.currentIndex).coerceAtLeast(0)
-                val latestCoverWindow by rememberUpdatedState(coverWindow)
-                val latestCenterPage by rememberUpdatedState(coverCenterPage)
-                val coverPagerState = rememberPagerState(
-                    initialPage = coverCenterPage,
-                    pageCount = { latestCoverWindow.size }
-                )
-                // Estado fresco para el watcher de asentamiento (ninguna
-                // recomposición le deja valores viejos).
-                val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
-                val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
+            }
+            val coverCenterPage = coverWindow.indexOf(state.currentIndex).coerceAtLeast(0)
+            val latestCoverWindow by rememberUpdatedState(coverWindow)
+            val latestCenterPage by rememberUpdatedState(coverCenterPage)
+            val coverPagerState = rememberPagerState(
+                initialPage = coverCenterPage,
+                pageCount = { latestCoverWindow.size }
+            )
+            // Estado fresco para el watcher de asentamiento (ninguna
+            // recomposición le deja valores viejos).
+            val latestCurrentIndex by rememberUpdatedState(state.currentIndex)
+            val latestOnPlayQueueItem by rememberUpdatedState(onPlayQueueItem)
 
-                // Modelo GALERÍA: sin observadores custom de release. El pager
-                // sigue el dedo 1:1 con su física nativa; al soltar, si el
-                // arrastre/fling lo llevó a una portada vecina, la animación
-                // se completa sola (y si no, vuelve sola a su sitio).
-                // La canción cambia SOLO cuando el pager SE ASIENTA quieto
-                // en la vecina: el deslizamiento de salida/entrada nunca se
-                // interrumpe y siempre se ve completo. NUNCA se dispara el
-                // cambio con el pager en movimiento.
-                LaunchedEffect(coverPagerState) {
-                    snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
-                        .collect { (page, scrolling) ->
-                            if (!scrolling) {
-                                val center = latestCenterPage
-                                if (page != center) {
-                                    // Página vecina: resolver su índice del
-                                    // timeline y cambiar la canción (directo,
-                                    // sin regla de 3 s; respeta el shuffle).
-                                    val targetIndex = latestCoverWindow.getOrNull(page)
-                                    if (targetIndex != null
-                                        && targetIndex != C.INDEX_UNSET
-                                        && targetIndex != latestCurrentIndex
-                                    ) {
-                                        latestOnPlayQueueItem(targetIndex)
-                                    } else if (center < latestCoverWindow.size) {
-                                        // Red de seguridad: si no hay cambio
-                                        // válido, volver al centro.
-                                        coverPagerState.animateScrollToPage(center)
-                                    }
+            // Modelo GALERÍA: sin observadores custom de release. El pager
+            // sigue el dedo 1:1 con su física nativa; al soltar, si el
+            // arrastre/fling lo llevó a una portada vecina, la animación se
+            // completa sola (y si no, vuelve sola a su sitio). La canción
+            // cambia SOLO cuando el pager SE ASIENTA quieto en la vecina:
+            // el deslizamiento de salida/entrada nunca se interrumpe y
+            // siempre se ve completo. NUNCA se dispara el cambio con el
+            // pager en movimiento.
+            LaunchedEffect(coverPagerState) {
+                snapshotFlow { coverPagerState.currentPage to coverPagerState.isScrollInProgress }
+                    .collect { (page, scrolling) ->
+                        if (!scrolling) {
+                            val center = latestCenterPage
+                            if (page != center) {
+                                // Página vecina: resolver su índice del
+                                // timeline y cambiar la canción (directo,
+                                // sin regla de 3 s; respeta el shuffle).
+                                val targetIndex = latestCoverWindow.getOrNull(page)
+                                if (targetIndex != null
+                                    && targetIndex != C.INDEX_UNSET
+                                    && targetIndex != latestCurrentIndex
+                                ) {
+                                    latestOnPlayQueueItem(targetIndex)
+                                } else if (center < latestCoverWindow.size) {
+                                    // Red de seguridad: si no hay cambio
+                                    // válido, volver al centro.
+                                    coverPagerState.animateScrollToPage(center)
                                 }
                             }
                         }
-                }
+                    }
+            }
 
-                // Reproductor -> carrusel: si la canción cambia por otra vía
-                // (botones, avance automático, aleatorio), reconstruir la
-                // ventana y volver a la página central.
-                LaunchedEffect(coverWindow, state.currentIndex) {
-                    val count = latestCoverWindow.size
-                    if (count > 0) {
-                        val target = latestCenterPage.coerceIn(0, count - 1)
-                        if (!coverPagerState.isScrollInProgress && coverPagerState.currentPage != target) {
-                            coverPagerState.scrollToPage(target)
-                        }
+            // Reproductor -> carrusel: si la canción cambia por otra vía
+            // (botones, avance automático, aleatorio), reconstruir la
+            // ventana y volver a la página central.
+            LaunchedEffect(coverWindow, state.currentIndex) {
+                val count = latestCoverWindow.size
+                if (count > 0) {
+                    val target = latestCenterPage.coerceIn(0, count - 1)
+                    if (!coverPagerState.isScrollInProgress && coverPagerState.currentPage != target) {
+                        coverPagerState.scrollToPage(target)
                     }
                 }
+            }
 
-                HorizontalPager(
-                    state = coverPagerState,
-                    modifier = Modifier.fillMaxWidth()
-                ) { page ->
-                    // La página es una posición de la ventana; se traduce a
-                    // índice del timeline (un solo espacio de índices) y la
-                    // portada se resuelve igual que en el reproductor.
-                    val timelineIndex = latestCoverWindow.getOrNull(page)
-                    val coverSong = timelineIndex?.let { viewModel.playback.songAtTimelineIndex(it) }
-                    // La página ocupa todo el ancho; la portada va centrada
-                    // con margen lateral para que su sombra NUNCA se recorte
-                    // en los bordes del viewport (en reposo: una portada
-                    // limpia con su sombra completa, sin franjas).
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(pageWidth),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CoverArt(
-                            uri = coverSong?.let { customCovers[it.id] ?: it.albumArtUri },
-                            size = pageWidth - coverSideMargin * 2,
-                            modifier = Modifier.shadow(
-                                elevation = 24.dp,
-                                shape = RoundedCornerShape(16.dp),
-                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                            ),
-                            cornerRadius = 16.dp
+            // Canciones de la ventana (actual + vecinas), resueltas una vez
+            // por ventana: durante el arrastre la ventana es estable.
+            val coverItems = remember(coverWindow, customCovers) {
+                coverWindow.map { idx ->
+                    viewModel.playback.songAtTimelineIndex(idx)?.let { s ->
+                        CoverItem(
+                            id = s.id,
+                            title = s.title,
+                            artist = s.artist,
+                            uri = customCovers[s.id] ?: s.albumArtUri
                         )
                     }
                 }
             }
 
+            // ---- Color dominante por canción (glow del fondo) ----
+            // Cache id -> (uri usada, color): si el usuario cambia la
+            // carátula personalizada, la uri cambia y se recalcula.
+            val context = LocalContext.current
+            val dominantCache = remember { mutableStateMapOf<Long, Pair<String?, Color>>() }
+            val fallbackDominant = MaterialTheme.colorScheme.primary
+            val paletteTargets = remember(coverItems) {
+                coverItems.mapNotNull { it?.let { item -> item.id to item.uri } }
+                    .distinctBy { it.first }
+            }
+            LaunchedEffect(paletteTargets, fallbackDominant) {
+                val loader = Coil.imageLoader(context)
+                val fallbackArgb = fallbackDominant.toArgb()
+                paletteTargets.forEach { (id, uri) ->
+                    if (uri.isNullOrBlank()) return@forEach
+                    if (dominantCache[id]?.first == uri) return@forEach
+                    try {
+                        val result = loader.execute(
+                            ImageRequest.Builder(context)
+                                .data(uri)
+                                .allowHardware(false)
+                                .build()
+                        )
+                        val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
+                        if (bitmap != null) {
+                            val small = Bitmap.createScaledBitmap(bitmap, 96, 96, false)
+                            val dominant = withContext(Dispatchers.Default) {
+                                Palette.from(small).generate()
+                                    .getDominantColor(fallbackArgb)
+                            }
+                            dominantCache[id] = uri to Color(dominant)
+                        }
+                    } catch (_: Exception) { /* fallback: color primario */ }
+                }
+            }
+
+            CoverCarousel(
+                coverPagerState = coverPagerState,
+                coverItems = coverItems,
+                coverCenterPage = coverCenterPage,
+                currentSongId = song.id,
+                dominantColors = dominantCache,
+                fallbackDominant = fallbackDominant,
+                modifier = Modifier.fillMaxWidth()
+            )
             // ---- Línea actual de la letra (debajo de la carátula) ----
             var lrcLines by remember(song?.id) {
                 mutableStateOf<List<com.aural.player.data.LrcLine>>(emptyList())
@@ -477,28 +490,15 @@ fun NowPlayingScreen(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee(
-                            iterations = Int.MAX_VALUE,
-                            repeatDelayMillis = 2000
-                        )
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = customMetadata[song.id]?.second?.ifBlank { song.artist.ifBlank { "Artista desconocido" } }
-                            ?: song.artist.ifBlank { "Artista desconocido" },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                CarouselTitleText(
+                    coverPagerState = coverPagerState,
+                    coverItems = coverItems,
+                    coverCenterPage = coverCenterPage,
+                    customMetadata = customMetadata,
+                    fallbackTitle = song.title,
+                    fallbackArtist = song.artist.ifBlank { "Artista desconocido" },
+                    modifier = Modifier.weight(1f)
+                )
                 IconButton(onClick = onToggleFavorite) {
                     AnimatedContent(
                         targetState = isFavorite,
@@ -1152,3 +1152,180 @@ private fun NowPlayingMenu(
     }
 }
 
+
+/** Datos mínimos de cada página del carrusel de carátulas. */
+private data class CoverItem(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val uri: String?
+)
+
+/**
+ * Carrusel de carátulas del Now Playing.
+ *
+ * En REPOSO muestra UNA portada centrada y limpia, idéntica al diseño
+ * anterior (la transformación por distancia vale 0). Durante el ARRASTRE
+ * cada portada se escala (mín 0.85) y atenúa (mín 0.4) según su distancia
+ * al centro, y el glow del fondo funde entre el color dominante de la
+ * actual y el de la portada entrante.
+ *
+ * Solo este composable se recompone durante el arrastre (lee el offset
+ * del pager); el resto de la pantalla no se entera.
+ */
+@Composable
+private fun CoverCarousel(
+    coverPagerState: PagerState,
+    coverItems: List<CoverItem?>,
+    coverCenterPage: Int,
+    currentSongId: Long,
+    dominantColors: Map<Long, Pair<String?, Color>>,
+    fallbackDominant: Color,
+    modifier: Modifier = Modifier
+) {
+    // Lecturas del scroll: limitadas a este scope.
+    val currentPage = coverPagerState.currentPage
+    val offsetFraction = coverPagerState.currentPageOffsetFraction
+    fun distanceToCenter(page: Int): Float =
+        abs((currentPage - page) + offsetFraction).coerceIn(0f, 1f)
+
+    // Glow: en reposo, el dominante de la actual. Durante el arrastre
+    // funde hacia el dominante de la portada entrante (la vecina más
+    // cercana al centro, distinta de la actual).
+    val currentDominant = dominantColors[currentSongId]?.second ?: fallbackDominant
+    var incomingPage = -1
+    var incomingD = Float.MAX_VALUE
+    for (p in coverItems.indices) {
+        if (p == coverCenterPage) continue
+        val d = distanceToCenter(p)
+        if (d < incomingD) {
+            incomingD = d
+            incomingPage = p
+        }
+    }
+    val glowColor = if (incomingPage < 0) {
+        currentDominant
+    } else {
+        val incomingDominant = coverItems.getOrNull(incomingPage)?.id
+            ?.let { dominantColors[it]?.second } ?: currentDominant
+        lerp(currentDominant, incomingDominant, (1f - incomingD).coerceIn(0f, 1f))
+    }
+
+    BoxWithConstraints(
+        modifier
+            .padding(top = 8.dp)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        glowColor.copy(alpha = 0.18f),
+                        glowColor.copy(alpha = 0.05f),
+                        Color.Transparent
+                    ),
+                    radius = 600f
+                )
+            )
+    ) {
+        val pageWidth = maxWidth
+        // Margen lateral para que la sombra de la portada (24 dp) nunca se
+        // recorte en los bordes del viewport.
+        val coverSideMargin = 32.dp
+        HorizontalPager(
+            state = coverPagerState,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            // Transform por distancia al centro (patrón oficial de carrusel
+            // con Pager): en reposo d=0 → escala 1 y alpha 1, idéntico al
+            // diseño anterior.
+            val d = abs((coverPagerState.currentPage - page) + coverPagerState.currentPageOffsetFraction)
+                .coerceIn(0f, 1f)
+            val item = coverItems.getOrNull(page)
+            // La página ocupa todo el ancho; la portada va centrada con
+            // margen lateral para que su sombra NUNCA se recorte en los
+            // bordes del viewport.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(pageWidth)
+                    .graphicsLayer {
+                        val s = 1f - 0.15f * d
+                        scaleX = s
+                        scaleY = s
+                        alpha = 1f - 0.6f * d
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                com.aural.player.ui.components.CoverArt(
+                    uri = item?.uri,
+                    size = pageWidth - coverSideMargin * 2,
+                    modifier = Modifier.shadow(
+                        elevation = 24.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    ),
+                    cornerRadius = 16.dp
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Título + artista del Now Playing con comportamiento de carrusel: en
+ * reposo muestra la canción en reproducción; durante el arrastre se
+ * desvanece (alpha = 1 - progreso) y el texto cambia a la canción de la
+ * página más cercana al centro (cruza al 50%).
+ *
+ * Solo este composable se recompone durante el arrastre. La letra
+ * sincronizada sigue atada a la canción real en reproducción.
+ */
+@Composable
+private fun CarouselTitleText(
+    coverPagerState: PagerState,
+    coverItems: List<CoverItem?>,
+    coverCenterPage: Int,
+    customMetadata: Map<Long, Triple<String, String, String>>,
+    fallbackTitle: String,
+    fallbackArtist: String,
+    modifier: Modifier = Modifier
+) {
+    val offsetFraction = coverPagerState.currentPageOffsetFraction
+    // Página más cercana al centro: el texto cambia al cruzar el 50%.
+    var nearestPage = coverCenterPage
+    var nearestD = Float.MAX_VALUE
+    for (p in coverItems.indices) {
+        val d = abs((coverPagerState.currentPage - p) + offsetFraction)
+        if (d < nearestD) {
+            nearestD = d
+            nearestPage = p
+        }
+    }
+    val item = coverItems.getOrNull(nearestPage)
+    val title = item?.let { customMetadata[it.id]?.first?.ifBlank { it.title } ?: it.title }
+        ?: fallbackTitle
+    val artist = item?.let {
+        customMetadata[it.id]?.second?.ifBlank { it.artist.ifBlank { "Artista desconocido" } }
+            ?: it.artist.ifBlank { "Artista desconocido" }
+    } ?: fallbackArtist
+    Column(modifier.alpha(1f - abs(offsetFraction).coerceIn(0f, 1f))) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            modifier = Modifier.basicMarquee(
+                iterations = Int.MAX_VALUE,
+                repeatDelayMillis = 2000
+            )
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = artist,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
