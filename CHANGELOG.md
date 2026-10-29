@@ -9,6 +9,7 @@ en GitHub salen de aquí.
 ### Novedades
 - **"Para ti" en el home** — la sección "Más reproducidas" ahora se llama "Para ti", porque ya no solo muestra lo más sonado.
 - **La portada ahora se desliza como en la galería de fotos** — en la pantalla de Now Playing, la portada sigue tu dedo mientras la arrastras: si la llevas lo suficiente o la lanzas con fuerza, la animación se completa sola hasta la canción vecina (y si no, vuelve sola a su sitio). La canción cambia cuando la portada termina de llegar, así que el deslizamiento de salida y entrada siempre se ve completo. La sombra de la portada ya no se recorta en los bordes. El cambio es directo y respeta el aleatorio.
+- **La portada reacciona a tu dedo con efecto carrusel** — al deslizar, las portadas vecinas se ven más pequeñas y atenuadas según su distancia al centro, el fondo de la pantalla toma el color de la música y funde de una canción a otra mientras arrastras, y el título con el artista se desvanecen y cambian a la mitad del camino.
 - **La app recuerda dónde te quedaste** — si cierras la app por completo y la vuelves a abrir, el mini reproductor aparece con la última canción que sonaba y su lista, en pausa y lista para reproducir (nunca suena sola al abrir). Si esa canción ya no está en tu biblioteca, simplemente no se muestra nada.
 
 ## v1.0.5 — 2026-10-25
