@@ -39,8 +39,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -93,10 +91,13 @@ private fun GhostDrift(
     sizeDp: Dp,
     baseYFraction: Float,
     direction: Float,
-    maxAlpha: Float
+    maxAlpha: Float,
+    frozen: Boolean = false
 ) {
-    val t = rememberInfiniteTransition(label = "ghost")
-    val p by t.animateFloat(
+    // Congelado (p. ej. scroll en la biblioteca): un frame fijo, sin
+    // animación corriendo, para no robarle cuadros a la lista.
+    val t = if (frozen) null else rememberInfiniteTransition(label = "ghost")
+    val p = t?.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -104,7 +105,7 @@ private fun GhostDrift(
             repeatMode = RepeatMode.Restart
         ),
         label = "gp"
-    )
+    )?.value ?: 0.5f
     val density = LocalDensity.current
     val sizePx = with(density) { sizeDp.toPx() }
     val delayFrac = delayMs / travelDurationMs.toFloat()
@@ -127,9 +128,10 @@ private fun GhostDrift(
 // ===========================================================================
 
 @Composable
-private fun SpiderWeb(modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition(label = "web")
-    val shimmer by t.animateFloat(
+private fun SpiderWeb(modifier: Modifier = Modifier, frozen: Boolean = false) {
+    // Congelado (scroll): frame fijo sin animación corriendo.
+    val t = if (frozen) null else rememberInfiniteTransition(label = "web")
+    val shimmer = t?.animateFloat(
         initialValue = 0.14f,
         targetValue = 0.30f,
         animationSpec = infiniteRepeatable(
@@ -137,8 +139,8 @@ private fun SpiderWeb(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Reverse
         ),
         label = "shimmer"
-    )
-    val swayDeg by t.animateFloat(
+    )?.value ?: 0.22f
+    val swayDeg = t?.animateFloat(
         initialValue = -1.4f,
         targetValue = 1.4f,
         animationSpec = infiniteRepeatable(
@@ -146,7 +148,7 @@ private fun SpiderWeb(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Reverse
         ),
         label = "sway"
-    )
+    )?.value ?: 0f
     Canvas(modifier.size(170.dp)) {
         val anchor = Offset(size.width, 0f)
         rotate(swayDeg, anchor) {
@@ -190,9 +192,10 @@ private fun SpiderWeb(modifier: Modifier = Modifier) {
 // ===========================================================================
 
 @Composable
-private fun SpiderDrop(modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition(label = "spider")
-    val p by t.animateFloat(
+private fun SpiderDrop(modifier: Modifier = Modifier, frozen: Boolean = false) {
+    // Congelado (scroll): araña colgando quieta, sin animación corriendo.
+    val t = if (frozen) null else rememberInfiniteTransition(label = "spider")
+    val p = t?.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -200,7 +203,7 @@ private fun SpiderDrop(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Restart
         ),
         label = "sp"
-    )
+    )?.value ?: 0.5f
     val density = LocalDensity.current
     val dropMaxPx = with(density) { 150.dp.toPx() }
     Canvas(modifier.size(96.dp, 220.dp)) {
@@ -257,25 +260,29 @@ private fun SpiderDrop(modifier: Modifier = Modifier) {
 
 // ===========================================================================
 // AMBIENTE HOME: fantasmas + telaraña + araña (dibujo puro, sin toques).
+// [isScrolling]: durante el scroll los decorados se congelan en un frame
+// fijo (sin animaciones corriendo) para no relentizar la lista; al soltar,
+// la animación continúa donde iba.
 // ===========================================================================
 
 @Composable
-fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
+fun HalloweenHomeAmbient(modifier: Modifier = Modifier, isScrolling: Boolean = false) {
     Box(modifier) {
         GhostDrift(
             travelDurationMs = 26000, delayMs = 0, sizeDp = 58.dp,
-            baseYFraction = 0.20f, direction = 1f, maxAlpha = 0.42f
+            baseYFraction = 0.20f, direction = 1f, maxAlpha = 0.42f,
+            frozen = isScrolling
         )
         GhostDrift(
             travelDurationMs = 33000, delayMs = 11000, sizeDp = 42.dp,
-            baseYFraction = 0.52f, direction = -1f, maxAlpha = 0.32f
+            baseYFraction = 0.52f, direction = -1f, maxAlpha = 0.32f,
+            frozen = isScrolling
         )
-        GhostDrift(
-            travelDurationMs = 29000, delayMs = 20000, sizeDp = 50.dp,
-            baseYFraction = 0.78f, direction = 1f, maxAlpha = 0.36f
+        SpiderWeb(Modifier.align(Alignment.TopEnd), frozen = isScrolling)
+        SpiderDrop(
+            Modifier.align(Alignment.TopCenter).offset(x = 110.dp),
+            frozen = isScrolling
         )
-        SpiderWeb(Modifier.align(Alignment.TopEnd))
-        SpiderDrop(Modifier.align(Alignment.TopCenter).offset(x = 110.dp))
     }
 }
 
@@ -389,9 +396,9 @@ fun HalloweenBats(modifier: Modifier = Modifier) {
 }
 
 // ===========================================================================
-// CALAVERA ESPORÁDICA (global, cualquier vista): cada 25-45 s (aleatorio) se
-// desliza desde un costado (izquierda o derecha, aleatorio), se asoma ~1/3,
-// se queda 1.2 s con un leve meneo y se vuelve a esconder. Solo con el tema
+// CALAVERA ESPORÁDICA (global, cualquier vista): cada 1-2 min (aleatorio) se
+// desliza desde un costado (izquierda o derecha, aleatorio), se asoma ~60%,
+// se queda 1.6 s con un leve meneo y se vuelve a esconder. Solo con el tema
 // Halloween; nunca consume toques.
 // ===========================================================================
 
@@ -404,7 +411,7 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
             delay(Random.nextLong(60000L, 120001L))
             side = if (Random.nextBoolean()) -1f else 1f
             peek = true
-            delay(1200L)
+            delay(1600L)
             peek = false
         }
     }
@@ -425,7 +432,7 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
     )
     if (peekAnim > 0.01f) {
         val density = LocalDensity.current
-        val skullDp = 72.dp
+        val skullDp = 88.dp
         val skullPx = with(density) { skullDp.toPx() }
         Box(modifier.fillMaxSize()) {
             Canvas(
@@ -433,8 +440,8 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
                     .size(skullDp)
                     .align(if (side < 0f) Alignment.CenterStart else Alignment.CenterEnd)
                     .offset {
-                        // escondida: toda fuera; asomada: ~1/3 visible
-                        val off = side * skullPx * (1f - 0.33f * peekAnim)
+                        // escondida: toda fuera; asomada: ~60% visible
+                        val off = side * skullPx * (1f - 0.60f * peekAnim)
                         IntOffset(off.toInt(), 0)
                     }
             ) {
@@ -471,143 +478,6 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-// ===========================================================================
-// SPLASH: tumbas + mano zombi animada + niebla sutil (abajo).
-// ===========================================================================
-
-private fun DrawScope.drawTombstone(
-    cx: Float,
-    baseY: Float,
-    w: Float,
-    h: Float,
-    tiltDeg: Float,
-    color: Color
-) {
-    rotate(tiltDeg, Offset(cx, baseY)) {
-        val left = cx - w / 2f
-        val top = baseY - h
-        val path = Path().apply {
-            moveTo(left, baseY)
-            lineTo(left, top + w / 2f)
-            arcTo(Rect(left, top, left + w, top + w), 180f, 180f, false)
-            lineTo(left + w, baseY)
-            close()
-        }
-        drawPath(path, color)
-        // filo superior más claro
-        drawArc(
-            color = color.copy(alpha = 0.5f),
-            startAngle = 180f,
-            sweepAngle = 180f,
-            useCenter = false,
-            topLeft = Offset(left, top),
-            size = Size(w, w),
-            style = Stroke(width = 2.5f)
-        )
-    }
-}
-
-private fun DrawScope.drawZombieHand(
-    cx: Float,
-    groundY: Float,
-    risePx: Float,
-    wig: Float,
-    s: Float = 1f
-) {
-    val green = Color(0xFF6F9B3F)
-    val gDark = Color(0xFF557A2E)
-    translate(0f, -risePx) {
-        // La mano se dibuja escalada (s) con pivote en la base: la subida
-        // (risePx) no se escala, solo el tamaño de la mano.
-        scale(s, s, Offset(cx, groundY)) {
-            // antebrazo
-            drawRoundRect(green, Offset(cx - 15f, groundY - 70f), Size(30f, 80f), CornerRadius(14f, 14f))
-            drawRoundRect(
-                gDark, Offset(cx - 15f, groundY - 70f), Size(10f, 80f),
-                CornerRadius(5f, 5f)
-            )
-            // palma
-            drawRoundRect(green, Offset(cx - 22f, groundY - 92f), Size(44f, 28f), CornerRadius(12f, 12f))
-            // 4 dedos con meneo individual
-            val fingerDX = listOf(-15f, -5f, 5f, 15f)
-            fingerDX.forEachIndexed { i, dx ->
-                val ang = dx * 0.9f + wig * (7f + i * 3f)
-                rotate(ang, Offset(cx + dx, groundY - 92f)) {
-                    drawRoundRect(
-                        green, Offset(cx + dx - 5f, groundY - 124f), Size(10f, 36f),
-                        CornerRadius(5f, 5f)
-                    )
-                }
-            }
-            // pulgar
-            rotate(38f + wig * 6f, Offset(cx - 20f, groundY - 78f)) {
-                drawRoundRect(
-                    green, Offset(cx - 31f, groundY - 100f), Size(10f, 26f),
-                    CornerRadius(5f, 5f)
-                )
-            }
-        } // scale(s)
-    }
-}
-
-@Composable
-fun HalloweenSplashScene(modifier: Modifier = Modifier) {
-    var rise by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(200)
-        rise = true
-    }
-    val density = LocalDensity.current
-    val maxRisePx = with(density) { 170.dp.toPx() }
-    val risePx by animateFloatAsState(
-        targetValue = if (rise) maxRisePx else 0f,
-        animationSpec = tween(900, easing = FastOutSlowInEasing),
-        label = "handrise"
-    )
-    val t = rememberInfiniteTransition(label = "splashfx")
-    val wig by t.animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(650),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "wig"
-    )
-    val fogP by t.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(9000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "fog"
-    )
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val groundY = h * 0.98f
-        // niebla a la deriva (muy sutil)
-        for (i in 0..2) {
-            val fx = ((fogP + i * 0.37f) % 1f) * (w + 560f) - 280f
-            drawOval(
-                Color.White.copy(alpha = 0.05f),
-                Offset(fx - 260f, groundY - 70f + i * 18f),
-                Size(520f, 62f)
-            )
-        }
-        // montículo
-        drawOval(Color(0xFF0C0C10), Offset(-w * 0.15f, groundY - 44f), Size(w * 1.3f, 130f))
-        // tumbas laterales (más grandes)
-        drawTombstone(w * 0.16f, groundY, 115f, 172f, -7f, Color(0xFF4C4C55))
-        drawTombstone(w * 0.86f, groundY, 105f, 152f, 6f, Color(0xFF43434C))
-        // mano zombi saliendo detrás de la tumba central (más grande)
-        drawZombieHand(w * 0.52f, groundY + 8f, risePx, wig, s = 1.6f)
-        // tumba central (delante de la muñeca)
-        drawTombstone(w * 0.52f, groundY, 132f, 192f, 0f, Color(0xFF55555E))
     }
 }
 
