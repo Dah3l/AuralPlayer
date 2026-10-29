@@ -69,6 +69,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
     )
 
+    /** Playlist del día: UNA sola instancia { fecha, ids } que rota a diario. */
+    val dailyPlaylist: StateFlow<SettingsStore.DailyPlaylist?> = settings.dailyPlaylist.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
     val lrcMap: StateFlow<Map<Long, String>> = settings.lrcMap.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
@@ -81,6 +86,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.delay(1000) // esperar a que cargue settings
             if (playlists.value.none { it.name == "Descargas" }) {
                 settings.createPlaylist("Descargas")
+            }
+        }
+        // Rotación de la Playlist del día: si la guardada no es de hoy,
+        // se REGENERA con 30 aleatorias distintas (o las que haya si la
+        // biblioteca tiene menos; vacía si no hay canciones) y la anterior
+        // DESAPARECE (sin historial). Se chequea cada vez que la
+        // biblioteca emite, así cubre el arranque y cambios de día.
+        viewModelScope.launch {
+            _library.collect { lib ->
+                val songs = lib.songs
+                if (songs.isEmpty()) return@collect
+                val today = java.time.LocalDate.now().toString()
+                if (dailyPlaylist.value?.date != today) {
+                    val ids = songs.shuffled().take(30).map { it.id }
+                    settings.setDailyPlaylist(today, ids)
+                }
             }
         }
     }
@@ -260,6 +281,34 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun songsOfPlaylist(playlist: Playlist): List<Song> {
         val byId = _library.value.songs.associateBy { it.id }
         return playlist.songIds.mapNotNull { byId[it] }
+    }
+
+    /** Canciones de la Playlist del día (resueltas contra la biblioteca). */
+    fun dailyPlaylistSongs(): List<Song> {
+        val byId = _library.value.songs.associateBy { it.id }
+        return (dailyPlaylist.value?.songIds ?: emptyList()).mapNotNull { byId[it] }
+    }
+
+    /**
+     * Guarda la Playlist del día como permanente: crea una copia ESTÁTICA
+     * en las playlists normales (con el nombre indicado, único). La del
+     * día sigue su rotación normal.
+     */
+    fun saveDailyPlaylistAsPermanent(name: String) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        val ids = dailyPlaylist.value?.songIds ?: return
+        viewModelScope.launch {
+            val existing = playlists.value.map { it.name.lowercase() }.toSet()
+            var finalName = clean
+            var n = 2
+            while (existing.contains(finalName.lowercase())) {
+                finalName = "$clean ($n)"
+                n++
+            }
+            val id = settings.createPlaylist(finalName)
+            settings.setPlaylistSongs(id, ids)
+        }
     }
 
     // ----------------------------- Acciones -----------------------------
