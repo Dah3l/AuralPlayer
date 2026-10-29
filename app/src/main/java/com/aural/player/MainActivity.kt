@@ -189,12 +189,11 @@ private fun AuralApp(viewModel: AuralViewModel,
     settingsStore: SettingsStore) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
-    // El tema activo decide la duración del splash: 1.8s normal (cortina
-    // mientras carga), ~2.8s con Halloween para que se vea la escena.
+    // El splash dura 1.8s (cortina mientras carga).
     val splashThemeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
     val splashHalloween = splashThemeName == AppTheme.HALLOWEEN.name
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(if (splashHalloween) 2800L else 1800L)
+        kotlinx.coroutines.delay(1800L)
         showSplash = false
     }
     // Estados elevados: sobreviven a la navegación para recordar posición
