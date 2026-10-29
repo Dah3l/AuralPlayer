@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
@@ -79,11 +80,10 @@ import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.HalloweenHomeAmbient
 import com.aural.player.ui.components.MediaGridCard
-import com.aural.player.ui.components.PumpkinMark
+import com.aural.player.ui.theme.HalloweenFontFamily
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
-import com.aural.player.ui.theme.SeasonalTheme
-import com.aural.player.ui.theme.currentSeasonalTheme
+import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -259,8 +259,10 @@ fun LibraryScreen(
         listOfNotNull(dailyEntry) + rest.take(if (dailyEntry != null) 1 else 2)
     }
 
-    // Temporada activa (Halloween 27-oct..1-nov): decoración automática.
-    val season = currentSeasonalTheme()
+    // Decoración Halloween: solo si el tema activo es Halloween
+    // (tema real del menú, no por fecha sola).
+    val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
+    val isHalloween = themeName == AppTheme.HALLOWEEN.name
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
@@ -286,12 +288,13 @@ fun LibraryScreen(
                     text = "Aural",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
+                    fontFamily = if (isHalloween) HalloweenFontFamily else null,
                     color = MaterialTheme.colorScheme.primary
                 )
-                // Calabacita de temporada junto al título
-                if (season == SeasonalTheme.Halloween) {
+                // Calabaza junto al título (tema Halloween activo)
+                if (isHalloween) {
                     Spacer(Modifier.width(6.dp))
-                    PumpkinMark()
+                    Text(text = "🎃", fontSize = 28.sp)
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -804,9 +807,9 @@ fun LibraryScreen(
         )
     }
 
-    // ---- Ambiente Halloween (27-oct..1-nov): dibujo puro, no consume toques ----
-    // Navidad (diciembre): enganchar ChristmasHomeAmbient() aquí.
-    if (season == SeasonalTheme.Halloween) {
+    // ---- Ambiente Halloween (tema activo): dibujo puro, no consume toques ----
+    // Navidad (diciembre): enganchar ChristmasHomeAmbient() con theme == CHRISTMAS.
+    if (isHalloween) {
         HalloweenHomeAmbient(Modifier.fillMaxSize())
     }
 
