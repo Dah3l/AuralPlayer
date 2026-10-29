@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.colorScheme
+import com.aural.player.ui.theme.isHalloweenWindow
 
 /**
  * Selector de temas a pantalla completa: cada tarjeta es una miniatura
@@ -57,6 +58,11 @@ fun ThemesScreen(
     onBack: () -> Unit,
     gridState: LazyGridState
 ) {
+    // Halloween aparece en el menú solo durante su ventana (27-oct..1-nov).
+    // Navidad (diciembre): añadir aquí su condición con isChristmasWindow().
+    val visibleThemes = AppTheme.entries.filter {
+        it != AppTheme.HALLOWEEN || isHalloweenWindow()
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -77,7 +83,7 @@ fun ThemesScreen(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "${AppTheme.entries.size} temas",
+                text = "${visibleThemes.size} temas",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 12.dp)
@@ -94,7 +100,7 @@ fun ThemesScreen(
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(AppTheme.entries, key = { it.name }) { theme ->
+            items(visibleThemes, key = { it.name }) { theme ->
                 ThemeCard(
                     theme = theme,
                     selected = theme == currentTheme,
@@ -155,6 +161,18 @@ private fun ThemeCard(
                 color = scheme.onBackground,
                 maxLines = 1
             )
+            // Etiquetita de temporada (Halloween solo aparece en su ventana)
+            if (theme == AppTheme.HALLOWEEN) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Temporada",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onPrimary,
+                    modifier = Modifier
+                        .background(scheme.primary, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                )
+            }
         }
         if (selected) {
             Box(
