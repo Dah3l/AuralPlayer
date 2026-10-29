@@ -1231,7 +1231,7 @@ private fun CoverCarousel(
         val pageWidth = maxWidth
         // Margen lateral para que la sombra de la portada (24 dp) nunca se
         // recorte en los bordes del viewport.
-        val coverSideMargin = 32.dp
+        val coverSideMargin = 20.dp
         HorizontalPager(
             state = coverPagerState,
             modifier = Modifier.fillMaxWidth()
