@@ -4,6 +4,7 @@ package com.aural.player.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -37,6 +38,7 @@ class SettingsStore(private val context: Context) {
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_ms")
         val KEY_LAST_PLAYBACK = stringPreferencesKey("last_playback_json")
         val KEY_DAILY_PLAYLIST = stringPreferencesKey("daily_playlist_json")
+        val KEY_THEME_BEFORE_HALLOWEEN = stringPreferencesKey("theme_before_halloween")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -101,6 +103,39 @@ class SettingsStore(private val context: Context) {
     suspend fun setAppTheme(themeName: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_THEME] = themeName
+        }
+    }
+
+    // ------------------------- Tema de temporada (auto-aplicado) -------------------------
+
+    /**
+     * Auto-aplicado del tema Halloween. Se llama una vez por arranque desde
+     * MainActivity, antes de pintar:
+     * - Dentro de la ventana (27-oct..1-nov): la PRIMERA vez activa
+     *   HALLOWEEN, guardando el tema previo en theme_before_halloween y
+     *   marcando el flag halloween_applied_<año>. Si el usuario luego elige
+     *   otro tema en el picker, se respeta: no se re-aplica.
+     * - Fuera de la ventana: si el tema activo es HALLOWEEN, restaura el
+     *   tema previo (o Aural Classic si no hay).
+     * (El tema se guarda como nombre del enum; se usa el literal para no
+     * acoplar la capa de datos con ui.theme.)
+     */
+    suspend fun runSeasonalAutoTheme(isHalloweenWindow: Boolean, year: Int) {
+        context.dataStore.edit { prefs ->
+            val appliedKey = booleanPreferencesKey("halloween_applied_$year")
+            val current = prefs[KEY_THEME] ?: "BOSQUE"
+            if (isHalloweenWindow) {
+                if (prefs[appliedKey] != true) {
+                    if (current != "HALLOWEEN") {
+                        prefs[KEY_THEME_BEFORE_HALLOWEEN] = current
+                    }
+                    prefs[KEY_THEME] = "HALLOWEEN"
+                    prefs[appliedKey] = true
+                }
+            } else if (current == "HALLOWEEN") {
+                prefs[KEY_THEME] = prefs[KEY_THEME_BEFORE_HALLOWEEN] ?: "BOSQUE"
+                prefs.remove(KEY_THEME_BEFORE_HALLOWEEN)
+            }
         }
     }
 
