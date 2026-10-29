@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -37,7 +38,15 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val isReady: Boolean = false
+    val isReady: Boolean = false,
+    /**
+     * Índices de la cola vecinos de [currentIndex] para el carrusel de
+     * portada del Now Playing. Con aleatorio activado siguen el orden
+     * aleatorio del timeline; con aleatorio desactivado son
+     * currentIndex±1. [C.INDEX_UNSET] = no hay vecino (extremo).
+     */
+    val prevNeighborIndex: Int = C.INDEX_UNSET,
+    val nextNeighborIndex: Int = C.INDEX_UNSET
 )
 
 /**
@@ -333,18 +342,33 @@ class PlaybackManager(private val context: Context) {
             c.getMediaItemAt(i).mediaId.toLongOrNull()?.let { libraryById[it] }
         }
         val current = c.currentMediaItem?.mediaId?.toLongOrNull()?.let { libraryById[it] }
+        val curIdx = c.currentMediaItemIndex
+        // Vecinos del carrusel de portada: con aleatorio activado siguen el
+        // orden aleatorio del timeline; con aleatorio desactivado son
+        // currentIndex±1. REPEAT_MODE_OFF a propósito: sin wrap en los
+        // extremos (el wrap es lógica de repeat, no del carrusel).
+        val timeline = c.currentTimeline
+        val shuffle = c.shuffleModeEnabled
+        val prevNeighbor = if (curIdx >= 0 && timeline.windowCount > 0) {
+            timeline.getPreviousWindowIndex(curIdx, Player.REPEAT_MODE_OFF, shuffle)
+        } else C.INDEX_UNSET
+        val nextNeighbor = if (curIdx >= 0 && timeline.windowCount > 0) {
+            timeline.getNextWindowIndex(curIdx, Player.REPEAT_MODE_OFF, shuffle)
+        } else C.INDEX_UNSET
         _state.value = _state.value.copy(
             currentSong = current,
             isPlaying = c.isPlaying,
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
             queue = items,
-            currentIndex = c.currentMediaItemIndex,
-            shuffleEnabled = c.shuffleModeEnabled,
+            currentIndex = curIdx,
+            shuffleEnabled = shuffle,
             repeatMode = when (c.repeatMode) {
                 Player.REPEAT_MODE_ONE -> RepeatMode.ONE
                 Player.REPEAT_MODE_ALL -> RepeatMode.ALL
                 else -> RepeatMode.OFF
-            }
+            },
+            prevNeighborIndex = prevNeighbor,
+            nextNeighborIndex = nextNeighbor
         )
         // Guardar última reproducción (solo cuando cambia la canción o la cola,
         // para no escribir en cada evento del reproductor).
