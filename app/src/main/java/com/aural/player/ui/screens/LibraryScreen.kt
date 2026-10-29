@@ -77,9 +77,13 @@ import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
+import com.aural.player.ui.components.HalloweenHomeAmbient
 import com.aural.player.ui.components.MediaGridCard
+import com.aural.player.ui.components.PumpkinMark
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.theme.SeasonalTheme
+import com.aural.player.ui.theme.currentSeasonalTheme
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
@@ -255,6 +259,9 @@ fun LibraryScreen(
         listOfNotNull(dailyEntry) + rest.take(if (dailyEntry != null) 1 else 2)
     }
 
+    // Temporada activa (Halloween 27-oct..1-nov): decoración automática.
+    val season = currentSeasonalTheme()
+
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
 
@@ -281,6 +288,11 @@ fun LibraryScreen(
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.primary
                 )
+                // Calabacita de temporada junto al título
+                if (season == SeasonalTheme.Halloween) {
+                    Spacer(Modifier.width(6.dp))
+                    PumpkinMark()
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -790,6 +802,12 @@ fun LibraryScreen(
                 TextButton(onClick = { manualUpdateMessage = null }) { Text("Cerrar") }
             }
         )
+    }
+
+    // ---- Ambiente Halloween (27-oct..1-nov): dibujo puro, no consume toques ----
+    // Navidad (diciembre): enganchar ChristmasHomeAmbient() aquí.
+    if (season == SeasonalTheme.Halloween) {
+        HalloweenHomeAmbient(Modifier.fillMaxSize())
     }
 
 }
