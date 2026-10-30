@@ -14,7 +14,6 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -110,35 +109,25 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settingsStore = SettingsStore(this@MainActivity)
-            // Tema aún sin cargar (null): pantalla neutra para que el splash
-            // nunca arranque con el tema por defecto y parpadee al cambiar.
-            val themeName by settingsStore.appTheme.collectAsState(initial = null)
-            if (themeName == null) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Color.Black)
-                )
-            } else {
-                val appTheme = try {
-                    AppTheme.valueOf(themeName)
-                } catch (e: Exception) {
-                    AppTheme.BOSQUE
+            val themeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
+            val appTheme = try {
+                AppTheme.valueOf(themeName)
+            } catch (e: Exception) {
+                AppTheme.BOSQUE
+            }
+            AuralTheme(theme = appTheme) {
+                var showOnboarding by remember {
+                    mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))
                 }
-                AuralTheme(theme = appTheme) {
-                    var showOnboarding by remember {
-                        mutableStateOf(!OnboardingPrefs.isSeen(this@MainActivity))
-                    }
-                    if (showOnboarding) {
-                        OnboardingScreen(
-                            onFinish = {
-                                OnboardingPrefs.markSeen(this@MainActivity)
-                                showOnboarding = false
-                            }
-                        )
-                    } else {
-                        AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore)
-                    }
+                if (showOnboarding) {
+                    OnboardingScreen(
+                        onFinish = {
+                            OnboardingPrefs.markSeen(this@MainActivity)
+                            showOnboarding = false
+                        }
+                    )
+                } else {
+                    AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore)
                 }
             }
         }
@@ -200,16 +189,12 @@ private fun AuralApp(viewModel: AuralViewModel,
     settingsStore: SettingsStore) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
-    // El splash dura 2.2s (cortina mientras carga): aparece al instante para
-    // que se note incluso en arranques fríos lentos. El temporizador arranca
-    // cuando el tema ya cargó (nunca null) para que no parpadee.
-    val splashThemeName by settingsStore.appTheme.collectAsState(initial = null)
+    // El splash se oculta tras 1.8s (cortina mientras carga).
+    val splashThemeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
     val splashHalloween = splashThemeName == AppTheme.HALLOWEEN.name
-    androidx.compose.runtime.LaunchedEffect(splashThemeName) {
-        if (splashThemeName != null) {
-            kotlinx.coroutines.delay(2200L)
-            showSplash = false
-        }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1800L)
+        showSplash = false
     }
     // Estados elevados: sobreviven a la navegación para recordar posición
     val songsListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -465,7 +450,7 @@ private fun AuralApp(viewModel: AuralViewModel,
         )
     }
     // ---- Splash de bienvenida ----
-    if (showSplash && splashThemeName != null) {
+    if (showSplash) {
         SplashScreen(isHalloween = splashHalloween)
     }
 
