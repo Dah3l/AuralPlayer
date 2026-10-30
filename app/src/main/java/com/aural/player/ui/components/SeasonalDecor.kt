@@ -264,9 +264,6 @@ fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
     }
 
     BoxWithConstraints(modifier) {
-        val maxWpx = with(density) { maxWidth.toPx() }
-        val maxHpx = with(density) { maxHeight.toPx() }
-
         // ---- Telaraña: fija arriba a la derecha; mecedora + brillo en capa ----
         Image(
             bitmap = webBmp,
