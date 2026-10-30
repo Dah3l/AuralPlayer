@@ -370,6 +370,14 @@ fun NowPlayingScreen(
                                     && targetIndex != C.INDEX_UNSET
                                     && targetIndex != latestCurrentIndex
                                 ) {
+                                    // Volver al centro ANTES de cambiar la canción:
+                                    // el salto es instantáneo e invisible (la página
+                                    // central de la ventana nueva muestra la misma
+                                    // canción que la página asentada de la vieja).
+                                    // Sin esto hay un frame con el pager en la página
+                                    // vieja pero ya con la ventana nueva -> flash de
+                                    // la canción vecina en título y portada.
+                                    coverPagerState.scrollToPage(center)
                                     latestOnPlayQueueItem(targetIndex)
                                 } else if (center < latestCoverWindow.size) {
                                     // Red de seguridad: si no hay cambio
