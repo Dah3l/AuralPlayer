@@ -321,7 +321,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     selectedTab = libraryTab,
                     onTabSelected = { libraryTab = it },
                         youTubeManager = youTubeManager,
-                        settingsStore = settingsStore
+                        settingsStore = settingsStore,
+                        isAmbientVisible = !showNowPlaying
                     )
 
                 is Screen.Album -> {
