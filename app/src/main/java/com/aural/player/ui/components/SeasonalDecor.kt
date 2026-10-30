@@ -316,19 +316,19 @@ fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
     // ---- Bitmaps: se renderizan UNA VEZ ----
     val ghostPx = (58f * u * 2f).toInt()
     val ghostBmp = rememberRenderedBitmap(ghostPx, ghostPx) {
-        scale(ghostPx / 100f, ghostPx / 100f) { drawGhostAssembly() }
+        scale(ghostPx / 100f, ghostPx / 100f, pivot = Offset.Zero) { drawGhostAssembly() }
     }
     val webPx = (170f * u * 2f).toInt()
     val webBmp = rememberRenderedBitmap(webPx, webPx) {
-        scale(webPx / 170f, webPx / 170f) { drawWebAssembly() }
+        scale(webPx / 170f, webPx / 170f, pivot = Offset.Zero) { drawWebAssembly() }
     }
     val spiderWPx = (96f * u * 2f).toInt()
     val spiderHPx = (220f * u * 2f).toInt()
     val spiderBmpA = rememberRenderedBitmap(spiderWPx, spiderHPx) {
-        scale(spiderWPx / 96f, spiderHPx / 220f) { drawSpiderAssembly(legsUp = true) }
+        scale(spiderWPx / 96f, spiderHPx / 220f, pivot = Offset.Zero) { drawSpiderAssembly(legsUp = true) }
     }
     val spiderBmpB = rememberRenderedBitmap(spiderWPx, spiderHPx) {
-        scale(spiderWPx / 96f, spiderHPx / 220f) { drawSpiderAssembly(legsUp = false) }
+        scale(spiderWPx / 96f, spiderHPx / 220f, pivot = Offset.Zero) { drawSpiderAssembly(legsUp = false) }
     }
 
     BoxWithConstraints(modifier) {
@@ -336,43 +336,41 @@ fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
         val maxHpx = with(density) { maxHeight.toPx() }
 
         // ---- Fantasma 1: deriva continua, aparece y se desvanece ----
-        run {
-            val phase = g1p % 1f
-            val gx = -140f + phase * (maxWpx + 280f)
-            val gy = 0.20f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
-            val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.42f
-            val dispPx = 58f * u
-            Image(
-                bitmap = ghostBmp,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(58.dp)
-                    .graphicsLayer {
-                        translationX = gx - dispPx / 2f
-                        translationY = gy - dispPx / 2f
-                        alpha = ga
-                    }
-            )
-        }
+        // REGLA: los estados animados SOLO se leen dentro de graphicsLayer
+        // (invalida la capa GPU, no recompone).
+        Image(
+            bitmap = ghostBmp,
+            contentDescription = null,
+            modifier = Modifier
+                .size(58.dp)
+                .graphicsLayer {
+                    val phase = g1p % 1f
+                    val gx = -140f + phase * (maxWpx + 280f)
+                    val gy = 0.20f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
+                    val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.42f
+                    val dispPx = 58f * u
+                    translationX = gx - dispPx / 2f
+                    translationY = gy - dispPx / 2f
+                    alpha = ga
+                }
+        )
         // ---- Fantasma 2 ----
-        run {
-            val phase = (g2p + 11000f / 33000f) % 1f
-            val gx = maxWpx + 140f - phase * (maxWpx + 280f)
-            val gy = 0.52f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
-            val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.32f
-            val dispPx = 42f * u
-            Image(
-                bitmap = ghostBmp,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(42.dp)
-                    .graphicsLayer {
-                        translationX = gx - dispPx / 2f
-                        translationY = gy - dispPx / 2f
-                        alpha = ga
-                    }
-            )
-        }
+        Image(
+            bitmap = ghostBmp,
+            contentDescription = null,
+            modifier = Modifier
+                .size(42.dp)
+                .graphicsLayer {
+                    val phase = (g2p + 11000f / 33000f) % 1f
+                    val gx = maxWpx + 140f - phase * (maxWpx + 280f)
+                    val gy = 0.52f * maxHpx + sin(phase * 2f * PI.toFloat() * 2.5f) * 30f
+                    val ga = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * 0.32f
+                    val dispPx = 42f * u
+                    translationX = gx - dispPx / 2f
+                    translationY = gy - dispPx / 2f
+                    alpha = ga
+                }
+        )
         // ---- Telaraña: fija arriba a la derecha; mecedora + brillo en capa ----
         Image(
             bitmap = webBmp,
@@ -388,37 +386,65 @@ fun HalloweenHomeAmbient(modifier: Modifier = Modifier) {
         )
         // ---- Araña: baja/sube por el hilo (el bitmap lleva el hilo completo;
         // se traslada en Y para simular la bajada), balanceo + patas A/B ----
-        run {
-            val dropMaxPx = 150f * u
-            val dropPx = dropMaxPx * when {
-                spP < 0.32f -> spP / 0.32f
-                spP < 0.68f -> 1f
-                else -> 1f - (spP - 0.68f) / 0.32f
-            }
-            val spAlpha = when {
-                spP < 0.04f -> spP / 0.04f
-                spP > 0.96f -> (1f - spP) / 0.04f
-                else -> 1f
-            }.coerceIn(0f, 1f)
-            val hanging = spP in 0.32f..0.68f
-            val swayX =
-                if (hanging) sin((spP - 0.32f) / 0.36f * 2f * PI.toFloat() * 2f) * 18f else 0f
-            // el cuerpo está dibujado a 188dp del borde superior del bitmap
-            val transY = (8f * u + dropPx) - (188f * u)
-            Image(
-                bitmap = if (legFlip < 0.5f) spiderBmpA else spiderBmpB,
-                contentDescription = null,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(x = 110.dp)
-                    .size(96.dp, 220.dp)
-                    .graphicsLayer {
-                        translationY = transY
-                        translationX = swayX
-                        alpha = spAlpha
+        // Los dos bitmaps (patas A/B) se apilan y la visibilidad se controla
+        // con alpha DENTRO de graphicsLayer: cero recomposición.
+        Image(
+            bitmap = spiderBmpA,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(x = 110.dp)
+                .size(96.dp, 220.dp)
+                .graphicsLayer {
+                    val dropMaxPx = 150f * u
+                    val dropPx = dropMaxPx * when {
+                        spP < 0.32f -> spP / 0.32f
+                        spP < 0.68f -> 1f
+                        else -> 1f - (spP - 0.68f) / 0.32f
                     }
-            )
-        }
+                    val spAlpha = when {
+                        spP < 0.04f -> spP / 0.04f
+                        spP > 0.96f -> (1f - spP) / 0.04f
+                        else -> 1f
+                    }.coerceIn(0f, 1f)
+                    val hanging = spP in 0.32f..0.68f
+                    val swayX =
+                        if (hanging) sin((spP - 0.32f) / 0.36f * 2f * PI.toFloat() * 2f) * 18f else 0f
+                    // el cuerpo está dibujado a 188dp del borde superior del bitmap
+                    val transY = (8f * u + dropPx) - (188f * u)
+                    translationY = transY
+                    translationX = swayX
+                    alpha = spAlpha * (if (legFlip < 0.5f) 1f else 0f)
+                }
+        )
+        Image(
+            bitmap = spiderBmpB,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(x = 110.dp)
+                .size(96.dp, 220.dp)
+                .graphicsLayer {
+                    val dropMaxPx = 150f * u
+                    val dropPx = dropMaxPx * when {
+                        spP < 0.32f -> spP / 0.32f
+                        spP < 0.68f -> 1f
+                        else -> 1f - (spP - 0.68f) / 0.32f
+                    }
+                    val spAlpha = when {
+                        spP < 0.04f -> spP / 0.04f
+                        spP > 0.96f -> (1f - spP) / 0.04f
+                        else -> 1f
+                    }.coerceIn(0f, 1f)
+                    val hanging = spP in 0.32f..0.68f
+                    val swayX =
+                        if (hanging) sin((spP - 0.32f) / 0.36f * 2f * PI.toFloat() * 2f) * 18f else 0f
+                    val transY = (8f * u + dropPx) - (188f * u)
+                    translationY = transY
+                    translationX = swayX
+                    alpha = spAlpha * (if (legFlip < 0.5f) 0f else 1f)
+                }
+        )
     }
 }
 
@@ -441,7 +467,7 @@ fun HalloweenBats(modifier: Modifier = Modifier) {
 
     val batPx = (84f * u * 2f).toInt()
     val batBmp = rememberRenderedBitmap(batPx, batPx) {
-        scale(batPx / 150f, batPx / 150f) { drawBatAssembly() }
+        scale(batPx / 150f, batPx / 150f, pivot = Offset.Zero) { drawBatAssembly() }
     }
 
     BoxWithConstraints(modifier) {
@@ -458,12 +484,6 @@ fun HalloweenBats(modifier: Modifier = Modifier) {
             maxAlpha: Float,
             fromRight: Boolean
         ) {
-            val phase = (p + delayMs / travelMs.toFloat()) % 1f
-            val x = if (fromRight) maxWpx + 100f - phase * (maxWpx + 200f)
-            else -100f + phase * (maxWpx + 200f)
-            val y = yFraction * maxHpx + sin(phase * 2f * PI.toFloat() * 3f) * 22f
-            val a = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
-            val flap = sin(phase * 2f * PI.toFloat() * 8f)
             val dispPx = sizeDp.value * u
             Image(
                 bitmap = batBmp,
@@ -471,6 +491,13 @@ fun HalloweenBats(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .size(sizeDp)
                     .graphicsLayer {
+                        // cálculos DENTRO de graphicsLayer: no recomponen
+                        val phase = (p + delayMs / travelMs.toFloat()) % 1f
+                        val x = if (fromRight) maxWpx + 100f - phase * (maxWpx + 200f)
+                        else -100f + phase * (maxWpx + 200f)
+                        val y = yFraction * maxHpx + sin(phase * 2f * PI.toFloat() * 3f) * 22f
+                        val a = sin(phase * PI.toFloat()).coerceIn(0f, 1f) * maxAlpha
+                        val flap = sin(phase * 2f * PI.toFloat() * 8f)
                         translationX = x - dispPx / 2f
                         translationY = y - dispPx / 2f
                         // bateo de alas en vista frontal
@@ -526,7 +553,7 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
         val u = density.density
         val skullPx = (88f * u * 2f).toInt()
         val skullBmp = rememberRenderedBitmap(skullPx, skullPx) {
-            scale(skullPx / 100f, skullPx / 100f) { drawSkullAssembly() }
+            scale(skullPx / 100f, skullPx / 100f, pivot = Offset.Zero) { drawSkullAssembly() }
         }
         val dispPx = 88f * u
         Box(modifier.fillMaxSize()) {
