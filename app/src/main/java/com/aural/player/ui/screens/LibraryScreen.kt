@@ -1305,6 +1305,8 @@ private fun PlaylistsTab(
                     targetValue = if (rowPressed) 0.98f else 1f,
                     label = "playlist_press"
                 )
+                // El conteo se calcula una sola vez por fila (no en cada Text).
+                val count = songCount(pl)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1324,7 +1326,7 @@ private fun PlaylistsTab(
                     ) {
                         Text(pl.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         Text(
-                            "${songCount(pl)} ${if (songCount(pl) == 1) "canción" else "canciones"}",
+                            "$count ${if (count == 1) "canción" else "canciones"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
