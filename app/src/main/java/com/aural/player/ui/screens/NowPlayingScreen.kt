@@ -83,7 +83,7 @@ import androidx.compose.ui.unit.dp
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
-import com.aural.player.ui.components.HalloweenBats
+import com.aural.player.ui.components.HalloweenGhosts
 import com.aural.player.ui.components.formatDuration
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.HalloweenPumpkin
@@ -254,10 +254,10 @@ fun NowPlayingScreen(
                     }
                 }
         )
-        // Murciélagos (tema Halloween activo): al fondo, dibujo puro.
+        // Fantasmas (tema Halloween activo): al fondo, dibujo puro.
         // Navidad (diciembre): enganchar decoración navideña con theme == CHRISTMAS.
         if (isHalloweenTheme) {
-            HalloweenBats(Modifier.fillMaxSize())
+            HalloweenGhosts(Modifier.fillMaxSize())
         }
         Column(
             Modifier
