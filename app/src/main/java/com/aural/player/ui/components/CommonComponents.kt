@@ -465,7 +465,8 @@ fun SplashScreen(isHalloween: Boolean = false) {
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 fontFamily = if (isHalloween) HalloweenFontFamily else null,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isHalloween) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
             )
             Spacer(Modifier.height(8.dp))
