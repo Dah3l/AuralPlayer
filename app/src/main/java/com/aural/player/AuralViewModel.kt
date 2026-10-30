@@ -269,24 +269,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         .map { repository.groupByFolder(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // Mapa id→canción con caché: se reconstruye solo cuando cambia la lista
+    // de la biblioteca (evita reconstruirlo en cada llamada durante la
+    // composición de las pantallas de playlist).
+    private var libraryByIdCache: Pair<List<Song>, Map<Long, Song>>? = null
+    private fun libraryById(): Map<Long, Song> {
+        val songs = _library.value.songs
+        val cached = libraryByIdCache
+        if (cached != null && cached.first === songs) return cached.second
+        return songs.associateBy { it.id }.also { libraryByIdCache = songs to it }
+    }
+
     fun favoriteSongs(): List<Song> {
         val order = favoriteOrder.value.withIndex().associate { it.value to it.index }
-        return _library.value.songs
+        val songs = _library.value.songs
+        val indexById = songs.withIndex().associate { it.value.id to it.index }
+        return songs
             .filter { favorites.value.contains(it.id) }
             .sortedWith(
                 compareBy<Song> { order[it.id] ?: Int.MAX_VALUE }
-                    .thenBy { _library.value.songs.indexOf(it) }
+                    .thenBy { indexById[it.id] ?: Int.MAX_VALUE }
             )
     }
 
     fun songsOfPlaylist(playlist: Playlist): List<Song> {
-        val byId = _library.value.songs.associateBy { it.id }
+        val byId = libraryById()
         return playlist.songIds.mapNotNull { byId[it] }
     }
 
     /** Canciones de la Playlist del día (resueltas contra la biblioteca). */
     fun dailyPlaylistSongs(): List<Song> {
-        val byId = _library.value.songs.associateBy { it.id }
+        val byId = libraryById()
         return (dailyPlaylist.value?.songIds ?: emptyList()).mapNotNull { byId[it] }
     }
 
