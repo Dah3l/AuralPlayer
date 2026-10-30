@@ -406,23 +406,23 @@ fun AlphabetFastScroller(
 /**
  * Pantalla de bienvenida: logo de la app con animación de entrada.
  * Con el tema Halloween activo, el "Aural" usa la fuente de terror
- * (Creepster). Dura 1.8s.
+ * (Creepster) en naranja. Aparece al instante y dura 2.2s para que se
+ * note incluso en arranques fríos lentos.
  */
 @Composable
 fun SplashScreen(isHalloween: Boolean = false) {
     var visible by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(100)
         visible = true
     }
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (visible) 1f else 0.7f,
-        animationSpec = androidx.compose.animation.core.tween(600),
+        animationSpec = androidx.compose.animation.core.tween(400),
         label = "splash_scale"
     )
     val alpha by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(600),
+        animationSpec = androidx.compose.animation.core.tween(400),
         label = "splash_alpha"
     )
     Box(
