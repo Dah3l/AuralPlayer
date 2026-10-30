@@ -146,7 +146,10 @@ fun LibraryScreen(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
-    settingsStore: SettingsStore
+    settingsStore: SettingsStore,
+    // El ambiente Halloween solo corre cuando el Home está visible de verdad
+    // (con el Now Playing abierto, el Home queda tapado debajo).
+    isAmbientVisible: Boolean = true
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -809,7 +812,7 @@ fun LibraryScreen(
 
     // ---- Ambiente Halloween (tema activo): dibujo puro, no consume toques ----
     // Navidad (diciembre): enganchar ChristmasHomeAmbient() con theme == CHRISTMAS.
-    if (isHalloween) {
+    if (isHalloween && isAmbientVisible) {
         HalloweenHomeAmbient(Modifier.fillMaxSize())
     }
 
