@@ -164,7 +164,8 @@ private fun DrawScope.drawSpiderAssembly(legsUp: Boolean) {
     val h = 220f
     val cx = w / 2f
     val bodyY = h - 32f
-    val col = Color(0xFF17121F)
+    // Gris medio: contrasta con el fondo oscuro del tema (el negro se perdía)
+    val col = Color(0xFF9E9E9E)
     // hilo
     drawLine(col, Offset(cx, 0f), Offset(cx, bodyY - 12f), strokeWidth = 2f)
     // 8 patas: dos poses (arriba/abajo)
