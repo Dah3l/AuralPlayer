@@ -296,6 +296,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setIslandEnabled(enabled) }
     }
 
+    /** Aspecto de Dynamic Aural: "auto" o "classic". */
+    val islandAppearance: StateFlow<String> = settings.islandAppearance.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "auto"
+    )
+
+    fun setIslandAppearance(mode: String) {
+        viewModelScope.launch { settings.setIslandAppearance(mode) }
+    }
+
     // Mapa id→canción con caché: se reconstruye solo cuando cambia la lista
     // de la biblioteca (evita reconstruirlo en cada llamada durante la
     // composición de las pantallas de playlist).
