@@ -2,7 +2,7 @@
 package com.aural.player.ui.components
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,14 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.aural.player.R
 import com.aural.player.data.UpdateInfo
 
 /** URLs de descarga por tienda. */
@@ -48,22 +49,11 @@ const val GITHUB_RELEASES_URL = "https://github.com/Dah3l/AuralPlayer/releases/l
  */
 const val UPTODOWN_APP_URL = "https://aural-player.uptodown.com/android"
 
-/** Tienda de descarga con su logo oficial. */
-private enum class DownloadStore(val url: String, val logoBase64: String) {
-    APKLIS(APKLIS_APP_URL, LOGO_APKLIS_BASE64),
-    GITHUB(GITHUB_RELEASES_URL, LOGO_GITHUB_BASE64),
-    UPTODOWN(UPTODOWN_APP_URL, LOGO_UPTODOWN_BASE64),
-}
-
-/** Decodifica el logo una vez (el JPEG viene en base64). */
-private fun decodeLogo(base64: String): androidx.compose.ui.graphics.ImageBitmap? {
-    return try {
-        val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?.asImageBitmap()
-    } catch (_: Exception) {
-        null
-    }
+/** Tienda de descarga con su logo oficial (drawable). */
+private enum class DownloadStore(val url: String, val logoRes: Int) {
+    APKLIS(APKLIS_APP_URL, R.drawable.logo_apklis),
+    GITHUB(GITHUB_RELEASES_URL, R.drawable.logo_github),
+    UPTODOWN(UPTODOWN_APP_URL, R.drawable.logo_uptodown),
 }
 
 /**
@@ -129,13 +119,19 @@ fun UpdateAvailableDialog(
 private fun StoreTile(store: DownloadStore, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val logo = remember(store) { decodeLogo(store.logoBase64) }
+    val tileShape = RoundedCornerShape(20.dp)
     Box(
         modifier = Modifier
             .size(76.dp)
             .scale(if (isPressed) 0.92f else 1f)
-            .clip(RoundedCornerShape(20.dp))
-            .background(storeBackground(store))
+            .clip(tileShape)
+            // Borde sutil según el tema: en modo claro define el borde
+            // del tile blanco de Uptodown; en oscuro apenas se nota.
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant,
+                tileShape
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -143,19 +139,11 @@ private fun StoreTile(store: DownloadStore, onClick: () -> Unit) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (logo != null) {
-            Image(
-                bitmap = logo,
-                contentDescription = store.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
+        Image(
+            painter = painterResource(store.logoRes),
+            contentDescription = store.name,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
     }
-}
-
-private fun storeBackground(store: DownloadStore): Color = when (store) {
-    DownloadStore.APKLIS -> Color(0xFF1B7BD4)
-    DownloadStore.GITHUB -> Color(0xFF24292F)
-    DownloadStore.UPTODOWN -> Color(0xFF00A0E6)
 }
