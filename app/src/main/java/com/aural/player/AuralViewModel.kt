@@ -264,6 +264,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         .map { repository.groupByAlbum(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Carpetas ocultas por el usuario. v1.0.7. */
+    val hiddenFolders: StateFlow<Set<String>> = settings.hiddenFolders.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptySet()
+    )
+
     /** Carpetas agrupadas (sin las ocultas por el usuario). v1.0.7. */
     val foldersFlow: StateFlow<List<Folder>> = combine(
         filteredSongsFlow,
@@ -271,11 +276,6 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     ) { songs, hidden ->
         repository.groupByFolder(songs).filterNot { it.path in hidden }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** Carpetas ocultas por el usuario. v1.0.7. */
-    val hiddenFolders: StateFlow<Set<String>> = settings.hiddenFolders.stateIn(
-        viewModelScope, SharingStarted.Eagerly, emptySet()
-    )
 
     /** Oculta o muestra una carpeta de la biblioteca. v1.0.7. */
     fun toggleHiddenFolder(path: String) {
