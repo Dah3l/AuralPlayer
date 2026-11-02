@@ -644,10 +644,7 @@ private fun IslandExpandedContent(
                 .size(38.dp)
                 .clip(CircleShape)
                 .background(islandOnBg.copy(alpha = 0.12f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = onCollapse
-                ),
+                .clickable(onClick = onCollapse),
             contentAlignment = Alignment.Center
         ) {
             Icon(
