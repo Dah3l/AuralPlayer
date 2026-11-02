@@ -27,6 +27,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -385,15 +386,30 @@ private fun IslandExpandedContent(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = coverUri?.let { android.net.Uri.parse(it) },
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF1E2129))
-            )
+                    .background(Color(0xFF1E2129)),
+                contentAlignment = Alignment.Center
+            ) {
+                // Placeholder siempre de fondo (patrón CoverArt de la app):
+                // si no hay portada, no queda el cuadro vacío.
+                Icon(
+                    Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = IslandAccent.copy(alpha = 0.5f),
+                    modifier = Modifier.size(24.dp)
+                )
+                if (!coverUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = android.net.Uri.parse(coverUri),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
