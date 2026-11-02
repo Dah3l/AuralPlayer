@@ -346,6 +346,7 @@ fun EqualizerScreen(onBack: () -> Unit) {
         }
     }
 }
+}
 
 /** Tarjeta de un efecto con título. */
 @Composable
@@ -368,7 +369,6 @@ private fun EffectCard(
             )
             Spacer(Modifier.height(8.dp))
             content()
-        }
         }
     }
 }
