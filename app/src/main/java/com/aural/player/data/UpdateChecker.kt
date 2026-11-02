@@ -66,7 +66,9 @@ suspend fun checkForUpdate(context: Context): UpdateCheckResult =
     withContext(Dispatchers.IO) {
         // DEBUG TEMPORAL: simula que hay una actualización para
         // previsualizar el diálogo. REVERTIR antes del release.
-        if (com.aural.player.BuildConfig.DEBUG) {
+        val isDebug = (context.applicationInfo.flags and
+                android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebug) {
             return@withContext UpdateCheckResult.Available(
                 UpdateInfo(
                     "1.0.8",
