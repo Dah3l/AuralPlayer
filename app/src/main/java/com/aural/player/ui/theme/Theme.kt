@@ -19,6 +19,7 @@ import com.aural.player.R
  * ventana (27-oct..1-nov) y se auto-activa al primer arranque en ella. */
 enum class AppTheme(val displayName: String, val iconRes: Int) {
     HALLOWEEN("Halloween", R.drawable.ic_launcher_foreground),
+    CHRISTMAS("Navidad", R.drawable.ic_launcher_foreground),
     BOSQUE("Aural Classic", R.drawable.ic_launcher_foreground),
     OCEANO("Abyssal Indigo", R.drawable.ic_launcher_foreground_oceano),
     ATARDECER("Solar Amber", R.drawable.ic_launcher_foreground_atardecer),
@@ -140,6 +141,7 @@ private val ClaroColorScheme = lightColorScheme(
  *  pintar cada tarjeta con los colores de su propio tema). */
 fun AppTheme.colorScheme(): androidx.compose.material3.ColorScheme = when (this) {
     AppTheme.HALLOWEEN -> HalloweenColorScheme
+    AppTheme.CHRISTMAS -> ChristmasColorScheme
     AppTheme.BOSQUE -> BosqueColorScheme
     AppTheme.OCEANO -> OceanoColorScheme
     AppTheme.ATARDECER -> AtardecerColorScheme
@@ -254,6 +256,46 @@ private val HalloweenColorScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF1E1A1E),
     outline = Color(0xFF3A2E2A),
     outlineVariant = Color(0xFF2A2226),
+    scrim = Color(0xFF000000),
+    error = Color(0xFFFF6B6B),
+    onError = Color(0xFF1A0505),
+    errorContainer = Color(0xFF4A1414),
+    onErrorContainer = Color(0xFFFFD0D0)
+)
+
+// ---- Tema Navidad: temporada 20-dic..26-dic (noche + rojo navideño + dorado) ----
+private val ChristmasColorScheme = darkColorScheme(
+    primary = Color(0xFFE63946),
+    onPrimary = Color(0xFF1A0505),
+    primaryContainer = Color(0xFF4A1215),
+    onPrimaryContainer = Color(0xFFFFD0D0),
+    secondary = Color(0xFF2D6A4F),
+    onSecondary = Color(0xFFE8F5EC),
+    secondaryContainer = Color(0xFF1B4332),
+    onSecondaryContainer = Color(0xFFD8F3DC),
+    tertiary = Color(0xFFD4AF37),
+    onTertiary = Color(0xFF1A1202),
+    tertiaryContainer = Color(0xFF4A3A08),
+    onTertiaryContainer = Color(0xFFFFF3B3),
+    background = Color(0xFF0B0F0D),
+    onBackground = Color(0xFFF2F5F2),
+    surface = Color(0xFF131715),
+    onSurface = Color(0xFFF2F5F2),
+    surfaceVariant = Color(0xFF1C221E),
+    onSurfaceVariant = Color(0xFFADB5AD),
+    surfaceTint = Color(0xFFE63946),
+    inverseSurface = Color(0xFFF2F5F2),
+    inverseOnSurface = Color(0xFF131715),
+    inversePrimary = Color(0xFFB32530),
+    surfaceDim = Color(0xFF0B0F0D),
+    surfaceBright = Color(0xFF2A332C),
+    surfaceContainerLowest = Color(0xFF070908),
+    surfaceContainerLow = Color(0xFF0F130F),
+    surfaceContainer = Color(0xFF131715),
+    surfaceContainerHigh = Color(0xFF181E19),
+    surfaceContainerHighest = Color(0xFF1C221E),
+    outline = Color(0xFF333B34),
+    outlineVariant = Color(0xFF272D28),
     scrim = Color(0xFF000000),
     error = Color(0xFFFF6B6B),
     onError = Color(0xFF1A0505),
