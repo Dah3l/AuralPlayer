@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -85,12 +84,6 @@ fun DonateScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
-            )
-            Icon(
-                Icons.Rounded.Favorite,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(end = 16.dp)
             )
         }
 
@@ -231,7 +224,7 @@ fun DonateScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
             Text(
-                text = "¡Gracias por apoyar a Aural! ❤",
+                text = "¡Gracias por apoyar a Aural!",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
