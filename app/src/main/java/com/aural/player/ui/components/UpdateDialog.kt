@@ -1,7 +1,7 @@
 // Diálogo de nueva versión disponible: tiles por tienda (solo icono).
 package com.aural.player.ui.components
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,10 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,11 +48,22 @@ const val GITHUB_RELEASES_URL = "https://github.com/Dah3l/AuralPlayer/releases/l
  */
 const val UPTODOWN_APP_URL = "https://aural-player.uptodown.com/android"
 
-/** Tienda de descarga con su icono dibujado. */
-private enum class DownloadStore(val url: String) {
-    APKLIS(APKLIS_APP_URL),
-    GITHUB(GITHUB_RELEASES_URL),
-    UPTODOWN(UPTODOWN_APP_URL),
+/** Tienda de descarga con su logo oficial. */
+private enum class DownloadStore(val url: String, val logoBase64: String) {
+    APKLIS(APKLIS_APP_URL, LOGO_APKLIS_BASE64),
+    GITHUB(GITHUB_RELEASES_URL, LOGO_GITHUB_BASE64),
+    UPTODOWN(UPTODOWN_APP_URL, LOGO_UPTODOWN_BASE64),
+}
+
+/** Decodifica el logo una vez (el JPEG viene en base64). */
+private fun decodeLogo(base64: String): androidx.compose.ui.graphics.ImageBitmap? {
+    return try {
+        val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?.asImageBitmap()
+    } catch (_: Exception) {
+        null
+    }
 }
 
 /**
@@ -113,11 +124,12 @@ fun UpdateAvailableDialog(
     }
 }
 
-/** Tile de tienda: solo el icono, sin texto de enlace. */
+/** Tile de tienda: el logo oficial, sin texto de enlace. */
 @Composable
 private fun StoreTile(store: DownloadStore, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val logo = remember(store) { decodeLogo(store.logoBase64) }
     Box(
         modifier = Modifier
             .size(76.dp)
@@ -128,14 +140,16 @@ private fun StoreTile(store: DownloadStore, onClick: () -> Unit) {
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .padding(14.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
-        when (store) {
-            DownloadStore.APKLIS -> ApklisIcon(Modifier.size(48.dp))
-            DownloadStore.GITHUB -> GitHubIcon(Modifier.size(48.dp))
-            DownloadStore.UPTODOWN -> UptodownIcon(Modifier.size(48.dp))
+        if (logo != null) {
+            Image(
+                bitmap = logo,
+                contentDescription = store.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
         }
     }
 }
@@ -144,111 +158,4 @@ private fun storeBackground(store: DownloadStore): Color = when (store) {
     DownloadStore.APKLIS -> Color(0xFF1B7BD4)
     DownloadStore.GITHUB -> Color(0xFF24292F)
     DownloadStore.UPTODOWN -> Color(0xFF00A0E6)
-}
-
-/** Icono Apklis: "A" blanca sobre azul. */
-@Composable
-private fun ApklisIcon(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            moveTo(w * 0.5f, h * 0.08f)
-            lineTo(w * 0.92f, h * 0.92f)
-            lineTo(w * 0.68f, h * 0.92f)
-            lineTo(w * 0.5f, h * 0.48f)
-            lineTo(w * 0.32f, h * 0.92f)
-            lineTo(w * 0.08f, h * 0.92f)
-            close()
-        }
-        drawPath(path, Color.White)
-        // Travesaño de la A
-        drawLine(
-            Color.White,
-            Offset(w * 0.36f, h * 0.72f),
-            Offset(w * 0.64f, h * 0.72f),
-            strokeWidth = h * 0.12f
-        )
-    }
-}
-
-/** Icono GitHub: silueta simplificada de cabeza de gato sobre oscuro. */
-@Composable
-private fun GitHubIcon(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        // Orejas
-        val earH = h * 0.30f
-        val earW = w * 0.22f
-        drawPath(
-            Path().apply {
-                moveTo(cx - w * 0.28f, h * 0.38f)
-                lineTo(cx - w * 0.34f, h * 0.38f - earH)
-                lineTo(cx - w * 0.10f, h * 0.30f)
-                close()
-            },
-            Color.White
-        )
-        drawPath(
-            Path().apply {
-                moveTo(cx + w * 0.28f, h * 0.38f)
-                lineTo(cx + w * 0.34f, h * 0.38f - earH)
-                lineTo(cx + w * 0.10f, h * 0.30f)
-                close()
-            },
-            Color.White
-        )
-        // Cabeza
-        drawCircle(Color.White, radius = w * 0.30f, center = Offset(cx, h * 0.58f))
-        // Cuerpo (arco inferior)
-        drawArc(
-            Color.White,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(cx - w * 0.30f, h * 0.52f),
-            size = androidx.compose.ui.geometry.Size(w * 0.60f, h * 0.44f),
-            style = Stroke(width = h * 0.10f)
-        )
-    }
-}
-
-/** Icono Uptodown: flecha de descarga blanca sobre azul. */
-@Composable
-private fun UptodownIcon(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        val sw = w * 0.14f
-        // Vástago
-        drawLine(
-            Color.White,
-            Offset(cx, h * 0.12f),
-            Offset(cx, h * 0.62f),
-            strokeWidth = sw
-        )
-        // Punta
-        drawPath(
-            Path().apply {
-                moveTo(cx - w * 0.26f, h * 0.44f)
-                lineTo(cx, h * 0.72f)
-                lineTo(cx + w * 0.26f, h * 0.44f)
-                lineTo(cx + w * 0.26f - sw * 0.7f, h * 0.44f)
-                lineTo(cx, h * 0.62f)
-                lineTo(cx - w * 0.26f + sw * 0.7f, h * 0.44f)
-                close()
-            },
-            Color.White
-        )
-        // Base
-        drawLine(
-            Color.White,
-            Offset(w * 0.16f, h * 0.86f),
-            Offset(w * 0.84f, h * 0.86f),
-            strokeWidth = sw
-        )
-    }
 }
