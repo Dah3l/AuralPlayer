@@ -295,7 +295,8 @@ fun NowPlayingScreen(
                         viewModel = viewModel,
                         state = state,
                         onRemoveFromQueue = onRemoveFromQueue,
-                        onShowLyrics = { showLyrics = true }
+                        onShowLyrics = { showLyrics = true },
+                        onOpenEqualizer = onOpenEqualizer
                     )
                 }
             }
@@ -861,7 +862,8 @@ private fun NowPlayingMenu(
     viewModel: com.aural.player.AuralViewModel,
     state: com.aural.player.playback.PlayerUiState,
     onRemoveFromQueue: (Int) -> Unit,
-    onShowLyrics: () -> Unit
+    onShowLyrics: () -> Unit,
+    onOpenEqualizer: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
