@@ -289,7 +289,9 @@ class MusicService : MediaSessionService() {
                             // La X la oculta por ahora; NO toca el ajuste.
                             islandDismissed = true
                             hideIslandOverlay()
-                        }
+                        },
+                        onExpandWindow = { expandIslandWindow() },
+                        onCollapseWindow = { collapseIslandWindow() }
                     )
                 }
             }
@@ -303,6 +305,30 @@ class MusicService : MediaSessionService() {
             islandView = null
             islandParams = null
         }
+    }
+
+    // Durante el morph la ventana se fija UNA vez al tamaño expandido:
+    // la animación corre 100% dentro (GPU), sin re-layouts de ventana
+    // por frame, que es lo que producía el stutter.
+    private fun expandIslandWindow() {
+        val view = islandView ?: return
+        val params = islandParams ?: return
+        val d = resources.displayMetrics.density
+        params.width = (380 * d).toInt()
+        params.height = (420 * d).toInt()
+        try {
+            windowManager.updateViewLayout(view, params)
+        } catch (_: Exception) { }
+    }
+
+    private fun collapseIslandWindow() {
+        val view = islandView ?: return
+        val params = islandParams ?: return
+        params.width = WindowManager.LayoutParams.WRAP_CONTENT
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT
+        try {
+            windowManager.updateViewLayout(view, params)
+        } catch (_: Exception) { }
     }
 
     private fun hideIslandOverlay() {
