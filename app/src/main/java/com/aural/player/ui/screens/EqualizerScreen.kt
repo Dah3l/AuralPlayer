@@ -1,6 +1,7 @@
 // Pantalla propia del ecualizador (v1.0.7): página dedicada en vez de modal.
 package com.aural.player.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,7 +55,11 @@ fun EqualizerScreen(onBack: () -> Unit) {
     var virtualStrength by remember { mutableIntStateOf(manager.getVirtualizerStrength()) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
