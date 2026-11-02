@@ -8,8 +8,8 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -118,22 +118,17 @@ fun IslandOverlayContent(
         AnimatedContent(
             targetState = expanded,
             transitionSpec = {
+                // Opción A: morph en dos tiempos. El contenido viejo se va
+                // rápido (100ms), el contenedor se morphéa VACÍO — solo el
+                // fondo negro — y el contenido nuevo entra con fade al
+                // final (240ms). Nunca se ve contenido deformándose.
+                // Total ~400ms: rápida pero legible.
                 val sizeSpec: FiniteAnimationSpec<IntSize> =
-                    spring(dampingRatio = 0.85f, stiffness = 500f)
-                if (targetState) {
-                    // Entrando: la píldora se va rápido y la tarjeta entra
-                    // cuando el contenedor ya se estiró.
-                    (fadeIn(tween(220, delayMillis = 120)) togetherWith
-                            fadeOut(tween(110))).using(
-                        SizeTransform(clip = true) { _, _ -> sizeSpec }
-                    )
-                } else {
-                    // Saliendo: fundido simple.
-                    (fadeIn(tween(180)) togetherWith
-                            fadeOut(tween(180))).using(
-                        SizeTransform(clip = true) { _, _ -> sizeSpec }
-                    )
-                }
+                    tween(300, easing = FastOutSlowInEasing)
+                (fadeIn(tween(160, delayMillis = 240)) togetherWith
+                        fadeOut(tween(100))).using(
+                    SizeTransform(clip = true) { _, _ -> sizeSpec }
+                )
             },
             label = "island_morph"
         ) { targetExpanded ->
@@ -220,7 +215,7 @@ private fun IslandCollapsedContent(
                             }
                             vib?.vibrate(
                                 android.os.VibrationEffect.createOneShot(
-                                    80, android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                    100, android.os.VibrationEffect.DEFAULT_AMPLITUDE
                                 )
                             )
                         } catch (_: Exception) { }
