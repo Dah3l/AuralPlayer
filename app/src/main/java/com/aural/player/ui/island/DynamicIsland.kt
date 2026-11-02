@@ -3,19 +3,14 @@
 // Transición colapsada <-> expandida con morph animado (spring).
 package com.aural.player.ui.island
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -40,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -109,21 +105,16 @@ fun IslandOverlayContent(
             .clip(IslandShape)
             .background(IslandBg.copy(alpha = 0.97f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), IslandShape)
-            // El morph: los bordes se estiran/contraen con rebote.
+            // El morph: los bordes se estiran/contraen con un spring suave.
+            // El contenido solo hace fade (sin escala): escalar entre
+            // contenidos de tamaños tan distintos se veía roto.
             .animateContentSize(
-                animationSpec = spring(dampingRatio = 0.65f, stiffness = 350f)
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 600f)
             )
     ) {
-        AnimatedContent(
+        Crossfade(
             targetState = expanded,
-            transitionSpec = {
-                (fadeIn(animationSpec = tween(200)) +
-                        scaleIn(initialScale = 0.9f, animationSpec = tween(200)))
-                    .togetherWith(
-                        fadeOut(animationSpec = tween(150)) +
-                                scaleOut(targetScale = 0.9f, animationSpec = tween(150))
-                    )
-            },
+            animationSpec = tween(180),
             label = "island_morph"
         ) { targetExpanded ->
             if (targetExpanded) {
@@ -154,7 +145,7 @@ fun IslandOverlayContent(
             } else {
                 IslandCollapsedContent(
                     title = song.title,
-                    isPlaying = playerState.isPlaying,
+                    coverUri = song.albumArtUri,
                     onTap = { expanded = true },
                     onQuickAction = { action -> handleQuickAction(app, action) }
                 )
@@ -174,7 +165,7 @@ fun IslandOverlayContent(
 @Composable
 private fun IslandCollapsedContent(
     title: String,
-    isPlaying: Boolean,
+    coverUri: String?,
     onTap: () -> Unit,
     onQuickAction: (QuickAction) -> Unit,
     modifier: Modifier = Modifier
@@ -221,11 +212,33 @@ private fun IslandCollapsedContent(
             modifier = Modifier.widthIn(max = 180.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Onda pequeña, del tamaño de la píldora.
-            IslandWave(
-                isPlaying = isPlaying,
-                modifier = Modifier.size(width = 36.dp, height = 18.dp)
-            )
+            // Portada en círculo; si no hay, la nota musical por defecto.
+            if (coverUri != null) {
+                AsyncImage(
+                    model = android.net.Uri.parse(coverUri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E2129))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(IslandAccent.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = IslandAccent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
             Spacer(Modifier.width(8.dp))
             Text(
                 text = title,
