@@ -2,6 +2,7 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -717,11 +718,14 @@ fun LibraryScreen(
         selectionMode = false
         selectedIds.clear()
     }
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter
+    ) {
     androidx.compose.animation.AnimatedVisibility(
         visible = selectionMode,
         enter = androidx.compose.animation.slideInVertically { -it },
-        exit = androidx.compose.animation.slideOutVertically { -it },
-        modifier = Modifier.align(Alignment.TopCenter)
+        exit = androidx.compose.animation.slideOutVertically { -it }
     ) {
         androidx.compose.material3.Surface(
             color = MaterialTheme.colorScheme.surface,
@@ -773,6 +777,7 @@ fun LibraryScreen(
             }
         }
     }
+    } // v1.0.7: cierra Box de la barra de selección
 
     // ---- Diálogo para crear playlist ----
     renameTarget?.let { pl ->        RenamePlaylistDialog(
