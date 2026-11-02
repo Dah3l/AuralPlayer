@@ -29,9 +29,7 @@ import androidx.media3.session.SessionResult
 import com.aural.player.AuralApp
 import com.aural.player.MainActivity
 import com.aural.player.R
-import com.aural.player.ui.island.DynamicIslandCollapsed
 import com.aural.player.ui.island.IslandOverlayContent
-import com.aural.player.ui.island.DynamicIslandExpanded
 import com.aural.player.ui.island.QuickAction
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
