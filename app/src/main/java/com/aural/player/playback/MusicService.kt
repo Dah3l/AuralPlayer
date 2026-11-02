@@ -315,7 +315,7 @@ class MusicService : MediaSessionService() {
         val params = islandParams ?: return
         val d = resources.displayMetrics.density
         params.width = (380 * d).toInt()
-        params.height = (420 * d).toInt()
+        params.height = (340 * d).toInt()
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: Exception) { }
