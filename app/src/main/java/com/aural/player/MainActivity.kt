@@ -129,7 +129,8 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 } else {
-                    AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore)
+                    AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore,
+                        onToggleIsland = { toggleDynamicIsland(viewModel, settingsStore) })
                 }
             }
         }
@@ -239,7 +240,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AuralApp(viewModel: AuralViewModel,
     youTubeManager: com.aural.player.youtube.YouTubeManager?,
-    settingsStore: SettingsStore) {
+    settingsStore: SettingsStore,
+    onToggleIsland: () -> Unit = {}) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga).
@@ -267,6 +269,7 @@ private fun AuralApp(viewModel: AuralViewModel,
         detailListStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     // v1.0.7: la isla dinámica puede pedir abrir la pestaña de Descargas.
+    var pendingIslandTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Int?>(null) }
     androidx.compose.runtime.LaunchedEffect(pendingIslandTab) {
         pendingIslandTab?.let {
             libraryTab = it
@@ -372,12 +375,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
                     onOpenThemes = { screen = Screen.Themes },
                     onOpenEqualizer = { showEqualizerScreen = true },
-                    onToggleIsland = {
-                        toggleDynamicIsland(
-                            viewModel,
-                            settingsStore
-                        )
-                    },
+                    onToggleIsland = onToggleIsland,
                     onOpenDonate = { screen = Screen.Donate },
                     onSongMenu = { song ->
                         songMenuTarget = song
