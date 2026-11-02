@@ -30,7 +30,9 @@ fun CoverPickerDialog(
     onDismiss: () -> Unit
 ) {
     var searchTitle by remember { mutableStateOf(title) }
-    var searchArtist by remember { mutableStateOf(artist) }
+    var searchArtist by remember {
+        mutableStateOf(artist.takeUnless { it == "Artista misterioso" } ?: "")
+    }
     var results by remember { mutableStateOf<List<CoverArtResult>?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
