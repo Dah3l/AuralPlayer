@@ -1,17 +1,23 @@
 // Aplicación: instancia única de los componentes compartidos
 package com.aural.player
 
+import android.app.Activity
 import android.app.Application
+import android.app.Application.ActivityLifecycleCallbacks
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.util.Log
 import com.aural.player.data.MusicRepository
 import com.aural.player.data.SettingsStore
 import com.aural.player.playback.PlaybackManager
 import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Contenedor manual de dependencias (sin librerías de DI externas):
@@ -26,6 +32,10 @@ class AuralApp : Application() {
     lateinit var playback: PlaybackManager
         private set
 
+    /** true mientras alguna actividad de la app está visible (para la isla dinámica). */
+    private val _isForeground = MutableStateFlow(false)
+    val isForeground: StateFlow<Boolean> = _isForeground.asStateFlow()
+
     override fun onCreate() {
         super.onCreate()
         // Icono único garantizado: una versión anterior con icono dinámico
@@ -39,6 +49,27 @@ class AuralApp : Application() {
         playback = PlaybackManager(this)
         // Conectar el MediaController con el servicio en segundo plano
         playback.connect()
+        // v1.0.7: rastrear si la app está en primer plano (isla dinámica
+        // solo se muestra fuera de la app).
+        registerActivityLifecycleCallbacks(ForegroundTracker())
+    }
+
+    /** Cuenta actividades resumed: >0 = app visible. */
+    private inner class ForegroundTracker : ActivityLifecycleCallbacks {
+        private var resumedCount = 0
+        override fun onActivityResumed(activity: Activity) {
+            resumedCount++
+            _isForeground.value = true
+        }
+        override fun onActivityPaused(activity: Activity) {
+            resumedCount = (resumedCount - 1).coerceAtLeast(0)
+            if (resumedCount == 0) _isForeground.value = false
+        }
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityStopped(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
     }
 
     /** Rehabilita MainActivity si quedó desactivada (icono único de la app). */
