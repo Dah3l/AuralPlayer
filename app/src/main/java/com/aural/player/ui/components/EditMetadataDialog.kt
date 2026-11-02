@@ -19,7 +19,10 @@ fun EditMetadataDialog(
     onDismiss: () -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
-    var artist by remember { mutableStateOf(initialArtist) }
+    // Si es "Artista misterioso", el campo arranca vacío para editar cómodo.
+    var artist by remember {
+        mutableStateOf(initialArtist.takeUnless { it == "Artista misterioso" } ?: "")
+    }
     var album by remember { mutableStateOf(initialAlbum) }
 
     AlertDialog(
