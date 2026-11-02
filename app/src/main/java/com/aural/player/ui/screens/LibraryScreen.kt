@@ -563,6 +563,11 @@ fun LibraryScreen(
                                     onDownloadComplete = { fileName, mediaId ->
                                         if (fileName != null) {
                                             viewModel.addDownloadToPlaylist(fileName, mediaId)
+                                            android.widget.Toast.makeText(
+                                                appContext,
+                                                "Canción descargada",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 )
