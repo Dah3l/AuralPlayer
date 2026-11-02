@@ -16,6 +16,7 @@
 
     <!-- Permiso de notificación multimedia (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Micrófono (reconocimiento de música por audio) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
