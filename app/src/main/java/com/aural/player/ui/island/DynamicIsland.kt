@@ -118,14 +118,14 @@ fun IslandOverlayContent(
         AnimatedContent(
             targetState = expanded,
             transitionSpec = {
-                // Opción A: morph en dos tiempos. El contenido viejo se va
-                // rápido (100ms), el contenedor se morphéa VACÍO — solo el
-                // fondo negro — y el contenido nuevo entra con fade al
-                // final (240ms). Nunca se ve contenido deformándose.
-                // Total ~400ms: rápida pero legible.
+                // Opción A: morph en dos tiempos estrictos. El contenido
+                // viejo se va rápido (100ms), el contenedor se morphéa
+                // VACÍO — solo el fondo negro, 300ms — y el contenido nuevo
+                // entra con fade DESPUÉS (300ms). Nunca se ve contenido
+                // deformándose. Total ~480ms: rápida pero legible.
                 val sizeSpec: FiniteAnimationSpec<IntSize> =
                     tween(300, easing = FastOutSlowInEasing)
-                (fadeIn(tween(160, delayMillis = 240)) togetherWith
+                (fadeIn(tween(180, delayMillis = 300)) togetherWith
                         fadeOut(tween(100))).using(
                     SizeTransform(clip = true) { _, _ -> sizeSpec }
                 )
@@ -215,7 +215,7 @@ private fun IslandCollapsedContent(
                             }
                             vib?.vibrate(
                                 android.os.VibrationEffect.createOneShot(
-                                    100, android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                    100, 255
                                 )
                             )
                         } catch (_: Exception) { }
