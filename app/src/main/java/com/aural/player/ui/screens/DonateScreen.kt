@@ -101,7 +101,7 @@ fun DonateScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "¿Te gusta Aural? ¡Dale cariño! ❤",
+                text = "¿Te gusta Aural? ¡Dale cariño!",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
