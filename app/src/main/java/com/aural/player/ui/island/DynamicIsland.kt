@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.font.FontWeight
@@ -118,6 +119,16 @@ fun IslandOverlayContent(
     val pillAlpha = remember { Animatable(1f) }
     val panelAlpha = remember { Animatable(0f) }
     var animJob by remember { mutableStateOf<Job?>(null) }
+    // Dimensiones adaptativas: la isla nunca supera el ancho/alto de la
+    // pantalla (16dp de margen lateral, espacio para el status bar arriba).
+    val screenWdp = LocalConfiguration.current.screenWidthDp.toFloat()
+    val screenHdp = LocalConfiguration.current.screenHeightDp.toFloat()
+    val expandedW = remember(screenWdp) {
+        minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
+    }
+    val expandedH = remember(screenHdp) {
+        minOf(308f, (screenHdp - 140f).coerceAtLeast(220f))
+    }
 
     fun doExpand() {
         if (expanded) return
@@ -127,10 +138,10 @@ fun IslandOverlayContent(
         animJob = scope.launch {
             // Fase 1: la píldora se desvanece mientras el ancho crece.
             launch { pillAlpha.animateTo(0f, tween(120)) }
-            widthA.animateTo(340f, tween(150, easing = ease))
+            widthA.animateTo(expandedW, tween(150, easing = ease))
             cornerA.animateTo(28f, tween(150, easing = ease))
             // Fase 2: la altura, ya con el ancho objetivo.
-            heightA.animateTo(308f, tween(150, easing = ease))
+            heightA.animateTo(expandedH, tween(150, easing = ease))
             // Fase 3: el contenido del panel entra con fade.
             panelAlpha.animateTo(1f, tween(120))
         }
