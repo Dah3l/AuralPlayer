@@ -121,6 +121,7 @@ fun CoverArt(
 
 /** Fila de canción para listas de la biblioteca. v1.0.7: soporta modo
  *  selección múltiple (checkbox + long-press para entrar al modo). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
     title: String,
