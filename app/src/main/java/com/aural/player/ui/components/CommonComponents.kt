@@ -3,6 +3,7 @@ package com.aural.player.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -118,7 +119,8 @@ fun CoverArt(
     }
 }
 
-/** Fila de canción para listas de la biblioteca. */
+/** Fila de canción para listas de la biblioteca. v1.0.7: soporta modo
+ *  selección múltiple (checkbox + long-press para entrar al modo). */
 @Composable
 fun SongRow(
     title: String,
@@ -128,7 +130,10 @@ fun SongRow(
     isPlaying: Boolean,
     onClick: () -> Unit,
     trailing: (@Composable () -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    showCheckbox: Boolean = false,
+    onLongClick: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -140,14 +145,26 @@ fun SongRow(
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else Color.Transparent
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (showCheckbox) {
+            androidx.compose.material3.Checkbox(
+                checked = selected,
+                onCheckedChange = null,
+                modifier = Modifier.padding(end = 4.dp)
+            )
+        }
         CoverArt(uri = coverUri, size = 48.dp)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
@@ -406,9 +423,10 @@ fun AlphabetFastScroller(
 /**
  * Pantalla de bienvenida: logo de la app con animación de entrada.
  * Con el tema Halloween, el "Aural" usa la fuente de terror en naranja.
+ * Con el tema Navidad, el "Aural" va en rojo navideño con un copo ❄.
  */
 @Composable
-fun SplashScreen(isHalloween: Boolean = false) {
+fun SplashScreen(isHalloween: Boolean = false, isChristmas: Boolean = false) {
     var visible by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)
@@ -464,10 +482,19 @@ fun SplashScreen(isHalloween: Boolean = false) {
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 fontFamily = if (isHalloween) HalloweenFontFamily else null,
-                color = if (isHalloween) MaterialTheme.colorScheme.primary
+                color = if (isHalloween || isChristmas) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.graphicsLayer { this.alpha = alpha }
             )
+            if (isChristmas) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "❄ Felices fiestas ❄",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.graphicsLayer { this.alpha = alpha }
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "El sonido, sin ruido",
