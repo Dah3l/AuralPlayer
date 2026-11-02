@@ -52,6 +52,16 @@ class YouTubeManager(private val context: Context) {
     val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
+
+    // v1.0.7: videos descargados en esta sesión (videoId -> nombre de archivo).
+    // Vive en el manager (no en un remember) para que el indicador "Descargada"
+    // sobreviva a que la pantalla salga de la composición durante el rescan.
+    private val _downloaded = MutableStateFlow<Map<String, String>>(emptyMap())
+    val downloaded: StateFlow<Map<String, String>> = _downloaded.asStateFlow()
+
+    fun markDownloaded(videoId: String, fileName: String) {
+        _downloaded.value = _downloaded.value + (videoId to fileName)
+    }
     val error: StateFlow<String?> = _error.asStateFlow()
 
     fun clearError() { _error.value = null }
