@@ -102,7 +102,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-service:2.8.6")
     // v1.0.7: isla dinámica (overlay desde el servicio)
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.8.6")
-    implementation("androidx.savedstate:savedstate:2.1.0")
 
     // ---- DataStore Preferences (ajustes) ----
     implementation("androidx.datastore:datastore-preferences:1.1.1")
