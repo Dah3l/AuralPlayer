@@ -8,13 +8,15 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -64,6 +66,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,13 +81,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlin.math.sin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-private val IslandShape = RoundedCornerShape(28.dp)
 
 /**
  * Contenido del overlay: contenedor ÚNICO cuyos bordes se animan con spring
@@ -96,7 +100,9 @@ private val IslandShape = RoundedCornerShape(28.dp)
 @Composable
 fun IslandOverlayContent(
     app: com.aural.player.AuralApp,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onExpandWindow: () -> Unit = {},
+    onCollapseWindow: () -> Unit = {}
 ) {
     val playerState by app.playback.state.collectAsState()
     // La isla usa la metadata PERSONALIZADA de la app, no la original
@@ -106,6 +112,24 @@ fun IslandOverlayContent(
     val customCovers by app.settings.customCovers
         .collectAsStateWithLifecycle(initialValue = emptyMap())
     var expanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    // Generación de la animación: evita que un colapso programado
+    // restaure la ventana si el usuario re-expande antes.
+    var animGen by remember { mutableStateOf(0) }
+
+    fun doExpand() {
+        animGen++
+        onExpandWindow() // la ventana crece UNA vez; el morph corre dentro
+        expanded = true
+    }
+    fun doCollapse() {
+        expanded = false
+        val g = ++animGen
+        scope.launch {
+            delay(750) // deja que el spring se asiente
+            if (g == animGen) onCollapseWindow()
+        }
+    }
     val song = playerState.currentSong ?: return
     val meta = customMeta[song.id]
     val title = meta?.first?.ifBlank { song.title } ?: song.title
@@ -134,65 +158,78 @@ fun IslandOverlayContent(
     val islandOnBg = if (classic) Color.White else scheme.onSurface
     val islandOnAccent = scheme.onPrimary
 
+    // Morph estilo iOS: UNA sola caja cuyo tamaño anima con spring;
+    // el contenido hace crossfade DENTRO (la caja nunca queda vacía).
+    val morphSpec = spring<Dp>(
+        stiffness = Spring.StiffnessLow,
+        dampingRatio = 0.6f
+    )
+    val islandWidth by animateDpAsState(
+        targetValue = if (expanded) 340.dp else 135.dp,
+        animationSpec = morphSpec, label = "islandWidth"
+    )
+    val islandHeight by animateDpAsState(
+        targetValue = if (expanded) 360.dp else 44.dp,
+        animationSpec = morphSpec, label = "islandHeight"
+    )
+    val islandCorner by animateDpAsState(
+        targetValue = if (expanded) 28.dp else 22.dp,
+        animationSpec = morphSpec, label = "islandCorner"
+    )
+    val islandShape = RoundedCornerShape(islandCorner)
     Box(
         modifier = Modifier
-            .widthIn(max = 340.dp)
-            .shadow(14.dp, IslandShape)
-            .clip(IslandShape)
+            .size(islandWidth, islandHeight)
+            .shadow(14.dp, islandShape)
+            .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
-            .border(1.dp, islandOnBg.copy(alpha = 0.12f), IslandShape)
-            // Sin animateContentSize: el SizeTransform de la transición
-            // anima los bordes de forma coordinada (los dos mecanismos
-            // peleando por el tamaño era lo que se veía roto).
+            .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape),
+        contentAlignment = Alignment.TopCenter
     ) {
-        AnimatedContent(
-            targetState = expanded,
-            transitionSpec = {
-                // Opción A: morph en dos tiempos estrictos. El contenido
-                // viejo se va rápido (100ms), el contenedor se morphéa
-                // VACÍO — solo el fondo negro, 300ms — y el contenido nuevo
-                // entra con fade DESPUÉS (300ms). Nunca se ve contenido
-                // deformándose. Total ~480ms: rápida pero legible.
-                val sizeSpec: FiniteAnimationSpec<IntSize> =
-                    tween(300, easing = FastOutSlowInEasing)
-                (fadeIn(tween(180, delayMillis = 300)) togetherWith
-                        fadeOut(tween(100))).using(
-                    SizeTransform(clip = true) { _, _ -> sizeSpec }
-                )
-            },
-            label = "island_morph"
-        ) { targetExpanded ->
-            if (targetExpanded) {
-                IslandExpandedContent(
-                    title = title,
-                    artist = artist,
-                    coverUri = coverUri,
-                    appearance = appearance,
-                    isPlaying = playerState.isPlaying,
-                    positionMs = playerState.positionMs,
-                    durationMs = playerState.durationMs,
-                    onTogglePlay = { app.playback.togglePlayPause() },
-                    onNext = { app.playback.seekToNext() },
-                    onPrevious = { app.playback.seekToPrevious() },
-                    onSeek = { app.playback.seekTo(it) },
-                    onOpenApp = { openApp() },
-                    onQuickAction = { action -> handleQuickAction(app, action) },
-                    onCollapse = { expanded = false }
-                )
-            } else {
-                IslandCollapsedContent(
-                    title = title,
-                    artist = artist,
-                    coverUri = coverUri,
-                    appearance = appearance,
-
-                    onTap = { expanded = true },
-                    onPrevious = { app.playback.seekToPreviousSong() },
-                    onNext = { app.playback.seekToNext() },
-                    onTogglePlay = { app.playback.togglePlayPause() },
-                    onHide = onClose
-                )
-            }
+        // Píldora: fade + escala leve, solapado con el morph.
+        AnimatedVisibility(
+            visible = !expanded,
+            enter = fadeIn(tween(220, delayMillis = 80)) +
+                    scaleIn(tween(220, delayMillis = 80), initialScale = 0.92f),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.92f),
+            label = "islandCollapsed"
+        ) {
+            IslandCollapsedContent(
+                title = title,
+                artist = artist,
+                coverUri = coverUri,
+                appearance = appearance,
+                onTap = { doExpand() },
+                onPrevious = { app.playback.seekToPreviousSong() },
+                onNext = { app.playback.seekToNext() },
+                onTogglePlay = { app.playback.togglePlayPause() },
+                onHide = onClose
+            )
+        }
+        // Vista detallada: entra con fade mientras la caja crece.
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(260, delayMillis = 100)) +
+                    scaleIn(tween(260, delayMillis = 100), initialScale = 0.96f),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.96f),
+            label = "islandExpanded"
+        ) {
+            IslandExpandedContent(
+                title = title,
+                artist = artist,
+                coverUri = coverUri,
+                appearance = appearance,
+                isPlaying = playerState.isPlaying,
+                positionMs = playerState.positionMs,
+                durationMs = playerState.durationMs,
+                onTogglePlay = { app.playback.togglePlayPause() },
+                onNext = { app.playback.seekToNext() },
+                onPrevious = { app.playback.seekToPrevious() },
+                onSeek = { app.playback.seekTo(it) },
+                onOpenApp = { openApp() },
+                onQuickAction = { action -> handleQuickAction(app, action) },
+                onCollapse = { doCollapse() }
+            )
         }
     }
 }
