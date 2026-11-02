@@ -1,4 +1,5 @@
 // Isla dinámica (v1.0.7): píldora flotante sobre otras apps.
+// Posición FIJA bajo el orificio de la cámara (sin arrastre).
 package com.aural.player.ui.island
 
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -8,7 +9,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,16 +52,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.aural.player.data.Song
 import kotlin.math.sin
 
 private val IslandBg = Color(0xFF101014)
@@ -64,38 +70,38 @@ private val IslandAccent = Color(0xFF2ED3B7)
 private val IslandWave1 = Color(0xFF2ED3B7)
 private val IslandWave2 = Color(0xFF8B5CF6)
 private val IslandWave3 = Color(0xFFFF7A1A)
+private val CollapsedShape = RoundedCornerShape(24.dp)
+private val ExpandedShape = RoundedCornerShape(28.dp)
 
 /**
- * Píldora colapsada: portada + título/artista + onda animada.
+ * Píldora colapsada: solo el título (marquesina si no cabe) + onda pequeña.
+ * Posición fija — sin arrastre.
  * - Tap: expande.
- * - Arrastre: mueve la píldora.
  * - Fling horizontal rápido: acciones rápidas (→ buscar en YouTube,
  *   ← reconocer canción).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DynamicIslandCollapsed(
-    song: Song?,
     title: String,
-    artist: String,
-    coverUri: String?,
     isPlaying: Boolean,
     onTap: () -> Unit,
-    onDrag: (dx: Float, dy: Float) -> Unit,
     onQuickAction: (QuickAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var actionHint by remember { mutableStateOf<QuickAction?>(null) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    val density = LocalDensity.current
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
-            .background(IslandBg.copy(alpha = 0.94f))
+            .shadow(10.dp, CollapsedShape)
+            .clip(CollapsedShape)
+            .background(IslandBg.copy(alpha = 0.96f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), CollapsedShape)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onTap() })
             }
             .pointerInput(Unit) {
-                // Un solo detector: arrastre = mover; fling horizontal rápido
-                // = acción rápida (→ YouTube, ← reconocer).
+                // Solo fling: la posición es fija, ya no se arrastra.
                 var totalX = 0f
                 var totalY = 0f
                 var startTime = 0L
@@ -119,50 +125,29 @@ fun DynamicIslandCollapsed(
                         }
                     },
                     onDragCancel = { },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        totalX += dragAmount.x
-                        totalY += dragAmount.y
-                        onDrag(dragAmount.x, dragAmount.y)
-                    }
+                    onDrag = { change, _ -> change.consume() }
                 )
             }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = coverUri?.let { android.net.Uri.parse(it) },
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E2129))
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.width(120.dp)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = artist,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            // Onda animada: el indicador de que está sonando.
+        Row(
+            modifier = Modifier.widthIn(max = 260.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Onda pequeña, del tamaño de la píldora nueva.
             IslandWave(
                 isPlaying = isPlaying,
-                modifier = Modifier.size(width = 56.dp, height = 28.dp)
+                modifier = Modifier.size(width = 44.dp, height = 22.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.basicMarquee()
             )
         }
         // Hint breve de la acción rápida ejecutada.
@@ -223,8 +208,9 @@ fun IslandWave(isPlaying: Boolean, modifier: Modifier = Modifier) {
 }
 
 /**
- * Isla expandida: portada grande, progreso arrastrable (seek con gestos),
- * controles ⏮ ⏯ ⏭, acciones rápidas y botones para abrir la app / cerrar.
+ * Isla expandida compacta: portada + título/artista + onda, progreso
+ * arrastrable (seek con gestos), controles ⏮ ⏯ ⏭ y acciones rápidas.
+ * Ancho máximo 340dp.
  */
 @Composable
 fun DynamicIslandExpanded(
@@ -248,14 +234,17 @@ fun DynamicIslandExpanded(
     var seeking by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
+            .widthIn(max = 340.dp)
+            .shadow(16.dp, ExpandedShape)
+            .clip(ExpandedShape)
             .background(IslandBg.copy(alpha = 0.97f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), ExpandedShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onCollapse
             )
-            .padding(20.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
@@ -271,32 +260,40 @@ fun DynamicIslandExpanded(
                 )
             }
         }
-        AsyncImage(
-            model = coverUri?.let { android.net.Uri.parse(it) },
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF1E2129))
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(
+                model = coverUri?.let { android.net.Uri.parse(it) },
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF1E2129))
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = artist,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IslandWave(
+                isPlaying = isPlaying,
+                modifier = Modifier.size(width = 52.dp, height = 26.dp)
+            )
+        }
         Spacer(Modifier.height(12.dp))
-        Text(
-            text = title,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = artist,
-            color = Color.White.copy(alpha = 0.6f),
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.height(8.dp))
         // Progreso arrastrable (seek con gestos: en la notificación no se puede).
         val dur = durationMs.coerceAtLeast(1L)
         Slider(
@@ -350,14 +347,14 @@ fun DynamicIslandExpanded(
             IconButton(
                 onClick = onTogglePlay,
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(60.dp)
                     .background(IslandAccent, CircleShape)
             ) {
                 Icon(
                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "Pausar" else "Reproducir",
                     tint = Color.Black,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
             Spacer(Modifier.width(8.dp))
@@ -386,7 +383,7 @@ fun DynamicIslandExpanded(
                 onClick = { onQuickAction(QuickAction.RECOGNIZE) }
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = "Abrir Aural",
             color = IslandAccent,
@@ -440,7 +437,6 @@ private fun formatMs(ms: Long): String {
 @Composable
 fun IslandOverlayContent(
     app: com.aural.player.AuralApp,
-    onMove: (dx: Float, dy: Float) -> Unit,
     onClose: () -> Unit
 ) {
     val playerState by app.playback.state.collectAsState()
@@ -477,13 +473,9 @@ fun IslandOverlayContent(
         )
     } else {
         DynamicIslandCollapsed(
-            song = song,
             title = song.title,
-            artist = song.artist,
-            coverUri = song.albumArtUri,
             isPlaying = playerState.isPlaying,
             onTap = { expanded = true },
-            onDrag = onMove,
             onQuickAction = { action -> handleQuickAction(app, action) }
         )
     }
