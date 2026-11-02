@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -51,6 +52,8 @@ fun DownloadsScreen(
     val downloading by youTubeManager.downloading.collectAsState()
     val progress by youTubeManager.progress.collectAsState()
     val error by youTubeManager.error.collectAsState()
+    // v1.0.7: indicador de descarga exitosa por videoId -> nombre de archivo.
+    val downloadedOk = remember { mutableStateMapOf<String, String>() }
 
     Column(
         modifier = modifier
@@ -254,8 +257,30 @@ fun DownloadsScreen(
                             )
                         }
 
-                        // Botón descarga / progreso
-                        if (isDl) {
+                        // Botón descarga / progreso / éxito
+                        val justDownloaded = downloadedOk[result.videoId]
+                        if (justDownloaded != null) {
+                            // v1.0.7: indicador de descarga exitosa.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.width(96.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Descargada",
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "Descargada",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF4CAF50),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2
+                                )
+                            }
+                        } else if (isDl) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.width(64.dp)
@@ -291,6 +316,10 @@ fun DownloadsScreen(
                             IconButton(
                                 onClick = {
                                     youTubeManager.download(result) { fileName, mediaId ->
+                                        // v1.0.7: marcar éxito para el indicador.
+                                        if (fileName != null) {
+                                            downloadedOk[result.videoId] = fileName
+                                        }
                                         onDownloadComplete(fileName, mediaId)
                                     }
                                 },
