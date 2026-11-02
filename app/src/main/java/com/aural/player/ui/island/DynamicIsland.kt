@@ -9,10 +9,12 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -65,13 +67,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.animateContentSize
 import coil.compose.AsyncImage
 import kotlin.math.sin
 
@@ -110,24 +111,28 @@ fun IslandOverlayContent(
             .clip(IslandShape)
             .background(IslandBg.copy(alpha = 0.97f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), IslandShape)
-            // El morph: los bordes se estiran/contraen con un spring suave.
-            // El contenido solo hace fade (sin escala): escalar entre
-            // contenidos de tamaños tan distintos se veía roto.
-            .animateContentSize(
-                animationSpec = spring(dampingRatio = 0.9f, stiffness = 600f)
-            )
+            // Sin animateContentSize: el SizeTransform de la transición
+            // anima los bordes de forma coordinada (los dos mecanismos
+            // peleando por el tamaño era lo que se veía roto).
     ) {
         AnimatedContent(
             targetState = expanded,
             transitionSpec = {
+                val sizeSpec: FiniteAnimationSpec<IntSize> =
+                    spring(dampingRatio = 0.85f, stiffness = 500f)
                 if (targetState) {
                     // Entrando: la píldora se va rápido y la tarjeta entra
                     // cuando el contenedor ya se estiró.
-                    fadeIn(tween(220, delayMillis = 140)) togetherWith
-                            fadeOut(tween(110))
+                    (fadeIn(tween(220, delayMillis = 120)) togetherWith
+                            fadeOut(tween(110))).using(
+                        SizeTransform(clip = true) { _, _ -> sizeSpec }
+                    )
                 } else {
                     // Saliendo: fundido simple.
-                    fadeIn(tween(180)) togetherWith fadeOut(tween(180))
+                    (fadeIn(tween(180)) togetherWith
+                            fadeOut(tween(180))).using(
+                        SizeTransform(clip = true) { _, _ -> sizeSpec }
+                    )
                 }
             },
             label = "island_morph"
@@ -194,7 +199,7 @@ private fun IslandCollapsedContent(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     Box(
         modifier = modifier
             .pointerInput(Unit) {
@@ -202,7 +207,12 @@ private fun IslandCollapsedContent(
                     onTap = { onTap() },
                     onDoubleTap = { onTogglePlay() },
                     onLongPress = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        context.getSystemService(android.os.Vibrator::class.java)
+                            ?.vibrate(
+                                android.os.VibrationEffect.createOneShot(
+                                    60, android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                )
+                            )
                         onHide()
                     }
                 )
