@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -636,7 +637,7 @@ private fun IslandExpandedContent(
                 fontWeight = FontWeight.SemiBold
             )
         }
-        // Cerrar: X estilizada, centrada al pie del panel.
+        // Compactar: flecha ^ estilizada, centrada al pie del panel.
         Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
@@ -650,10 +651,10 @@ private fun IslandExpandedContent(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Default.Close,
+                Icons.Rounded.KeyboardArrowUp,
                 contentDescription = "Compactar isla",
                 tint = islandOnBg.copy(alpha = 0.9f),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
