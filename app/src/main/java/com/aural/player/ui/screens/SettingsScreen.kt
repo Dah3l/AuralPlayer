@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -141,22 +143,64 @@ fun SettingsScreen(
             )
             // Aspecto de Dynamic Aural: auto (según el tema) o classic (negra).
             if (islandEnabled) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
-                    Spacer(Modifier.width(40.dp))
-                    FilterChip(
-                        selected = islandAppearance == "auto",
-                        onClick = { onIslandAppearance("auto") },
-                        label = { Text("Automático") }
-                    )
-                    FilterChip(
-                        selected = islandAppearance == "classic",
-                        onClick = { onIslandAppearance("classic") },
-                        label = { Text("Clásico") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(Modifier.width(40.dp))
+                        FilterChip(
+                            selected = islandAppearance == "auto",
+                            onClick = { onIslandAppearance("auto") },
+                            label = { Text("Automático") },
+                            leadingIcon = if (islandAppearance == "auto") {
+                                {
+                                    Icon(
+                                        Icons.Rounded.Check, null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primary,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor =
+                                    MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                        FilterChip(
+                            selected = islandAppearance == "classic",
+                            onClick = { onIslandAppearance("classic") },
+                            label = { Text("Clásico") },
+                            leadingIcon = if (islandAppearance == "classic") {
+                                {
+                                    Icon(
+                                        Icons.Rounded.Check, null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primary,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor =
+                                    MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                    Text(
+                        text = if (islandAppearance == "auto")
+                            "Sigue los colores de tu tema en el fondo y los elementos."
+                        else
+                            "Fondo negro con los acentos en el color primario de tu tema.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 56.dp, top = 4.dp)
                     )
                 }
             }
@@ -306,9 +350,9 @@ fun SettingsScreen(
 private fun SettingsSection(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.labelLarge,
+        style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp)
     )
 }
