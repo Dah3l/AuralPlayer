@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,25 +70,29 @@ fun SettingsScreen(
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
-    // Box raíz: el scrim hermano (detrás del contenido) bloquea los toques
-    // para que no lleguen a la biblioteca que está debajo — mismo patrón
-    // que NowPlayingScreen (el bloqueador como padre se tragaba los swipes).
-    Box(
-        Modifier
+    // El botón atrás del sistema vuelve a la pantalla anterior.
+    BackHandler(onBack = onBack)
+    // Surface: da el fondo y el color de contenido para los textos
+    // (sin Surface, LocalContentColor es negro y los títulos salían oscuros).
+    Surface(
+        modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
+            .statusBarsPadding(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown().consume()
+        // Scrim hermano (detrás del contenido): bloquea los toques para que
+        // no lleguen a la pantalla de debajo — mismo patrón que NowPlayingScreen.
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown().consume()
+                        }
                     }
-                }
-        )
-        Column(Modifier.fillMaxSize()) {
+            )
+            Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -189,6 +194,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
     }
 
     // ---- Carpetas ocultas ----
