@@ -45,7 +45,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.filled.Mic
@@ -646,7 +645,6 @@ private fun IslandExpandedContent(
                 .background(islandOnBg.copy(alpha = 0.12f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = rememberRipple(bounded = true),
                     onClick = onCollapse
                 ),
             contentAlignment = Alignment.Center
