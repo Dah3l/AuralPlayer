@@ -253,9 +253,14 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
-    /** Anterior directo, sin la regla de los 3 segundos (gesto de la isla). */
+    /** Anterior directo, sin la regla de los 3 segundos (gesto de la isla).
+     *  OJO: no se puede usar controller.seekToPrevious() porque ExoPlayer
+     *  trae la regla de los 3 s implementada DENTRO y reiniciaría igual:
+     *  se salta directo al índice anterior. */
     fun seekToPreviousSong() {
-        controller?.seekToPrevious()
+        val c = controller ?: return
+        val prevIndex = c.currentMediaItemIndex - 1
+        if (prevIndex >= 0) c.seekTo(prevIndex, 0L) else c.seekTo(0L)
         publishState()
     }
 
