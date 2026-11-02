@@ -299,6 +299,7 @@ private fun SettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(72.dp)
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
