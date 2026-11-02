@@ -209,7 +209,7 @@ private fun IslandCollapsedContent(
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.widthIn(max = 135.dp), // ~2.1 cm
+            modifier = Modifier.width(135.dp), // tamaño fijo ~2.1 cm
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Portada en círculo; si no hay, la nota musical por defecto.
