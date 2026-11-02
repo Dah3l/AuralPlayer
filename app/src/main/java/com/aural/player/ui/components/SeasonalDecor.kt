@@ -482,3 +482,150 @@ fun PeekingSkull(modifier: Modifier = Modifier) {
 //   - En cada pantalla, el decorado se muestra cuando el tema activo ==
 //     CHRISTMAS (if (themeName == AppTheme.CHRISTMAS.name)).
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// NAVIDAD (20-26 dic): nieve cayendo + guirnalda de luces en el home.
+// Mismo patrón que Halloween: motivos pre-renderizados una vez con
+// rememberRenderedBitmap, animación 100% en graphicsLayer (GPU).
+// Se muestra cuando el tema activo == CHRISTMAS.
+// ===========================================================================
+
+private val ChristmasBulbColors = listOf(
+    Color(0xFFE63946), // rojo
+    Color(0xFFD4AF37), // dorado
+    Color(0xFF2D6A4F), // verde (se aclara al dibujar)
+    Color(0xFF4DA6FF), // azul
+)
+
+@Composable
+fun ChristmasHomeAmbient(modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "xm")
+    // Nieve: ciclo de caída 0..1 (se reinicia arriba).
+    val snowP by t.animateFloat(
+        0f, 1f,
+        infiniteRepeatable(tween(9000), RepeatMode.Restart),
+        label = "snowP"
+    )
+    // Parpadeo de las luces.
+    val twinkle by t.animateFloat(
+        0.35f, 1f,
+        infiniteRepeatable(tween(1400), RepeatMode.Reverse),
+        label = "twinkle"
+    )
+
+    val density = LocalDensity.current
+    val u = density.density
+
+    // ---- Copo de nieve: asterisco de 6 brazos, pre-renderizado ----
+    val flakePx = (28f * u * 2f).toInt()
+    val flakeBmp = rememberRenderedBitmap(flakePx, flakePx) {
+        scale(flakePx / 28f, flakePx / 28f, pivot = Offset.Zero) {
+            val c = Offset(14f, 14f)
+            for (i in 0 until 6) {
+                val a = (i * 60f * PI / 180f).toFloat()
+                val dx = cos(a) * 11f
+                val dy = sin(a) * 11f
+                drawLine(
+                    Color.White.copy(alpha = 0.85f),
+                    Offset(c.x - dx, c.y - dy),
+                    Offset(c.x + dx, c.y + dy),
+                    strokeWidth = 2.2f,
+                    cap = StrokeCap.Round
+                )
+            }
+            drawCircle(Color.White, radius = 2.4f, center = c)
+        }
+    }
+    // ---- Bombilla con brillo, pre-renderizada por color ----
+    val bulbPx = (44f * u * 2f).toInt()
+    val bulbBmps = rememberRenderedBitmap(bulbPx, bulbPx) {
+        // Se dibuja un brillo genérico blanco; el color va en el tint de la capa.
+        scale(bulbPx / 44f, bulbPx / 44f, pivot = Offset.Zero) {
+            val c = Offset(22f, 22f)
+            drawCircle(Color.White.copy(alpha = 0.25f), radius = 20f, center = c)
+            drawCircle(Color.White.copy(alpha = 0.5f), radius = 13f, center = c)
+            drawCircle(Color.White, radius = 7f, center = c)
+        }
+    }
+
+    // Copos con posiciones pseudo-aleatorias estables.
+    val flakes = remember {
+        val rnd = Random(20261225)
+        List(14) {
+            Triple(
+                rnd.nextFloat(), // x: 0..1 del ancho
+                rnd.nextFloat(), // fase: 0..1 del ciclo
+                0.6f + rnd.nextFloat() * 0.9f // tamaño relativo
+            )
+        }
+    }
+    val bulbCount = 9
+
+    BoxWithConstraints(modifier) {
+        val wPx = constraints.maxWidth.toFloat()
+        val hPx = constraints.maxHeight.toFloat()
+
+        // ---- Nieve: cada copo cae en bucle con su fase y deriva lateral ----
+        flakes.forEachIndexed { i, (fx, phase, s) ->
+            val p = (snowP + phase) % 1f
+            Image(
+                bitmap = flakeBmp,
+                contentDescription = null,
+                modifier = Modifier
+                    .size((14f * s).dp)
+                    .graphicsLayer {
+                        translationX = fx * wPx + sin(p * 6.28f + i) * 18f * u
+                        translationY = p * (hPx + 60f * u) - 60f * u
+                        rotationZ = p * 220f * (if (i % 2 == 0) 1f else -1f)
+                        alpha = 0.75f
+                    }
+            )
+        }
+
+        // ---- Guirnalda: cable combado + bombillas parpadeantes ----
+        // El cable se dibuja con un Canvas simple (estático, sin animación).
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val w = size.width
+            // Cable: curva suave de lado a lado, colgando ~90dp.
+            val path = Path().apply {
+                moveTo(0f, 8f * u)
+                quadraticBezierTo(
+                    w * 0.25f, 96f * u,
+                    w * 0.5f, 60f * u
+                )
+                quadraticBezierTo(
+                    w * 0.75f, 24f * u,
+                    w, 70f * u
+                )
+            }
+            drawPath(path, Color(0xFF2A332C), style = Stroke(width = 3f * u))
+        }
+        for (b in 0 until bulbCount) {
+            val bx = (b + 0.5f) / bulbCount
+            // Altura sobre la curva (aprox. la misma forma del cable).
+            val byDp = when {
+                bx < 0.5f -> 8f + (bx / 0.5f) * 52f
+                else -> 60f - ((bx - 0.5f) / 0.5f) * 36f
+            }
+            val col = ChristmasBulbColors[b % ChristmasBulbColors.size]
+            Image(
+                bitmap = bulbBmps,
+                contentDescription = null,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(col),
+                modifier = Modifier
+                    .offset(
+                        x = (bx * 360f).dp,
+                        y = byDp.dp
+                    )
+                    .size(22.dp)
+                    .graphicsLayer {
+                        // Parpadeo desfasado por bombilla.
+                        val ph = (twinkle + b * 0.13f) % 1f
+                        alpha = 0.45f + 0.55f * ph
+                    }
+            )
+        }
+    }
+}
