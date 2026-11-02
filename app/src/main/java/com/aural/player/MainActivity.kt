@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
             android.widget.Toast.makeText(
                 this,
-                "Activa \"Permitir mostrar sobre otras apps\" y vuelve a tocar Isla dinámica",
+                "Activa \"Permitir mostrar sobre otras apps\" y vuelve a tocar Dynamic Aural",
                 android.widget.Toast.LENGTH_LONG
             ).show()
             return
@@ -213,7 +213,7 @@ class MainActivity : ComponentActivity() {
         viewModel.setIslandEnabled(!currentlyEnabled)
         android.widget.Toast.makeText(
             this,
-            if (!currentlyEnabled) "Isla dinámica activada" else "Isla dinámica desactivada",
+            if (!currentlyEnabled) "Dynamic Aural activado" else "Dynamic Aural desactivado",
             android.widget.Toast.LENGTH_SHORT
         ).show()
     }
@@ -585,11 +585,14 @@ private fun AuralApp(viewModel: AuralViewModel,
     // ---- v1.0.7: pantalla de Ajustes ----
     if (showSettingsScreen) {
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
+        val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
             islandEnabled = islandOn,
             onToggleIsland = onToggleIsland,
+            islandAppearance = islandLook,
+            onIslandAppearance = { viewModel.setIslandAppearance(it) },
             viewModel = viewModel
         )
     }
