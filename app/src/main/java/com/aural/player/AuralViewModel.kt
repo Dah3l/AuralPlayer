@@ -176,7 +176,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Vuelve a escanear MediaStore (se llama al iniciar y al pedirlo el usuario). */
     fun rescan() {
         viewModelScope.launch {
-            _library.value = _library.value.copy(isLoading = true)
+            // Actualización silenciosa: el loader de pantalla completa solo en
+            // la primera carga; si ya hay canciones, se actualiza por debajo
+            // sin tumbar la UI (evita flashes al descargar de YouTube).
+            val firstLoad = _library.value.songs.isEmpty()
+            if (firstLoad) _library.value = _library.value.copy(isLoading = true)
             val songs = repository.scanSongs()
             playback.setLibrary(songs)
             _library.value = _library.value.copy(songs = songs, isLoading = false)
