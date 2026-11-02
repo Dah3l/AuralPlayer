@@ -534,12 +534,6 @@ private fun AuralApp(viewModel: AuralViewModel,
             onOpenEqualizer = { showEqualizerScreen = true },
         )
     }
-    // ---- v1.0.7: pantalla propia del ecualizador ----
-    if (showEqualizerScreen) {
-        com.aural.player.ui.screens.EqualizerScreen(
-            onBack = { showEqualizerScreen = false }
-        )
-    }
     // ---- v1.0.7: pantalla de Ajustes ----
     if (showSettingsScreen) {
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
@@ -549,6 +543,13 @@ private fun AuralApp(viewModel: AuralViewModel,
             islandEnabled = islandOn,
             onToggleIsland = onToggleIsland,
             viewModel = viewModel
+        )
+    }
+    // ---- v1.0.7: pantalla propia del ecualizador ----
+    // Va DESPUÉS de Ajustes para que al abrirlo desde Ajustes quede encima.
+    if (showEqualizerScreen) {
+        com.aural.player.ui.screens.EqualizerScreen(
+            onBack = { showEqualizerScreen = false }
         )
     }
     // ---- Splash de bienvenida ----
