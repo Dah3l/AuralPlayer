@@ -134,7 +134,9 @@ class MainActivity : ComponentActivity() {
                     AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore,
                         onToggleIsland = { toggleDynamicIsland(viewModel, settingsStore) },
                         pendingIslandTab = pendingIslandTab,
-                        onConsumeIslandTab = { pendingIslandTab = null })
+                        onConsumeIslandTab = { pendingIslandTab = null },
+                        pendingIslandHome = pendingIslandHome,
+                        onConsumeIslandHome = { pendingIslandHome = false })
                 }
             }
         }
@@ -153,6 +155,7 @@ class MainActivity : ComponentActivity() {
             ) == true
         ) {
             viewModel.openAudioSearch()
+            pendingIslandHome = true
         }
     }
 
@@ -163,17 +166,24 @@ class MainActivity : ComponentActivity() {
      */
     /** Pestaña que la isla dinámica pidió abrir (estado observable). */
     var pendingIslandTab by mutableStateOf<Int?>(null)
+    // v1.0.7: la isla pide ir al Home (Biblioteca, sin overlays).
+    var pendingIslandHome by mutableStateOf(false)
         private set
 
     private fun handleIslandIntent(intent: android.content.Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_YOUTUBE_TAB, false) == true) {
             pendingIslandTab = 4 // pestaña Descargas
+            pendingIslandHome = true
+        }
+        if (intent?.getBooleanExtra(EXTRA_OPEN_HOME, false) == true) {
+            pendingIslandHome = true
         }
     }
 
     companion object {
         /** Extra para abrir la pestaña de Descargas (isla dinámica → YouTube). */
         const val EXTRA_OPEN_YOUTUBE_TAB = "com.aural.player.EXTRA_OPEN_YOUTUBE_TAB"
+        const val EXTRA_OPEN_HOME = "com.aural.player.EXTRA_OPEN_HOME"
     }
 
     /**
@@ -249,7 +259,9 @@ private fun AuralApp(viewModel: AuralViewModel,
     settingsStore: SettingsStore,
     onToggleIsland: () -> Unit = {},
     pendingIslandTab: Int? = null,
-    onConsumeIslandTab: () -> Unit = {}) {
+    onConsumeIslandTab: () -> Unit = {},
+    pendingIslandHome: Boolean = false,
+    onConsumeIslandHome: () -> Unit = {}) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga).
@@ -288,6 +300,18 @@ private fun AuralApp(viewModel: AuralViewModel,
     var showEqualizerScreen by remember { mutableStateOf(false) }
     // v1.0.7: pantalla de Ajustes (lo que antes vivía en el menú ⋮).
     var showSettingsScreen by remember { mutableStateOf(false) }
+    // v1.0.7: la isla pide ir al Home: Biblioteca visible y sin overlays
+    // (ni Now Playing, ni Ajustes, ni Ecualizador) para que la pestaña
+    // pedida se abra directamente donde toca.
+    androidx.compose.runtime.LaunchedEffect(pendingIslandHome) {
+        if (pendingIslandHome) {
+            screen = Screen.Library
+            showNowPlaying = false
+            showEqualizerScreen = false
+            showSettingsScreen = false
+            onConsumeIslandHome()
+        }
+    }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
     // Playlist desde la que se abrió el menú de canción (null si fue desde
     // la biblioteca, un álbum o un artista): cambia "Añadir a playlist"
