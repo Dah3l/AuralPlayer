@@ -207,12 +207,23 @@ private fun IslandCollapsedContent(
                     onTap = { onTap() },
                     onDoubleTap = { onTogglePlay() },
                     onLongPress = {
-                        context.getSystemService(android.os.Vibrator::class.java)
-                            ?.vibrate(
+                        try {
+                            val vib = if (android.os.Build.VERSION.SDK_INT >= 31) {
+                                context.getSystemService(
+                                    android.os.VibratorManager::class.java
+                                )?.defaultVibrator
+                            } else {
+                                @Suppress("DEPRECATION")
+                                context.getSystemService(
+                                    android.os.Vibrator::class.java
+                                )
+                            }
+                            vib?.vibrate(
                                 android.os.VibrationEffect.createOneShot(
-                                    60, android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                    80, android.os.VibrationEffect.DEFAULT_AMPLITUDE
                                 )
                             )
+                        } catch (_: Exception) { }
                         onHide()
                     }
                 )
