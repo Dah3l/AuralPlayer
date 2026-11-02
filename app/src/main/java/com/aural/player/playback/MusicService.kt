@@ -313,9 +313,18 @@ class MusicService : MediaSessionService() {
     private fun expandIslandWindow() {
         val view = islandView ?: return
         val params = islandParams ?: return
-        val d = resources.displayMetrics.density
-        params.width = (380 * d).toInt()
-        params.height = (340 * d).toInt()
+        val metrics = resources.displayMetrics
+        val d = metrics.density
+        // Mismo cálculo adaptativo que en el overlay: la ventana contiene
+        // a la isla con margen, sin superar la pantalla.
+        val screenWdp = metrics.widthPixels / d
+        val screenHdp = metrics.heightPixels / d
+        val islandW = minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
+        val islandH = minOf(308f, (screenHdp - 140f).coerceAtLeast(220f))
+        params.width = ((islandW + 40f) * d).toInt()
+            .coerceAtMost(metrics.widthPixels)
+        params.height = ((islandH + 32f) * d).toInt()
+            .coerceAtMost(metrics.heightPixels)
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: Exception) { }
