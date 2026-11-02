@@ -101,7 +101,6 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Edit
-import com.aural.player.ui.components.EqualizerDialog
 import com.aural.player.ui.components.CoverPickerDialog
 import com.aural.player.ui.components.EditMetadataDialog
 import androidx.compose.material.icons.rounded.Share
@@ -156,6 +155,7 @@ fun NowPlayingScreen(
     onPlayQueueItem: (Int) -> Unit,
     onRemoveFromQueue: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
+    onOpenEqualizer: () -> Unit = {},
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
@@ -884,7 +884,6 @@ private fun NowPlayingMenu(
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLrcPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var showEqualizer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCoverPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showEditMetadata by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -926,7 +925,7 @@ private fun NowPlayingMenu(
         DropdownMenuItem(
             text = { Text("Ecualizador") },
             leadingIcon = { Icon(Icons.Rounded.Tune, null) },
-            onClick = { onDismiss(); showEqualizer = true }
+            onClick = { onDismiss(); onOpenEqualizer() }
         )
         DropdownMenuItem(
             text = { Text("Cambiar portada") },
@@ -994,10 +993,7 @@ private fun NowPlayingMenu(
         )
     }
 
-    // Diálogo del ecualizador
-    if (showEqualizer) {
-        EqualizerDialog(onDismiss = { showEqualizer = false })
-    }
+    // (v1.0.7: el ecualizador ahora es pantalla propia, se abre con onOpenEqualizer)
 
     // Diálogo: editar metadatos
     if (showEditMetadata && song != null) {
