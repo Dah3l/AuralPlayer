@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.filled.Mic
@@ -75,7 +76,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -111,7 +111,6 @@ fun IslandOverlayContent(
     val title = meta?.first?.ifBlank { song.title } ?: song.title
     val artist = meta?.second?.ifBlank { song.artist } ?: song.artist
     val coverUri = customCovers[song.id] ?: song.albumArtUri
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     // Abrir la app en el Home.
     fun openApp() {
         val ctx = app.applicationContext
@@ -122,10 +121,6 @@ fun IslandOverlayContent(
             putExtra(com.aural.player.MainActivity.EXTRA_OPEN_HOME, true)
         }
         ctx.startActivity(intent)
-    }
-    // Swipe hacia abajo: marcar/desmarcar favorita.
-    fun toggleFavorite() {
-        scope.launch { app.settings.toggleFavorite(song.id) }
     }
     // Aspecto de Dynamic Aural: "auto" sigue al tema, "classic" es negro
     // con los acentos en el color primario del tema.
@@ -190,8 +185,7 @@ fun IslandOverlayContent(
                     artist = artist,
                     coverUri = coverUri,
                     appearance = appearance,
-                    onOpenApp = { openApp() },
-                    onToggleFavorite = { toggleFavorite() },
+
                     onTap = { expanded = true },
                     onPrevious = { app.playback.seekToPreviousSong() },
                     onNext = { app.playback.seekToNext() },
@@ -208,8 +202,7 @@ fun IslandOverlayContent(
  * Posición fija — sin arrastre.
  * - Toque: expande a la vista detallada.
  * - Swipe izquierda: siguiente. Swipe derecha: anterior (directo,
- *   sin la regla de los 3 segundos). Swipe arriba: ocultar temporal.
- *   Swipe abajo: marcar/desmarcar favorita. Long-press: abrir Aural.
+ *   sin la regla de los 3 segundos). Long-press: ocultar temporal.
  * - Doble toque: pausa/play.
  * - Mantener presionado: oculta temporalmente.
  */
@@ -225,8 +218,6 @@ private fun IslandCollapsedContent(
     onNext: () -> Unit,
     onTogglePlay: () -> Unit,
     onHide: () -> Unit,
-    onOpenApp: () -> Unit,
-    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -240,7 +231,7 @@ private fun IslandCollapsedContent(
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = { onTogglePlay() },
-                    // Long-press: abre la app de Aural.
+                    // Long-press: ocultar temporal.
                     onLongPress = {
                         try {
                             val vib = if (android.os.Build.VERSION.SDK_INT >= 31) {
@@ -259,12 +250,12 @@ private fun IslandCollapsedContent(
                                 )
                             )
                         } catch (_: Exception) { }
-                        onOpenApp()
+                        onHide()
                     }
                 )
             }
             .pointerInput(Unit) {
-                // Swipes: ← siguiente, → anterior, ↑ ocultar, ↓ favorita.
+                // Swipes horizontales: ← siguiente, → anterior.
                 var totalX = 0f
                 var totalY = 0f
                 val swipeDistPx = with(density) { 60.dp.toPx() }
@@ -274,12 +265,10 @@ private fun IslandCollapsedContent(
                         totalY = 0f
                     },
                     onDragEnd = {
-                        val ax = kotlin.math.abs(totalX)
-                        val ay = kotlin.math.abs(totalY)
-                        if (ax > swipeDistPx && ax > 2f * ay) {
+                        if (kotlin.math.abs(totalX) > swipeDistPx &&
+                            kotlin.math.abs(totalX) > 2f * kotlin.math.abs(totalY)
+                        ) {
                             if (totalX > 0f) onPrevious() else onNext()
-                        } else if (ay > swipeDistPx && ay > 2f * ax) {
-                            if (totalY < 0f) onHide() else onToggleFavorite()
                         }
                     },
                     onDragCancel = { },
@@ -413,51 +402,10 @@ private fun IslandExpandedContent(
     val islandOnAccent = scheme.onPrimary
     var sliderPos by remember(positionMs) { mutableStateOf(positionMs.toFloat()) }
     var seeking by remember { mutableStateOf(false) }
-    val density = LocalDensity.current
     Column(
-        modifier = modifier
-            // Los toques en vacío no hacen nada; se colapsa con la X
-            // o con swipe hacia arriba dentro de la vista.
-            .pointerInput(Unit) {
-                var totalX = 0f
-                var totalY = 0f
-                val swipeDistPx = with(density) { 60.dp.toPx() }
-                detectDragGestures(
-                    onDragStart = {
-                        totalX = 0f
-                        totalY = 0f
-                    },
-                    onDragEnd = {
-                        val ay = kotlin.math.abs(totalY)
-                        if (totalY < -swipeDistPx &&
-                            ay > 2f * kotlin.math.abs(totalX)
-                        ) {
-                            onCollapse()
-                        }
-                    },
-                    onDragCancel = { },
-                    onDrag = { change, dragAmount ->
-                        totalX += dragAmount.x
-                        totalY += dragAmount.y
-                    }
-                )
-            }
-            .padding(16.dp),
+        modifier = modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = onCollapse, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Compactar isla",
-                    tint = islandOnBg.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -650,6 +598,27 @@ private fun IslandExpandedContent(
             Text(
                 text = "Abrir Aural",
                 fontWeight = FontWeight.SemiBold
+            )
+        }
+        // Cerrar: X estilizada, centrada al pie del panel.
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(islandOnBg.copy(alpha = 0.12f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = rememberRipple(bounded = true),
+                    onClick = onCollapse
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Compactar isla",
+                tint = islandOnBg.copy(alpha = 0.9f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
