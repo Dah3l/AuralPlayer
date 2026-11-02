@@ -2,6 +2,10 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,12 +60,25 @@ fun EqualizerScreen(onBack: () -> Unit) {
     var virtualStrength by remember { mutableIntStateOf(manager.getVirtualizerStrength()) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
-    Column(
+    // Box raíz: el scrim hermano (detrás del contenido) bloquea los toques
+    // para que no lleguen a la biblioteca que está debajo — mismo patrón
+    // que NowPlayingScreen (el bloqueador como padre se tragaba los swipes).
+    Box(
         Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown().consume()
+                    }
+                }
+        )
+        Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -351,6 +368,7 @@ private fun EffectCard(
             )
             Spacer(Modifier.height(8.dp))
             content()
+        }
         }
     }
 }
