@@ -214,23 +214,23 @@ private fun IslandCollapsedContent(
                     onDrag = { change, _ -> change.consume() }
                 )
             }
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.widthIn(max = 260.dp),
+            modifier = Modifier.widthIn(max = 180.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Onda pequeña, del tamaño de la píldora.
             IslandWave(
                 isPlaying = isPlaying,
-                modifier = Modifier.size(width = 44.dp, height = 22.dp)
+                modifier = Modifier.size(width = 36.dp, height = 18.dp)
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = title,
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 modifier = Modifier.basicMarquee()
