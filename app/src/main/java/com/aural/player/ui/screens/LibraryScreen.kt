@@ -144,6 +144,7 @@ fun LibraryScreen(
     onOpenEqualizer: () -> Unit = {},
     onToggleIsland: () -> Unit = {},
     onOpenDonate: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -193,8 +194,6 @@ fun LibraryScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var showGeneralMenu by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
-    var showLicenseDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf<UpdateInfo?>(null) }
     // v1.0.7: selección múltiple en Canciones.
     var selectionMode by remember { mutableStateOf(false) }
@@ -202,7 +201,6 @@ fun LibraryScreen(
     var showPlaylistPicker by remember { mutableStateOf(false) }
     // v1.0.7: ocultar carpeta (long-press en Carpetas).
     var folderHideTarget by remember { mutableStateOf<com.aural.player.data.Folder?>(null) }
-    var showHiddenFolders by remember { mutableStateOf(false) }
     var manualUpdateMessage by remember { mutableStateOf<String?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
@@ -645,23 +643,8 @@ fun LibraryScreen(
                 onDismissRequest = { showGeneralMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Licencia") },
-                    onClick = { showGeneralMenu = false; showLicenseDialog = true }
-                )
-                DropdownMenuItem(
-                    text = { Text("Repositorio en GitHub") },
-                    onClick = {
-                        showGeneralMenu = false
-                        val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/Dah3l/AuralPlayer")
-                        )
-                        appContext.startActivity(intent)
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Acerca de AuralPlayer") },
-                    onClick = { showGeneralMenu = false; showAboutDialog = true }
+                    text = { Text("Tema") },
+                    onClick = { showGeneralMenu = false; onOpenThemes() }
                 )
                 DropdownMenuItem(
                     text = { Text("Buscar actualizaciones") },
@@ -690,24 +673,12 @@ fun LibraryScreen(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Tema") },
-                    onClick = { showGeneralMenu = false; onOpenThemes() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Ecualizador") },
-                    onClick = { showGeneralMenu = false; onOpenEqualizer() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Isla dinámica") },
-                    onClick = { showGeneralMenu = false; onToggleIsland() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Carpetas ocultas") },
-                    onClick = { showGeneralMenu = false; showHiddenFolders = true }
-                )
-                DropdownMenuItem(
                     text = { Text("❤ Apoyar a Aural") },
                     onClick = { showGeneralMenu = false; onOpenDonate() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Ajustes") },
+                    onClick = { showGeneralMenu = false; onOpenSettings() }
                 )
             }
         }
@@ -880,83 +851,6 @@ fun LibraryScreen(
     }
 
     // ---- v1.0.7: gestionar carpetas ocultas ----
-    if (showHiddenFolders) {
-        val hidden by viewModel.hiddenFolders.collectAsStateWithLifecycle()
-        AlertDialog(
-            onDismissRequest = { showHiddenFolders = false },
-            title = { Text("Carpetas ocultas") },
-            text = {
-                if (hidden.isEmpty()) {
-                    Text("No hay carpetas ocultas. Mantén pulsada una carpeta en la pestaña Carpetas para ocultarla.")
-                } else {
-                    LazyColumn(modifier = Modifier.height(280.dp)) {
-                        items(hidden.toList(), key = { it }) { path ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = path.ifBlank { "Desconocida" },
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                TextButton(onClick = {
-                                    viewModel.toggleHiddenFolder(path)
-                                }) { Text("Mostrar") }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showHiddenFolders = false }) { Text("Cerrar") }
-            }
-        )
-    }
-
-    // ---- Diálogo de licencia ----
-    if (showLicenseDialog) {
-        AlertDialog(
-            onDismissRequest = { showLicenseDialog = false },
-            title = { Text("Licencia") },
-            text = {
-                Text(
-                    "AuralPlayer es software libre bajo la GNU General Public " +
-                        "License v3.0.\n\nPuedes usar, modificar y compartir " +
-                        "esta app libremente, siempre que cualquier versión " +
-                        "distribuida mantenga esta misma licencia y el código " +
-                        "fuente disponible.\n\nCopyright (C) 2026 Dahel"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showLicenseDialog = false }) { Text("Cerrar") }
-            }
-        )
-    }
-
-    // ---- Diálogo acerca de ----
-    if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text("Acerca de AuralPlayer") },
-            text = {
-                Text(
-                    "AuralPlayer — tu música, sin ruido.\n\n" +
-                        "Reproductor minimalista con descargas de YouTube, " +
-                        "letras sincronizadas, ecualizador, reconocimiento de " +
-                        "canciones estilo Shazam y 16 temas para hacerlo tuyo.\n\n" +
-                        "Versión ${installedVersionName(appContext)}\nHecho con ❤️ y Jetpack Compose"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text("Cerrar") }
-            }
-        )
-    }
 
     // ---- Diálogo de nueva versión (chequeo manual) ----
     showUpdateDialog?.let { info ->
