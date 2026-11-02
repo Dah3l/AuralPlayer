@@ -26,6 +26,8 @@
 
     <!-- Control de auriculares/Bluetooth mediante MediaSession -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- v1.0.7: isla dinámica (overlay sobre otras apps) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".AuralApp"
