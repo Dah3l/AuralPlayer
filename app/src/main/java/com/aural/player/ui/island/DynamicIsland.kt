@@ -1,13 +1,21 @@
 // Isla dinámica (v1.0.7): píldora flotante sobre otras apps.
 // Posición FIJA bajo el orificio de la cámara (sin arrastre).
+// Transición colapsada <-> expandida con morph animado (spring).
 package com.aural.player.ui.island
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -62,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.animateContentSize
 import coil.compose.AsyncImage
 import kotlin.math.sin
 
@@ -70,8 +79,89 @@ private val IslandAccent = Color(0xFF2ED3B7)
 private val IslandWave1 = Color(0xFF2ED3B7)
 private val IslandWave2 = Color(0xFF8B5CF6)
 private val IslandWave3 = Color(0xFFFF7A1A)
-private val CollapsedShape = RoundedCornerShape(24.dp)
-private val ExpandedShape = RoundedCornerShape(28.dp)
+private val IslandShape = RoundedCornerShape(28.dp)
+
+/**
+ * Contenido del overlay: contenedor ÚNICO cuyos bordes se animan con spring
+ * (morph tipo isla) y cuyo contenido hace crossfade + escala al alternar
+ * entre píldora colapsada y tarjeta expandida.
+ * Lo usa el MusicService dentro de un ComposeView sobre el WindowManager.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun IslandOverlayContent(
+    app: com.aural.player.AuralApp,
+    onClose: () -> Unit
+) {
+    val playerState by app.playback.state.collectAsState()
+    var expanded by remember { mutableStateOf(false) }
+    val song = playerState.currentSong ?: return
+
+    // Al cambiar de canción, la isla vuelve a colapsada.
+    androidx.compose.runtime.LaunchedEffect(song.id) {
+        expanded = false
+    }
+
+    Box(
+        modifier = Modifier
+            .widthIn(max = 340.dp)
+            .shadow(14.dp, IslandShape)
+            .clip(IslandShape)
+            .background(IslandBg.copy(alpha = 0.97f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), IslandShape)
+            // El morph: los bordes se estiran/contraen con rebote.
+            .animateContentSize(
+                animationSpec = spring(dampingRatio = 0.65f, stiffness = 350f)
+            )
+    ) {
+        AnimatedContent(
+            targetState = expanded,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(200)) +
+                        scaleIn(initialScale = 0.9f, animationSpec = tween(200)))
+                    .togetherWith(
+                        fadeOut(animationSpec = tween(150)) +
+                                scaleOut(targetScale = 0.9f, animationSpec = tween(150))
+                    )
+            },
+            label = "island_morph"
+        ) { targetExpanded ->
+            if (targetExpanded) {
+                IslandExpandedContent(
+                    title = song.title,
+                    artist = song.artist,
+                    coverUri = song.albumArtUri,
+                    isPlaying = playerState.isPlaying,
+                    positionMs = playerState.positionMs,
+                    durationMs = playerState.durationMs,
+                    onTogglePlay = { app.playback.togglePlayPause() },
+                    onNext = { app.playback.seekToNext() },
+                    onPrevious = { app.playback.seekToPrevious() },
+                    onSeek = { app.playback.seekTo(it) },
+                    onOpenApp = {
+                        val ctx = app.applicationContext
+                        val intent = android.content.Intent(
+                            ctx, com.aural.player.MainActivity::class.java
+                        ).apply {
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        ctx.startActivity(intent)
+                    },
+                    onQuickAction = { action -> handleQuickAction(app, action) },
+                    onClose = onClose,
+                    onCollapse = { expanded = false }
+                )
+            } else {
+                IslandCollapsedContent(
+                    title = song.title,
+                    isPlaying = playerState.isPlaying,
+                    onTap = { expanded = true },
+                    onQuickAction = { action -> handleQuickAction(app, action) }
+                )
+            }
+        }
+    }
+}
 
 /**
  * Píldora colapsada: solo el título (marquesina si no cabe) + onda pequeña.
@@ -82,7 +172,7 @@ private val ExpandedShape = RoundedCornerShape(28.dp)
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DynamicIslandCollapsed(
+private fun IslandCollapsedContent(
     title: String,
     isPlaying: Boolean,
     onTap: () -> Unit,
@@ -93,10 +183,6 @@ fun DynamicIslandCollapsed(
     val density = LocalDensity.current
     Box(
         modifier = modifier
-            .shadow(10.dp, CollapsedShape)
-            .clip(CollapsedShape)
-            .background(IslandBg.copy(alpha = 0.96f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), CollapsedShape)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onTap() })
             }
@@ -135,7 +221,7 @@ fun DynamicIslandCollapsed(
             modifier = Modifier.widthIn(max = 260.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Onda pequeña, del tamaño de la píldora nueva.
+            // Onda pequeña, del tamaño de la píldora.
             IslandWave(
                 isPlaying = isPlaying,
                 modifier = Modifier.size(width = 44.dp, height = 22.dp)
@@ -210,10 +296,9 @@ fun IslandWave(isPlaying: Boolean, modifier: Modifier = Modifier) {
 /**
  * Isla expandida compacta: portada + título/artista + onda, progreso
  * arrastrable (seek con gestos), controles ⏮ ⏯ ⏭ y acciones rápidas.
- * Ancho máximo 340dp.
  */
 @Composable
-fun DynamicIslandExpanded(
+private fun IslandExpandedContent(
     title: String,
     artist: String,
     coverUri: String?,
@@ -234,11 +319,6 @@ fun DynamicIslandExpanded(
     var seeking by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
-            .widthIn(max = 340.dp)
-            .shadow(16.dp, ExpandedShape)
-            .clip(ExpandedShape)
-            .background(IslandBg.copy(alpha = 0.97f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), ExpandedShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -428,57 +508,6 @@ private fun IslandActionButton(
 private fun formatMs(ms: Long): String {
     val totalSec = (ms / 1000).toInt().coerceAtLeast(0)
     return "${totalSec / 60}:${(totalSec % 60).toString().padStart(2, '0')}"
-}
-
-/**
- * Contenido del overlay: alterna entre píldora colapsada y tarjeta expandida.
- * Lo usa el MusicService dentro de un ComposeView sobre el WindowManager.
- */
-@Composable
-fun IslandOverlayContent(
-    app: com.aural.player.AuralApp,
-    onClose: () -> Unit
-) {
-    val playerState by app.playback.state.collectAsState()
-    var expanded by remember { mutableStateOf(false) }
-    val song = playerState.currentSong ?: return
-
-    // Al cambiar de canción, la isla vuelve a colapsada.
-    androidx.compose.runtime.LaunchedEffect(song.id) {
-        expanded = false
-    }
-
-    if (expanded) {
-        DynamicIslandExpanded(
-            title = song.title,
-            artist = song.artist,
-            coverUri = song.albumArtUri,
-            isPlaying = playerState.isPlaying,
-            positionMs = playerState.positionMs,
-            durationMs = playerState.durationMs,
-            onTogglePlay = { app.playback.togglePlayPause() },
-            onNext = { app.playback.seekToNext() },
-            onPrevious = { app.playback.seekToPrevious() },
-            onSeek = { app.playback.seekTo(it) },
-            onOpenApp = {
-                val ctx = app.applicationContext
-                val intent = android.content.Intent(ctx, com.aural.player.MainActivity::class.java).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                ctx.startActivity(intent)
-            },
-            onQuickAction = { action -> handleQuickAction(app, action) },
-            onClose = onClose,
-            onCollapse = { expanded = false }
-        )
-    } else {
-        DynamicIslandCollapsed(
-            title = song.title,
-            isPlaying = playerState.isPlaying,
-            onTap = { expanded = true },
-            onQuickAction = { action -> handleQuickAction(app, action) }
-        )
-    }
 }
 
 /** Ejecuta una acción rápida: abre la app en la pantalla correspondiente. */
