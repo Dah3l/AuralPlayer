@@ -59,6 +59,19 @@ val HalloweenPurple = Color(0xFF8B5CF6)
 /** Blanco fantasmal. */
 val HalloweenGhost = Color(0xFFF2F0EA)
 
+// ---- Colores de Navidad (los usa el decorado y el tema Christmas) ----
+/** Rojo navideño. */
+val ChristmasRed = Color(0xFFE63946)
+
+/** Verde pino. */
+val ChristmasGreen = Color(0xFF2D6A4F)
+
+/** Dorado de luces. */
+val ChristmasGold = Color(0xFFD4AF37)
+
+/** Blanco nieve. */
+val ChristmasSnow = Color(0xFFF8FAFC)
+
 // ---------------------------------------------------------------------------
 // PATRÓN NAVIDAD (diciembre): repetir lo de Halloween —
 //   1. AppTheme.CHRISTMAS("Navidad", icono) + ChristmasColorScheme en Theme.kt.
