@@ -133,6 +133,7 @@ fun EqualizerScreen(onBack: () -> Unit) {
 
             if (enabled) {
                 // ---- Presets ----
+                var selectedPreset by remember { mutableIntStateOf(manager.getCurrentPreset()) }
                 val presets = manager.presets
                 if (presets.isNotEmpty()) {
                     EffectCard(title = "Preset") {
@@ -141,9 +142,10 @@ fun EqualizerScreen(onBack: () -> Unit) {
                         ) {
                             itemsIndexed(presets) { i, name ->
                                 FilterChip(
-                                    selected = false,
+                                    selected = i == selectedPreset,
                                     onClick = {
                                         manager.usePreset(i)
+                                        selectedPreset = i
                                         refreshTick++
                                     },
                                     label = { Text(name) }
@@ -186,6 +188,7 @@ fun EqualizerScreen(onBack: () -> Unit) {
                                 onValueChange = {
                                     level = it.toInt()
                                     manager.setBandLevelDb(band, level)
+                                    selectedPreset = -1
                                 },
                                 valueRange = range.first.toFloat()..range.last.toFloat(),
                                 steps = (range.last - range.first) - 1
