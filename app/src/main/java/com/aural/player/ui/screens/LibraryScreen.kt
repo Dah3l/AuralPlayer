@@ -673,7 +673,7 @@ fun LibraryScreen(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("❤ Apoyar a Aural") },
+                    text = { Text("Apoyar a Aural ❤") },
                     onClick = { showGeneralMenu = false; onOpenDonate() }
                 )
                 DropdownMenuItem(
