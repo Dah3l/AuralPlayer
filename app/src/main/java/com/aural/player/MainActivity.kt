@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleAudioSearchIntent(intent)
+        handleIslandIntent(intent)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         enableEdgeToEdge()
         requestNeededPermissions()
@@ -130,7 +131,9 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore,
-                        onToggleIsland = { toggleDynamicIsland(viewModel, settingsStore) })
+                        onToggleIsland = { toggleDynamicIsland(viewModel, settingsStore) },
+                        pendingIslandTab = pendingIslandTab,
+                        onConsumeIslandTab = { pendingIslandTab = null })
                 }
             }
         }
@@ -157,7 +160,9 @@ class MainActivity : ComponentActivity() {
      * pestaña de Descargas (búsqueda de YouTube); EXTRA_OPEN_AUDIO_SEARCH
      * (arriba) abre el reconocimiento.
      */
-    private var pendingIslandTab: Int? = null
+    /** Pestaña que la isla dinámica pidió abrir (estado observable). */
+    var pendingIslandTab by mutableStateOf<Int?>(null)
+        private set
 
     private fun handleIslandIntent(intent: android.content.Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_YOUTUBE_TAB, false) == true) {
@@ -241,7 +246,9 @@ class MainActivity : ComponentActivity() {
 private fun AuralApp(viewModel: AuralViewModel,
     youTubeManager: com.aural.player.youtube.YouTubeManager?,
     settingsStore: SettingsStore,
-    onToggleIsland: () -> Unit = {}) {
+    onToggleIsland: () -> Unit = {},
+    pendingIslandTab: Int? = null,
+    onConsumeIslandTab: () -> Unit = {}) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
     var showSplash by remember { mutableStateOf(true) }
     // El splash se oculta tras 1.8s (cortina mientras carga).
@@ -269,11 +276,10 @@ private fun AuralApp(viewModel: AuralViewModel,
         detailListStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     // v1.0.7: la isla dinámica puede pedir abrir la pestaña de Descargas.
-    var pendingIslandTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Int?>(null) }
     androidx.compose.runtime.LaunchedEffect(pendingIslandTab) {
         pendingIslandTab?.let {
             libraryTab = it
-            pendingIslandTab = null
+            onConsumeIslandTab()
         }
     }
     var showNowPlaying by remember { mutableStateOf(false) }
