@@ -1627,6 +1627,7 @@ private fun FoldersTab(
 }
 
 /** Tarjeta de carpeta con long-press para ocultarla. v1.0.7. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun FolderCard(
     folder: com.aural.player.data.Folder,
