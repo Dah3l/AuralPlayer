@@ -9,7 +9,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -62,6 +65,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,9 +117,19 @@ fun IslandOverlayContent(
                 animationSpec = spring(dampingRatio = 0.9f, stiffness = 600f)
             )
     ) {
-        Crossfade(
+        AnimatedContent(
             targetState = expanded,
-            animationSpec = tween(180),
+            transitionSpec = {
+                if (targetState) {
+                    // Entrando: la píldora se va rápido y la tarjeta entra
+                    // cuando el contenedor ya se estiró.
+                    fadeIn(tween(220, delayMillis = 140)) togetherWith
+                            fadeOut(tween(110))
+                } else {
+                    // Saliendo: fundido simple.
+                    fadeIn(tween(180)) togetherWith fadeOut(tween(180))
+                }
+            },
             label = "island_morph"
         ) { targetExpanded ->
             if (targetExpanded) {
@@ -147,7 +162,7 @@ fun IslandOverlayContent(
                     title = song.title,
                     coverUri = song.albumArtUri,
                     onTap = { expanded = true },
-                    onPrevious = { app.playback.seekToPrevious() },
+                    onPrevious = { app.playback.seekToPreviousSong() },
                     onNext = { app.playback.seekToNext() },
                     onTogglePlay = { app.playback.togglePlayPause() },
                     onHide = onClose
@@ -161,7 +176,8 @@ fun IslandOverlayContent(
  * Píldora colapsada: portada en círculo + título con marquesina.
  * Posición fija — sin arrastre.
  * - Toque: expande a la vista detallada.
- * - Swipe izquierda: anterior. Swipe derecha: siguiente.
+ * - Swipe izquierda: siguiente. Swipe derecha: anterior (directo,
+ *   sin la regla de los 3 segundos).
  * - Doble toque: pausa/play.
  * - Mantener presionado: oculta temporalmente.
  */
@@ -178,17 +194,21 @@ private fun IslandCollapsedContent(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier = modifier
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = { onTogglePlay() },
-                    onLongPress = { onHide() }
+                    onLongPress = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onHide()
+                    }
                 )
             }
             .pointerInput(Unit) {
-                // Swipes horizontales: ← anterior, → siguiente.
+                // Swipes horizontales: ← siguiente, → anterior.
                 var totalX = 0f
                 var totalY = 0f
                 val swipeDistPx = with(density) { 60.dp.toPx() }
@@ -201,7 +221,7 @@ private fun IslandCollapsedContent(
                         if (kotlin.math.abs(totalX) > swipeDistPx &&
                             kotlin.math.abs(totalX) > 2f * kotlin.math.abs(totalY)
                         ) {
-                            if (totalX > 0f) onNext() else onPrevious()
+                            if (totalX > 0f) onPrevious() else onNext()
                         }
                     },
                     onDragCancel = { },
