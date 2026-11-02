@@ -13,8 +13,8 @@ android {
         applicationId = "com.aural.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
     }
 
     signingConfigs {
@@ -100,6 +100,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-service:2.8.6")
+    // v1.0.7: isla dinámica (overlay desde el servicio)
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.8.6")
+    implementation("androidx.savedstate:savedstate:2.1.0")
 
     // ---- DataStore Preferences (ajustes) ----
     implementation("androidx.datastore:datastore-preferences:1.1.1")
