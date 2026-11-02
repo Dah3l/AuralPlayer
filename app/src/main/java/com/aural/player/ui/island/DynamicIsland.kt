@@ -112,9 +112,9 @@ fun IslandOverlayContent(
     //  expandir = ancho -> alto -> fade del panel
     //  colapsar = fade del panel -> alto -> ancho (inversa)
     val ease = remember { CubicBezierEasing(0.32f, 0.72f, 0f, 1f) }
-    val widthA = remember { Animatable(135.dp, Dp.VectorConverter) }
-    val heightA = remember { Animatable(44.dp, Dp.VectorConverter) }
-    val cornerA = remember { Animatable(22.dp, Dp.VectorConverter) }
+    val widthA = remember { Animatable(135f) }
+    val heightA = remember { Animatable(44f) }
+    val cornerA = remember { Animatable(22f) }
     val pillAlpha = remember { Animatable(1f) }
     val panelAlpha = remember { Animatable(0f) }
     var animJob by remember { mutableStateOf<Job?>(null) }
@@ -127,10 +127,10 @@ fun IslandOverlayContent(
         animJob = scope.launch {
             // Fase 1: la píldora se desvanece mientras el ancho crece.
             launch { pillAlpha.animateTo(0f, tween(140)) }
-            widthA.animateTo(340.dp, tween(200, easing = ease))
-            cornerA.animateTo(28.dp, tween(200, easing = ease))
+            widthA.animateTo(340f, tween(200, easing = ease))
+            cornerA.animateTo(28f, tween(200, easing = ease))
             // Fase 2: la altura, ya con el ancho objetivo.
-            heightA.animateTo(308.dp, tween(200, easing = ease))
+            heightA.animateTo(308f, tween(200, easing = ease))
             // Fase 3: el contenido del panel entra con fade.
             panelAlpha.animateTo(1f, tween(160))
         }
@@ -142,9 +142,9 @@ fun IslandOverlayContent(
         animJob = scope.launch {
             // Inversa: primero los items, luego alto, luego ancho.
             panelAlpha.animateTo(0f, tween(120))
-            heightA.animateTo(44.dp, tween(180, easing = ease))
-            widthA.animateTo(135.dp, tween(180, easing = ease))
-            cornerA.animateTo(22.dp, tween(180, easing = ease))
+            heightA.animateTo(44f, tween(180, easing = ease))
+            widthA.animateTo(135f, tween(180, easing = ease))
+            cornerA.animateTo(22f, tween(180, easing = ease))
             pillAlpha.animateTo(1f, tween(150))
             onCollapseWindow()
         }
@@ -179,10 +179,10 @@ fun IslandOverlayContent(
 
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
-    val islandShape = RoundedCornerShape(cornerA.value)
+    val islandShape = RoundedCornerShape(cornerA.value.dp)
     Box(
         modifier = Modifier
-            .size(widthA.value, heightA.value)
+            .size(widthA.value.dp, heightA.value.dp)
             .shadow(14.dp, islandShape)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
