@@ -264,10 +264,33 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         .map { repository.groupByAlbum(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Carpetas agrupadas. */
-    val foldersFlow: StateFlow<List<Folder>> = filteredSongsFlow
-        .map { repository.groupByFolder(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Carpetas agrupadas (sin las ocultas por el usuario). v1.0.7. */
+    val foldersFlow: StateFlow<List<Folder>> = combine(
+        filteredSongsFlow,
+        hiddenFolders
+    ) { songs, hidden ->
+        repository.groupByFolder(songs).filterNot { it.path in hidden }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Carpetas ocultas por el usuario. v1.0.7. */
+    val hiddenFolders: StateFlow<Set<String>> = settings.hiddenFolders.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptySet()
+    )
+
+    /** Oculta o muestra una carpeta de la biblioteca. v1.0.7. */
+    fun toggleHiddenFolder(path: String) {
+        viewModelScope.launch { settings.toggleHiddenFolder(path) }
+    }
+
+    /** Isla dinámica activada. v1.0.7. */
+    val islandEnabled: StateFlow<Boolean> = settings.islandEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    /** Activa o desactiva la isla dinámica. v1.0.7. */
+    fun setIslandEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setIslandEnabled(enabled) }
+    }
 
     // Mapa id→canción con caché: se reconstruye solo cuando cambia la lista
     // de la biblioteca (evita reconstruirlo en cada llamada durante la
@@ -423,6 +446,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addToPlaylist(playlistId: String, songId: Long) {
         viewModelScope.launch { settings.addToPlaylist(playlistId, songId) }
+    }
+
+    /** Añade varias canciones a una playlist (selección múltiple). v1.0.7. */
+    fun addAllToPlaylist(playlistId: String, songIds: List<Long>) {
+        if (songIds.isEmpty()) return
+        viewModelScope.launch { settings.addAllToPlaylist(playlistId, songIds) }
+    }
+
+    /** Marca varias canciones como favoritas (selección múltiple). v1.0.7. */
+    fun addFavorites(songIds: List<Long>) {
+        if (songIds.isEmpty()) return
+        viewModelScope.launch { settings.addFavorites(songIds) }
     }
 
     /**
