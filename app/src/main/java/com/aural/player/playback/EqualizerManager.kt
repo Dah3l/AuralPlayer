@@ -1,18 +1,23 @@
 // Ecualizador de 5 bandas + normalización de volumen (LoudnessEnhancer)
+// v1.0.7: + refuerzo de bajos (BassBoost) + audio inmersivo (Virtualizer)
 package com.aural.player.playback
 
 import android.content.Context
+import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
+import android.media.audiofx.Virtualizer
 
 /**
- * Gestiona el ecualizador y la normalización atados a la sesión de audio
+ * Gestiona el ecualizador y los efectos atados a la sesión de audio
  * de ExoPlayer. Los ajustes se guardan en SharedPreferences.
  */
 object EqualizerManager {
 
     private var equalizer: Equalizer? = null
     private var loudness: LoudnessEnhancer? = null
+    private var bassBoost: BassBoost? = null
+    private var virtualizer: Virtualizer? = null
     private var prefs: android.content.SharedPreferences? = null
 
     var enabled: Boolean = false
@@ -21,11 +26,19 @@ object EqualizerManager {
     var loudnessEnabled: Boolean = false
         private set
 
+    var bassBoostEnabled: Boolean = false
+        private set
+
+    var virtualizerEnabled: Boolean = false
+        private set
+
     /** Debe llamarse al crear el reproductor, con su audioSessionId. */
     fun init(context: Context, audioSessionId: Int) {
         prefs = context.getSharedPreferences("aural_equalizer", Context.MODE_PRIVATE)
         enabled = prefs?.getBoolean("enabled", false) ?: false
         loudnessEnabled = prefs?.getBoolean("loudness_enabled", false) ?: false
+        bassBoostEnabled = prefs?.getBoolean("bass_enabled", false) ?: false
+        virtualizerEnabled = prefs?.getBoolean("virtualizer_enabled", false) ?: false
         releaseEffects()
         if (audioSessionId == 0) return
         try {
@@ -36,7 +49,24 @@ object EqualizerManager {
             loudness?.enabled = loudnessEnabled
         } catch (e: Exception) {
             android.util.Log.e("EqualizerManager", "No soportado: ${e.message}")
-            releaseEffects()
+        }
+        // BassBoost y Virtualizer son opcionales: si el dispositivo no los
+        // soporta, se ignora sin romper el resto.
+        try {
+            bassBoost = BassBoost(0, audioSessionId)
+            bassBoost?.setStrength(getBassBoostStrength().toShort())
+            bassBoost?.enabled = bassBoostEnabled
+        } catch (e: Exception) {
+            android.util.Log.w("EqualizerManager", "Sin BassBoost: ${e.message}")
+            bassBoost = null
+        }
+        try {
+            virtualizer = Virtualizer(0, audioSessionId)
+            virtualizer?.setStrength(getVirtualizerStrength().toShort())
+            virtualizer?.enabled = virtualizerEnabled
+        } catch (e: Exception) {
+            android.util.Log.w("EqualizerManager", "Sin Virtualizer: ${e.message}")
+            virtualizer = null
         }
     }
 
@@ -48,11 +78,17 @@ object EqualizerManager {
     private fun releaseEffects() {
         runCatching { equalizer?.release() }
         runCatching { loudness?.release() }
+        runCatching { bassBoost?.release() }
+        runCatching { virtualizer?.release() }
         equalizer = null
         loudness = null
+        bassBoost = null
+        virtualizer = null
     }
 
     val isAvailable: Boolean get() = equalizer != null
+    val isBassBoostAvailable: Boolean get() = bassBoost != null
+    val isVirtualizerAvailable: Boolean get() = virtualizer != null
 
     fun setEnabled(value: Boolean) {
         enabled = value
@@ -118,6 +154,42 @@ object EqualizerManager {
             loudness?.setTargetGain(db * 100)
             prefs?.edit()?.putInt("loudness_gain", db)?.apply()
         } catch (e: Exception) { /* ignorar */ }
+    }
+
+    // ------------------------- Refuerzo de bajos (v1.0.7) -------------------------
+
+    fun setBassBoostEnabled(value: Boolean) {
+        bassBoostEnabled = value
+        try { bassBoost?.enabled = value } catch (e: Exception) { /* ignorar */ }
+        prefs?.edit()?.putBoolean("bass_enabled", value)?.apply()
+    }
+
+    /** Intensidad del refuerzo de bajos (0..1000). */
+    fun getBassBoostStrength(): Int =
+        prefs?.getInt("bass_strength", 500) ?: 500
+
+    fun setBassBoostStrength(strength: Int) {
+        val s = strength.coerceIn(0, 1000)
+        try { bassBoost?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
+        prefs?.edit()?.putInt("bass_strength", s)?.apply()
+    }
+
+    // ------------------------- Audio inmersivo / Virtualizer (v1.0.7) -------------------------
+
+    fun setVirtualizerEnabled(value: Boolean) {
+        virtualizerEnabled = value
+        try { virtualizer?.enabled = value } catch (e: Exception) { /* ignorar */ }
+        prefs?.edit()?.putBoolean("virtualizer_enabled", value)?.apply()
+    }
+
+    /** Intensidad del efecto envolvente (0..1000). */
+    fun getVirtualizerStrength(): Int =
+        prefs?.getInt("virtualizer_strength", 500) ?: 500
+
+    fun setVirtualizerStrength(strength: Int) {
+        val s = strength.coerceIn(0, 1000)
+        try { virtualizer?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
+        prefs?.edit()?.putInt("virtualizer_strength", s)?.apply()
     }
 
     private fun saveBandLevels() {
