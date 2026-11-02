@@ -198,6 +198,7 @@ class MusicService : MediaSessionService() {
 
     private var islandView: ComposeView? = null
     private var islandParams: WindowManager.LayoutParams? = null
+    private var islandLifecycle: IslandLifecycleOwner? = null
     private val windowManager: WindowManager by lazy {
         getSystemService(WINDOW_SERVICE) as WindowManager
     }
@@ -238,10 +239,16 @@ class MusicService : MediaSessionService() {
         val composeView = ComposeView(this).apply {
             // El servicio no es un LifecycleOwner; se usa un ciclo de vida
             // manual mínimo para que Compose funcione en el overlay.
-            val islandLifecycle = IslandLifecycleOwner()
-            setViewTreeLifecycleOwner(islandLifecycle)
+            // OJO: el SavedStateRegistry debe hacer attach con el lifecycle
+            // en INITIALIZED (si no, SavedStateRegistryController lanza
+            // "Restarter must be created only during owner's initialization stage").
+            val owner = IslandLifecycleOwner()
+            val savedStateOwner = IslandSavedStateOwner(owner.lifecycle)
+            owner.doResume()
+            islandLifecycle = owner
+            setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(IslandViewModelStoreOwner())
-            setViewTreeSavedStateRegistryOwner(IslandSavedStateOwner(islandLifecycle.lifecycle))
+            setViewTreeSavedStateRegistryOwner(savedStateOwner)
             setContent {
                 IslandOverlayContent(
                     app = app,
@@ -278,15 +285,32 @@ class MusicService : MediaSessionService() {
                 windowManager.removeView(view)
             } catch (_: Exception) { }
         }
+        try {
+            islandLifecycle?.doDestroy()
+        } catch (_: Exception) { }
         islandView = null
         islandParams = null
+        islandLifecycle = null
     }
 
-    /** Ciclo de vida mínimo para el ComposeView del overlay. */
+    /** Ciclo de vida mínimo para el ComposeView del overlay.
+     *  Se crea en INITIALIZED y se avanza manualmente: el
+     *  SavedStateRegistryController exige INITIALIZED en el attach. */
     private class IslandLifecycleOwner : androidx.lifecycle.LifecycleOwner {
-        private val registry = androidx.lifecycle.LifecycleRegistry(this).apply {
-            handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_RESUME)
+        private val registry = androidx.lifecycle.LifecycleRegistry(this)
+
+        fun doResume() {
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_CREATE)
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_START)
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_RESUME)
         }
+
+        fun doDestroy() {
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_PAUSE)
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_STOP)
+            registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_DESTROY)
+        }
+
         override val lifecycle: androidx.lifecycle.Lifecycle get() = registry
     }
 
