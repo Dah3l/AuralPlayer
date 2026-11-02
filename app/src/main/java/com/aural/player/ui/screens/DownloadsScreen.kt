@@ -53,7 +53,8 @@ fun DownloadsScreen(
     val progress by youTubeManager.progress.collectAsState()
     val error by youTubeManager.error.collectAsState()
     // v1.0.7: indicador de descarga exitosa por videoId -> nombre de archivo.
-    val downloadedOk = remember { mutableStateMapOf<String, String>() }
+    // v1.0.7: el indicador vive en el manager para no perderse en el rescan.
+    val downloadedOk by youTubeManager.downloaded.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -318,7 +319,7 @@ fun DownloadsScreen(
                                     youTubeManager.download(result) { fileName, mediaId ->
                                         // v1.0.7: marcar éxito para el indicador.
                                         if (fileName != null) {
-                                            downloadedOk[result.videoId] = fileName
+                                            youTubeManager.markDownloaded(result.videoId, fileName)
                                         }
                                         onDownloadComplete(fileName, mediaId)
                                     }
