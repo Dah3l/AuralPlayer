@@ -138,6 +138,11 @@ object EqualizerManager {
             }
         }
 
+    /** Índice del preset activo (-1 si es personalizado o no disponible). */
+    fun getCurrentPreset(): Int = try {
+        equalizer?.currentPreset?.toInt() ?: -1
+    } catch (e: Exception) { -1 }
+
     fun usePreset(index: Int) {
         try {
             equalizer?.usePreset(index.toShort())
