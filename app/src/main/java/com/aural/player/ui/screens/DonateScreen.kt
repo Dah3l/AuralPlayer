@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
  * Número de tarjeta CUP para donar por Transfermóvil.
  * Dahel la cambia aquí cuando quiera (formato con guiones).
  */
-const val DONATION_CARD_CUP = "XXXX-XXXX-XXXX-XXXX"
+const val DONATION_CARD_CUP = "9227-9598-7391-3011"
 
 /** Usuario de QvaPay para donaciones (sin montos fijos: el usuario dona lo que desee). */
 const val DONATION_QVAPAY_USER = "@Dah3l"
