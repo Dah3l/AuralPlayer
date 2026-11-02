@@ -939,7 +939,6 @@ private fun NowPlayingMenu(
             leadingIcon = { Icon(Icons.Rounded.Edit, null) },
             onClick = { onDismiss(); showEditMetadata = true }
         )
-        )
         DropdownMenuItem(
             text = { Text(if (hasLrc) "Ver letra" else "Agregar letra") },
             leadingIcon = { Icon(Icons.Rounded.MusicNote, null) },
