@@ -74,6 +74,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,6 +96,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import com.aural.player.youtube.YouTubeManager
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
@@ -725,31 +728,68 @@ fun LibraryScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(
-                    onClick = { showPlaylistPicker = true },
-                    enabled = selectedIds.isNotEmpty()
-                ) { Text("Playlist") }
-                TextButton(
+            }
+        }
+    }
+    } // v1.0.7: cierra Box de la barra de selección
+
+    // ---- v1.0.7: barra de acciones inferior (zona del pulgar) ----
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = selectionMode,
+        enter = androidx.compose.animation.slideInVertically { it },
+        exit = androidx.compose.animation.slideOutVertically { it }
+    ) {
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                topStart = 20.dp, topEnd = 20.dp
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SelectionActionButton(
+                    icon = Icons.Rounded.PlaylistAdd,
+                    label = "Playlist",
+                    enabled = selectedIds.isNotEmpty(),
+                    onClick = { showPlaylistPicker = true }
+                )
+                SelectionActionButton(
+                    icon = Icons.Rounded.QueueMusic,
+                    label = "A la cola",
+                    enabled = selectedIds.isNotEmpty(),
                     onClick = {
                         val byId = songs.associateBy { it.id }
                         viewModel.playback.enqueueAll(selectedIds.mapNotNull { byId[it] })
                         selectionMode = false
                         selectedIds.clear()
-                    },
-                    enabled = selectedIds.isNotEmpty()
-                ) { Text("A la cola") }
-                TextButton(
+                    }
+                )
+                SelectionActionButton(
+                    icon = Icons.Rounded.Favorite,
+                    label = "Favorita",
+                    enabled = selectedIds.isNotEmpty(),
+                    tint = Color(0xFFE5484D),
                     onClick = {
                         viewModel.addFavorites(selectedIds.toList())
                         selectionMode = false
                         selectedIds.clear()
-                    },
-                    enabled = selectedIds.isNotEmpty()
-                ) { Text("❤") }
+                    }
+                )
             }
         }
     }
-    } // v1.0.7: cierra Box de la barra de selección
+    } // v1.0.7: cierra Box de la barra de acciones inferior
 
     // ---- Diálogo para crear playlist ----
     renameTarget?.let { pl ->        RenamePlaylistDialog(
@@ -1659,5 +1699,41 @@ private fun greetingForHour(): String {
         in 5..11 -> "Buenos días"
         in 12..17 -> "Buenas tardes"
         else -> "Buenas noches"
+    }
+}
+
+/**
+ * Botón de la barra de acciones de selección múltiple:
+ * icono grande + etiqueta, pensado para la zona del pulgar.
+ */
+@Composable
+private fun SelectionActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(26.dp)
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
