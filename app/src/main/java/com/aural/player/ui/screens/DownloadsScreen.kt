@@ -262,24 +262,16 @@ fun DownloadsScreen(
                         // Botón descarga / progreso / éxito
                         val justDownloaded = downloadedOk[result.videoId]
                         if (justDownloaded != null) {
-                            // v1.0.7: indicador de descarga exitosa.
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.width(96.dp)
+                            // v1.0.7: solo el check de descarga exitosa.
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.width(64.dp)
                             ) {
                                 Icon(
                                     Icons.Default.CheckCircle,
                                     contentDescription = "Descargada",
                                     tint = Color(0xFF4CAF50),
                                     modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    "Descargada",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF4CAF50),
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 2
                                 )
                             }
                         } else if (isDl) {
