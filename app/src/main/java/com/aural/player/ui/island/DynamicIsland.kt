@@ -169,7 +169,7 @@ fun IslandOverlayContent(
         animationSpec = morphSpec, label = "islandWidth"
     )
     val islandHeight by animateDpAsState(
-        targetValue = if (expanded) 360.dp else 44.dp,
+        targetValue = if (expanded) 308.dp else 44.dp,
         animationSpec = morphSpec, label = "islandHeight"
     )
     val islandCorner by animateDpAsState(
@@ -439,8 +439,34 @@ private fun IslandExpandedContent(
     val islandOnAccent = scheme.onPrimary
     var sliderPos by remember(positionMs) { mutableStateOf(positionMs.toFloat()) }
     var seeking by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier
+            // Swipe hacia arriba (solo en la vista detallada): compactar.
+            .pointerInput(Unit) {
+                var totalX = 0f
+                var totalY = 0f
+                val swipeDistPx = with(density) { 60.dp.toPx() }
+                detectDragGestures(
+                    onDragStart = {
+                        totalX = 0f
+                        totalY = 0f
+                    },
+                    onDragEnd = {
+                        if (totalY < -swipeDistPx &&
+                            kotlin.math.abs(totalY) > 2f * kotlin.math.abs(totalX)
+                        ) {
+                            onCollapse()
+                        }
+                    },
+                    onDragCancel = { },
+                    onDrag = { _, dragAmount ->
+                        totalX += dragAmount.x
+                        totalY += dragAmount.y
+                    }
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -571,6 +597,18 @@ private fun IslandExpandedContent(
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
+            IconButton(
+                onClick = { onQuickAction(QuickAction.YOUTUBE_SEARCH) },
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Buscar en YouTube",
+                    tint = islandOnBg.copy(alpha = 0.85f),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
             IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
                 Icon(
                     Icons.Default.SkipPrevious,
@@ -602,26 +640,20 @@ private fun IslandExpandedContent(
                     modifier = Modifier.size(32.dp)
                 )
             }
+            Spacer(Modifier.width(4.dp))
+            IconButton(
+                onClick = { onQuickAction(QuickAction.RECOGNIZE) },
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    Icons.Default.Mic,
+                    contentDescription = "Reconocer",
+                    tint = islandOnBg.copy(alpha = 0.85f),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
         Spacer(Modifier.height(12.dp))
-        // Acciones rápidas.
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            IslandActionButton(
-                icon = Icons.Default.Search,
-                label = "YouTube",
-                onClick = { onQuickAction(QuickAction.YOUTUBE_SEARCH) },
-                onBg = islandOnBg
-            )
-            IslandActionButton(
-                icon = Icons.Default.Mic,
-                label = "Reconocer",
-                onClick = { onQuickAction(QuickAction.RECOGNIZE) },
-                onBg = islandOnBg
-            )
-        }
-        Spacer(Modifier.height(8.dp))
         FilledTonalButton(
             onClick = onOpenApp,
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
@@ -658,31 +690,6 @@ private fun IslandExpandedContent(
 }
 
 @Composable
-private fun IslandActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    onBg: androidx.compose.ui.graphics.Color
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier
-                .size(48.dp)
-                .background(onBg.copy(alpha = 0.1f), CircleShape)
-        ) {
-            Icon(
-                icon,
-                contentDescription = label,
-                tint = onBg,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(text = label, color = onBg.copy(alpha = 0.7f), fontSize = 11.sp)
-    }
-}
-
 private fun formatMs(ms: Long): String {
     val totalSec = (ms / 1000).toInt().coerceAtLeast(0)
     return "${totalSec / 60}:${(totalSec % 60).toString().padStart(2, '0')}"
