@@ -981,6 +981,7 @@ private fun NowPlayingMenu(
                     )
                 }
             }
+        )
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
             leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
