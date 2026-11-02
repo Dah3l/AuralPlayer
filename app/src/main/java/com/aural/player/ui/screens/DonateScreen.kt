@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Button
@@ -25,6 +26,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -51,6 +58,15 @@ const val DONATION_QVAPAY_USER = "@Dah3l"
 @Composable
 fun DonateScreen(onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
+    // Feedback visual al copiar: el botón pasa a ✔️ por 2 s.
+    var copiedCard by remember { mutableStateOf(false) }
+    var copiedQva by remember { mutableStateOf(false) }
+    LaunchedEffect(copiedCard) {
+        if (copiedCard) { delay(2000); copiedCard = false }
+    }
+    LaunchedEffect(copiedQva) {
+        if (copiedQva) { delay(2000); copiedQva = false }
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -138,11 +154,13 @@ fun DonateScreen(onBack: () -> Unit) {
                         )
                         IconButton(onClick = {
                             clipboard.setText(AnnotatedString(DONATION_CARD_CUP))
+                            copiedCard = true
                         }) {
                             Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = "Copiar número",
-                                tint = MaterialTheme.colorScheme.primary
+                                if (copiedCard) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = if (copiedCard) "Copiado" else "Copiar número",
+                                tint = if (copiedCard) androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                else MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -191,11 +209,13 @@ fun DonateScreen(onBack: () -> Unit) {
                         )
                         IconButton(onClick = {
                             clipboard.setText(AnnotatedString(DONATION_QVAPAY_USER))
+                            copiedQva = true
                         }) {
                             Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = "Copiar usuario",
-                                tint = MaterialTheme.colorScheme.primary
+                                if (copiedQva) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = if (copiedQva) "Copiado" else "Copiar usuario",
+                                tint = if (copiedQva) androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                else MaterialTheme.colorScheme.primary
                             )
                         }
                     }
