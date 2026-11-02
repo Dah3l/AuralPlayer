@@ -147,7 +147,10 @@ fun IslandOverlayContent(
                     title = song.title,
                     coverUri = song.albumArtUri,
                     onTap = { expanded = true },
-                    onQuickAction = { action -> handleQuickAction(app, action) }
+                    onPrevious = { app.playback.seekToPrevious() },
+                    onNext = { app.playback.seekToNext() },
+                    onTogglePlay = { app.playback.togglePlayPause() },
+                    onHide = onClose
                 )
             }
         }
@@ -155,11 +158,12 @@ fun IslandOverlayContent(
 }
 
 /**
- * Píldora colapsada: solo el título (marquesina si no cabe) + onda pequeña.
+ * Píldora colapsada: portada en círculo + título con marquesina.
  * Posición fija — sin arrastre.
- * - Tap: expande.
- * - Fling horizontal rápido: acciones rápidas (→ buscar en YouTube,
- *   ← reconocer canción).
+ * - Toque: expande a la vista detallada.
+ * - Swipe izquierda: anterior. Swipe derecha: siguiente.
+ * - Doble toque: pausa/play.
+ * - Mantener presionado: oculta temporalmente.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -167,42 +171,45 @@ private fun IslandCollapsedContent(
     title: String,
     coverUri: String?,
     onTap: () -> Unit,
-    onQuickAction: (QuickAction) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var actionHint by remember { mutableStateOf<QuickAction?>(null) }
     val density = LocalDensity.current
     Box(
         modifier = modifier
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() })
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = { onTogglePlay() },
+                    onLongPress = { onHide() }
+                )
             }
             .pointerInput(Unit) {
-                // Solo fling: la posición es fija, ya no se arrastra.
+                // Swipes horizontales: ← anterior, → siguiente.
                 var totalX = 0f
                 var totalY = 0f
-                var startTime = 0L
-                val flingDistPx = with(density) { 90.dp.toPx() }
+                val swipeDistPx = with(density) { 60.dp.toPx() }
                 detectDragGestures(
                     onDragStart = {
                         totalX = 0f
                         totalY = 0f
-                        startTime = System.currentTimeMillis()
                     },
                     onDragEnd = {
-                        val dt = System.currentTimeMillis() - startTime
-                        if (dt in 1..600 &&
-                            kotlin.math.abs(totalX) > flingDistPx &&
+                        if (kotlin.math.abs(totalX) > swipeDistPx &&
                             kotlin.math.abs(totalX) > 2f * kotlin.math.abs(totalY)
                         ) {
-                            val action = if (totalX > 0f) QuickAction.YOUTUBE_SEARCH
-                            else QuickAction.RECOGNIZE
-                            actionHint = action
-                            onQuickAction(action)
+                            if (totalX > 0f) onNext() else onPrevious()
                         }
                     },
                     onDragCancel = { },
-                    onDrag = { change, _ -> change.consume() }
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        totalX += dragAmount.x
+                        totalY += dragAmount.y
+                    }
                 )
             }
             .padding(horizontal = 10.dp, vertical = 7.dp),
@@ -247,18 +254,6 @@ private fun IslandCollapsedContent(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 modifier = Modifier.basicMarquee()
-            )
-        }
-        // Hint breve de la acción rápida ejecutada.
-        actionHint?.let { hint ->
-            Text(
-                text = when (hint) {
-                    QuickAction.YOUTUBE_SEARCH -> "Buscando en YouTube…"
-                    QuickAction.RECOGNIZE -> "Escuchando…"
-                },
-                color = IslandAccent,
-                fontSize = 11.sp,
-                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
