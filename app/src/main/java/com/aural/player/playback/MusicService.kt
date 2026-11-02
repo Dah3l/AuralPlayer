@@ -199,6 +199,12 @@ class MusicService : MediaSessionService() {
     private var islandView: ComposeView? = null
     private var islandParams: WindowManager.LayoutParams? = null
     private var islandLifecycle: IslandLifecycleOwner? = null
+    // La X oculta la isla "por ahora" (NO la apaga en ajustes): reaparece con
+    // canción nueva, cambio de play/pausa o al salir y volver a entrar a Aural.
+    private var islandDismissed = false
+    private var lastIslandSongId: Long? = null
+    private var lastIslandPlaying: Boolean? = null
+    private var lastIslandForeground: Boolean? = null
     private val windowManager: WindowManager by lazy {
         getSystemService(WINDOW_SERVICE) as WindowManager
     }
@@ -213,9 +219,20 @@ class MusicService : MediaSessionService() {
             ) { enabled, playerState, foreground ->
                 Triple(enabled, playerState, foreground)
             }.collect { (enabled, playerState, foreground) ->
+                val songId = playerState.currentSong?.id
+                val playing = playerState.isPlaying
+                if (songId != lastIslandSongId || playing != lastIslandPlaying ||
+                    (lastIslandForeground == true && !foreground)
+                ) {
+                    islandDismissed = false
+                }
+                lastIslandSongId = songId
+                lastIslandPlaying = playing
+                lastIslandForeground = foreground
                 val show = enabled &&
-                        playerState.currentSong != null &&
+                        songId != null &&
                         !foreground &&
+                        !islandDismissed &&
                         Settings.canDrawOverlays(this@MusicService)
                 if (show) showIslandOverlay() else hideIslandOverlay()
             }
@@ -225,6 +242,12 @@ class MusicService : MediaSessionService() {
     private fun showIslandOverlay() {
         if (islandView != null) return
         val app = application as? AuralApp ?: return
+        // Posición FIJA: centrada, justo debajo de la barra de estado
+        // (donde cae el orificio de la cámara). Sin arrastre.
+        val density = resources.displayMetrics.density
+        val statusBarId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        val statusBarPx = if (statusBarId > 0) resources.getDimensionPixelSize(statusBarId)
+        else (24 * density).toInt()
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -234,7 +257,7 @@ class MusicService : MediaSessionService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 24 // debajo de la barra de estado
+            y = statusBarPx + (10 * density).toInt()
         }
         val composeView = ComposeView(this).apply {
             // El servicio no es un LifecycleOwner; se usa un ciclo de vida
@@ -252,18 +275,10 @@ class MusicService : MediaSessionService() {
             setContent {
                 IslandOverlayContent(
                     app = app,
-                    onMove = { dx, dy ->
-                        params.x += dx.toInt()
-                        params.y += dy.toInt()
-                        try {
-                            windowManager.updateViewLayout(this, params)
-                        } catch (_: Exception) { }
-                    },
                     onClose = {
-                        // Cerrar la isla = desactivarla en ajustes.
-                        serviceScope.launch {
-                            app.settings.setIslandEnabled(false)
-                        }
+                        // La X la oculta por ahora; NO toca el ajuste.
+                        islandDismissed = true
+                        hideIslandOverlay()
                     }
                 )
             }
