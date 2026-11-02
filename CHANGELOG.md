@@ -4,6 +4,19 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.7 — 2026-11-01
+
+### Novedades
+- **Descargas de YouTube: ya se ve cuál quedó lista** — cuando una descarga termina bien, su tarjeta muestra una marca verde "Descargada" en vez del botón de descargar.
+- **Actualizar la app, más claro** — el aviso de nueva versión ahora muestra tres tarjetas con el icono de cada tienda (Apklis, GitHub y Uptodown): toca la que prefieras y se abre su página de descarga.
+- **Oculta las carpetas que no quieres ver** — mantén pulsada una carpeta en la biblioteca para ocultarla (ideal para los audios de WhatsApp, Telegram y demás). Desde el menú ⋮, en "Carpetas ocultas", las puedes volver a mostrar cuando quieras.
+- **Navidad en Aural (20 – 26 de diciembre)** — igual que el Halloween: un tema más en el menú de Temas, solo visible durante la fecha, que se activa solo al abrir la app y al pasar la fecha vuelve solo a tu tema anterior. Si prefieres otro tema, lo cambias y se respeta. Viene con rojo navideño, verde pino y dorado, nieve cayendo en el home, una guirnalda de luces de colores parpadeando arriba y "❄ Felices fiestas ❄" en la pantalla de bienvenida.
+- **Selección múltiple en la biblioteca** — mantén pulsada una canción para entrar en modo selección: marca varias con las casillas y añádelas de una vez a una playlist, a la cola o a favoritas. El botón de atrás sale del modo.
+- **Ecualizador con página propia** — desde el menú ⋮ o desde el Now Playing: interruptor general, presets, 5 bandas, refuerzo de graves y audio inmersivo (si tu teléfono lo permite), y normalización de volumen. Todo se guarda y se mantiene al actualizar.
+- **Isla dinámica** — una píldora flotante sobre otras apps con la portada, el título y una onda de colores que se mueve al ritmo de la música. Tócala para expandirla: portada grande, barra de progreso que sí se puede arrastrar, controles ⏮ ⏯ ⏭, botones para buscar en YouTube o reconocer una canción, abrir Aural y cerrar. También puedes arrastrarla para moverla, o lanzarla rápido a la derecha para buscar en YouTube y a la izquierda para reconocer. Solo aparece fuera de la app mientras hay música cargada; se activa en el menú ⋮ → "Isla dinámica" (pide permiso para mostrarse sobre otras apps). En Xiaomi/HyperOS puede pedir además el inicio automático y quitar las restricciones de batería.
+- **Notificación con botones propios** — además de anterior, play/pausa y siguiente, la notificación trae el corazón de favorita y el botón de repetición, que rota entre desactivado, repetir una y repetir todas. (La barra de progreso arrastrable no es posible en las notificaciones de Android: el seek con gestos vive en la isla dinámica.)
+- **Apoya a Aural** — nueva pantalla desde el menú ⋮ → "❤ Apoyar a Aural": si te gusta la app, puedes aportar por Transfermóvil (número de tarjeta con botón para copiar e instrucciones paso a paso) o por QvaPay (@Dah3l, con botón para copiar), con el monto que quieras.
+
 ## v1.0.6 — 2026-10-28
 
 ### Novedades
