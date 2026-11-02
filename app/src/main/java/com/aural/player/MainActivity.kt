@@ -77,6 +77,7 @@ private sealed class Screen {
     data object Themes : Screen()
     data object Donate : Screen()
     data class Album(val title: String) : Screen()
+    data class Folder(val path: String) : Screen()
     data class Artist(val name: String) : Screen()
     data class Playlist(val id: String) : Screen()
 }
@@ -379,6 +380,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                         showNowPlaying = true
                     },
                     onOpenAlbum = { screen = Screen.Album(it) },
+                    onOpenFolder = { screen = Screen.Folder(it.path) },
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
                     onOpenThemes = { screen = Screen.Themes },
@@ -418,6 +420,28 @@ private fun AuralApp(viewModel: AuralViewModel,
                             songMenuPlaylistId = null
                         }
                     )
+                }
+
+                is Screen.Folder -> {
+                    val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
+                    val folder = folders.find { it.path == s.path }
+                    if (folder == null) {
+                        LaunchedEffect(Unit) { screen = Screen.Library }
+                    } else {
+                        DetailScreen(
+                            viewModel = viewModel,
+                            title = folder.displayName,
+                            subtitle = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
+                            songs = folder.songs,
+                            coverUri = folder.songs.firstOrNull()?.albumArtUri,
+                            listState = detailListState("folder:${s.path}"),
+                            onBack = { screen = Screen.Library },
+                            onSongMenu = { song ->
+                                songMenuTarget = song
+                                songMenuPlaylistId = null
+                            }
+                        )
+                    }
                 }
 
                 is Screen.Artist -> {
