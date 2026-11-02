@@ -253,6 +253,12 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /** Anterior directo, sin la regla de los 3 segundos (gesto de la isla). */
+    fun seekToPreviousSong() {
+        controller?.seekToPrevious()
+        publishState()
+    }
+
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs)
         _state.value = _state.value.copy(positionMs = positionMs)
