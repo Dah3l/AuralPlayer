@@ -64,6 +64,16 @@ fun isNewerVersion(latest: String, current: String): Boolean {
  */
 suspend fun checkForUpdate(context: Context): UpdateCheckResult =
     withContext(Dispatchers.IO) {
+        // DEBUG TEMPORAL: simula que hay una actualización para
+        // previsualizar el diálogo. REVERTIR antes del release.
+        if (com.aural.player.BuildConfig.DEBUG) {
+            return@withContext UpdateCheckResult.Available(
+                UpdateInfo(
+                    "1.0.8",
+                    "https://github.com/Dah3l/AuralPlayer/releases/latest"
+                )
+            )
+        }
         try {
             val connection = URL(RELEASES_URL).openConnection() as HttpURLConnection
             try {
