@@ -588,12 +588,14 @@ private fun IslandExpandedContent(
             IslandActionButton(
                 icon = Icons.Default.Search,
                 label = "YouTube",
-                onClick = { onQuickAction(QuickAction.YOUTUBE_SEARCH) }
+                onClick = { onQuickAction(QuickAction.YOUTUBE_SEARCH) },
+                onBg = islandOnBg
             )
             IslandActionButton(
                 icon = Icons.Default.Mic,
                 label = "Reconocer",
-                onClick = { onQuickAction(QuickAction.RECOGNIZE) }
+                onClick = { onQuickAction(QuickAction.RECOGNIZE) },
+                onBg = islandOnBg
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -617,24 +619,25 @@ private fun IslandExpandedContent(
 private fun IslandActionButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onBg: androidx.compose.ui.graphics.Color
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(
             onClick = onClick,
             modifier = Modifier
                 .size(48.dp)
-                .background(islandOnBg.copy(alpha = 0.1f), CircleShape)
+                .background(onBg.copy(alpha = 0.1f), CircleShape)
         ) {
             Icon(
                 icon,
                 contentDescription = label,
-                tint = Color.White,
+                tint = onBg,
                 modifier = Modifier.size(24.dp)
             )
         }
         Spacer(Modifier.height(4.dp))
-        Text(text = label, color = islandOnBg.copy(alpha = 0.7f), fontSize = 11.sp)
+        Text(text = label, color = onBg.copy(alpha = 0.7f), fontSize = 11.sp)
     }
 }
 
