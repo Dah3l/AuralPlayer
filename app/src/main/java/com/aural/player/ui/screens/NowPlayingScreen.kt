@@ -939,22 +939,6 @@ private fun NowPlayingMenu(
             leadingIcon = { Icon(Icons.Rounded.Edit, null) },
             onClick = { onDismiss(); showEditMetadata = true }
         )
-        DropdownMenuItem(
-            text = { Text("Compartir") },
-            leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = {
-                onDismiss()
-                song?.let {
-                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "audio/*"
-                        putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(it.uri))
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(
-                        android.content.Intent.createChooser(shareIntent, "Compartir canción")
-                    )
-                }
-            }
         )
         DropdownMenuItem(
             text = { Text(if (hasLrc) "Ver letra" else "Agregar letra") },
@@ -982,6 +966,22 @@ private fun NowPlayingMenu(
                 showLyricsSearch = true
             }
         )
+        DropdownMenuItem(
+            text = { Text("Compartir") },
+            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+            onClick = {
+                onDismiss()
+                song?.let {
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "audio/*"
+                        putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(it.uri))
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(shareIntent, "Compartir canción")
+                    )
+                }
+            }
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
             leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
