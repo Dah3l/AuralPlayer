@@ -148,7 +148,13 @@ fun EqualizerScreen(onBack: () -> Unit) {
                                         selectedPreset = i
                                         refreshTick++
                                     },
-                                    label = { Text(name) }
+                                    label = { Text(name) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor =
+                                            MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor =
+                                            MaterialTheme.colorScheme.onPrimary
+                                    )
                                 )
                             }
                         }
