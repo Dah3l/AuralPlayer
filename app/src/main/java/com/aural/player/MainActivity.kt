@@ -279,6 +279,8 @@ private fun AuralApp(viewModel: AuralViewModel,
     var showNowPlaying by remember { mutableStateOf(false) }
     // v1.0.7: pantalla propia del ecualizador (overlay a pantalla completa).
     var showEqualizerScreen by remember { mutableStateOf(false) }
+    // v1.0.7: pantalla de Ajustes (lo que antes vivía en el menú ⋮).
+    var showSettingsScreen by remember { mutableStateOf(false) }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
     // Playlist desde la que se abrió el menú de canción (null si fue desde
     // la biblioteca, un álbum o un artista): cambia "Añadir a playlist"
@@ -377,6 +379,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenEqualizer = { showEqualizerScreen = true },
                     onToggleIsland = onToggleIsland,
                     onOpenDonate = { screen = Screen.Donate },
+                    onOpenSettings = { showSettingsScreen = true },
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
@@ -529,6 +532,17 @@ private fun AuralApp(viewModel: AuralViewModel,
     if (showEqualizerScreen) {
         com.aural.player.ui.screens.EqualizerScreen(
             onBack = { showEqualizerScreen = false }
+        )
+    }
+    // ---- v1.0.7: pantalla de Ajustes ----
+    if (showSettingsScreen) {
+        val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
+        com.aural.player.ui.screens.SettingsScreen(
+            onBack = { showSettingsScreen = false },
+            onOpenEqualizer = { showSettingsScreen = false; showEqualizerScreen = true },
+            islandEnabled = islandOn,
+            onToggleIsland = onToggleIsland,
+            viewModel = viewModel
         )
     }
     // ---- Splash de bienvenida ----
