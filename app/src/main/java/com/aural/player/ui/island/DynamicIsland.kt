@@ -126,13 +126,13 @@ fun IslandOverlayContent(
         onExpandWindow() // la ventana crece UNA vez; el morph corre dentro
         animJob = scope.launch {
             // Fase 1: la píldora se desvanece mientras el ancho crece.
-            launch { pillAlpha.animateTo(0f, tween(140)) }
-            widthA.animateTo(340f, tween(200, easing = ease))
-            cornerA.animateTo(28f, tween(200, easing = ease))
+            launch { pillAlpha.animateTo(0f, tween(120)) }
+            widthA.animateTo(340f, tween(150, easing = ease))
+            cornerA.animateTo(28f, tween(150, easing = ease))
             // Fase 2: la altura, ya con el ancho objetivo.
-            heightA.animateTo(308f, tween(200, easing = ease))
+            heightA.animateTo(308f, tween(150, easing = ease))
             // Fase 3: el contenido del panel entra con fade.
-            panelAlpha.animateTo(1f, tween(160))
+            panelAlpha.animateTo(1f, tween(120))
         }
     }
     fun doCollapse() {
@@ -141,11 +141,11 @@ fun IslandOverlayContent(
         animJob?.cancel()
         animJob = scope.launch {
             // Inversa: primero los items, luego alto, luego ancho.
-            panelAlpha.animateTo(0f, tween(120))
-            heightA.animateTo(44f, tween(180, easing = ease))
-            widthA.animateTo(135f, tween(180, easing = ease))
-            cornerA.animateTo(22f, tween(180, easing = ease))
-            pillAlpha.animateTo(1f, tween(150))
+            panelAlpha.animateTo(0f, tween(90))
+            heightA.animateTo(44f, tween(130, easing = ease))
+            launch { pillAlpha.animateTo(1f, tween(110)) }
+            widthA.animateTo(135f, tween(130, easing = ease))
+            cornerA.animateTo(22f, tween(130, easing = ease))
             onCollapseWindow()
         }
     }
