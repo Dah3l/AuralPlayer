@@ -133,9 +133,9 @@ private fun StoreTile(store: DownloadStore, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         when (store) {
-            DownloadStore.APKLIS -> ApklisIcon(Modifier.fillMaxWidth())
-            DownloadStore.GITHUB -> GitHubIcon(Modifier.fillMaxWidth())
-            DownloadStore.UPTODOWN -> UptodownIcon(Modifier.fillMaxWidth())
+            DownloadStore.APKLIS -> ApklisIcon(Modifier.size(48.dp))
+            DownloadStore.GITHUB -> GitHubIcon(Modifier.size(48.dp))
+            DownloadStore.UPTODOWN -> UptodownIcon(Modifier.size(48.dp))
         }
     }
 }
