@@ -67,6 +67,7 @@ import com.aural.player.ui.components.SplashScreen
 import com.aural.player.ui.screens.OnboardingScreen
 import com.aural.player.data.OnboardingPrefs
 import androidx.lifecycle.lifecycleScope
+import com.aural.player.ui.theme.isChristmasWindow
 import com.aural.player.ui.theme.isHalloweenWindow
 import java.time.LocalDate
 
@@ -74,6 +75,7 @@ import java.time.LocalDate
 private sealed class Screen {
     data object Library : Screen()
     data object Themes : Screen()
+    data object Donate : Screen()
     data class Album(val title: String) : Screen()
     data class Artist(val name: String) : Screen()
     data class Playlist(val id: String) : Screen()
@@ -98,13 +100,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestNeededPermissions()
 
-        // Auto-aplicado del tema de temporada (una vez por arranque, antes
-        // de pintar): dentro de la ventana de Halloween activa el tema solo
-        // la primera vez; fuera de la ventana restaura el tema previo.
+        // Auto-aplicado de los temas de temporada (una vez por arranque,
+        // antes de pintar): Halloween (27-oct..1-nov) y Navidad (20-dic..26-dic).
         lifecycleScope.launch {
-            SettingsStore(this@MainActivity).runSeasonalAutoTheme(
-                isHalloweenWindow(), LocalDate.now().year
-            )
+            val store = SettingsStore(this@MainActivity)
+            val year = LocalDate.now().year
+            store.runSeasonalAutoTheme(isHalloweenWindow(), year)
+            store.runChristmasAutoTheme(isChristmasWindow(), year)
         }
 
         setContent {
@@ -136,6 +138,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         handleAudioSearchIntent(intent)
+        handleIslandIntent(intent)
     }
 
     /** Abre la búsqueda por audio si el intent viene del tile de ajustes rápidos. */
@@ -146,6 +149,56 @@ class MainActivity : ComponentActivity() {
         ) {
             viewModel.openAudioSearch()
         }
+    }
+
+    /**
+     * v1.0.7: intents de la isla dinámica. EXTRA_OPEN_YOUTUBE_TAB abre la
+     * pestaña de Descargas (búsqueda de YouTube); EXTRA_OPEN_AUDIO_SEARCH
+     * (arriba) abre el reconocimiento.
+     */
+    private var pendingIslandTab: Int? = null
+
+    private fun handleIslandIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_YOUTUBE_TAB, false) == true) {
+            pendingIslandTab = 4 // pestaña Descargas
+        }
+    }
+
+    companion object {
+        /** Extra para abrir la pestaña de Descargas (isla dinámica → YouTube). */
+        const val EXTRA_OPEN_YOUTUBE_TAB = "com.aural.player.EXTRA_OPEN_YOUTUBE_TAB"
+    }
+
+    /**
+     * v1.0.7: activa/desactiva la isla dinámica. Si falta el permiso de
+     * overlay, abre los ajustes del sistema para concederlo; si ya está
+     * concedido, alterna el ajuste.
+     */
+    private fun toggleDynamicIsland(
+        viewModel: AuralViewModel,
+        settingsStore: SettingsStore
+    ) {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            // Pedir el permiso en los ajustes del sistema.
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            android.widget.Toast.makeText(
+                this,
+                "Activa \"Permitir mostrar sobre otras apps\" y vuelve a tocar Isla dinámica",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val currentlyEnabled = viewModel.islandEnabled.value
+        viewModel.setIslandEnabled(!currentlyEnabled)
+        android.widget.Toast.makeText(
+            this,
+            if (!currentlyEnabled) "Isla dinámica activada" else "Isla dinámica desactivada",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
     }
 
     /**
@@ -192,6 +245,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     // El splash se oculta tras 1.8s (cortina mientras carga).
     val splashThemeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
     val splashHalloween = splashThemeName == AppTheme.HALLOWEEN.name
+    val splashChristmas = splashThemeName == AppTheme.CHRISTMAS.name
     androidx.compose.runtime.LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(1800L)
         showSplash = false
@@ -212,7 +266,16 @@ private fun AuralApp(viewModel: AuralViewModel,
     fun detailListState(key: String) =
         detailListStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // v1.0.7: la isla dinámica puede pedir abrir la pestaña de Descargas.
+    androidx.compose.runtime.LaunchedEffect(pendingIslandTab) {
+        pendingIslandTab?.let {
+            libraryTab = it
+            pendingIslandTab = null
+        }
+    }
     var showNowPlaying by remember { mutableStateOf(false) }
+    // v1.0.7: pantalla propia del ecualizador (overlay a pantalla completa).
+    var showEqualizerScreen by remember { mutableStateOf(false) }
     var songMenuTarget by remember { mutableStateOf<Song?>(null) }
     // Playlist desde la que se abrió el menú de canción (null si fue desde
     // la biblioteca, un álbum o un artista): cambia "Añadir a playlist"
@@ -308,6 +371,14 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
                     onOpenThemes = { screen = Screen.Themes },
+                    onOpenEqualizer = { showEqualizerScreen = true },
+                    onToggleIsland = {
+                        toggleDynamicIsland(
+                            viewModel,
+                            settingsStore
+                        )
+                    },
+                    onOpenDonate = { screen = Screen.Donate },
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
@@ -412,6 +483,12 @@ private fun AuralApp(viewModel: AuralViewModel,
                         gridState = themesGridState
                     )
                 }
+
+                Screen.Donate -> {
+                    com.aural.player.ui.screens.DonateScreen(
+                        onBack = { screen = Screen.Library }
+                    )
+                }
             }
         }
     }
@@ -447,11 +524,18 @@ private fun AuralApp(viewModel: AuralViewModel,
             onPlayQueueItem = viewModel.playback::playAt,
             onRemoveFromQueue = viewModel.playback::removeFromQueue,
             onMoveQueueItem = viewModel.playback::moveInQueue,
+            onOpenEqualizer = { showEqualizerScreen = true },
+        )
+    }
+    // ---- v1.0.7: pantalla propia del ecualizador ----
+    if (showEqualizerScreen) {
+        com.aural.player.ui.screens.EqualizerScreen(
+            onBack = { showEqualizerScreen = false }
         )
     }
     // ---- Splash de bienvenida ----
     if (showSplash) {
-        SplashScreen(isHalloween = splashHalloween)
+        SplashScreen(isHalloween = splashHalloween, isChristmas = splashChristmas)
     }
 
     // ---- Menú contextual de canción: añadir a playlist / favoritos ----
@@ -519,10 +603,10 @@ private fun AuralApp(viewModel: AuralViewModel,
     updateInfo?.let { info ->
         UpdateAvailableDialog(
             info = info,
-            onDownload = {
+            onDownload = { url ->
                 updateInfo = null
                 updateContext.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(info.url))
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 )
             },
             onLater = {
