@@ -110,7 +110,7 @@ fun IslandOverlayContent(
     val scope = rememberCoroutineScope()
     // Coreografía por fases (suave e ininterrumpida):
     //  expandir = ancho -> alto -> fade del panel
-    //  colapsar = fade del panel -> alto -> ancho (inversa)
+    //  colapsar = alto -> ancho con el contenido visible (wipe) -> desrender
     val ease = remember { CubicBezierEasing(0.32f, 0.72f, 0f, 1f) }
     val widthA = remember { Animatable(135f) }
     val heightA = remember { Animatable(44f) }
@@ -140,12 +140,13 @@ fun IslandOverlayContent(
         expanded = false
         animJob?.cancel()
         animJob = scope.launch {
-            // Inversa: primero los items, luego alto, luego ancho.
-            panelAlpha.animateTo(0f, tween(90))
-            heightA.animateTo(44f, tween(130, easing = ease))
+            // El panel se cierra CON el contenido visible (se va clipeando
+            // como un wipe); se desrenderiza al final, sin caja vacía.
+            heightA.animateTo(44f, tween(140, easing = ease))
+            widthA.animateTo(135f, tween(140, easing = ease))
+            cornerA.animateTo(22f, tween(140, easing = ease))
+            panelAlpha.snapTo(0f)
             launch { pillAlpha.animateTo(1f, tween(110)) }
-            widthA.animateTo(135f, tween(130, easing = ease))
-            cornerA.animateTo(22f, tween(130, easing = ease))
             onCollapseWindow()
         }
     }
