@@ -69,6 +69,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -97,8 +98,18 @@ fun IslandOverlayContent(
     onClose: () -> Unit
 ) {
     val playerState by app.playback.state.collectAsState()
+    // La isla usa la metadata PERSONALIZADA de la app, no la original
+    // del archivo (igual que NowPlaying y la biblioteca).
+    val customMeta by app.settings.customMetadata
+        .collectAsStateWithLifecycle(initialValue = emptyMap())
+    val customCovers by app.settings.customCovers
+        .collectAsStateWithLifecycle(initialValue = emptyMap())
     var expanded by remember { mutableStateOf(false) }
     val song = playerState.currentSong ?: return
+    val meta = customMeta[song.id]
+    val title = meta?.first?.ifBlank { song.title } ?: song.title
+    val artist = meta?.second?.ifBlank { song.artist } ?: song.artist
+    val coverUri = customCovers[song.id] ?: song.albumArtUri
 
     // Al cambiar de canción, la isla vuelve a colapsada.
     androidx.compose.runtime.LaunchedEffect(song.id) {
@@ -135,9 +146,9 @@ fun IslandOverlayContent(
         ) { targetExpanded ->
             if (targetExpanded) {
                 IslandExpandedContent(
-                    title = song.title,
-                    artist = song.artist,
-                    coverUri = song.albumArtUri,
+                    title = title,
+                    artist = artist,
+                    coverUri = coverUri,
                     isPlaying = playerState.isPlaying,
                     positionMs = playerState.positionMs,
                     durationMs = playerState.durationMs,
@@ -160,8 +171,8 @@ fun IslandOverlayContent(
                 )
             } else {
                 IslandCollapsedContent(
-                    title = song.title,
-                    coverUri = song.albumArtUri,
+                    title = title,
+                    coverUri = coverUri,
                     onTap = { expanded = true },
                     onPrevious = { app.playback.seekToPreviousSong() },
                     onNext = { app.playback.seekToNext() },
