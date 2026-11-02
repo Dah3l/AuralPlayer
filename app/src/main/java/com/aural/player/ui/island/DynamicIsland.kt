@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -79,11 +80,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlin.math.sin
 
-private val IslandBg = Color(0xFF101014)
-private val IslandAccent = Color(0xFF2ED3B7)
-private val IslandWave1 = Color(0xFF2ED3B7)
-private val IslandWave2 = Color(0xFF8B5CF6)
-private val IslandWave3 = Color(0xFFFF7A1A)
 private val IslandShape = RoundedCornerShape(28.dp)
 
 /**
@@ -111,14 +107,25 @@ fun IslandOverlayContent(
     val title = meta?.first?.ifBlank { song.title } ?: song.title
     val artist = meta?.second?.ifBlank { song.artist } ?: song.artist
     val coverUri = customCovers[song.id] ?: song.albumArtUri
+    // Aspecto de Dynamic Aural: "auto" sigue al tema, "classic" es negro
+    // con los acentos en el color primario del tema.
+    val appearance by app.settings.islandAppearance
+        .collectAsStateWithLifecycle(initialValue = "auto")
+    val scheme = MaterialTheme.colorScheme
+    val classic = appearance == "classic"
+    val islandBg = if (classic) Color(0xFF101014) else scheme.surface
+    val islandAccent = scheme.primary
+    val islandAccent2 = if (classic) Color(0xFF8B5CF6) else scheme.secondary
+    val islandOnBg = if (classic) Color.White else scheme.onSurface
+    val islandOnAccent = scheme.onPrimary
 
     Box(
         modifier = Modifier
             .widthIn(max = 340.dp)
             .shadow(14.dp, IslandShape)
             .clip(IslandShape)
-            .background(IslandBg.copy(alpha = 0.97f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), IslandShape)
+            .background(islandBg.copy(alpha = 0.97f))
+            .border(1.dp, islandOnBg.copy(alpha = 0.12f), IslandShape)
             // Sin animateContentSize: el SizeTransform de la transición
             // anima los bordes de forma coordinada (los dos mecanismos
             // peleando por el tamaño era lo que se veía roto).
@@ -145,6 +152,7 @@ fun IslandOverlayContent(
                     title = title,
                     artist = artist,
                     coverUri = coverUri,
+                    appearance = appearance,
                     isPlaying = playerState.isPlaying,
                     positionMs = playerState.positionMs,
                     durationMs = playerState.durationMs,
@@ -171,7 +179,9 @@ fun IslandOverlayContent(
             } else {
                 IslandCollapsedContent(
                     title = title,
+                    artist = artist,
                     coverUri = coverUri,
+                    appearance = appearance,
                     onTap = { expanded = true },
                     onPrevious = { app.playback.seekToPreviousSong() },
                     onNext = { app.playback.seekToNext() },
@@ -196,7 +206,9 @@ fun IslandOverlayContent(
 @Composable
 private fun IslandCollapsedContent(
     title: String,
+    artist: String,
     coverUri: String?,
+    appearance: String,
     onTap: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -204,6 +216,9 @@ private fun IslandCollapsedContent(
     onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val islandAccent = scheme.primary
+    val islandOnBg = if (appearance == "classic") Color.White else scheme.onSurface
     val density = LocalDensity.current
     val context = LocalContext.current
     Box(
@@ -266,37 +281,34 @@ private fun IslandCollapsedContent(
             modifier = Modifier.width(135.dp), // tamaño fijo ~2.1 cm
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Portada en círculo; si no hay (nula o vacía), la nota musical.
-            if (!coverUri.isNullOrBlank()) {
-                AsyncImage(
-                    model = android.net.Uri.parse(coverUri),
+            // Portada en círculo con la nota musical SIEMPRE de fondo:
+            // aunque la imagen falle al cargar, nunca queda vacío.
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(islandAccent.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1E2129))
+                    tint = islandAccent,
+                    modifier = Modifier.size(16.dp)
                 )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(IslandAccent.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.MusicNote,
+                if (!coverUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = android.net.Uri.parse(coverUri),
                         contentDescription = null,
-                        tint = IslandAccent,
-                        modifier = Modifier.size(16.dp)
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
             Spacer(Modifier.width(8.dp))
             Text(
-                text = title,
-                color = Color.White,
+                text = if (artist.isBlank()) title else "$title — $artist",
+                color = islandOnBg,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -311,7 +323,13 @@ enum class QuickAction { YOUTUBE_SEARCH, RECOGNIZE }
 
 /** Onda animada de colores (indicador de reproducción). */
 @Composable
-fun IslandWave(isPlaying: Boolean, modifier: Modifier = Modifier) {
+fun IslandWave(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    color1: Color = Color(0xFF2ED3B7),
+    color2: Color = Color(0xFF8B5CF6),
+    color3: Color = Color(0xFFFF7A1A)
+) {
     val t = rememberInfiniteTransition(label = "island_wave")
     val phase by t.animateFloat(
         initialValue = 0f,
@@ -328,9 +346,9 @@ fun IslandWave(isPlaying: Boolean, modifier: Modifier = Modifier) {
         val midY = h / 2f
         val amp = if (isPlaying) h * 0.38f else h * 0.12f
         listOf(
-            IslandWave1 to 0f,
-            IslandWave2 to 2.1f,
-            IslandWave3 to 4.2f
+            color1 to 0f,
+            color2 to 2.1f,
+            color3 to 4.2f
         ).forEach { (color, off) ->
             val path = Path()
             val steps = 40
@@ -367,8 +385,16 @@ private fun IslandExpandedContent(
     onOpenApp: () -> Unit,
     onQuickAction: (QuickAction) -> Unit,
     onCollapse: () -> Unit,
+    appearance: String,
     modifier: Modifier = Modifier
 ) {
+    // Colores según el aspecto (auto = tema, classic = negro + primario).
+    val scheme = MaterialTheme.colorScheme
+    val classic = appearance == "classic"
+    val islandAccent = scheme.primary
+    val islandAccent2 = if (classic) Color(0xFF8B5CF6) else scheme.secondary
+    val islandOnBg = if (classic) Color.White else scheme.onSurface
+    val islandOnAccent = scheme.onPrimary
     var sliderPos by remember(positionMs) { mutableStateOf(positionMs.toFloat()) }
     var seeking by remember { mutableStateOf(false) }
     Column(
@@ -389,7 +415,7 @@ private fun IslandExpandedContent(
                 Icon(
                     Icons.Default.Close,
                     contentDescription = "Compactar isla",
-                    tint = Color.White.copy(alpha = 0.7f),
+                    tint = islandOnBg.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -407,7 +433,7 @@ private fun IslandExpandedContent(
                 Icon(
                     Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = IslandAccent.copy(alpha = 0.5f),
+                    tint = islandAccent.copy(alpha = 0.5f),
                     modifier = Modifier.size(24.dp)
                 )
                 if (!coverUri.isNullOrBlank()) {
@@ -423,7 +449,7 @@ private fun IslandExpandedContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = islandOnBg,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     maxLines = 1,
@@ -431,7 +457,7 @@ private fun IslandExpandedContent(
                 )
                 Text(
                     text = artist,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = islandOnBg.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -439,7 +465,10 @@ private fun IslandExpandedContent(
             }
             IslandWave(
                 isPlaying = isPlaying,
-                modifier = Modifier.size(width = 52.dp, height = 26.dp)
+                modifier = Modifier.size(width = 52.dp, height = 26.dp),
+                color1 = islandAccent,
+                color2 = islandAccent2,
+                color3 = if (classic) Color(0xFFFF7A1A) else scheme.tertiary
             )
         }
         Spacer(Modifier.height(12.dp))
@@ -457,9 +486,9 @@ private fun IslandExpandedContent(
             },
             valueRange = 0f..dur.toFloat(),
             colors = SliderDefaults.colors(
-                thumbColor = IslandAccent,
-                activeTrackColor = IslandAccent,
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                thumbColor = islandAccent,
+                activeTrackColor = islandAccent,
+                inactiveTrackColor = islandOnBg.copy(alpha = 0.2f)
             ),
             // Barra fina estilizada (menos gruesa que el Slider por defecto).
             track = { sliderState ->
@@ -474,13 +503,13 @@ private fun IslandExpandedContent(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.18f))
+                        .background(islandOnBg.copy(alpha = 0.18f))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(fraction)
-                            .background(IslandAccent)
+                            .background(islandAccent)
                     )
                 }
             },
@@ -490,10 +519,10 @@ private fun IslandExpandedContent(
                         .size(14.dp)
                         .shadow(
                             4.dp, CircleShape,
-                            spotColor = IslandAccent.copy(alpha = 0.6f)
+                            spotColor = islandAccent.copy(alpha = 0.6f)
                         )
                         .clip(CircleShape)
-                        .background(IslandAccent)
+                        .background(islandAccent)
                 )
             },
             modifier = Modifier.fillMaxWidth()
@@ -504,12 +533,12 @@ private fun IslandExpandedContent(
         ) {
             Text(
                 text = formatMs(if (seeking) sliderPos.toLong() else positionMs),
-                color = Color.White.copy(alpha = 0.6f),
+                color = islandOnBg.copy(alpha = 0.6f),
                 fontSize = 11.sp
             )
             Text(
                 text = formatMs(durationMs),
-                color = Color.White.copy(alpha = 0.6f),
+                color = islandOnBg.copy(alpha = 0.6f),
                 fontSize = 11.sp
             )
         }
@@ -523,7 +552,7 @@ private fun IslandExpandedContent(
                 Icon(
                     Icons.Default.SkipPrevious,
                     contentDescription = "Anterior",
-                    tint = Color.White,
+                    tint = islandOnBg,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -532,12 +561,12 @@ private fun IslandExpandedContent(
                 onClick = onTogglePlay,
                 modifier = Modifier
                     .size(60.dp)
-                    .background(IslandAccent, CircleShape)
+                    .background(islandAccent, CircleShape)
             ) {
                 Icon(
                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                    tint = Color.Black,
+                    tint = islandOnAccent,
                     modifier = Modifier.size(34.dp)
                 )
             }
@@ -546,7 +575,7 @@ private fun IslandExpandedContent(
                 Icon(
                     Icons.Default.SkipNext,
                     contentDescription = "Siguiente",
-                    tint = Color.White,
+                    tint = islandOnBg,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -570,7 +599,7 @@ private fun IslandExpandedContent(
         Spacer(Modifier.height(4.dp))
         Text(
             text = "Abrir Aural",
-            color = IslandAccent,
+            color = islandAccent,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
@@ -595,7 +624,7 @@ private fun IslandActionButton(
             onClick = onClick,
             modifier = Modifier
                 .size(48.dp)
-                .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                .background(islandOnBg.copy(alpha = 0.1f), CircleShape)
         ) {
             Icon(
                 icon,
@@ -605,7 +634,7 @@ private fun IslandActionButton(
             )
         }
         Spacer(Modifier.height(4.dp))
-        Text(text = label, color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+        Text(text = label, color = islandOnBg.copy(alpha = 0.7f), fontSize = 11.sp)
     }
 }
 
