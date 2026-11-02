@@ -39,6 +39,9 @@ class SettingsStore(private val context: Context) {
         val KEY_LAST_PLAYBACK = stringPreferencesKey("last_playback_json")
         val KEY_DAILY_PLAYLIST = stringPreferencesKey("daily_playlist_json")
         val KEY_THEME_BEFORE_HALLOWEEN = stringPreferencesKey("theme_before_halloween")
+        val KEY_HIDDEN_FOLDERS = stringPreferencesKey("hidden_folders_json")
+        val KEY_THEME_BEFORE_CHRISTMAS = stringPreferencesKey("theme_before_christmas")
+        val KEY_ISLAND_ENABLED = booleanPreferencesKey("island_enabled")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -135,6 +138,36 @@ class SettingsStore(private val context: Context) {
             } else if (current == "HALLOWEEN") {
                 prefs[KEY_THEME] = prefs[KEY_THEME_BEFORE_HALLOWEEN] ?: "BOSQUE"
                 prefs.remove(KEY_THEME_BEFORE_HALLOWEEN)
+            }
+        }
+    }
+
+    // ------------------------- Tema de temporada: Navidad (v1.0.7) -------------------------
+
+    /**
+     * Auto-aplicado del tema Navidad. Mismo patrón que Halloween:
+     * - Dentro de la ventana (20-dic..26-dic): la PRIMERA vez activa
+     *   CHRISTMAS, guardando el tema previo en theme_before_christmas y
+     *   marcando el flag christmas_applied_<año>. Si el usuario luego elige
+     *   otro tema en el picker, se respeta: no se re-aplica.
+     * - Fuera de la ventana: si el tema activo es CHRISTMAS, restaura el
+     *   tema previo (o Aural Classic si no hay).
+     */
+    suspend fun runChristmasAutoTheme(isChristmasWindow: Boolean, year: Int) {
+        context.dataStore.edit { prefs ->
+            val appliedKey = booleanPreferencesKey("christmas_applied_$year")
+            val current = prefs[KEY_THEME] ?: "BOSQUE"
+            if (isChristmasWindow) {
+                if (prefs[appliedKey] != true) {
+                    if (current != "CHRISTMAS") {
+                        prefs[KEY_THEME_BEFORE_CHRISTMAS] = current
+                    }
+                    prefs[KEY_THEME] = "CHRISTMAS"
+                    prefs[appliedKey] = true
+                }
+            } else if (current == "CHRISTMAS") {
+                prefs[KEY_THEME] = prefs[KEY_THEME_BEFORE_CHRISTMAS] ?: "BOSQUE"
+                prefs.remove(KEY_THEME_BEFORE_CHRISTMAS)
             }
         }
     }
@@ -367,6 +400,16 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Añade varias canciones al final de la playlist (sin duplicar). v1.0.7. */
+    suspend fun addAllToPlaylist(playlistId: String, songIds: List<Long>) =
+        mutatePlaylists { list ->
+            list.map { pl ->
+                if (pl.id == playlistId) {
+                    val existing = pl.songIds.toSet()
+                    pl.copy(songIds = pl.songIds + songIds.filterNot { it in existing })
+                } else pl
+            }
+        }
     /** Quita una canción de la playlist. */
     suspend fun removeFromPlaylist(playlistId: String, songId: Long) = mutatePlaylists { list ->
         list.map { pl ->
@@ -462,6 +505,16 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Marca varias canciones como favoritas (sin quitar las que ya lo son). v1.0.7. */
+    suspend fun addFavorites(songIds: List<Long>) {
+        if (songIds.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = decodeFavorites(prefs[KEY_FAVORITES]).toMutableSet()
+            current.addAll(songIds)
+            prefs[KEY_FAVORITES] = JSONArray(current.toList()).toString()
+        }
+    }
+
     /** Guarda el orden completo de favoritos (la UI reordena en local y confirma al soltar). */
     suspend fun setFavoriteOrder(songIds: List<Long>) {
         context.dataStore.edit { prefs ->
@@ -509,6 +562,45 @@ class SettingsStore(private val context: Context) {
             (0 until arr.length()).map { arr.getLong(it) }.toSet()
         } catch (e: Exception) {
             emptySet()
+        }
+    }
+
+    // ------------------------- Carpetas ocultas (v1.0.7) -------------------------
+
+    /** Rutas de carpetas que el usuario ocultó de la biblioteca. */
+    val hiddenFolders: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        decodeStringSet(prefs[KEY_HIDDEN_FOLDERS])
+    }
+
+    /** Oculta o muestra una carpeta. */
+    suspend fun toggleHiddenFolder(path: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodeStringSet(prefs[KEY_HIDDEN_FOLDERS]).toMutableSet()
+            if (!current.add(path)) current.remove(path)
+            prefs[KEY_HIDDEN_FOLDERS] = JSONArray(current.toList()).toString()
+        }
+    }
+
+    private fun decodeStringSet(json: String?): Set<String> {
+        if (json.isNullOrBlank()) return emptySet()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { arr.getString(it) }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    // ------------------------- Isla dinámica (v1.0.7) -------------------------
+
+    /** Si la isla dinámica está activada. */
+    val islandEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ISLAND_ENABLED] ?: false
+    }
+
+    suspend fun setIslandEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ISLAND_ENABLED] = enabled
         }
     }
 
