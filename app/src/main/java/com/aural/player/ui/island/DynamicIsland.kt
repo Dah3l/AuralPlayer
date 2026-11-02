@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -111,11 +112,6 @@ fun IslandOverlayContent(
     val artist = meta?.second?.ifBlank { song.artist } ?: song.artist
     val coverUri = customCovers[song.id] ?: song.albumArtUri
 
-    // Al cambiar de canción, la isla vuelve a colapsada.
-    androidx.compose.runtime.LaunchedEffect(song.id) {
-        expanded = false
-    }
-
     Box(
         modifier = Modifier
             .widthIn(max = 340.dp)
@@ -162,11 +158,14 @@ fun IslandOverlayContent(
                             ctx, com.aural.player.MainActivity::class.java
                         ).apply {
                             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            putExtra(
+                                com.aural.player.MainActivity.EXTRA_OPEN_HOME,
+                                true
+                            )
                         }
                         ctx.startActivity(intent)
                     },
                     onQuickAction = { action -> handleQuickAction(app, action) },
-                    onClose = onClose,
                     onCollapse = { expanded = false }
                 )
             } else {
@@ -267,8 +266,8 @@ private fun IslandCollapsedContent(
             modifier = Modifier.width(135.dp), // tamaño fijo ~2.1 cm
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Portada en círculo; si no hay, la nota musical por defecto.
-            if (coverUri != null) {
+            // Portada en círculo; si no hay (nula o vacía), la nota musical.
+            if (!coverUri.isNullOrBlank()) {
                 AsyncImage(
                     model = android.net.Uri.parse(coverUri),
                     contentDescription = null,
@@ -367,7 +366,6 @@ private fun IslandExpandedContent(
     onSeek: (Long) -> Unit,
     onOpenApp: () -> Unit,
     onQuickAction: (QuickAction) -> Unit,
-    onClose: () -> Unit,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -387,10 +385,10 @@ private fun IslandExpandedContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
         ) {
-            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onCollapse, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Cerrar isla",
+                    contentDescription = "Compactar isla",
                     tint = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -463,6 +461,41 @@ private fun IslandExpandedContent(
                 activeTrackColor = IslandAccent,
                 inactiveTrackColor = Color.White.copy(alpha = 0.2f)
             ),
+            // Barra fina estilizada (menos gruesa que el Slider por defecto).
+            track = { sliderState ->
+                val range = sliderState.valueRange
+                val fraction =
+                    if (range.endInclusive > range.start)
+                        ((sliderState.value - range.start) /
+                                (range.endInclusive - range.start)).coerceIn(0f, 1f)
+                    else 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.18f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction)
+                            .background(IslandAccent)
+                    )
+                }
+            },
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .shadow(
+                            4.dp, CircleShape,
+                            spotColor = IslandAccent.copy(alpha = 0.6f)
+                        )
+                        .clip(CircleShape)
+                        .background(IslandAccent)
+                )
+            },
             modifier = Modifier.fillMaxWidth()
         )
         Row(
