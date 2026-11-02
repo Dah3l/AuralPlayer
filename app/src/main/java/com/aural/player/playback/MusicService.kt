@@ -30,6 +30,8 @@ import com.aural.player.AuralApp
 import com.aural.player.MainActivity
 import com.aural.player.R
 import com.aural.player.ui.island.IslandOverlayContent
+import com.aural.player.ui.theme.AppTheme
+import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.island.QuickAction
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -271,14 +273,25 @@ class MusicService : MediaSessionService() {
             setViewTreeViewModelStoreOwner(IslandViewModelStoreOwner())
             setViewTreeSavedStateRegistryOwner(savedStateOwner)
             setContent {
-                IslandOverlayContent(
-                    app = app,
-                    onClose = {
-                        // La X la oculta por ahora; NO toca el ajuste.
-                        islandDismissed = true
-                        hideIslandOverlay()
-                    }
-                )
+                // La isla vive en un overlay del servicio: se envuelve en el
+                // tema guardado para que siga al tema de la app.
+                val themeName by app.settings.appTheme
+                    .collectAsState(initial = "BOSQUE")
+                val theme = try {
+                    AppTheme.valueOf(themeName)
+                } catch (_: Exception) {
+                    AppTheme.BOSQUE
+                }
+                AuralTheme(theme = theme) {
+                    IslandOverlayContent(
+                        app = app,
+                        onClose = {
+                            // La X la oculta por ahora; NO toca el ajuste.
+                            islandDismissed = true
+                            hideIslandOverlay()
+                        }
+                    )
+                }
             }
         }
         try {
