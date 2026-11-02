@@ -1,5 +1,5 @@
 // Pantalla de Ajustes (v1.0.7): agrupa lo que antes vivía en el menú ⋮
-// (ecualizador, isla dinámica, carpetas ocultas, acerca de, licencia,
+// (ecualizador, Dynamic Aural, carpetas ocultas, acerca de, licencia,
 // repositorio) para que el menú quede corto.
 package com.aural.player.ui.screens
 
@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +64,8 @@ fun SettingsScreen(
     onOpenEqualizer: () -> Unit,
     islandEnabled: Boolean,
     onToggleIsland: () -> Unit,
+    islandAppearance: String,
+    onIslandAppearance: (String) -> Unit,
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
@@ -128,13 +131,34 @@ fun SettingsScreen(
             SettingsSection("Interfaz")
             SettingsRow(
                 icon = Icons.Rounded.PhoneAndroid,
-                title = "Isla dinámica",
+                title = "Dynamic Aural",
                 subtitle = "Píldora flotante con la música fuera de la app",
                 trailing = {
                     Switch(checked = islandEnabled, onCheckedChange = { onToggleIsland() })
                 },
                 onClick = onToggleIsland
             )
+            // Aspecto de Dynamic Aural: auto (según el tema) o classic (negra).
+            if (islandEnabled) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Spacer(Modifier.width(40.dp))
+                    FilterChip(
+                        selected = islandAppearance == "auto",
+                        onClick = { onIslandAppearance("auto") },
+                        label = { Text("Automático") }
+                    )
+                    FilterChip(
+                        selected = islandAppearance == "classic",
+                        onClick = { onIslandAppearance("classic") },
+                        label = { Text("Clásico") }
+                    )
+                }
+            }
             SettingsSection("Biblioteca")
             SettingsRow(
                 icon = Icons.Rounded.Folder,
