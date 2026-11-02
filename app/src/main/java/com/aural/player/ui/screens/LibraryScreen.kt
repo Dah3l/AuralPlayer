@@ -62,6 +62,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,6 +80,7 @@ import com.aural.player.data.Song
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.HalloweenHomeAmbient
+import com.aural.player.ui.components.ChristmasHomeAmbient
 import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.theme.HalloweenFontFamily
 import com.aural.player.ui.components.SectionHeader
@@ -111,6 +113,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -137,6 +140,9 @@ fun LibraryScreen(
     onOpenPlaylist: (playlistId: String) -> Unit,
     onOpenThemes: () -> Unit,
     onSongMenu: (song: Song) -> Unit,
+    onOpenEqualizer: () -> Unit = {},
+    onToggleIsland: () -> Unit = {},
+    onOpenDonate: () -> Unit = {},
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -189,6 +195,13 @@ fun LibraryScreen(
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf<UpdateInfo?>(null) }
+    // v1.0.7: selección múltiple en Canciones.
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateListOf<Long>() }
+    var showPlaylistPicker by remember { mutableStateOf(false) }
+    // v1.0.7: ocultar carpeta (long-press en Carpetas).
+    var folderHideTarget by remember { mutableStateOf<com.aural.player.data.Folder?>(null) }
+    var showHiddenFolders by remember { mutableStateOf(false) }
     var manualUpdateMessage by remember { mutableStateOf<String?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
@@ -266,6 +279,8 @@ fun LibraryScreen(
     // (tema real del menú, no por fecha sola).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
     val isHalloween = themeName == AppTheme.HALLOWEEN.name
+    // v1.0.7: Navidad sigue el mismo patrón.
+    val isChristmas = themeName == AppTheme.CHRISTMAS.name
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
@@ -473,7 +488,18 @@ fun LibraryScreen(
                                 }
                                 if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
                             },
-                            onSeeAllPlaylists = { onTabSelected(3) }
+                            onSeeAllPlaylists = { onTabSelected(3) },
+                            selectionMode = selectionMode,
+                            selectedIds = selectedIds.toSet(),
+                            onToggleSelect = { song ->
+                                if (song.id in selectedIds) selectedIds.remove(song.id)
+                                else selectedIds.add(song.id)
+                            },
+                            onEnterSelection = { song ->
+                                selectionMode = true
+                                selectedIds.clear()
+                                selectedIds.add(song.id)
+                            }
                         )
 
                         1 -> ArtistsTab(
@@ -543,7 +569,8 @@ fun LibraryScreen(
                         5 -> FoldersTab(
                             folders = folders,
                             onPlay = { folder -> onPlayList(folder.songs, 0, null) },
-                            gridState = foldersGridState
+                            gridState = foldersGridState,
+                            onHideFolder = { folder -> folderHideTarget = folder }
                         )
                     }
                 }
@@ -609,8 +636,7 @@ fun LibraryScreen(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 8.dp, end = 16.dp)
-        ) {
-            IconButton(onClick = { showGeneralMenu = true }) {
+        ) {            IconButton(onClick = { showGeneralMenu = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Menú")
             }
             DropdownMenu(
@@ -666,13 +692,90 @@ fun LibraryScreen(
                     text = { Text("Tema") },
                     onClick = { showGeneralMenu = false; onOpenThemes() }
                 )
+                DropdownMenuItem(
+                    text = { Text("Ecualizador") },
+                    onClick = { showGeneralMenu = false; onOpenEqualizer() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Isla dinámica") },
+                    onClick = { showGeneralMenu = false; onToggleIsland() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Carpetas ocultas") },
+                    onClick = { showGeneralMenu = false; showHiddenFolders = true }
+                )
+                DropdownMenuItem(
+                    text = { Text("❤ Apoyar a Aural") },
+                    onClick = { showGeneralMenu = false; onOpenDonate() }
+                )
+            }
+        }
+    }
+
+    // ---- v1.0.7: barra de selección múltiple ----
+    androidx.activity.compose.BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedIds.clear()
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = selectionMode,
+        enter = androidx.compose.animation.slideInVertically { -it },
+        exit = androidx.compose.animation.slideOutVertically { -it },
+        modifier = Modifier.align(Alignment.TopCenter)
+    ) {
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                bottomStart = 20.dp, bottomEnd = 20.dp
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    selectionMode = false
+                    selectedIds.clear()
+                }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Cancelar selección")
+                }
+                Text(
+                    text = "${selectedIds.size} seleccionada${if (selectedIds.size == 1) "" else "s"}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = { showPlaylistPicker = true },
+                    enabled = selectedIds.isNotEmpty()
+                ) { Text("Playlist") }
+                TextButton(
+                    onClick = {
+                        val byId = songs.associateBy { it.id }
+                        viewModel.playback.enqueueAll(selectedIds.mapNotNull { byId[it] })
+                        selectionMode = false
+                        selectedIds.clear()
+                    },
+                    enabled = selectedIds.isNotEmpty()
+                ) { Text("A la cola") }
+                TextButton(
+                    onClick = {
+                        viewModel.addFavorites(selectedIds.toList())
+                        selectionMode = false
+                        selectedIds.clear()
+                    },
+                    enabled = selectedIds.isNotEmpty()
+                ) { Text("❤") }
             }
         }
     }
 
     // ---- Diálogo para crear playlist ----
-    renameTarget?.let { pl ->
-        RenamePlaylistDialog(
+    renameTarget?.let { pl ->        RenamePlaylistDialog(
             currentName = pl.name,
             onDismiss = { renameTarget = null },
             onConfirm = { newName ->
@@ -716,6 +819,96 @@ fun LibraryScreen(
             onConfirm = { name ->
                 viewModel.saveDailyPlaylistAsPermanent(name)
                 showSaveDaily = false
+            }
+        )
+    }
+
+    // ---- v1.0.7: elegir playlist para la selección múltiple ----
+    if (showPlaylistPicker) {
+        AlertDialog(
+            onDismissRequest = { showPlaylistPicker = false },
+            title = { Text("Añadir ${selectedIds.size} a la playlist") },
+            text = {
+                LazyColumn(modifier = Modifier.height(280.dp)) {
+                    items(playlists, key = { it.id }) { pl ->
+                        TextButton(
+                            onClick = {
+                                viewModel.addAllToPlaylist(pl.id, selectedIds.toList())
+                                showPlaylistPicker = false
+                                selectionMode = false
+                                selectedIds.clear()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                pl.name,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPlaylistPicker = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // ---- v1.0.7: confirmar ocultar carpeta ----
+    folderHideTarget?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { folderHideTarget = null },
+            title = { Text("Ocultar carpeta") },
+            text = { Text("¿Ocultar \"${folder.displayName}\" de la biblioteca? Podrás mostrarla de nuevo en el menú ⋮ → Carpetas ocultas.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.toggleHiddenFolder(folder.path)
+                    folderHideTarget = null
+                }) { Text("Ocultar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderHideTarget = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // ---- v1.0.7: gestionar carpetas ocultas ----
+    if (showHiddenFolders) {
+        val hidden by viewModel.hiddenFolders.collectAsStateWithLifecycle()
+        AlertDialog(
+            onDismissRequest = { showHiddenFolders = false },
+            title = { Text("Carpetas ocultas") },
+            text = {
+                if (hidden.isEmpty()) {
+                    Text("No hay carpetas ocultas. Mantén pulsada una carpeta en la pestaña Carpetas para ocultarla.")
+                } else {
+                    LazyColumn(modifier = Modifier.height(280.dp)) {
+                        items(hidden.toList(), key = { it }) { path ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = path.ifBlank { "Desconocida" },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                TextButton(onClick = {
+                                    viewModel.toggleHiddenFolder(path)
+                                }) { Text("Mostrar") }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHiddenFolders = false }) { Text("Cerrar") }
             }
         )
     }
@@ -764,10 +957,10 @@ fun LibraryScreen(
     showUpdateDialog?.let { info ->
         UpdateAvailableDialog(
             info = info,
-            onDownload = {
+            onDownload = { url ->
                 showUpdateDialog = null
                 appContext.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(info.url))
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 )
             },
             onLater = {
@@ -811,9 +1004,12 @@ fun LibraryScreen(
     }
 
     // ---- Ambiente Halloween (tema activo): dibujo puro, no consume toques ----
-    // Navidad (diciembre): enganchar ChristmasHomeAmbient() con theme == CHRISTMAS.
+    // Navidad (diciembre): mismo patrón con ChristmasHomeAmbient.
     if (isHalloween && isAmbientVisible) {
         HalloweenHomeAmbient(Modifier.fillMaxSize())
+    }
+    if (isChristmas && isAmbientVisible) {
+        ChristmasHomeAmbient(Modifier.fillMaxSize())
     }
 
 }
@@ -966,7 +1162,12 @@ private fun SongsTab(
     topPlaylists: List<TopPlaylist> = emptyList(),
     onOpenPlaylist: (String) -> Unit = {},
     onPlayPlaylist: (String) -> Unit = {},
-    onSeeAllPlaylists: () -> Unit = {}
+    onSeeAllPlaylists: () -> Unit = {},
+    // v1.0.7: selección múltiple.
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: (Song) -> Unit = {},
+    onEnterSelection: (Song) -> Unit = {}
 ) {
     if (songs.isEmpty()) {
         EmptyState("Sin resultados para tu búsqueda")
@@ -998,10 +1199,17 @@ private fun SongsTab(
                     coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == currentId,
-                    onClick = { onPlay(song) },
+                    onClick = {
+                        if (selectionMode) onToggleSelect(song) else onPlay(song)
+                    },
+                    onLongClick = { onEnterSelection(song) },
+                    selected = song.id in selectedIds,
+                    showCheckbox = selectionMode,
                     trailing = {
-                        TextButton(onClick = { onMenu(song) }) {
-                            Text("···", style = MaterialTheme.typography.titleMedium)
+                        if (!selectionMode) {
+                            TextButton(onClick = { onMenu(song) }) {
+                                Text("···", style = MaterialTheme.typography.titleMedium)
+                            }
                         }
                     }
                 )
@@ -1390,7 +1598,9 @@ private fun FoldersTab(
     onPlay: (com.aural.player.data.Folder) -> Unit,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState =
         androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
-    customCovers: Map<Long, String> = emptyMap()
+    customCovers: Map<Long, String> = emptyMap(),
+    // v1.0.7: ocultar carpeta con long-press.
+    onHideFolder: (com.aural.player.data.Folder) -> Unit = {}
 ) {
     if (folders.isEmpty()) {
         EmptyState("Sin carpetas"); return
@@ -1402,13 +1612,62 @@ private fun FoldersTab(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(folders, key = { it.path }) { folder ->
-            MediaGridCard(
-                coverUri = folder.songs.firstOrNull()?.albumArtUri,
-                title = folder.displayName,
-                subtitle = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
-                onClick = { onPlay(folder) }
+            FolderCard(
+                folder = folder,
+                onClick = { onPlay(folder) },
+                onLongClick = { onHideFolder(folder) }
             )
         }
+    }
+}
+
+/** Tarjeta de carpeta con long-press para ocultarla. v1.0.7. */
+@Composable
+private fun FolderCard(
+    folder: com.aural.player.data.Folder,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "folder_press"
+    )
+    Column(
+        modifier = Modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(36.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = folder.displayName,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Text(
+            text = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
