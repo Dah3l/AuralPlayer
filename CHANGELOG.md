@@ -18,6 +18,8 @@ en GitHub salen de aquí.
 - **Apoya a Aural** — nueva pantalla desde el menú ⋮ → "❤ Apoyar a Aural": si te gusta la app, puedes aportar por Transfermóvil (número de tarjeta con botón para copiar e instrucciones paso a paso) o por QvaPay (@Dah3l, con botón para copiar), con el monto que quieras.
 - **Pantalla de Ajustes** — el menú ⋮ ahora solo trae Tema, Buscar actualizaciones, ❤ Apoyar a Aural y Ajustes. Todo lo demás (ecualizador, isla dinámica, carpetas ocultas, acerca de, licencia y repositorio) vive en la nueva pantalla de Ajustes, con secciones y su interruptor para la isla dinámica.
 - **Arreglos** — la pantalla del ecualizador ya no se ve transparente ni pegada a la barra de estado; la isla dinámica ya no tumba la app al salir de ella.
+- **Isla dinámica, refinada** — posición fija bajo la cámara (ya no se arrastra); píldora resumida más pequeña con solo el título en marquesina y la onda en chiquito; expandida compacta (máx. 340dp); la X la oculta por ahora y reaparece sola con canción nueva, play/pausa o al salir y volver a Aural (el interruptor de Ajustes sigue siendo el apagado total); sombra y borde sutil para que se distinga del fondo.
+- **Pantalla de Ajustes** — el menú ⋮ ahora solo trae Tema, Buscar actualizaciones, ❤ Apoyar a Aural y Ajustes; el botón atrás (gesto o flecha) vuelve a la pantalla anterior en Ajustes y en el ecualizador.
 
 ## v1.0.6 — 2026-10-28
 
