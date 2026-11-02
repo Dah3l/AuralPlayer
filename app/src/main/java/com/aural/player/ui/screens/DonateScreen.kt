@@ -108,14 +108,14 @@ fun DonateScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "¿Te gusta Aural? Apóyame ☕",
+                text = "¿Te gusta Aural? ¡Dale cariño! ❤",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Aural es gratis y sin anuncios. Si quieres apoyar su desarrollo, puedes donar lo que desees por cualquiera de estas vías:",
+                text = "Aural es gratis, sin anuncios y sin letra pequeña. Si quieres que siga creciendo — más funciones, más música, más fiesta — puedes aportar lo que desees por cualquiera de estas vías. ¡Cada granito cuenta! 🎶",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
