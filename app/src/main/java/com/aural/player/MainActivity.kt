@@ -539,7 +539,7 @@ private fun AuralApp(viewModel: AuralViewModel,
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
-            onOpenEqualizer = { showSettingsScreen = false; showEqualizerScreen = true },
+            onOpenEqualizer = { showEqualizerScreen = true },
             islandEnabled = islandOn,
             onToggleIsland = onToggleIsland,
             viewModel = viewModel
