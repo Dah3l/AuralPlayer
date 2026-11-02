@@ -31,6 +31,8 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -137,6 +139,7 @@ fun LibraryScreen(
     viewModel: AuralViewModel,
     onPlayList: (songs: List<Song>, index: Int, playlistId: String?) -> Unit,
     onOpenAlbum: (albumTitle: String) -> Unit,
+    onOpenFolder: (folder: com.aural.player.data.Folder) -> Unit = {},
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
     onOpenThemes: () -> Unit,
@@ -173,7 +176,6 @@ fun LibraryScreen(
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
-    val foldersGridState = rememberLazyGridState()
     val pillsListState = rememberLazyListState()
 
     // La fila de pills se desplaza sola para mostrar la pestaña activa
@@ -567,8 +569,7 @@ fun LibraryScreen(
                         }
                         5 -> FoldersTab(
                             folders = folders,
-                            onPlay = { folder -> onPlayList(folder.songs, 0, null) },
-                            gridState = foldersGridState,
+                            onOpen = { folder -> onOpenFolder(folder) },
                             onHideFolder = { folder -> folderHideTarget = folder }
                         )
                     }
@@ -1491,83 +1492,76 @@ private fun PlaylistsTab(
 
 // --------------------------- Pestaña: Carpetas ---------------------------
 
+/**
+ * Carpetas en lista (no cuadrícula): tocar abre la lista de canciones
+ * (como álbum/playlist), el ojo oculta la carpeta con confirmación.
+ */
 @Composable
 private fun FoldersTab(
     folders: List<com.aural.player.data.Folder>,
-    onPlay: (com.aural.player.data.Folder) -> Unit,
-    gridState: androidx.compose.foundation.lazy.grid.LazyGridState =
-        androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
-    customCovers: Map<Long, String> = emptyMap(),
-    // v1.0.7: ocultar carpeta con long-press.
+    onOpen: (com.aural.player.data.Folder) -> Unit,
     onHideFolder: (com.aural.player.data.Folder) -> Unit = {}
 ) {
     if (folders.isEmpty()) {
         EmptyState("Sin carpetas"); return
     }
-    LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Adaptive(minSize = 150.dp),
-        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    androidx.compose.foundation.lazy.LazyColumn(
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         items(folders, key = { it.path }) { folder ->
-            FolderCard(
+            FolderRow(
                 folder = folder,
-                onClick = { onPlay(folder) },
-                onLongClick = { onHideFolder(folder) }
+                onClick = { onOpen(folder) },
+                onHide = { onHideFolder(folder) }
             )
         }
     }
 }
 
-/** Tarjeta de carpeta con long-press para ocultarla. v1.0.7. */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+/** Fila de carpeta: icono, nombre, conteo y botón para ocultarla. */
 @Composable
-private fun FolderCard(
+private fun FolderRow(
     folder: com.aural.player.data.Folder,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onHide: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        label = "folder_press"
-    )
-    Column(
+    Row(
         modifier = Modifier
-            .scale(scale)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Rounded.MusicNote,
+            imageVector = Icons.Rounded.Folder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(40.dp)
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = folder.displayName,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-        Text(
-            text = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = folder.displayName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onHide) {
+            Icon(
+                imageVector = Icons.Rounded.VisibilityOff,
+                contentDescription = "Ocultar carpeta",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
