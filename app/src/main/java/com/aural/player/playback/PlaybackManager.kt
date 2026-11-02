@@ -222,6 +222,19 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /** Añade varias canciones al final de la cola (selección múltiple). v1.0.7. */
+    fun enqueueAll(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val c = controller ?: return
+        val wasEmpty = c.mediaItemCount == 0
+        c.addMediaItems(songs.map { it.toMediaItem() })
+        if (wasEmpty) {
+            c.prepare()
+            c.playWhenReady = true
+        }
+        publishState()
+    }
+
     fun togglePlayPause() {
         val c = controller ?: return
         if (c.isPlaying) c.pause() else c.play()
