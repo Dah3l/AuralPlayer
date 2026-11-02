@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.colorScheme
+import com.aural.player.ui.theme.isChristmasWindow
 import com.aural.player.ui.theme.isHalloweenWindow
 
 /**
@@ -59,9 +60,10 @@ fun ThemesScreen(
     gridState: LazyGridState
 ) {
     // Halloween aparece en el menú solo durante su ventana (27-oct..1-nov).
-    // Navidad (diciembre): añadir aquí su condición con isChristmasWindow().
+    // Navidad aparece solo durante la suya (20-dic..26-dic).
     val visibleThemes = AppTheme.entries.filter {
-        it != AppTheme.HALLOWEEN || isHalloweenWindow()
+        (it != AppTheme.HALLOWEEN || isHalloweenWindow()) &&
+            (it != AppTheme.CHRISTMAS || isChristmasWindow())
     }
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -161,8 +163,8 @@ private fun ThemeCard(
                 color = scheme.onBackground,
                 maxLines = 1
             )
-            // Etiquetita de temporada (Halloween solo aparece en su ventana)
-            if (theme == AppTheme.HALLOWEEN) {
+            // Etiquetita de temporada (Halloween/Navidad solo aparecen en su ventana)
+            if (theme == AppTheme.HALLOWEEN || theme == AppTheme.CHRISTMAS) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = "Temporada",
