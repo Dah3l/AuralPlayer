@@ -17,7 +17,9 @@ fun LyricsSearchDialog(
     onSearch: (track: String, artist: String) -> Unit
 ) {
     var track by remember { mutableStateOf(initialTrack) }
-    var artist by remember { mutableStateOf(initialArtist) }
+    var artist by remember {
+        mutableStateOf(initialArtist.takeUnless { it == "Artista misterioso" } ?: "")
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
