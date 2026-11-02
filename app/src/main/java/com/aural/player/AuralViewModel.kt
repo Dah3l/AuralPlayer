@@ -224,6 +224,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** FUENTE ÚNICA: canciones con metadatos personalizados aplicados.
      *  Toda la UI debe usar este Flow. Se actualiza automáticamente cuando
      *  cambian la biblioteca o los metadatos personalizados. */
+    /** Carpetas ocultas por el usuario. v1.0.7. */
+    val hiddenFolders: StateFlow<Set<String>> = settings.hiddenFolders.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptySet()
+    )
+
     val songsFlow: StateFlow<List<Song>> = combine(
         _library,
         customMetadata
@@ -239,14 +244,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Canciones filtradas por búsqueda (usa metadatos efectivos). */
+    /** Canciones filtradas por búsqueda (usa metadatos efectivos,
+     *  sin las canciones de carpetas ocultas). */
     val filteredSongsFlow: StateFlow<List<Song>> = combine(
         songsFlow,
-        _library
-    ) { songs, library ->
+        _library,
+        hiddenFolders
+    ) { songs, library, hidden ->
+        val visible = if (hidden.isEmpty()) songs
+        else songs.filter { it.folderPath !in hidden }
         val query = library.query
-        val filtered = if (query.isBlank()) songs
-        else songs.filter {
+        val filtered = if (query.isBlank()) visible
+        else visible.filter {
             it.title.contains(query, true) ||
                 it.artist.contains(query, true) ||
                 it.album.contains(query, true)
@@ -263,11 +272,6 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     val albumsFlow: StateFlow<List<Album>> = filteredSongsFlow
         .map { repository.groupByAlbum(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** Carpetas ocultas por el usuario. v1.0.7. */
-    val hiddenFolders: StateFlow<Set<String>> = settings.hiddenFolders.stateIn(
-        viewModelScope, SharingStarted.Eagerly, emptySet()
-    )
 
     /** Carpetas agrupadas (sin las ocultas por el usuario). v1.0.7. */
     val foldersFlow: StateFlow<List<Folder>> = combine(
