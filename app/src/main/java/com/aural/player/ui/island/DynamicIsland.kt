@@ -195,9 +195,11 @@ fun IslandOverlayContent(
     // El padding exterior le da aire a la sombra (14dp): la ventana usa
     // WRAP_CONTENT y sin este aire la sombra se recorta en recto,
     // dejando "esquinas" visibles sobre fondos claros.
+    // TopCenter: en expandida la isla queda arriba como antes
+    // (la sombra respira abajo); en colapsada no cambia nada.
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
     Box(
         modifier = Modifier
