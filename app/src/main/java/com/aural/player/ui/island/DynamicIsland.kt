@@ -192,8 +192,16 @@ fun IslandOverlayContent(
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
     val islandShape = RoundedCornerShape(cornerA.value.dp)
+    // El padding exterior le da aire a la sombra (14dp): la ventana usa
+    // WRAP_CONTENT y sin este aire la sombra se recorta en recto,
+    // dejando "esquinas" visibles sobre fondos claros.
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
     Box(
         modifier = Modifier
+            .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
             .shadow(14.dp, islandShape)
             .clip(islandShape)
@@ -237,6 +245,7 @@ fun IslandOverlayContent(
             }
         }
     }
+    } // caja exterior: aire para la sombra
 }
 
 /**
