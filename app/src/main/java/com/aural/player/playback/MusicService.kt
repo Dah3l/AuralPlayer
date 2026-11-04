@@ -257,7 +257,9 @@ class MusicService : MediaSessionService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = statusBarPx + (10 * density).toInt()
+            // -16dp: compensa el padding anti-recorte de la sombra para
+            // que la píldora quede a statusBar + 10dp como antes.
+            y = statusBarPx + (10 * density).toInt() - (16 * density).toInt()
         }
         val composeView = ComposeView(this).apply {
             // El servicio no es un LifecycleOwner; se usa un ciclo de vida
@@ -321,9 +323,11 @@ class MusicService : MediaSessionService() {
         val screenHdp = metrics.heightPixels / d
         val islandW = minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
         val islandH = minOf(308f, (screenHdp - 140f).coerceAtLeast(220f))
-        params.width = ((islandW + 40f) * d).toInt()
+        // +32dp del padding anti-recorte y +32dp de aire para que la
+        // sombra (14dp) respire dentro de la ventana sin recortarse.
+        params.width = ((islandW + 64f) * d).toInt()
             .coerceAtMost(metrics.widthPixels)
-        params.height = ((islandH + 32f) * d).toInt()
+        params.height = ((islandH + 64f) * d).toInt()
             .coerceAtMost(metrics.heightPixels)
         try {
             windowManager.updateViewLayout(view, params)
