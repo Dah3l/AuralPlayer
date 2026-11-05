@@ -17,6 +17,20 @@ import org.json.JSONObject
 /** DataStore único para toda la aplicación (archivo "aural_prefs"). */
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "aural_prefs")
 
+/** Orden por defecto de las pestañas de la biblioteca (claves estables). */
+val defaultTabOrder = listOf("songs", "artists", "albums", "playlists", "downloads", "folders")
+
+/** Etiqueta visible de cada clave de pestaña. */
+fun tabLabel(key: String): String = when (key) {
+    "songs" -> "Canciones"
+    "artists" -> "Artistas"
+    "albums" -> "Álbumes"
+    "playlists" -> "Playlists"
+    "downloads" -> "Descargas"
+    "folders" -> "Carpetas"
+    else -> key
+}
+
 /**
  * Almacén de playlists y favoritos.
  * Se guarda como JSON en una clave de preferencias, ya que DataStore
@@ -43,6 +57,11 @@ class SettingsStore(private val context: Context) {
         val KEY_THEME_BEFORE_CHRISTMAS = stringPreferencesKey("theme_before_christmas")
         val KEY_ISLAND_ENABLED = booleanPreferencesKey("island_enabled")
         val KEY_ISLAND_APPEARANCE = stringPreferencesKey("island_appearance")
+        // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
+        val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
+        val KEY_AURA_ENABLED = booleanPreferencesKey("aura_enabled")
+        val KEY_AURA_MODE = stringPreferencesKey("aura_mode")
+        val KEY_AURA_COLORS = stringPreferencesKey("aura_colors_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -613,6 +632,76 @@ class SettingsStore(private val context: Context) {
     suspend fun setIslandAppearance(mode: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ISLAND_APPEARANCE] = mode
+        }
+    }
+
+    // ------------------------- v1.0.8: orden de pestañas -------------------------
+
+    /** Claves de pestañas de la biblioteca en el orden elegido por el usuario. */
+    val libraryTabOrder: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_TAB_ORDER] ?: return@map defaultTabOrder
+        try {
+            val arr = JSONArray(raw)
+            val list = List(arr.length()) { arr.getString(it) }
+            // Si falta o sobra alguna clave (p. ej. tras una actualización),
+            // se normaliza contra el orden por defecto sin perder las válidas.
+            val valid = list.filter { it in defaultTabOrder }
+            (valid + defaultTabOrder.filter { it !in valid })
+        } catch (e: Exception) {
+            defaultTabOrder
+        }
+    }
+
+    suspend fun setLibraryTabOrder(order: List<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TAB_ORDER] = JSONArray(order).toString()
+        }
+    }
+
+    // ------------------------- v1.0.8: aura de Dynamic Aural -------------------------
+
+    /** Aura luminosa alrededor de la píldora: activada por defecto. */
+    val auraEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_AURA_ENABLED] ?: true
+    }
+
+    suspend fun setAuraEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_AURA_ENABLED] = enabled
+        }
+    }
+
+    /** Modo del aura: "auto" (colores del tema) o "custom" (colores elegidos). */
+    val auraMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_AURA_MODE] ?: "auto"
+    }
+
+    suspend fun setAuraMode(mode: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_AURA_MODE] = mode
+        }
+    }
+
+    /** Colores personalizados del aura en hex ("#RRGGBB"); 1 o 2 colores. */
+    val auraColors: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_AURA_COLORS] ?: return@map listOf("#2ED3B7")
+        try {
+            val arr = JSONArray(raw)
+            val list = List(arr.length()) { arr.getString(it) }
+                .filter { it.matches(Regex("#[0-9A-Fa-f]{6}")) }
+                .take(2)
+            if (list.isEmpty()) listOf("#2ED3B7") else list
+        } catch (e: Exception) {
+            listOf("#2ED3B7")
+        }
+    }
+
+    suspend fun setAuraColors(colors: List<String>) {
+        val clean = colors.filter { it.matches(Regex("#[0-9A-Fa-f]{6}")) }.take(2)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_AURA_COLORS] = JSONArray(
+                if (clean.isEmpty()) listOf("#2ED3B7") else clean
+            ).toString()
         }
     }
 
