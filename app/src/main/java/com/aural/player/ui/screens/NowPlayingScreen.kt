@@ -226,20 +226,19 @@ fun NowPlayingScreen(
         }
     }
 
-    // Fondo oscuro con un halo de acento muy suave en la parte superior
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-    ) {
+    // Fondo ambiental (v1.0.8): la portada difuminada tiñe toda la
+    // pantalla. Encima va un velo del fondo del tema (más opaco arriba
+    // y abajo, donde está el texto; más ligero en el centro, donde está
+    // la portada) para que un tema oscuro nunca quede claro y viceversa,
+    // y el texto siga legible. Sin portada, o en Android < 12 (sin blur
+    // por hardware), el ambiente sale de los colores del tema.
+    // Los contenedores de dentro (Column, pager, letras) no pintan
+    // fondo: son transparentes y no interrumpen el efecto.
+    Box(Modifier.fillMaxSize()) {
+        NowPlayingAmbientBackground(
+            artUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
+            modifier = Modifier.fillMaxSize()
+        )
         // Scrim hermano: bloquea los toques para que no lleguen a la lista
         // detrás. Al estar DETRÁS del contenido (no ser su padre), solo ve
         // lo que nadie usó y JAMÁS compite con los gestos de los hijos
@@ -1190,6 +1189,67 @@ fun Modifier.artworkGlow(
 }
 
 @Composable
+/**
+ * Fondo ambiental del Now Playing: la portada difuminada a pantalla
+ * completa + un velo del fondo del tema. Sin portada (o en Android
+ * < 12, sin blur por hardware), el ambiente sale de los colores del
+ * tema (primario → secundario → terciario), como si la portada por
+ * defecto fuera la portada real.
+ */
+@Composable
+private fun NowPlayingAmbientBackground(
+    artUri: String?,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(modifier) {
+        if (!artUri.isNullOrBlank() &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        ) {
+            AsyncImage(
+                model = artUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // El blur deja un borde transparente: escalar un
+                        // poco lo recorta fuera de la pantalla.
+                        scaleX = 1.15f
+                        scaleY = 1.15f
+                    }
+                    .blur(80.dp)
+            )
+        } else {
+            // Sin portada: los colores del tema hacen de portada.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(scheme.primary, scheme.secondary, scheme.tertiary)
+                        )
+                    )
+            )
+        }
+        // Velo del tema: más opaco arriba y abajo (donde está el
+        // texto) y más ligero en el centro (donde está la portada).
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            scheme.background.copy(alpha = 0.85f),
+                            scheme.background.copy(alpha = 0.72f),
+                            scheme.background.copy(alpha = 0.85f)
+                        )
+                    )
+                )
+        )
+    }
+}
+
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
@@ -1200,31 +1260,9 @@ private fun CoverCarousel(
             .padding(top = 8.dp)
     ) {
         val pageWidth = maxWidth
-        // Patrón estándar (Spotify / YT Music / Retro): el fondo es el
-        // mismo arte, muy difuminado y oscurecido. Sin arte, o en Android
-        // < 12 (sin blur por hardware), fondo limpio de la superficie.
-        val currentArtUri = coverItems.getOrNull(coverPagerState.currentPage)?.uri
-        if (!currentArtUri.isNullOrBlank() &&
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-        ) {
-            // Cuadrado de la portada, NO fillMaxSize: con fillMaxSize la
-            // caja se estiraba a toda la altura y el scrim pintaba una
-            // lámina oscura sobre toda la pantalla (en Sakura se veía
-            // gris, en oscuro un vacío negro).
-            AsyncImage(
-                model = currentArtUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(pageWidth)
-                    .blur(50.dp)
-            )
-            Box(
-                Modifier
-                    .size(pageWidth)
-                    .background(Color.Black.copy(alpha = 0.55f))
-            )
-        }
+        // El fondo ambiental ya vive en la raíz del Now Playing (la
+        // portada difuminada a pantalla completa): aquí solo queda el
+        // carrusel con su glow. El frame difuminado cuadrado se eliminó.
         // Margen lateral de la portada.
         val coverSideMargin = 20.dp
         HorizontalPager(
