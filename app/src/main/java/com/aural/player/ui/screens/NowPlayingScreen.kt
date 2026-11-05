@@ -76,6 +76,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1191,8 +1196,10 @@ fun Modifier.artworkGlow(
 /**
  * Fondo ambiental del Now Playing: la portada difuminada a pantalla
  * completa + un velo del fondo del tema. Sin portada (o si la portada
- * no carga, o en Android < 12 sin blur por hardware), queda el fondo
- * del tema, opaco: nunca se ve la pantalla de atrás.
+ * no carga, o en Android < 12 sin blur por hardware), el mismo efecto
+ * con los colores del tema: dos manchas suaves muy difuminadas.
+ * Un grano sutil rompe las bandas que dejan los gradientes suaves en
+ * pantallas de 8 bits (el difuminado se veía por líneas).
  */
 @Composable
 private fun NowPlayingAmbientBackground(
@@ -1200,6 +1207,28 @@ private fun NowPlayingAmbientBackground(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Grano aleatorio 128x128 (semilla fija: siempre el mismo), en
+    // mosaico al 5%: invisible como textura, suficiente para romper
+    // las bandas del degradado.
+    val noiseBitmap = remember {
+        val bmp = android.graphics.Bitmap.createBitmap(
+            128, 128, android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val rnd = kotlin.random.Random(42)
+        for (y in 0 until 128) {
+            for (x in 0 until 128) {
+                val g = rnd.nextInt(256)
+                bmp.setPixel(x, y, android.graphics.Color.argb(255, g, g, g))
+            }
+        }
+        bmp.asImageBitmap()
+    }
+    val noisePaint = remember(noiseBitmap) {
+        Paint().apply {
+            shader = ImageShader(noiseBitmap, TileMode.Repeated, TileMode.Repeated)
+            alpha = 0.05f
+        }
+    }
     Box(modifier) {
         // Base opaca: el fondo del tema. Sin ella, cuando la portada
         // no carga (el URI existe pero no tiene arte) el AsyncImage no
@@ -1228,6 +1257,35 @@ private fun NowPlayingAmbientBackground(
                     // y la forma de la portada.
                     .blur(45.dp)
             )
+        } else {
+            // Sin portada: el mismo efecto difuminado con los colores
+            // del tema — dos manchas suaves (primario arriba a la
+            // izquierda, secundario abajo a la derecha) muy difuminadas.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.15f
+                        scaleY = 1.15f
+                    }
+                    .blur(80.dp)
+                    .drawBehind {
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(scheme.primary, Color.Transparent),
+                                center = Offset(size.width * 0.2f, size.height * 0.15f),
+                                radius = size.maxDimension * 0.75f
+                            )
+                        )
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(scheme.secondary, Color.Transparent),
+                                center = Offset(size.width * 0.85f, size.height * 0.9f),
+                                radius = size.maxDimension * 0.75f
+                            )
+                        )
+                    }
+            )
         }
         // Velo del tema: más opaco arriba y abajo (donde está el
         // texto) y más ligero en el centro (donde está la portada).
@@ -1243,6 +1301,17 @@ private fun NowPlayingAmbientBackground(
                         )
                     )
                 )
+        )
+        // Grano sutil sobre el ambiente (debajo del contenido): rompe
+        // las bandas del difuminado y del velo.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    drawContext.canvas.drawRect(
+                        0f, 0f, size.width, size.height, noisePaint
+                    )
+                }
         )
     }
 }
