@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -699,7 +700,7 @@ fun NowPlayingScreen(
 
             Spacer(
                 Modifier
-                    .height(48.dp)
+                    .height(64.dp)
                     .windowInsetsPadding(WindowInsets.navigationBars)
             )
         }
@@ -1286,16 +1287,22 @@ private fun CoverCarousel(
                 // Resplandor: degradado radial con el color dominante
                 // (sigue el lerp del arrastre vía glowColor), de alpha
                 // 0.35 en el centro a transparente en el borde.
+                // OJO: el radio tiene que ser explícito (mitad del cuadro);
+                // sin radio el degradado no fundía y se veía como una
+                // tarjeta plana con el borde duro.
+                val glowSize = pageWidth - coverSideMargin * 2 + 32.dp
+                val glowRadiusPx = with(LocalDensity.current) { (glowSize / 2).toPx() }
                 Box(
                     Modifier
-                        .size(pageWidth - coverSideMargin * 2 + 32.dp)
+                        .size(glowSize)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
                                     glowColor.copy(alpha = 0.35f),
                                     glowColor.copy(alpha = 0.12f),
                                     Color.Transparent
-                                )
+                                ),
+                                radius = glowRadiusPx
                             )
                         )
                 )
