@@ -597,9 +597,6 @@ private fun AuralApp(viewModel: AuralViewModel,
     if (showSettingsScreen) {
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
         val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
-        val auraOn by viewModel.auraEnabled.collectAsStateWithLifecycle()
-        val auraMode by viewModel.auraMode.collectAsStateWithLifecycle()
-        val auraColors by viewModel.auraColors.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
@@ -607,12 +604,6 @@ private fun AuralApp(viewModel: AuralViewModel,
             onToggleIsland = onToggleIsland,
             islandAppearance = islandLook,
             onIslandAppearance = { viewModel.setIslandAppearance(it) },
-            auraEnabled = auraOn,
-            onToggleAura = { viewModel.setAuraEnabled(!auraOn) },
-            auraMode = auraMode,
-            onAuraMode = { viewModel.setAuraMode(it) },
-            auraColors = auraColors,
-            onAuraColors = { viewModel.setAuraColors(it) },
             viewModel = viewModel
         )
     }
