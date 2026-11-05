@@ -72,9 +72,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
@@ -138,7 +140,10 @@ fun IslandOverlayContent(
         minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
     }
     val expandedH = remember(screenHdp) {
-        minOf(308f, (screenHdp - 140f).coerceAtLeast(220f))
+        // v1.0.8: 308→320 para darle aire al botón ^ de 48dp.
+        // OJO: la misma fórmula vive en MusicService.expandIslandWindow();
+        // ambas tienen que cambiar juntas.
+        minOf(320f, (screenHdp - 140f).coerceAtLeast(220f))
     }
 
     fun doExpand() {
@@ -162,12 +167,13 @@ fun IslandOverlayContent(
         expanded = false
         animJob?.cancel()
         animJob = scope.launch {
-            // El panel se cierra CON el contenido visible (se va clipeando
-            // como un wipe); se desrenderiza al final, sin caja vacía.
+            // Espejo de la expansión: primero el contenido se desvanece
+            // (120ms), LUEGO la caja vacía se cierra por fases (sin nada
+            // que aplastar), y al final entra la píldora con fade.
+            panelAlpha.animateTo(0f, tween(120))
             heightA.animateTo(44f, tween(140, easing = ease))
             widthA.animateTo(135f, tween(140, easing = ease))
             cornerA.animateTo(22f, tween(140, easing = ease))
-            panelAlpha.snapTo(0f)
             launch { pillAlpha.animateTo(1f, tween(110)) }
             onCollapseWindow()
         }
@@ -235,12 +241,13 @@ fun IslandOverlayContent(
             .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
             .shadow(14.dp, islandShape)
-            // v1.0.8: aura luminosa animada (dibuja sin recorte, dentro del
-            // aire de 16dp que ya deja el fix de la sombra).
-            .islandAura(auraVisible, auraBrush, cornerA.value)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
-            .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape),
+            .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape)
+            // v1.0.8: aura ENCIMA del fondo (con drawBehind el background
+            // al 97% la tapaba); pegada al borde interior con margen para
+            // que el clip no la recorte.
+            .islandAura(auraVisible, auraBrush, cornerA.value),
         contentAlignment = Alignment.TopCenter
     ) {
         if (pillAlpha.value > 0.01f) {
@@ -782,20 +789,20 @@ private fun IslandExpandedContent(
             }
         }
         // Compactar: flecha ^ estilizada, centrada al pie del panel.
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(islandOnBg.copy(alpha = 0.12f))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
                 .clickable(onClick = onCollapse),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Rounded.KeyboardArrowUp,
                 contentDescription = "Compactar isla",
-                tint = islandOnBg.copy(alpha = 0.9f),
-                modifier = Modifier.size(24.dp)
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(28.dp)
             )
         }
     }
@@ -864,37 +871,35 @@ private fun rememberAuraBrush(colors: List<Color>): Brush {
 }
 
 /**
- * v1.0.8: dibuja el aura alrededor de la píldora. Como va ANTES del
- * .clip() en la cadena de modificadores, el resplandor no se recorta y
- * respira dentro del aire de 16dp del fix de la sombra. El glow se finge
- * con 3 trazos concéntricos de alfa decreciente (sin BlurMaskFilter,
- * que es problemático con aceleración de hardware).
+ * v1.0.8: dibuja el aura alrededor de la píldora, ENCIMA del fondo
+ * (drawWithContent al final de la cadena: con drawBehind el background
+ * al 97% la tapaba). Todo el glow vive DENTRO de la caja con un inset,
+ * así ni el clip ni el fondo lo tocan; el trazo central va más brillante
+ * para que la luz sí se vea.
  */
 private fun Modifier.islandAura(
     enabled: Boolean,
     brush: Brush,
     cornerDp: Float
 ): Modifier = this.then(
-    Modifier.drawBehind {
-        if (!enabled) return@drawBehind
-        val corner = CornerRadius(cornerDp.dp.toPx())
+    Modifier.drawWithContent {
+        drawContent()
+        if (!enabled) return@drawWithContent
+        val inset = 5.dp.toPx()
+        val corner = CornerRadius((cornerDp.dp.toPx() - inset).coerceAtLeast(0f))
+        val topLeft = Offset(inset, inset)
+        val rectSize = Size(size.width - inset * 2, size.height - inset * 2)
         drawRoundRect(
-            brush = brush,
-            style = Stroke(11.dp.toPx()),
-            alpha = 0.10f,
-            cornerRadius = corner
+            brush = brush, topLeft = topLeft, size = rectSize,
+            style = Stroke(9.dp.toPx()), alpha = 0.16f, cornerRadius = corner
         )
         drawRoundRect(
-            brush = brush,
-            style = Stroke(7.dp.toPx()),
-            alpha = 0.22f,
-            cornerRadius = corner
+            brush = brush, topLeft = topLeft, size = rectSize,
+            style = Stroke(5.dp.toPx()), alpha = 0.35f, cornerRadius = corner
         )
         drawRoundRect(
-            brush = brush,
-            style = Stroke(3.5.dp.toPx()),
-            alpha = 0.45f,
-            cornerRadius = corner
+            brush = brush, topLeft = topLeft, size = rectSize,
+            style = Stroke(2.5.dp.toPx()), alpha = 0.85f, cornerRadius = corner
         )
     }
 )
