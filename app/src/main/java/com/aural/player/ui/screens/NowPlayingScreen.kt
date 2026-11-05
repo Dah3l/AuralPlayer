@@ -3,6 +3,9 @@ package com.aural.player.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -413,7 +416,6 @@ fun NowPlayingScreen(
             CoverCarousel(
                 coverPagerState = coverPagerState,
                 coverItems = coverItems,
-                isHalloweenTheme = isHalloweenTheme,
                 modifier = Modifier.fillMaxWidth()
             )
             // ---- Línea actual de la letra (debajo de la carátula) ----
@@ -1150,39 +1152,36 @@ private data class CoverItem(
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
-    isHalloweenTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Un solo glow ambiente con el primario del tema (sin cortes, sin
-    // cajas): vive detrás de la portada y los controles.
-    val primary = MaterialTheme.colorScheme.primary
-    // Con el tema Halloween el glow se tiñe más naranja calabaza.
-    val glowColor =
-        if (isHalloweenTheme) lerp(primary, HalloweenPumpkin, 0.45f)
-        else primary
-
     BoxWithConstraints(
         modifier
             .padding(top = 8.dp)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        glowColor.copy(alpha = 0.18f),
-                        glowColor.copy(alpha = 0.05f),
-                        Color.Transparent
-                    ),
-                    radius = 600f
-                )
-            )
     ) {
         val pageWidth = maxWidth
-        // Margen lateral de la portada (el resplandor dibujado vive dentro
-        // de la página y nunca se recorta).
-        // Margen lateral de la portada: 28dp para que la sombra de 28dp
-        // quepa ÍNTEGRA dentro de la página (ni el pager ni nada la
-        // recorta). La portada se achica ~5% a cambio de una sombra
-        // sin límites.
-        val coverSideMargin = 28.dp
+        // Patrón estándar (Spotify / YT Music / Retro): el fondo es el
+        // mismo arte, muy difuminado y oscurecido. Sin arte, o en Android
+        // < 12 (sin blur por hardware), fondo limpio de la superficie.
+        val currentArtUri = coverItems.getOrNull(coverPagerState.currentPage)?.uri
+        if (!currentArtUri.isNullOrBlank() &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        ) {
+            AsyncImage(
+                model = currentArtUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(50.dp)
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+            )
+        }
+        // Margen lateral de la portada.
+        val coverSideMargin = 20.dp
         HorizontalPager(
             state = coverPagerState,
             modifier = Modifier.fillMaxWidth()
@@ -1211,11 +1210,9 @@ private fun CoverCarousel(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Sombra sutil con el color primario del tema (como la de
-                // la píldora de la Dynamic Aural): sin cajas de degradado,
-                // sin cálculos raros.
+                // Sombra negra sutil, como los reproductores buenos: nada
+                // de halos de color (eso era lo que se veía turbio).
                 val coverShape = RoundedCornerShape(16.dp)
-                val shadowColor = MaterialTheme.colorScheme.primary
                 com.aural.player.ui.components.CoverArt(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
@@ -1223,10 +1220,8 @@ private fun CoverCarousel(
                     showBorder = false,
                     showPlaceholderBackground = false,
                     modifier = Modifier.shadow(
-                        elevation = 28.dp,
-                        shape = coverShape,
-                        ambientColor = shadowColor.copy(alpha = 0.45f),
-                        spotColor = shadowColor.copy(alpha = 0.45f)
+                        elevation = 12.dp,
+                        shape = coverShape
                     )
                 )
             }
