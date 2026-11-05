@@ -1865,7 +1865,7 @@ private fun TabCustomizerDialog(
                 text = "Arrastra para ordenar las pestañas a tu gusto.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             )
             LazyColumn(
                 state = listState,
@@ -1876,7 +1876,7 @@ private fun TabCustomizerDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
