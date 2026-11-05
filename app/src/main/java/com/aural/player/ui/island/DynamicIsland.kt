@@ -236,6 +236,16 @@ fun IslandOverlayContent(
         .collectAsStateWithLifecycle(initialValue = emptySet())
     val cometOn by app.settings.cometEnabled
         .collectAsStateWithLifecycle(initialValue = true)
+    // Color de Aural Light elegido por el usuario ("auto" = primario
+    // del tema, o el hex de otro tema, p. ej. Sakura con Neon Prime).
+    val lightColorSetting by app.settings.auralLightColor
+        .collectAsStateWithLifecycle(initialValue = "auto")
+    val lightColor = if (lightColorSetting == "auto") scheme.primary
+    else try {
+        Color(android.graphics.Color.parseColor(lightColorSetting))
+    } catch (e: Exception) {
+        scheme.primary
+    }
 
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
@@ -255,11 +265,11 @@ fun IslandOverlayContent(
             .size(widthA.value.dp, heightA.value.dp)
             // Cometa: ANTES de shadow/clip/fondo para que nada lo recorte
             // ni lo tape. Se funde con la píldora (pillAlpha) durante el
-            // morph en vez de aparecer/desaparecer de golpe. Se apaga
-            // desde Ajustes (interruptor "Cometa luminoso").
+            // morph en vez de aparecer/desaparecer de golpe. Se apaga y
+            // se cambia de color desde Ajustes (Aural Light).
             .then(
                 if (cometOn) Modifier.cometBorder(
-                    color = scheme.primary,
+                    color = lightColor,
                     cornerRadius = cornerA.value.dp,
                     fade = pillAlpha.value
                 ) else Modifier
@@ -937,15 +947,14 @@ fun Modifier.cometBorder(
         geo.build(head, geo.length * tailFraction)
 
         // Solo la línea: sin capas de glow ni halos, solo el núcleo
-        // con la cola desvanecida y el punto sólido de la cabeza.
-        val style = Stroke(width = stroke, cap = StrokeCap.Butt)
+        // con la cola desvanecida. La cabeza es redondeada por el
+        // propio trazo (Round): mismo ancho que la línea, sin punto.
+        val style = Stroke(width = stroke, cap = StrokeCap.Round)
         for (i in 0 until COMET_STEPS) {
             val t = (i + 0.5f) / COMET_STEPS
             val a = t * t * f // cola con caída suave + fade
             if (a < 0.01f) continue
             drawPath(geo.segments[i], color.copy(alpha = a), style = style)
         }
-        val p = geo.position(head)
-        drawCircle(color.copy(alpha = f), radius = stroke * 1.1f, center = p)
     }
 }
