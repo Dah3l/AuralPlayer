@@ -76,6 +76,7 @@ private sealed class Screen {
     data object Library : Screen()
     data object Themes : Screen()
     data object Donate : Screen()
+    data object Contact : Screen()
     data class Album(val title: String) : Screen()
     data class Folder(val path: String) : Screen()
     data class Artist(val name: String) : Screen()
@@ -411,6 +412,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenEqualizer = { showEqualizerScreen = true },
                     onToggleIsland = onToggleIsland,
                     onOpenDonate = { screen = Screen.Donate },
+                    onOpenContact = { screen = Screen.Contact },
                     onOpenSettings = { showSettingsScreen = true },
                     onSongMenu = { song ->
                         songMenuTarget = song
@@ -520,7 +522,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                         // Favoritas, Descargas y la del día conservan su identidad
                         playlistCoverId = if (isFavorites || isDownloads || isDaily) null else s.id,
                         isDownloadsPlaylist = isDownloads,
-                        onGoToDownloadsTab = { libraryTab = 4; screen = Screen.Library }
+                        onGoToDownloadsTab = {
+                            libraryTab = viewModel.libraryTabOrder.value.indexOf("downloads")
+                            screen = Screen.Library
+                        }
                     )
                 }
 
@@ -541,6 +546,12 @@ private fun AuralApp(viewModel: AuralViewModel,
 
                 Screen.Donate -> {
                     com.aural.player.ui.screens.DonateScreen(
+                        onBack = { screen = Screen.Library }
+                    )
+                }
+
+                Screen.Contact -> {
+                    com.aural.player.ui.screens.ContactScreen(
                         onBack = { screen = Screen.Library }
                     )
                 }
@@ -586,6 +597,9 @@ private fun AuralApp(viewModel: AuralViewModel,
     if (showSettingsScreen) {
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
         val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
+        val auraOn by viewModel.auraEnabled.collectAsStateWithLifecycle()
+        val auraMode by viewModel.auraMode.collectAsStateWithLifecycle()
+        val auraColors by viewModel.auraColors.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
@@ -593,6 +607,12 @@ private fun AuralApp(viewModel: AuralViewModel,
             onToggleIsland = onToggleIsland,
             islandAppearance = islandLook,
             onIslandAppearance = { viewModel.setIslandAppearance(it) },
+            auraEnabled = auraOn,
+            onToggleAura = { viewModel.setAuraEnabled(!auraOn) },
+            auraMode = auraMode,
+            onAuraMode = { viewModel.setAuraMode(it) },
+            auraColors = auraColors,
+            onAuraColors = { viewModel.setAuraColors(it) },
             viewModel = viewModel
         )
     }
