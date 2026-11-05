@@ -80,7 +80,8 @@ fun CoverArt(
     uri: String?,
     size: Dp,
     cornerRadius: Dp = size / 6,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBorder: Boolean = true
 ) {
     Box(
         modifier = modifier
@@ -94,10 +95,12 @@ fun CoverArt(
                     )
                 )
             )
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(cornerRadius)
+            .then(
+                if (showBorder) Modifier.border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(cornerRadius)
+                ) else Modifier
             ),
         contentAlignment = Alignment.Center
     ) {
