@@ -1861,12 +1861,6 @@ private fun TabCustomizerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Orden de pestañas") },
         text = {
-            Text(
-                text = "Arrastra para ordenar las pestañas a tu gusto.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth()
