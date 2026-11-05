@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -69,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.installedVersionName
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -482,7 +484,8 @@ private fun AuralLightColorDot(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val color = Color(android.graphics.Color.parseColor(hex))
+    val colorInt = android.graphics.Color.parseColor(hex)
+    val color = Color(colorInt)
     Box(
         modifier = Modifier
             .size(32.dp)
@@ -501,7 +504,7 @@ private fun AuralLightColorDot(
             Icon(
                 Icons.Rounded.Check, null,
                 // Marca oscura sobre colores claros y blanca sobre oscuros.
-                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                tint = if (android.graphics.Color.luminance(colorInt) > 0.5f) Color.Black else Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
