@@ -216,58 +216,59 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 56.dp, top = 4.dp)
                     )
-                    // Aural Light: luz que recorre el borde de la píldora.
-                    SettingsRow(
-                        icon = Icons.Rounded.FlashOn,
-                        title = "Aural Light",
-                        subtitle = "Luz que recorre el borde de la píldora",
-                        trailing = {
-                            Switch(checked = cometEnabled, onCheckedChange = { onToggleComet() })
-                        },
-                        onClick = onToggleComet
+                }
+                // Aural Light: al mismo nivel que Dynamic Aural para que
+                // el toggle quede alineado al final del tile.
+                SettingsRow(
+                    icon = Icons.Rounded.FlashOn,
+                    title = "Aural Light",
+                    subtitle = "Luz que recorre el borde de la píldora",
+                    trailing = {
+                        Switch(checked = cometEnabled, onCheckedChange = { onToggleComet() })
+                    },
+                    onClick = onToggleComet
+                )
+                // Color de Aural Light: auto (primario del tema) o el
+                // color de otro tema (p. ej. Sakura con Neon Prime).
+                if (cometEnabled) {
+                    Text(
+                        text = "Color de Aural Light",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 56.dp, top = 8.dp, bottom = 8.dp)
                     )
-                    // Color de Aural Light: auto (primario del tema) o el
-                    // color de otro tema (p. ej. Sakura con Neon Prime).
-                    if (cometEnabled) {
-                        Text(
-                            text = "Color de Aural Light",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 56.dp, top = 8.dp, bottom = 8.dp)
-                        )
-                        FlowRow(
-                            modifier = Modifier.padding(start = 56.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            FilterChip(
-                                selected = auralLightColor == "auto",
-                                onClick = { onLightColorChange("auto") },
-                                label = { Text("Auto") },
-                                leadingIcon = if (auralLightColor == "auto") {
-                                    {
-                                        Icon(
-                                            Icons.Rounded.Check, null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                } else null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor =
-                                        MaterialTheme.colorScheme.primary,
-                                    selectedLabelColor =
-                                        MaterialTheme.colorScheme.onPrimary,
-                                    selectedLeadingIconColor =
-                                        MaterialTheme.colorScheme.onPrimary
-                                )
+                    FlowRow(
+                        modifier = Modifier.padding(start = 56.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        FilterChip(
+                            selected = auralLightColor == "auto",
+                            onClick = { onLightColorChange("auto") },
+                            label = { Text("Auto") },
+                            leadingIcon = if (auralLightColor == "auto") {
+                                {
+                                    Icon(
+                                        Icons.Rounded.Check, null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.primary,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor =
+                                    MaterialTheme.colorScheme.onPrimary
                             )
-                            for ((_, hex) in AuralLightColors) {
-                                AuralLightColorDot(
-                                    hex = hex,
-                                    selected = auralLightColor == hex,
-                                    onClick = { onLightColorChange(hex) }
-                                )
-                            }
+                        )
+                        for ((_, hex) in AuralLightColors) {
+                            AuralLightColorDot(
+                                hex = hex,
+                                selected = auralLightColor == hex,
+                                onClick = { onLightColorChange(hex) }
+                            )
                         }
                     }
                 }
