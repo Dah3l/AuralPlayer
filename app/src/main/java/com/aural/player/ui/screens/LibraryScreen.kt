@@ -101,7 +101,13 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import com.aural.player.youtube.YouTubeManager
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material3.AlertDialog
+import com.aural.player.data.tabLabel
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.aural.player.data.SettingsStore
@@ -126,8 +132,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.material3.RadioButton
 
-/** Pestañas de la biblioteca. */
-private val tabs = listOf("Canciones", "Artistas", "Álbumes", "Playlists", "Descargas", "Carpetas")
+/** Pestañas de la biblioteca (el orden lo elige el usuario, v1.0.8). */
 
 /**
  * Pantalla de biblioteca. Recibe callbacks para acciones globales
@@ -150,6 +155,7 @@ fun LibraryScreen(
     onOpenEqualizer: () -> Unit = {},
     onToggleIsland: () -> Unit = {},
     onOpenDonate: () -> Unit = {},
+    onOpenContact: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -180,6 +186,10 @@ fun LibraryScreen(
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
     val pillsListState = rememberLazyListState()
+    // v1.0.8: orden de pestañas elegido por el usuario (claves estables).
+    val tabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
+    val tabs = tabOrder.map { tabLabel(it) }
+    var showTabCustomizer by remember { mutableStateOf(false) }
 
     // La fila de pills se desplaza sola para mostrar la pestaña activa
     LaunchedEffect(selectedTab) {
@@ -204,6 +214,9 @@ fun LibraryScreen(
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showPlaylistPicker by remember { mutableStateOf(false) }
+    // v1.0.8: crear playlist nueva desde el picker y agregarle la selección.
+    var pendingIdsForNewPlaylist by remember { mutableStateOf<List<Long>?>(null) }
+    var idsBeforePlaylistCreate by remember { mutableStateOf<Set<String>?>(null) }
     // v1.0.7: ocultar carpeta (long-press en Carpetas).
     var folderHideTarget by remember { mutableStateOf<com.aural.player.data.Folder?>(null) }
     var manualUpdateMessage by remember { mutableStateOf<String?>(null) }
@@ -213,7 +226,7 @@ fun LibraryScreen(
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
         val query = audioSearchRequest ?: return@LaunchedEffect
         viewModel.consumeAudioSearchRequest()
-        onTabSelected(4) // pestaña Descargas
+        onTabSelected(tabOrder.indexOf("downloads")) // pestaña Descargas
         youTubeManager?.search(query)
     }
     val m3uPicker = rememberLauncherForActivityResult(
@@ -406,6 +419,23 @@ fun LibraryScreen(
                     )
                 }
             }
+            // v1.0.8: botón para reordenar las pestañas.
+            item {
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { showTabCustomizer = true }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Edit, "Personalizar pestañas",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         // ---- Contenido por pestaña (con pull-to-refresh) ----
@@ -466,8 +496,9 @@ fun LibraryScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
-                    when (page) {
-                        0 -> SongsTab(
+                    // v1.0.8: las páginas se resuelven por clave, no por índice fijo.
+                    when (tabOrder[page]) {
+                        "songs" -> SongsTab(
                             songs = songs,
                             favorites = favorites,
                             currentId = playerState.currentSong?.id,
@@ -492,7 +523,7 @@ fun LibraryScreen(
                                 }
                                 if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
                             },
-                            onSeeAllPlaylists = { onTabSelected(3) },
+                            onSeeAllPlaylists = { onTabSelected(tabOrder.indexOf("playlists")) },
                             selectionMode = selectionMode,
                             selectedIds = selectedIds.toSet(),
                             onToggleSelect = { song ->
@@ -506,19 +537,19 @@ fun LibraryScreen(
                             }
                         )
 
-                        1 -> ArtistsTab(
+                        "artists" -> ArtistsTab(
                             artists = artists,
                             onOpen = { name -> onOpenArtist(name) },
                             gridState = artistsGridState
                         )
 
-                        2 -> AlbumsTab(
+                        "albums" -> AlbumsTab(
                             albums = albums,
                             onOpen = { title -> onOpenAlbum(title) },
                             gridState = albumsGridState
                         )
 
-                        3 -> {
+                        "playlists" -> {
                             val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
                             val dailySongs = viewModel.dailyPlaylistSongs()
                             PlaylistsTab(
@@ -554,7 +585,7 @@ fun LibraryScreen(
                                 onRemoveCover = { pl -> viewModel.setPlaylistCover(pl.id, "") }
                             )
                         }
-                    4 -> {
+                    "downloads" -> {
                             val ytm = youTubeManager
                             if (ytm != null) {
                                 DownloadsScreen(
@@ -575,7 +606,7 @@ fun LibraryScreen(
                                 Text("YouTube no disponible")
                             }
                         }
-                        5 -> FoldersTab(
+                        "folders" -> FoldersTab(
                             folders = folders,
                             onOpen = { folder -> onOpenFolder(folder) },
                             onHideFolder = { folder -> folderHideTarget = folder }
@@ -686,6 +717,10 @@ fun LibraryScreen(
                     onClick = { showGeneralMenu = false; onOpenDonate() }
                 )
                 DropdownMenuItem(
+                    text = { Text("Contacto") },
+                    onClick = { showGeneralMenu = false; onOpenContact() }
+                )
+                DropdownMenuItem(
                     text = { Text("Ajustes") },
                     onClick = { showGeneralMenu = false; onOpenSettings() }
                 )
@@ -770,6 +805,16 @@ fun LibraryScreen(
                     onClick = { showPlaylistPicker = true }
                 )
                 SelectionActionButton(
+                    icon = Icons.Rounded.SelectAll,
+                    label = "Todas",
+                    enabled = songs.isNotEmpty(),
+                    onClick = {
+                        // v1.0.8: selecciona las canciones VISIBLES (respeta
+                        // el filtro/búsqueda activo, que ya viene aplicado en `songs`).
+                        selectedIds.addAll(songs.map { it.id }.filter { it !in selectedIds })
+                    }
+                )
+                SelectionActionButton(
                     icon = Icons.Rounded.QueueMusic,
                     label = "A la cola",
                     enabled = selectedIds.isNotEmpty(),
@@ -826,10 +871,41 @@ fun LibraryScreen(
 
     if (showNewPlaylist) {
         NewPlaylistDialog(
-            onDismiss = { showNewPlaylist = false },
+            onDismiss = {
+                showNewPlaylist = false
+                pendingIdsForNewPlaylist = null
+                idsBeforePlaylistCreate = null
+            },
             onCreate = { name ->
                 viewModel.createPlaylist(name)
                 showNewPlaylist = false
+            }
+        )
+    }
+
+    // v1.0.8: al aparecer la playlist recién creada, agregarle la selección
+    // pendiente y salir del modo selección.
+    LaunchedEffect(playlists) {
+        val before = idsBeforePlaylistCreate ?: return@LaunchedEffect
+        val pending = pendingIdsForNewPlaylist ?: return@LaunchedEffect
+        val newPl = playlists.firstOrNull { it.id !in before }
+        if (newPl != null) {
+            viewModel.addAllToPlaylist(newPl.id, pending)
+            pendingIdsForNewPlaylist = null
+            idsBeforePlaylistCreate = null
+            selectionMode = false
+            selectedIds.clear()
+        }
+    }
+
+    // v1.0.8: personalizar el orden de las pestañas.
+    if (showTabCustomizer) {
+        TabCustomizerDialog(
+            currentOrder = tabOrder,
+            onDismiss = { showTabCustomizer = false },
+            onConfirm = { newOrder ->
+                viewModel.setLibraryTabOrder(newOrder)
+                showTabCustomizer = false
             }
         )
     }
@@ -852,6 +928,26 @@ fun LibraryScreen(
             title = { Text("Añadir ${selectedIds.size} a la playlist") },
             text = {
                 LazyColumn(modifier = Modifier.height(280.dp)) {
+                    // v1.0.8: opción para crear una playlist nueva con la selección.
+                    item {
+                        TextButton(
+                            onClick = {
+                                pendingIdsForNewPlaylist = selectedIds.toList()
+                                idsBeforePlaylistCreate = playlists.map { it.id }.toSet()
+                                showPlaylistPicker = false
+                                showNewPlaylist = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "＋ Crear nueva playlist",
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     items(playlists, key = { it.id }) { pl ->
                         TextButton(
                             onClick = {
@@ -1741,4 +1837,70 @@ private fun SelectionActionButton(
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+/**
+ * v1.0.8: diálogo para reordenar las pestañas de la biblioteca.
+ * Usa la misma librería de reorden (sh.calvin.reorderable) que las
+ * favoritas y la cola de reproducción.
+ */
+@Composable
+private fun TabCustomizerDialog(
+    currentOrder: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<String>) -> Unit
+) {
+    var order by remember(currentOrder) { mutableStateOf(currentOrder) }
+    val listState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        order = order.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Orden de pestañas") },
+        text = {
+            Text(
+                text = "Arrastra para ordenar las pestañas a tu gusto.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(order, key = { it }) { key ->
+                    ReorderableItem(reorderableState, key = key) { isDragging ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = tabLabel(key),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isDragging) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                Icons.Rounded.DragHandle,
+                                contentDescription = "Arrastrar para reordenar",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .draggableHandle()
+                                    .size(28.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(order) }) { Text("Guardar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }
