@@ -9,7 +9,8 @@ en GitHub salen de aquí.
 ### Novedades
 - **La isla ya gira los modos de reproducción** — en el panel expandido, el botón de la izquierda rota entre repetir todo 🔁, repetir una 🔂 y aleatorio 🔀, mostrando siempre el modo activo. El corazón de la derecha marca la canción como favorita sin salir de la isla.
 - **YouTube y el micrófono, junto a "Abrir Aural"** — ahora flanquean el botón como dos botones circulares con su mismo estilo, para que el panel quede más ordenado.
-- **Aura luminosa en la píldora** — una luz sutil recorre la píldora dando vueltas con movimiento fluido. Se activa y configura en Ajustes → Interfaz → Dynamic Aural: automática (usa los colores de tu tema) o con 1 o 2 colores a tu gusto.
+- **El Now Playing se tiñe con la portada** — toda la pantalla toma los colores de la portada difuminada, con un velo del tema para que un tema oscuro nunca quede claro y viceversa. Sin portada, el ambiente sale de los colores de tu tema.
+- **Aural Light, a tu color** — la luz que recorre la píldora va más lenta, es solo una línea fina sin punto en la cabeza, y se puede apagar o ponerle el color de otro tema (Sakura con Neon Prime, por ejemplo) desde Ajustes → Interfaz → Dynamic Aural.
 - **Ordena las pestañas de la biblioteca** — toca el lápiz al final de las pestañas y arrastra para ponerlas en el orden que quieras (Canciones, Artistas, Álbumes, Playlists, Descargas, Carpetas). Se guarda y se mantiene al actualizar.
 - **"Seleccionar todas" en la selección múltiple** — nuevo botón que marca de una vez todas las canciones visibles (respeta tu búsqueda o filtro activo).
 - **Añadir a playlist, completo** — al mandar canciones a una playlist ahora ves TODAS tus playlists y una opción para crear una nueva con esa selección.
