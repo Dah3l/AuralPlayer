@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -105,6 +106,8 @@ private fun DetailHeader(
     onShuffle: () -> Unit,
     titleAlpha: Float = 1f,
     onImageHeightChanged: (Int) -> Unit = {},
+    /** v1.0.8: si no es null, muestra el botón "Agregar canciones" en la cabecera. */
+    onAddSongs: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier) {
@@ -214,6 +217,19 @@ private fun DetailHeader(
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp))
             }
+            // v1.0.8: agregar canciones a playlists existentes.
+            if (onAddSongs != null) {
+                IconButton(
+                    onClick = onAddSongs,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                ) {
+                    Icon(Icons.Rounded.PlaylistAdd, "Agregar canciones",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp))
+                }
+            }
         }
     }
 }
@@ -274,6 +290,9 @@ fun DetailScreen(
         uri?.let { pendingCropUri = it.toString() }
     }
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
+
+    // v1.0.8: el picker de canciones sirve para playlists vacías Y existentes.
+    var showPicker by remember { mutableStateOf(false) }
     // Confirmar el recorte: guarda el cuadrado y lo pone de portada
     val cropConfirm: (Bitmap) -> Unit = { cropped ->
         pendingCropUri = null
@@ -317,7 +336,6 @@ fun DetailScreen(
                 }
             }
 
-            var showPicker by remember { mutableStateOf(false) }
             // Placeholder premium para listas vacías
             Column(
                 modifier = Modifier
@@ -374,18 +392,8 @@ fun DetailScreen(
                     }
                 }
             }
-            if (showPicker && removableFromPlaylistId != null) {
-                SongPickerDialog(
-                    songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
-                    onDismiss = { showPicker = false },
-                    onConfirm = { selected ->
-                        selected.forEach { song ->
-                            viewModel.addToPlaylist(removableFromPlaylistId, song.id)
-                        }
-                        showPicker = false
-                    }
-                )
-            }
+            // El picker vive a nivel de DetailScreen (v1.0.8) para que sirva
+            // también desde el botón de la cabecera.
             // Editor de recorte tras elegir imagen en la galería
             CropDialogHost(
                 pendingCropUri = pendingCropUri,
@@ -467,6 +475,12 @@ fun DetailScreen(
                     subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
                     onPlay = { viewModel.playSongs(songs, 0, fromPlaylistId = removableFromPlaylistId) },
                     onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true, fromPlaylistId = removableFromPlaylistId) },
+                    // v1.0.8: agregar canciones a playlists de usuario existentes.
+                    onAddSongs = if (removableFromPlaylistId != null &&
+                        removableFromPlaylistId != FAVORITES_ID && !isDownloadsPlaylist
+                    ) {
+                        { showPicker = true }
+                    } else null,
                     titleAlpha = bigTitleAlpha,
                     onImageHeightChanged = { imageHeightPx = it },
                     modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
@@ -597,6 +611,24 @@ fun DetailScreen(
             onDismiss = { pendingCropUri = null },
             onConfirm = cropConfirm
         )
+        // v1.0.8: picker de canciones para playlists vacías y existentes.
+        // Las que ya están en la playlist aparecen marcadas y no se duplican.
+        if (showPicker && removableFromPlaylistId != null) {
+            SongPickerDialog(
+                songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
+                preselected = songs.map { it.id }.toSet(),
+                onDismiss = { showPicker = false },
+                onConfirm = { selected ->
+                    val existing = songs.map { it.id }.toSet()
+                    selected.forEach { song ->
+                        if (song.id !in existing) {
+                            viewModel.addToPlaylist(removableFromPlaylistId, song.id)
+                        }
+                    }
+                    showPicker = false
+                }
+            )
+        }
 }
 
 
@@ -657,10 +689,11 @@ private fun CropDialogHost(
 @Composable
 private fun SongPickerDialog(
     songs: List<Song>,
+    preselected: Set<Long> = emptySet(),
     onDismiss: () -> Unit,
     onConfirm: (List<Song>) -> Unit
 ) {
-    var selected by remember { mutableStateOf(setOf<Long>()) }
+    var selected by remember { mutableStateOf(preselected) }
     var query by remember { mutableStateOf("") }
     val filtered = remember(songs, query) {
         if (query.isBlank()) songs
