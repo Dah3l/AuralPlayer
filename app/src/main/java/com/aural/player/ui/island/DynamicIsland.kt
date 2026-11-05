@@ -12,6 +12,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -39,6 +40,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -66,7 +72,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
@@ -189,6 +200,24 @@ fun IslandOverlayContent(
     val islandOnBg = if (classic) Color.White else scheme.onSurface
     val islandOnAccent = scheme.onPrimary
 
+    // v1.0.8: favoritas para el corazón del panel + aura luminosa animada.
+    val favorites by app.settings.favorites
+        .collectAsStateWithLifecycle(initialValue = emptySet())
+    val auraOn by app.settings.auraEnabled
+        .collectAsStateWithLifecycle(initialValue = true)
+    val auraMode by app.settings.auraMode
+        .collectAsStateWithLifecycle(initialValue = "auto")
+    val auraHexes by app.settings.auraColors
+        .collectAsStateWithLifecycle(initialValue = listOf("#2ED3B7"))
+    val auraColors = remember(auraMode, auraHexes, scheme) {
+        if (auraMode == "custom") auraHexes.map { hexToColor(it) }
+        else listOf(scheme.primary, scheme.secondary)
+    }
+    val auraBrush = rememberAuraBrush(auraColors)
+    // El aura solo rodea la píldora colapsada, nunca el panel expandido
+    // ni durante el morph (cuando la píldora aún no es visible).
+    val auraVisible = auraOn && !expanded && pillAlpha.value > 0.5f
+
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
     val islandShape = RoundedCornerShape(cornerA.value.dp)
@@ -206,6 +235,9 @@ fun IslandOverlayContent(
             .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
             .shadow(14.dp, islandShape)
+            // v1.0.8: aura luminosa animada (dibuja sin recorte, dentro del
+            // aire de 16dp que ya deja el fix de la sombra).
+            .islandAura(auraVisible, auraBrush, cornerA.value)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
             .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape),
@@ -242,7 +274,15 @@ fun IslandOverlayContent(
                     onSeek = { app.playback.seekTo(it) },
                     onOpenApp = { openApp() },
                     onQuickAction = { action -> handleQuickAction(app, action) },
-                    onCollapse = { doCollapse() }
+                    onCollapse = { doCollapse() },
+                    // v1.0.8: favorito + modo de reproducción.
+                    isFavorite = song.id in favorites,
+                    onToggleFavorite = {
+                        scope.launch { app.settings.toggleFavorite(song.id) }
+                    },
+                    shuffleEnabled = playerState.shuffleEnabled,
+                    repeatMode = playerState.repeatMode,
+                    onCyclePlayMode = { app.playback.cyclePlayMode() }
                 )
             }
         }
@@ -444,6 +484,12 @@ private fun IslandExpandedContent(
     onQuickAction: (QuickAction) -> Unit,
     onCollapse: () -> Unit,
     appearance: String,
+    // v1.0.8: modo de reproducción + favorito en la fila de transporte.
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    shuffleEnabled: Boolean,
+    repeatMode: com.aural.player.playback.RepeatMode,
+    onCyclePlayMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Colores según el aspecto (auto = tema, classic = negro + primario).
@@ -613,14 +659,22 @@ private fun IslandExpandedContent(
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
+            // v1.0.8: el botón de modos ocupa el slot de YouTube.
+            // Muestra el modo actual: 🔀 aleatorio, 🔂 repetir una, 🔁 repetir todo.
+            val modeIcon = when {
+                shuffleEnabled -> Icons.Default.Shuffle
+                repeatMode == com.aural.player.playback.RepeatMode.ONE -> Icons.Default.RepeatOne
+                else -> Icons.Default.Repeat
+            }
+            val modeActive = shuffleEnabled || repeatMode != com.aural.player.playback.RepeatMode.OFF
             IconButton(
-                onClick = { onQuickAction(QuickAction.YOUTUBE_SEARCH) },
+                onClick = onCyclePlayMode,
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
-                    Icons.Default.Search,
-                    contentDescription = "Buscar en YouTube",
-                    tint = islandOnBg.copy(alpha = 0.85f),
+                    modeIcon,
+                    contentDescription = "Modo de reproducción",
+                    tint = islandOnBg.copy(alpha = if (modeActive) 1f else 0.45f),
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -657,33 +711,75 @@ private fun IslandExpandedContent(
                 )
             }
             Spacer(Modifier.width(4.dp))
+            // v1.0.8: el corazón ocupa el slot del micrófono.
             IconButton(
-                onClick = { onQuickAction(QuickAction.RECOGNIZE) },
+                onClick = onToggleFavorite,
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
-                    Icons.Default.Mic,
-                    contentDescription = "Reconocer",
-                    tint = islandOnBg.copy(alpha = 0.85f),
+                    if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Añadir a favoritas",
+                    tint = if (isFavorite) Color(0xFFE5484D)
+                    else islandOnBg.copy(alpha = 0.85f),
                     modifier = Modifier.size(26.dp)
                 )
             }
         }
         Spacer(Modifier.height(12.dp))
-        FilledTonalButton(
-            onClick = onOpenApp,
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+        // v1.0.8: YouTube y micrófono flanquean "Abrir Aural" como botones
+        // circulares con el mismo estilo tonal del pill.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                Icons.Rounded.PhoneAndroid,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Abrir Aural",
-                fontWeight = FontWeight.SemiBold
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable { onQuickAction(QuickAction.YOUTUBE_SEARCH) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Buscar en YouTube",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            FilledTonalButton(
+                onClick = onOpenApp,
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.PhoneAndroid,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Abrir Aural",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable { onQuickAction(QuickAction.RECOGNIZE) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Mic,
+                    contentDescription = "Reconocer",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
         // Compactar: flecha ^ estilizada, centrada al pie del panel.
         Spacer(Modifier.height(12.dp))
@@ -728,3 +824,77 @@ private fun handleQuickAction(app: com.aural.player.AuralApp, action: QuickActio
     }
     ctx.startActivity(intent)
 }
+
+/** Convierte un hex "#RRGGBB" a Color (opaco). */
+private fun hexToColor(hex: String): Color =
+    Color(hex.removePrefix("#").toLong(16) or 0xFF000000L)
+
+/**
+ * v1.0.8: pincel animado del aura — un "cometa" de luz que recorre el
+ * borde en giro fluido e infinito. Los stops del degradado cónico se
+ * recalculan cada frame con la fase, así la luz viaja alrededor de la
+ * píldora sin rotar la geometría (funciona con cualquier forma).
+ */
+@Composable
+private fun rememberAuraBrush(colors: List<Color>): Brush {
+    val phase by rememberInfiniteTransition(label = "aura").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3600, easing = LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "auraPhase"
+    )
+    return remember(phase, colors) {
+        val c1 = colors.getOrElse(0) { Color(0xFF2ED3B7) }
+        val c2 = colors.getOrElse(1) { c1 }
+        val tail = 0.35f // longitud de la estela del cometa (fracción de vuelta)
+        val stops = ArrayList<Pair<Float, Color>>(49)
+        stops.add(0f to Color.Transparent)
+        for (i in 1..48) {
+            val x = i / 48f
+            val d = (phase - x + 1f) % 1f // 0 en la cabeza, crece hacia atrás
+            val k = (1f - d / tail).coerceIn(0f, 1f)
+            val col = lerp(c1, c2, (d / tail).coerceIn(0f, 1f))
+            stops.add(x to col.copy(alpha = k * 0.9f))
+        }
+        Brush.sweepGradient(colorStops = stops.toTypedArray())
+    }
+}
+
+/**
+ * v1.0.8: dibuja el aura alrededor de la píldora. Como va ANTES del
+ * .clip() en la cadena de modificadores, el resplandor no se recorta y
+ * respira dentro del aire de 16dp del fix de la sombra. El glow se finge
+ * con 3 trazos concéntricos de alfa decreciente (sin BlurMaskFilter,
+ * que es problemático con aceleración de hardware).
+ */
+private fun Modifier.islandAura(
+    enabled: Boolean,
+    brush: Brush,
+    cornerDp: Float
+): Modifier = this.then(
+    Modifier.drawBehind {
+        if (!enabled) return@drawBehind
+        val corner = CornerRadius(cornerDp.dp.toPx())
+        drawRoundRect(
+            brush = brush,
+            style = Stroke(11.dp.toPx()),
+            alpha = 0.10f,
+            cornerRadius = corner
+        )
+        drawRoundRect(
+            brush = brush,
+            style = Stroke(7.dp.toPx()),
+            alpha = 0.22f,
+            cornerRadius = corner
+        )
+        drawRoundRect(
+            brush = brush,
+            style = Stroke(3.5.dp.toPx()),
+            alpha = 0.45f,
+            cornerRadius = corner
+        )
+    }
+)
