@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhoneAndroid
@@ -210,10 +211,10 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 56.dp, top = 4.dp)
                     )
-                    // Cometa luminoso: luz que recorre el borde de la píldora.
+                    // Aural Light: luz que recorre el borde de la píldora.
                     SettingsRow(
-                        icon = Icons.Rounded.AutoAwesome,
-                        title = "Cometa luminoso",
+                        icon = Icons.Rounded.FlashOn,
+                        title = "Aural Light",
                         subtitle = "Luz que recorre el borde de la píldora",
                         trailing = {
                             Switch(checked = cometEnabled, onCheckedChange = { onToggleComet() })
