@@ -89,8 +89,11 @@ fun CoverArt(
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
             .then(
+                // Placeholder suave: degradado vertical sin borde duro (el
+                // radial sin radio se veía plano y recortado = el "cuadro"
+                // feo). La tarjeta se ve como elemento diseñado, no vacío.
                 if (showPlaceholderBackground) Modifier.background(
-                    Brush.radialGradient(
+                    Brush.verticalGradient(
                         colors = listOf(
                             MaterialTheme.colorScheme.surfaceVariant,
                             MaterialTheme.colorScheme.surface
