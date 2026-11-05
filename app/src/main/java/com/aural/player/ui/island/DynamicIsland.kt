@@ -63,7 +63,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,10 +72,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -232,20 +229,6 @@ fun IslandOverlayContent(
     // v1.0.8: favoritas para el corazón del panel + aura luminosa animada.
     val favorites by app.settings.favorites
         .collectAsStateWithLifecycle(initialValue = emptySet())
-    val auraOn by app.settings.auraEnabled
-        .collectAsStateWithLifecycle(initialValue = true)
-    val auraMode by app.settings.auraMode
-        .collectAsStateWithLifecycle(initialValue = "auto")
-    val auraHexes by app.settings.auraColors
-        .collectAsStateWithLifecycle(initialValue = listOf("#2ED3B7"))
-    val auraColors = remember(auraMode, auraHexes, scheme) {
-        if (auraMode == "custom") auraHexes.map { hexToColor(it) }
-        else listOf(scheme.primary, scheme.secondary)
-    }
-    val auraBreath = rememberAuraBreath()
-    // El aura solo rodea la píldora colapsada, nunca el panel expandido
-    // ni durante el morph (cuando la píldora aún no es visible).
-    val auraVisible = auraOn && !expanded && pillAlpha.value > 0.5f
 
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
@@ -263,10 +246,6 @@ fun IslandOverlayContent(
         modifier = Modifier
             .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
-            // Faro: ANTES del clip y del fondo, para que la luz salga
-            // hacia afuera sin que nada la recorte. Se funde con la
-            // píldora (fade) en vez de aparecer de golpe.
-            .islandFaroGlow(auraVisible, auraColors, cornerA.value, auraBreath, pillAlpha.value)
             .shadow(14.dp, islandShape)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
@@ -855,71 +834,3 @@ private fun handleQuickAction(app: com.aural.player.AuralApp, action: QuickActio
     ctx.startActivity(intent)
 }
 
-/** Convierte un hex "#RRGGBB" a Color (opaco). */
-private fun hexToColor(hex: String): Color =
-    Color(hex.removePrefix("#").toLong(16) or 0xFF000000L)
-
-/**
- * v1.0.8: pincel animado del aura — un "cometa" de luz que recorre el
- * borde en giro fluido e infinito. Los stops del degradado cónico se
- * recalculan cada frame con la fase, así la luz viaja alrededor de la
- * píldora sin rotar la geometría (funciona con cualquier forma).
- */
-/**
- * Respiración del glow faro (0..1, ida y vuelta ~2.4s). Devuelve el State
- * en vez del Float: el draw lo lee sin recomponer, solo redibuja → 60fps.
- */
-@Composable
-private fun rememberAuraBreath(): State<Float> {
-    return rememberInfiniteTransition(label = "auraBreath").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "auraBreath"
-    )
-}
-
-/**
- * Glow FARO: la luz sale DIRECTO del borde de la píldora, HACIA AFUERA
- * (como su sombra, pero con color), y RESPIRA: el grosor y el alpha pulsan
- * de forma continua y fluida. Se dibuja con drawBehind ANTES del clip y
- * del fondo: el fondo de la píldora tapa la parte interior y solo se ve
- * hacia afuera, sin que nada lo recorte. 3 capas = luz difuminada, no
- * línea. Colores sólidos, sin shaders por cuadro → 60fps.
- * El alcance máximo (~15dp) cabe en el aire de 16dp de la ventana.
- */
-private fun Modifier.islandFaroGlow(
-    enabled: Boolean,
-    colors: List<Color>,
-    cornerDp: Float,
-    breath: State<Float>,
-    fade: Float
-): Modifier = this.then(
-    Modifier.drawBehind {
-        val a = fade.coerceIn(0f, 1f)
-        if (!enabled || a <= 0.01f) return@drawBehind
-        val c1 = colors.getOrElse(0) { Color(0xFF2ED3B7) }
-        val b = breath.value // 0..1, ida y vuelta
-        val corner = cornerDp.dp.toPx()
-            .coerceAtMost(minOf(size.width, size.height) / 2f)
-        // Cada capa se expande su propio ancho/2 + 1dp: el trazo entero
-        // queda FUERA del borde de la píldora.
-        fun layer(widthPx: Float, alphaScale: Float) {
-            val expand = widthPx / 2f + 1.dp.toPx()
-            drawRoundRect(
-                color = c1.copy(alpha = alphaScale * a),
-                topLeft = Offset(-expand, -expand),
-                size = Size(size.width + expand * 2, size.height + expand * 2),
-                cornerRadius = CornerRadius(corner + expand),
-                style = Stroke(widthPx)
-            )
-        }
-        // Halo → medio → núcleo, todos respirando con b.
-        layer(10.dp.toPx() + 4.dp.toPx() * b, 0.10f + 0.10f * b)
-        layer(6.dp.toPx() + 4.dp.toPx() * b, 0.20f + 0.20f * b)
-        layer(3.dp.toPx() + 3.dp.toPx() * b, 0.40f + 0.30f * b)
-    }
-)
