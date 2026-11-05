@@ -10,6 +10,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import android.graphics.Bitmap
+import android.graphics.Color as AColor
+import coil.Coil
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -76,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Paint
@@ -123,6 +129,10 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.rememberInfiniteTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.launch
@@ -231,12 +241,10 @@ fun NowPlayingScreen(
         }
     }
 
-    // Fondo ambiental (v1.0.8): la portada difuminada tiñe toda la
-    // pantalla. Encima va un velo del fondo del tema (más opaco arriba
-    // y abajo, donde está el texto; más ligero en el centro, donde está
-    // la portada) para que un tema oscuro nunca quede claro y viceversa,
-    // y el texto siga legible. Sin portada queda el fondo del tema,
-    // opaco: nunca se ve la pantalla de atrás.
+    // Fondo ambiental (v1.0.8): mesh gradient con los colores de la
+    // portada (o del tema si no hay), manchas con deriva lenta + velo
+    // del fondo del tema para que el texto se lea + grano anti-bandas.
+    // Sin blur por hardware: igual en todos los dispositivos (API 26+).
     // Los contenedores de dentro (Column, pager, letras) no pintan
     // fondo: son transparentes y no interrumpen el efecto.
     Box(Modifier.fillMaxSize()) {
@@ -1193,13 +1201,84 @@ fun Modifier.artworkGlow(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Fondo mesh del Now Playing (adaptación del diseño de Claude): se extraen
+// hasta 3 colores dominantes de la portada (sin Palette) y se dibujan como
+// manchas radiales con deriva lenta. Sin blur por hardware: funciona desde
+// API 26. Sin portada, o portada en blanco y negro, entran los colores
+// del tema. Los colores se animan 700 ms al cambiar de canción.
+// ---------------------------------------------------------------------------
+
+/** Fuerza un color a vivo: saturación 0.55-0.95 y brillo 0.65-0.95. */
+private fun vivid(rgb: Int): Color {
+    val hsv = FloatArray(3).also { AColor.colorToHSV(rgb, it) }
+    hsv[1] = hsv[1].coerceIn(0.55f, 0.95f)
+    hsv[2] = hsv[2].coerceIn(0.65f, 0.95f)
+    return Color(AColor.HSVToColor(hsv))
+}
+
+/** Hasta 3 colores dominantes con tonos distintos. Lista vacía si la portada es gris/sin color. */
+private fun extractGlassColors(bitmap: Bitmap): List<Color> {
+    val n = 32
+    val px = IntArray(n * n)
+    Bitmap.createScaledBitmap(bitmap, n, n, true).getPixels(px, 0, n, 0, 0, n, n)
+
+    val w = FloatArray(12); val r = FloatArray(12); val g = FloatArray(12); val b = FloatArray(12)
+    val hsv = FloatArray(3)
+    for (p in px) {
+        AColor.colorToHSV(p, hsv)
+        if (hsv[1] < 0.25f || hsv[2] < 0.2f) continue // ignora grises y negros
+        val k = (hsv[0] / 30f).toInt().coerceAtMost(11)
+        val wt = hsv[1] * hsv[2]
+        w[k] += wt; r[k] += AColor.red(p) * wt; g[k] += AColor.green(p) * wt; b[k] += AColor.blue(p) * wt
+    }
+
+    val chosen = mutableListOf<Int>()
+    for (k in (0 until 12).filter { w[it] > 0.5f }.sortedByDescending { w[it] }) {
+        val tooClose = chosen.any { val d = kotlin.math.abs(it - k); minOf(d, 12 - d) < 2 }
+        if (!tooClose) chosen += k
+        if (chosen.size == 3) break
+    }
+    return chosen.map { vivid(AColor.rgb((r[it] / w[it]).toInt(), (g[it] / w[it]).toInt(), (b[it] / w[it]).toInt())) }
+}
+
+/** Paleta del mesh: colores de la portada (si hay 2+) completados con el tema. */
+@Composable
+private fun rememberGlassPalette(artwork: Any?): List<Color> {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    var fromArt by remember(artwork) { mutableStateOf<List<Color>>(emptyList()) }
+
+    LaunchedEffect(artwork) {
+        fromArt = if (artwork == null) emptyList() else try {
+            withContext(Dispatchers.Default) {
+                val req = ImageRequest.Builder(ctx).data(artwork).size(64).allowHardware(false).build()
+                val drawable = (Coil.imageLoader(ctx).execute(req) as? SuccessResult)?.drawable
+                drawable?.let { d ->
+                    val w = d.intrinsicWidth.takeIf { it > 0 } ?: 64
+                    val h = d.intrinsicHeight.takeIf { it > 0 } ?: 64
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bmp)
+                    d.setBounds(0, 0, w, h)
+                    d.draw(canvas)
+                    extractGlassColors(bmp)
+                } ?: emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    val theme = listOf(scheme.primary, scheme.tertiary, scheme.secondary)
+    val target = if (fromArt.size >= 2) (fromArt + theme).take(3) else theme
+
+    return target.map { animateColorAsState(it, tween(700), label = "glassColor").value }
+}
+
 /**
- * Fondo ambiental del Now Playing: la portada difuminada a pantalla
- * completa + un velo del fondo del tema. Sin portada (o si la portada
- * no carga, o en Android < 12 sin blur por hardware), el mismo efecto
- * con los colores del tema: dos manchas suaves muy difuminadas.
- * Un grano sutil rompe las bandas que dejan los gradientes suaves en
- * pantallas de 8 bits (el difuminado se veía por líneas).
+ * Fondo ambiental del Now Playing: mesh gradient con los colores de la
+ * portada (o del tema) + velo del fondo del tema + grano anti-bandas.
+ * Sin blur por hardware: igual en todos los dispositivos desde API 26.
  */
 @Composable
 private fun NowPlayingAmbientBackground(
@@ -1207,9 +1286,16 @@ private fun NowPlayingAmbientBackground(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
-    // Grano aleatorio 128x128 (semilla fija: siempre el mismo), en
-    // mosaico al 5%: invisible como textura, suficiente para romper
-    // las bandas del degradado.
+    val palette = rememberGlassPalette(artUri)
+    // luminance() de Compose no existe en esta versión: se usa el de Android.
+    val isDark = android.graphics.Color.luminance(scheme.background.toArgb()) < 0.5f
+    val blobAlpha = if (isDark) 0.85f else 0.65f
+    val phase by rememberInfiniteTransition(label = "mesh").animateFloat(
+        0f, (2 * Math.PI).toFloat(),
+        infiniteRepeatable(tween(28_000, easing = LinearEasing)), label = "phase",
+    )
+    // Grano aleatorio 128x128 (semilla fija), en mosaico al 3%: más
+    // suave que antes, suficiente para romper las bandas del degradado.
     val noiseBitmap = remember {
         val bmp = android.graphics.Bitmap.createBitmap(
             128, 128, android.graphics.Bitmap.Config.ARGB_8888
@@ -1226,84 +1312,66 @@ private fun NowPlayingAmbientBackground(
     val noisePaint = remember(noiseBitmap) {
         Paint().apply {
             shader = ImageShader(noiseBitmap, TileMode.Repeated, TileMode.Repeated)
-            alpha = 0.05f
+            alpha = 0.03f
         }
     }
     Box(modifier) {
-        // Base opaca: el fondo del tema. Sin ella, cuando la portada
-        // no carga (el URI existe pero no tiene arte) el AsyncImage no
-        // pinta nada y la biblioteca de atrás se ve a través del velo.
+        // Base opaca: el fondo del tema.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(scheme.background)
         )
-        if (!artUri.isNullOrBlank() &&
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-        ) {
-            AsyncImage(
-                model = artUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        // El blur deja un borde transparente: escalar un
-                        // poco lo recorta fuera de la pantalla.
-                        scaleX = 1.15f
-                        scaleY = 1.15f
-                    }
-                    // Menos difuminado (45dp): se notan más los colores
-                    // y la forma de la portada.
-                    .blur(45.dp)
-            )
-        } else {
-            // Sin portada: el mismo efecto difuminado con los colores
-            // del tema — dos manchas suaves (primario arriba a la
-            // izquierda, secundario abajo a la derecha) muy difuminadas.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = 1.15f
-                        scaleY = 1.15f
-                    }
-                    .blur(80.dp)
-                    .drawBehind {
-                        drawRect(
-                            brush = Brush.radialGradient(
-                                colors = listOf(scheme.primary, Color.Transparent),
-                                center = Offset(size.width * 0.2f, size.height * 0.15f),
-                                radius = size.maxDimension * 0.75f
-                            )
+        // Mesh: 4 manchas de la paleta con deriva lenta. La fase solo
+        // se lee en la fase de dibujo: no hay recomposición.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val d = size.minDimension * 0.06f
+                    // (x, y, radio, índice de color, desfase)
+                    val blobs = listOf(
+                        floatArrayOf(0.25f, 0.20f, 0.75f, 0f, 0f),
+                        floatArrayOf(0.90f, 0.45f, 0.70f, 2f, 1.7f),
+                        floatArrayOf(0.20f, 0.80f, 0.70f, 1f, 3.1f),
+                        floatArrayOf(0.85f, 0.95f, 0.60f, 0f, 4.4f),
+                    )
+                    blobs.forEach { (x, y, rad, ci, off) ->
+                        val c = palette[ci.toInt()]
+                        val center = Offset(
+                            size.width * x + kotlin.math.sin(phase + off) * d,
+                            size.height * y + kotlin.math.cos(phase + off) * d,
                         )
                         drawRect(
-                            brush = Brush.radialGradient(
-                                colors = listOf(scheme.secondary, Color.Transparent),
-                                center = Offset(size.width * 0.85f, size.height * 0.9f),
-                                radius = size.maxDimension * 0.75f
+                            Brush.radialGradient(
+                                listOf(
+                                    c.copy(alpha = blobAlpha),
+                                    c.copy(alpha = blobAlpha * 0.35f),
+                                    Color.Transparent
+                                ),
+                                center = center,
+                                radius = size.maxDimension * rad,
                             )
                         )
                     }
-            )
-        }
-        // Velo del tema: más opaco arriba y abajo (donde está el
-        // texto) y más ligero en el centro (donde está la portada).
+                }
+        )
+        // Velo suave del tema: protege la legibilidad del texto sin
+        // apagar el mesh (más opaco arriba y abajo, ligero en el centro).
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            scheme.background.copy(alpha = 0.85f),
-                            scheme.background.copy(alpha = 0.68f),
-                            scheme.background.copy(alpha = 0.85f)
+                            scheme.background.copy(alpha = 0.55f),
+                            scheme.background.copy(alpha = 0.30f),
+                            scheme.background.copy(alpha = 0.55f)
                         )
                     )
                 )
         )
-        // Grano sutil sobre el ambiente (debajo del contenido): rompe
-        // las bandas del difuminado y del velo.
+        // Grano sutil sobre el ambiente (debajo del contenido).
         Box(
             Modifier
                 .fillMaxSize()
