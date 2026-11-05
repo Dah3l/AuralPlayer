@@ -400,10 +400,3 @@ private fun SettingsRow(
         trailing?.invoke()
     }
 }
-
-/**
- * v1.0.8: ajustes del aura luminosa de Dynamic Aural.
- * Interruptor + modo (Automático con los colores del tema / Personalizado
- * con 1 o 2 colores de la paleta).
- */
-@Composable
