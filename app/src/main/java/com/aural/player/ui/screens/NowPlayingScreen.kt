@@ -4,6 +4,10 @@ package com.aural.player.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import kotlin.math.abs
+import kotlin.math.pow
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.aural.player.data.Song
@@ -1149,6 +1154,41 @@ private data class CoverItem(
  * del pager); el resto de la pantalla no se entera.
  */
 @Composable
+// ---------------------------------------------------------------------------
+// Glow de la carátula (código de Claude): halo de color difuminado hecho
+// con capas concéntricas, sin blur ni shadow. Evita lo que hacía ver
+// turbio al anterior: Modifier.shadow mezcla negro ambiental con el
+// color; aquí todas las capas son del color del tema, sin negro.
+// Va ANTES del clip: el glow se dibuja fuera de la carátula recortada y
+// el centro queda tapado por la propia imagen. Extensión máxima 19dp
+// (16 + 3 de offset) <= 20dp de margen de la página: el pager no lo
+// puede recortar. Solo drawRoundRect: funciona desde API 26.
+// ---------------------------------------------------------------------------
+fun Modifier.artworkGlow(
+    color: Color,
+    cornerRadius: Dp = 16.dp,
+    extent: Dp = 16.dp,
+    yOffset: Dp = 3.dp,
+    strength: Float = 0.45f, // opacidad acumulada junto al borde
+    layers: Int = 14,
+): Modifier = drawBehind {
+    val ext = extent.toPx()
+    val dy = yOffset.toPx()
+    val r0 = cornerRadius.toPx()
+    fun profile(x: Float) = strength * (1f - x).pow(1.5f) // caída suave hasta 0
+
+    for (i in layers downTo 1) {
+        val grow = ext * i / layers
+        val alpha = (profile((i - 1f) / layers) - profile(i.toFloat() / layers)).coerceIn(0f, 1f)
+        drawRoundRect(
+            color = color.copy(alpha = alpha),
+            topLeft = Offset(-grow, -grow + dy),
+            size = Size(size.width + grow * 2f, size.height + grow * 2f),
+            cornerRadius = CornerRadius(r0 + grow),
+        )
+    }
+}
+
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
@@ -1210,17 +1250,17 @@ private fun CoverCarousel(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Sombra negra sutil, como los reproductores buenos: nada
-                // de halos de color (eso era lo que se veía turbio).
-                val coverShape = RoundedCornerShape(16.dp)
+                // Glow del tema alrededor de la carátula (capas, sin
+                // shadow): el pager no lo recorta porque cabe en el
+                // margen de 20dp de la página.
                 com.aural.player.ui.components.CoverArt(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
                     cornerRadius = 16.dp,
                     showBorder = false,
-                    modifier = Modifier.shadow(
-                        elevation = 12.dp,
-                        shape = coverShape
+                    modifier = Modifier.artworkGlow(
+                        color = MaterialTheme.colorScheme.primary,
+                        cornerRadius = 16.dp
                     )
                 )
             }
