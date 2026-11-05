@@ -12,7 +12,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -78,14 +77,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -247,7 +241,7 @@ fun IslandOverlayContent(
         if (auraMode == "custom") auraHexes.map { hexToColor(it) }
         else listOf(scheme.primary, scheme.secondary)
     }
-    val auraPhase = rememberAuraPhase()
+    val auraBreath = rememberAuraBreath()
     // El aura solo rodea la píldora colapsada, nunca el panel expandido
     // ni durante el morph (cuando la píldora aún no es visible).
     val auraVisible = auraOn && !expanded && pillAlpha.value > 0.5f
@@ -268,15 +262,14 @@ fun IslandOverlayContent(
         modifier = Modifier
             .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
+            // Faro: ANTES del clip y del fondo, para que la luz salga
+            // hacia afuera sin que nada la recorte. Se funde con la
+            // píldora (fade) en vez de aparecer de golpe.
+            .islandFaroGlow(auraVisible, auraColors, cornerA.value, auraBreath, pillAlpha.value)
             .shadow(14.dp, islandShape)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
-            .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape)
-            // v1.0.8: aura ENCIMA del fondo (con drawBehind el background
-            // al 97% la tapaba); pegada al borde interior con margen para
-            // que el clip no la recorte. Se funde con la píldora (fade)
-            // en vez de aparecer de golpe.
-            .islandAura(auraVisible, auraColors, cornerA.value, auraPhase, pillAlpha.value),
+            .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape),
         contentAlignment = Alignment.TopCenter
     ) {
         if (pillAlpha.value > 0.01f) {
@@ -872,108 +865,60 @@ private fun hexToColor(hex: String): Color =
  * píldora sin rotar la geometría (funciona con cualquier forma).
  */
 /**
- * Fase del cometa del aura (0..1, una vuelta cada 3.6s). Devuelve el State
+ * Respiración del glow faro (0..1, ida y vuelta ~2.4s). Devuelve el State
  * en vez del Float: el draw lo lee sin recomponer, solo redibuja → 60fps.
  */
 @Composable
-private fun rememberAuraPhase(): State<Float> {
-    return rememberInfiniteTransition(label = "aura").animateFloat(
+private fun rememberAuraBreath(): State<Float> {
+    return rememberInfiniteTransition(label = "auraBreath").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(3600, easing = LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
         ),
-        label = "auraPhase"
+        label = "auraBreath"
     )
 }
 
 /**
- * v1.0.8-fix: el aura como COMETA sobre el borde (PathMeasure), en vez de
- * degradado sweep. Dos motivos:
- *  1. El degradado tenía una costura visible (línea negra a las 3 en punto,
- *     a la derecha): sus paradas no cerraban el círculo. Un trazo no tiene
- *     costura posible.
- *  2. El pincel se reconstruía 60 veces por segundo (un shader nuevo por
- *     cuadro = jank). El cometa usa solo colores sólidos: cero shaders por
- *     cuadro → 60fps fluidos.
- * El fade multiplica los alphas para que el aura se funda con la píldora
- * en vez de aparecer/desaparecer de golpe.
- * Dibuja el aura alrededor de la píldora, ENCIMA del fondo (drawWithContent
- * al final de la cadena: con drawBehind el background al 97% la tapaba).
- * Todo el glow vive DENTRO de la caja con un inset, así ni el clip ni el
- * fondo lo tocan.
+ * Glow FARO: la luz sale DIRECTO del borde de la píldora, HACIA AFUERA
+ * (como su sombra, pero con color), y RESPIRA: el grosor y el alpha pulsan
+ * de forma continua y fluida. Se dibuja con drawBehind ANTES del clip y
+ * del fondo: el fondo de la píldora tapa la parte interior y solo se ve
+ * hacia afuera, sin que nada lo recorte. 3 capas = luz difuminada, no
+ * línea. Colores sólidos, sin shaders por cuadro → 60fps.
+ * El alcance máximo (~15dp) cabe en el aire de 16dp de la ventana.
  */
-private fun Modifier.islandAura(
+private fun Modifier.islandFaroGlow(
     enabled: Boolean,
     colors: List<Color>,
     cornerDp: Float,
-    phase: State<Float>,
+    breath: State<Float>,
     fade: Float
 ): Modifier = this.then(
-    Modifier.drawWithContent {
-        drawContent()
+    Modifier.drawBehind {
         val a = fade.coerceIn(0f, 1f)
-        if (!enabled || a <= 0.01f) return@drawWithContent
+        if (!enabled || a <= 0.01f) return@drawBehind
         val c1 = colors.getOrElse(0) { Color(0xFF2ED3B7) }
-        val c2 = colors.getOrElse(1) { c1 }
-        val inset = 5.dp.toPx()
-        val w = size.width - inset * 2f
-        val h = size.height - inset * 2f
-        if (w <= 0f || h <= 0f) return@drawWithContent
-        // El radio nunca supera la mitad del lado menor (en el morph la
-        // esquina animada puede quedar grande para la caja).
-        val corner = ((cornerDp.dp.toPx() - inset).coerceAtLeast(0f))
-            .coerceAtMost(minOf(w, h) / 2f)
-        val border = Path().apply {
-            addRoundRect(
-                RoundRect(
-                    Rect(Offset(inset, inset), Size(w, h)),
-                    CornerRadius(corner)
-                )
+        val b = breath.value // 0..1, ida y vuelta
+        val corner = cornerDp.dp.toPx()
+            .coerceAtMost(minOf(size.width, size.height) / 2f)
+        // Cada capa se expande su propio ancho/2 + 1dp: el trazo entero
+        // queda FUERA del borde de la píldora.
+        fun layer(widthPx: Float, alphaScale: Float) {
+            val expand = widthPx / 2f + 1.dp.toPx()
+            drawRoundRect(
+                color = c1.copy(alpha = alphaScale * a),
+                topLeft = Offset(-expand, -expand),
+                size = Size(size.width + expand * 2, size.height + expand * 2),
+                cornerRadius = CornerRadius(corner + expand),
+                style = Stroke(widthPx)
             )
         }
-        val measure = PathMeasure()
-        measure.setPath(border, false)
-        val total = measure.length
-        if (total <= 0f) return@drawWithContent
-        // Estela-cometa: 28 segmentos solapados que forman UNA línea de al
-        // menos la mitad del perímetro, con degradado suave c1→c2 (sin
-        // cortes bruscos), más gruesa y fuerte en la cabeza y más fina y
-        // tenue hacia la cola. Todo en colores sólidos: cero shaders por
-        // cuadro → 60fps fluidos.
-        val segs = 28
-        val cometLen = total * 0.55f
-        val segLen = cometLen / segs * 1.7f // 70% de solape: línea continua
-        val headEnd = phase.value * total
-        fun drawRange(from: Float, to: Float, color: Color, widthPx: Float) {
-            if (to <= from) return
-            val f = ((from % total) + total) % total
-            val len = to - from
-            val style = Stroke(widthPx, cap = StrokeCap.Round)
-            val t = f + len
-            if (t <= total) {
-                val p = Path()
-                measure.getSegment(f, t, p, true)
-                drawPath(p, color, style = style)
-            } else {
-                // Cruza el punto de cierre: dos segmentos.
-                val p1 = Path()
-                measure.getSegment(f, total, p1, true)
-                drawPath(p1, color, style = style)
-                val p2 = Path()
-                measure.getSegment(0f, t - total, p2, true)
-                drawPath(p2, color, style = style)
-            }
-        }
-        // De la cola a la cabeza: la cabeza queda encima (más brillante).
-        for (i in segs - 1 downTo 0) {
-            val t = i / (segs - 1f) // 0 = cabeza, 1 = fin de la estela
-            val segEnd = headEnd - t * cometLen
-            val col = lerp(c1, c2, t)
-            val wPx = (7f - t * 5f).dp.toPx() // 7dp → 2dp
-            val alpha = (1f - t) * (1f - t) * 0.85f * a
-            drawRange(segEnd - segLen, segEnd, col.copy(alpha = alpha), wPx)
-        }
+        // Halo → medio → núcleo, todos respirando con b.
+        layer(10.dp.toPx() + 4.dp.toPx() * b, 0.10f + 0.10f * b)
+        layer(6.dp.toPx() + 4.dp.toPx() * b, 0.20f + 0.20f * b)
+        layer(3.dp.toPx() + 3.dp.toPx() * b, 0.40f + 0.30f * b)
     }
 )
