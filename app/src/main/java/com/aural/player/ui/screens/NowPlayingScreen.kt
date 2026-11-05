@@ -248,9 +248,14 @@ fun NowPlayingScreen(
     // Sin blur por hardware: igual en todos los dispositivos (API 26+).
     // Los contenedores de dentro (Column, pager, letras) no pintan
     // fondo: son transparentes y no interrumpen el efecto.
+    // La paleta se calcula una sola vez aquí: el mesh y el glow de la
+    // portada usan los mismos colores, así el glow nunca desentona
+    // con el fondo.
+    val currentArtUri = song?.let { customCovers[it.id] ?: it.albumArtUri }
+    val glassPalette = rememberGlassPalette(currentArtUri)
     Box(Modifier.fillMaxSize()) {
         NowPlayingAmbientBackground(
-            artUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
+            palette = glassPalette,
             modifier = Modifier.fillMaxSize()
         )
         // Scrim hermano: bloquea los toques para que no lleguen a la lista
@@ -435,6 +440,7 @@ fun NowPlayingScreen(
             CoverCarousel(
                 coverPagerState = coverPagerState,
                 coverItems = coverItems,
+                glowColor = glassPalette.firstOrNull() ?: MaterialTheme.colorScheme.primary,
                 modifier = Modifier.fillMaxWidth()
             )
             // ---- Línea actual de la letra (debajo de la carátula) ----
@@ -1280,14 +1286,15 @@ private fun rememberGlassPalette(artwork: Any?): List<Color> {
  * Fondo ambiental del Now Playing: mesh gradient con los colores de la
  * portada (o del tema) + velo del fondo del tema + grano anti-bandas.
  * Sin blur por hardware: igual en todos los dispositivos desde API 26.
+ * La paleta viene de fuera (la calcula el Now Playing): el glow de la
+ * portada usa estos mismos colores.
  */
 @Composable
 private fun NowPlayingAmbientBackground(
-    artUri: String?,
+    palette: List<Color>,
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
-    val palette = rememberGlassPalette(artUri)
     // luminance() de Compose no existe en esta versión: se usa el de Android.
     val isDark = android.graphics.Color.luminance(scheme.background.toArgb()) < 0.5f
     val blobAlpha = if (isDark) 0.85f else 0.65f
@@ -1389,6 +1396,7 @@ private fun NowPlayingAmbientBackground(
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
+    glowColor: Color,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(
@@ -1396,9 +1404,9 @@ private fun CoverCarousel(
             .padding(top = 8.dp)
     ) {
         val pageWidth = maxWidth
-        // El fondo ambiental ya vive en la raíz del Now Playing (la
-        // portada difuminada a pantalla completa): aquí solo queda el
-        // carrusel con su glow. El frame difuminado cuadrado se eliminó.
+        // El fondo ambiental ya vive en la raíz del Now Playing (mesh
+        // con los colores de la portada): aquí solo queda el carrusel
+        // con su glow.
         // Margen lateral de la portada.
         val coverSideMargin = 20.dp
         HorizontalPager(
@@ -1429,17 +1437,20 @@ private fun CoverCarousel(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Glow del tema alrededor de la carátula (capas, sin
-                // shadow): el pager no lo recorta porque cabe en el
-                // margen de 20dp de la página.
+                // Glow con el color dominante de la portada (el mismo
+                // del mesh): nunca desentona con el fondo. Más sutil y
+                // más pequeño (10dp, 0.30): se nota sin imponerse. El
+                // pager no lo recorta porque cabe en el margen de 20dp.
                 com.aural.player.ui.components.CoverArt(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
                     cornerRadius = 16.dp,
                     showBorder = false,
                     modifier = Modifier.artworkGlow(
-                        color = MaterialTheme.colorScheme.primary,
-                        cornerRadius = 16.dp
+                        color = glowColor,
+                        cornerRadius = 16.dp,
+                        extent = 10.dp,
+                        strength = 0.30f
                     )
                 )
             }
