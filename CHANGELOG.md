@@ -4,6 +4,20 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.8 — 2026-11-04
+
+### Novedades
+- **La isla ya gira los modos de reproducción** — en el panel expandido, el botón de la izquierda rota entre repetir todo 🔁, repetir una 🔂 y aleatorio 🔀, mostrando siempre el modo activo. El corazón de la derecha marca la canción como favorita sin salir de la isla.
+- **YouTube y el micrófono, junto a "Abrir Aural"** — ahora flanquean el botón como dos botones circulares con su mismo estilo, para que el panel quede más ordenado.
+- **Aura luminosa en la píldora** — una luz sutil recorre la píldora dando vueltas con movimiento fluido. Se activa y configura en Ajustes → Interfaz → Dynamic Aural: automática (usa los colores de tu tema) o con 1 o 2 colores a tu gusto.
+- **Ordena las pestañas de la biblioteca** — toca el lápiz al final de las pestañas y arrastra para ponerlas en el orden que quieras (Canciones, Artistas, Álbumes, Playlists, Descargas, Carpetas). Se guarda y se mantiene al actualizar.
+- **"Seleccionar todas" en la selección múltiple** — nuevo botón que marca de una vez todas las canciones visibles (respeta tu búsqueda o filtro activo).
+- **Añadir a playlist, completo** — al mandar canciones a una playlist ahora ves TODAS tus playlists y una opción para crear una nueva con esa selección.
+- **Agregar canciones a playlists existentes** — en la cabecera de cada playlist, junto a reproducir y aleatorio, hay un botón ＋ que abre el selector; las que ya están aparecen marcadas y no se duplican.
+- **Contacto con el desarrollador** — nueva pantalla desde el menú ⋮ → "Contacto": WhatsApp, correo e Instagram de Aural, todo a un toque.
+- **Confirma tu donación** — en ❤ Apoyar a Aural ahora aparece el número de WhatsApp para confirmar que tu apoyo llegó.
+- **Arreglos** — repaso del borde de la sombra de la isla para que no se recorte sobre fondos claros.
+
 ## v1.0.7 — 2026-11-01
 
 ### Novedades
