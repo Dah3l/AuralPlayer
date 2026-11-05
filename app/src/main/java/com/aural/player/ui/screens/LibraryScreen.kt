@@ -162,7 +162,9 @@ fun LibraryScreen(
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     playlistsListState: androidx.compose.foundation.lazy.LazyListState,
     pagerState: androidx.compose.foundation.pager.PagerState =
-        rememberPagerState(pageCount = { tabs.size }),
+        // v1.0.8: el juego de pestañas es fijo (6 claves); el orden lo elige
+        // el usuario pero la cantidad no cambia.
+        rememberPagerState(pageCount = { 6 }),
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
