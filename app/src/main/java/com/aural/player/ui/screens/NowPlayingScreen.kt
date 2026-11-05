@@ -230,8 +230,8 @@ fun NowPlayingScreen(
     // pantalla. Encima va un velo del fondo del tema (más opaco arriba
     // y abajo, donde está el texto; más ligero en el centro, donde está
     // la portada) para que un tema oscuro nunca quede claro y viceversa,
-    // y el texto siga legible. Sin portada, o en Android < 12 (sin blur
-    // por hardware), el ambiente sale de los colores del tema.
+    // y el texto siga legible. Sin portada queda el fondo del tema,
+    // opaco: nunca se ve la pantalla de atrás.
     // Los contenedores de dentro (Column, pager, letras) no pintan
     // fondo: son transparentes y no interrumpen el efecto.
     Box(Modifier.fillMaxSize()) {
@@ -1190,10 +1190,9 @@ fun Modifier.artworkGlow(
 
 /**
  * Fondo ambiental del Now Playing: la portada difuminada a pantalla
- * completa + un velo del fondo del tema. Sin portada (o en Android
- * < 12, sin blur por hardware), el ambiente sale de los colores del
- * tema (primario → secundario → terciario), como si la portada por
- * defecto fuera la portada real.
+ * completa + un velo del fondo del tema. Sin portada (o si la portada
+ * no carga, o en Android < 12 sin blur por hardware), queda el fondo
+ * del tema, opaco: nunca se ve la pantalla de atrás.
  */
 @Composable
 private fun NowPlayingAmbientBackground(
@@ -1202,6 +1201,14 @@ private fun NowPlayingAmbientBackground(
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier) {
+        // Base opaca: el fondo del tema. Sin ella, cuando la portada
+        // no carga (el URI existe pero no tiene arte) el AsyncImage no
+        // pinta nada y la biblioteca de atrás se ve a través del velo.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(scheme.background)
+        )
         if (!artUri.isNullOrBlank() &&
             android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
         ) {
@@ -1217,18 +1224,9 @@ private fun NowPlayingAmbientBackground(
                         scaleX = 1.15f
                         scaleY = 1.15f
                     }
-                    .blur(80.dp)
-            )
-        } else {
-            // Sin portada: los colores del tema hacen de portada.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(scheme.primary, scheme.secondary, scheme.tertiary)
-                        )
-                    )
+                    // Menos difuminado (45dp): se notan más los colores
+                    // y la forma de la portada.
+                    .blur(45.dp)
             )
         }
         // Velo del tema: más opaco arriba y abajo (donde está el
@@ -1240,7 +1238,7 @@ private fun NowPlayingAmbientBackground(
                     Brush.verticalGradient(
                         listOf(
                             scheme.background.copy(alpha = 0.85f),
-                            scheme.background.copy(alpha = 0.72f),
+                            scheme.background.copy(alpha = 0.68f),
                             scheme.background.copy(alpha = 0.85f)
                         )
                     )
