@@ -294,8 +294,7 @@ class MusicService : MediaSessionService() {
                             islandDismissed = true
                             hideIslandOverlay()
                         },
-                        onExpandWindow = { expandIslandWindow() },
-                        onCollapseWindow = { collapseIslandWindow() }
+                        onWindowSync = { w, h -> syncIslandWindow(w, h) }
                     )
                 }
             }
@@ -311,27 +310,22 @@ class MusicService : MediaSessionService() {
         }
     }
 
-    // Durante el morph la ventana se fija UNA vez al tamaño expandido:
-    // la animación corre 100% dentro (GPU), sin re-layouts de ventana
-    // por frame, que es lo que producía el stutter.
-    private fun expandIslandWindow() {
+    // La ventana sigue el morph de la isla cuadro por cuadro (vía
+    // onWindowSync): +32dp de aire para que la sombra (14dp) respire sin
+    // recortarse. Sin saltos instantáneos de tamaño, que en algunos equipos
+    // descentraban la píldora unos milisegundos (se veía como un panel que
+    // entraba desde la derecha al abrir, o una pill desde la izquierda al
+    // cerrar). La gravedad la mantiene siempre centrada.
+    private fun syncIslandWindow(wDp: Float, hDp: Float) {
         val view = islandView ?: return
         val params = islandParams ?: return
         val metrics = resources.displayMetrics
         val d = metrics.density
-        // Mismo cálculo adaptativo que en el overlay: la ventana contiene
-        // a la isla con margen, sin superar la pantalla.
-        val screenWdp = metrics.widthPixels / d
-        val screenHdp = metrics.heightPixels / d
-        val islandW = minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
-        // v1.0.8: 308→320 (parejo con DynamicIsland.kt) para el botón ^ de 48dp.
-        val islandH = minOf(320f, (screenHdp - 140f).coerceAtLeast(220f))
-        // +32dp del padding anti-recorte y +32dp de aire para que la
-        // sombra (14dp) respire dentro de la ventana sin recortarse.
-        params.width = ((islandW + 64f) * d).toInt()
+        params.width = ((wDp + 32f) * d).toInt()
             .coerceAtMost(metrics.widthPixels)
-        params.height = ((islandH + 64f) * d).toInt()
+        params.height = ((hDp + 32f) * d).toInt()
             .coerceAtMost(metrics.heightPixels)
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: Exception) { }
@@ -347,18 +341,6 @@ class MusicService : MediaSessionService() {
     private fun collapsedWindowPx(): Pair<Int, Int> {
         val d = resources.displayMetrics.density
         return Pair(((135f + 32f) * d).toInt(), ((44f + 32f) * d).toInt())
-    }
-
-    private fun collapseIslandWindow() {
-        val view = islandView ?: return
-        val params = islandParams ?: return
-        // v1.0.8: tamaño exacto en vez de WRAP_CONTENT (ver collapsedWindowPx).
-        val (w, h) = collapsedWindowPx()
-        params.width = w
-        params.height = h
-        try {
-            windowManager.updateViewLayout(view, params)
-        } catch (_: Exception) { }
     }
 
     private fun hideIslandOverlay() {
