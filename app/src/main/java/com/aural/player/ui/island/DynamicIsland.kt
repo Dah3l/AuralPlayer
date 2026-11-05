@@ -64,6 +64,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,10 +78,11 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
@@ -110,8 +113,9 @@ import kotlinx.coroutines.launch
 fun IslandOverlayContent(
     app: com.aural.player.AuralApp,
     onClose: () -> Unit,
-    onExpandWindow: () -> Unit = {},
-    onCollapseWindow: () -> Unit = {}
+    // La ventana sigue al morph cuadro por cuadro (tamaño de la caja);
+    // MusicService la mantiene centrada sin saltos.
+    onWindowSync: (wDp: Float, hDp: Float) -> Unit = { _, _ -> }
 ) {
     val playerState by app.playback.state.collectAsState()
     // La isla usa la metadata PERSONALIZADA de la app, no la original
@@ -141,8 +145,8 @@ fun IslandOverlayContent(
     }
     val expandedH = remember(screenHdp) {
         // v1.0.8: 308→320 para darle aire al botón ^ de 48dp.
-        // OJO: la misma fórmula vive en MusicService.expandIslandWindow();
-        // ambas tienen que cambiar juntas.
+        // La ventana la sigue MusicService.syncIslandWindow() cuadro por
+        // cuadro con estos mismos valores (vía onWindowSync).
         minOf(320f, (screenHdp - 140f).coerceAtLeast(220f))
     }
 
@@ -150,16 +154,28 @@ fun IslandOverlayContent(
         if (expanded) return
         expanded = true
         animJob?.cancel()
-        onExpandWindow() // la ventana crece UNA vez; el morph corre dentro
         animJob = scope.launch {
-            // Fase 1: la píldora se desvanece mientras el ancho crece.
-            launch { pillAlpha.animateTo(0f, tween(120)) }
-            widthA.animateTo(expandedW, tween(150, easing = ease))
-            cornerA.animateTo(28f, tween(150, easing = ease))
-            // Fase 2: la altura, ya con el ancho objetivo.
-            heightA.animateTo(expandedH, tween(150, easing = ease))
-            // Fase 3: el contenido del panel entra con fade.
-            panelAlpha.animateTo(1f, tween(120))
+            // La ventana sigue a la caja cuadro por cuadro: sin saltos
+            // instantáneos (el salto descentraba la píldora unos ms en
+            // algunos equipos: "panel desde la derecha / pill desde la
+            // izquierda"). Se cancela sola con el morph.
+            val windowSync = launch {
+                snapshotFlow { widthA.value to heightA.value }
+                    .collect { (w, h) -> onWindowSync(w, h) }
+            }
+            try {
+                // Fase 1: la píldora se desvanece mientras el ancho crece.
+                launch { pillAlpha.animateTo(0f, tween(120)) }
+                widthA.animateTo(expandedW, tween(150, easing = ease))
+                cornerA.animateTo(28f, tween(150, easing = ease))
+                // Fase 2: la altura, ya con el ancho objetivo.
+                heightA.animateTo(expandedH, tween(150, easing = ease))
+                // Fase 3: el contenido del panel entra con fade.
+                panelAlpha.animateTo(1f, tween(120))
+            } finally {
+                windowSync.cancel()
+            }
+            onWindowSync(expandedW, expandedH)
         }
     }
     fun doCollapse() {
@@ -167,15 +183,25 @@ fun IslandOverlayContent(
         expanded = false
         animJob?.cancel()
         animJob = scope.launch {
-            // Espejo de la expansión: primero el contenido se desvanece
-            // (120ms), LUEGO la caja vacía se cierra por fases (sin nada
-            // que aplastar), y al final entra la píldora con fade.
-            panelAlpha.animateTo(0f, tween(120))
-            heightA.animateTo(44f, tween(140, easing = ease))
-            widthA.animateTo(135f, tween(140, easing = ease))
-            cornerA.animateTo(22f, tween(140, easing = ease))
-            launch { pillAlpha.animateTo(1f, tween(110)) }
-            onCollapseWindow()
+            // Espejo de la expansión, con la ventana siguiendo a la caja.
+            val windowSync = launch {
+                snapshotFlow { widthA.value to heightA.value }
+                    .collect { (w, h) -> onWindowSync(w, h) }
+            }
+            try {
+                // Espejo de la expansión: primero el contenido se desvanece
+                // (120ms), LUEGO la caja vacía se cierra por fases (sin nada
+                // que aplastar), y al final entra la píldora con fade.
+                panelAlpha.animateTo(0f, tween(120))
+                heightA.animateTo(44f, tween(140, easing = ease))
+                widthA.animateTo(135f, tween(140, easing = ease))
+                cornerA.animateTo(22f, tween(140, easing = ease))
+                launch { pillAlpha.animateTo(1f, tween(110)) }
+            } finally {
+                windowSync.cancel()
+            }
+            // Termina en el tamaño colapsado exacto: sin salto final.
+            onWindowSync(135f, 44f)
         }
     }
     val song = playerState.currentSong ?: return
@@ -219,7 +245,7 @@ fun IslandOverlayContent(
         if (auraMode == "custom") auraHexes.map { hexToColor(it) }
         else listOf(scheme.primary, scheme.secondary)
     }
-    val auraBrush = rememberAuraBrush(auraColors)
+    val auraPhase = rememberAuraPhase()
     // El aura solo rodea la píldora colapsada, nunca el panel expandido
     // ni durante el morph (cuando la píldora aún no es visible).
     val auraVisible = auraOn && !expanded && pillAlpha.value > 0.5f
@@ -246,8 +272,9 @@ fun IslandOverlayContent(
             .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape)
             // v1.0.8: aura ENCIMA del fondo (con drawBehind el background
             // al 97% la tapaba); pegada al borde interior con margen para
-            // que el clip no la recorte.
-            .islandAura(auraVisible, auraBrush, cornerA.value),
+            // que el clip no la recorte. Se funde con la píldora (fade)
+            // en vez de aparecer de golpe.
+            .islandAura(auraVisible, auraColors, cornerA.value, auraPhase, pillAlpha.value),
         contentAlignment = Alignment.TopCenter
     ) {
         if (pillAlpha.value > 0.01f) {
@@ -843,8 +870,13 @@ private fun hexToColor(hex: String): Color =
  * píldora sin rotar la geometría (funciona con cualquier forma).
  */
 @Composable
-private fun rememberAuraBrush(colors: List<Color>): Brush {
-    val phase by rememberInfiniteTransition(label = "aura").animateFloat(
+/**
+ * Fase del cometa del aura (0..1, una vuelta cada 3.6s). Devuelve el State
+ * en vez del Float: el draw lo lee sin recomponer, solo redibuja → 60fps.
+ */
+@Composable
+private fun rememberAuraPhase(): State<Float> {
+    return rememberInfiniteTransition(label = "aura").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -853,53 +885,84 @@ private fun rememberAuraBrush(colors: List<Color>): Brush {
         ),
         label = "auraPhase"
     )
-    return remember(phase, colors) {
-        val c1 = colors.getOrElse(0) { Color(0xFF2ED3B7) }
-        val c2 = colors.getOrElse(1) { c1 }
-        val tail = 0.35f // longitud de la estela del cometa (fracción de vuelta)
-        val stops = ArrayList<Pair<Float, Color>>(49)
-        stops.add(0f to Color.Transparent)
-        for (i in 1..48) {
-            val x = i / 48f
-            val d = (phase - x + 1f) % 1f // 0 en la cabeza, crece hacia atrás
-            val k = (1f - d / tail).coerceIn(0f, 1f)
-            val col = lerp(c1, c2, (d / tail).coerceIn(0f, 1f))
-            stops.add(x to col.copy(alpha = k * 0.9f))
-        }
-        Brush.sweepGradient(colorStops = stops.toTypedArray())
-    }
 }
 
 /**
- * v1.0.8: dibuja el aura alrededor de la píldora, ENCIMA del fondo
- * (drawWithContent al final de la cadena: con drawBehind el background
- * al 97% la tapaba). Todo el glow vive DENTRO de la caja con un inset,
- * así ni el clip ni el fondo lo tocan; el trazo central va más brillante
- * para que la luz sí se vea.
+ * v1.0.8-fix: el aura como COMETA sobre el borde (PathMeasure), en vez de
+ * degradado sweep. Dos motivos:
+ *  1. El degradado tenía una costura visible (línea negra a las 3 en punto,
+ *     a la derecha): sus paradas no cerraban el círculo. Un trazo no tiene
+ *     costura posible.
+ *  2. El pincel se reconstruía 60 veces por segundo (un shader nuevo por
+ *     cuadro = jank). El cometa usa solo colores sólidos: cero shaders por
+ *     cuadro → 60fps fluidos.
+ * El fade multiplica los alphas para que el aura se funda con la píldora
+ * en vez de aparecer/desaparecer de golpe.
+ * Dibuja el aura alrededor de la píldora, ENCIMA del fondo (drawWithContent
+ * al final de la cadena: con drawBehind el background al 97% la tapaba).
+ * Todo el glow vive DENTRO de la caja con un inset, así ni el clip ni el
+ * fondo lo tocan.
  */
 private fun Modifier.islandAura(
     enabled: Boolean,
-    brush: Brush,
-    cornerDp: Float
+    colors: List<Color>,
+    cornerDp: Float,
+    phase: State<Float>,
+    fade: Float
 ): Modifier = this.then(
     Modifier.drawWithContent {
         drawContent()
-        if (!enabled) return@drawWithContent
+        val a = fade.coerceIn(0f, 1f)
+        if (!enabled || a <= 0.01f) return@drawWithContent
+        val c1 = colors.getOrElse(0) { Color(0xFF2ED3B7) }
+        val c2 = colors.getOrElse(1) { c1 }
         val inset = 5.dp.toPx()
-        val corner = CornerRadius((cornerDp.dp.toPx() - inset).coerceAtLeast(0f))
-        val topLeft = Offset(inset, inset)
-        val rectSize = Size(size.width - inset * 2, size.height - inset * 2)
-        drawRoundRect(
-            brush = brush, topLeft = topLeft, size = rectSize,
-            style = Stroke(9.dp.toPx()), alpha = 0.16f, cornerRadius = corner
-        )
-        drawRoundRect(
-            brush = brush, topLeft = topLeft, size = rectSize,
-            style = Stroke(5.dp.toPx()), alpha = 0.35f, cornerRadius = corner
-        )
-        drawRoundRect(
-            brush = brush, topLeft = topLeft, size = rectSize,
-            style = Stroke(2.5.dp.toPx()), alpha = 0.85f, cornerRadius = corner
-        )
+        val w = size.width - inset * 2f
+        val h = size.height - inset * 2f
+        if (w <= 0f || h <= 0f) return@drawWithContent
+        // El radio nunca supera la mitad del lado menor (en el morph la
+        // esquina animada puede quedar grande para la caja).
+        val corner = ((cornerDp.dp.toPx() - inset).coerceAtLeast(0f))
+            .coerceAtMost(minOf(w, h) / 2f)
+        val border = Path().apply {
+            addRoundRect(
+                RoundRect(Offset(inset, inset), Size(w, h), CornerRadius(corner))
+            )
+        }
+        val measure = PathMeasure()
+        measure.setPath(border, false)
+        val total = measure.length
+        if (total <= 0f) return@drawWithContent
+        // Cometa: cabeza brillante (c1) + estela (c2). La fase se lee aquí
+        // (draw) para no recomponer 60 veces por segundo.
+        val headLen = total * 0.14f
+        val tailLen = total * 0.32f
+        val headEnd = phase.value * total
+        fun drawComet(fromDist: Float, toDist: Float, color: Color, widthDp: Float) {
+            val f = ((fromDist % total) + total) % total
+            val len = toDist - fromDist
+            if (len <= 0f) return
+            val style = Stroke(widthDp.dp.toPx(), cap = StrokeCap.Round)
+            val t = f + len
+            if (t <= total) {
+                val seg = Path()
+                measure.getSegment(f, t, seg, true)
+                drawPath(seg, color, style = style)
+            } else {
+                // Cruza el punto de cierre: dos segmentos.
+                val seg1 = Path()
+                measure.getSegment(f, total, seg1, true)
+                drawPath(seg1, color, style = style)
+                val seg2 = Path()
+                measure.getSegment(0f, t - total, seg2, true)
+                drawPath(seg2, color, style = style)
+            }
+        }
+        // Estela: ancha y tenue (c2).
+        drawComet(headEnd - tailLen, headEnd - headLen * 0.5f,
+            c2.copy(alpha = 0.30f * a), 7f)
+        // Cabeza: fina y brillante (c1).
+        drawComet(headEnd - headLen, headEnd,
+            c1.copy(alpha = 0.90f * a), 3f)
     }
 )
