@@ -1,7 +1,6 @@
 // Vista de letras sincronizadas (.lrc)
 package com.aural.player.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -10,7 +9,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,6 +48,10 @@ fun LyricsScreen(
         mutableStateOf(listState.firstVisibleItemIndex > 0)
     }
     var showCardSheet by remember { mutableStateOf(false) }
+
+    // Zona del desvanecido superior de las líneas (96dp): al subir, la
+    // línea se funde en el mesh en vez de taparse con una sombra.
+    val fadePx = with(LocalDensity.current) { 96.dp.toPx() }
 
     // Cargar y parsear el .lrc
     LaunchedEffect(lrcPath) {
@@ -173,6 +177,15 @@ fun LyricsScreen(
                     ) {
                         itemsIndexed(lines) { index, line ->
                             val isActive = index == activeIndex
+                            // Desvanecido superior: la línea se funde en
+                            // el mesh al subir (su alpha baja según su
+                            // borde inferior se acerca al borde de arriba
+                            // de la lista), sin banda de sombra.
+                            val itemInfo = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == index }
+                            val itemAlpha = if (itemInfo == null) 1f
+                            else ((itemInfo.offset + itemInfo.size) / fadePx)
+                                .coerceIn(0f, 1f)
                             Text(
                                 line.text,
                                 fontSize = if (isActive) 22.sp else 17.sp,
@@ -180,26 +193,12 @@ fun LyricsScreen(
                                 color = if (isActive) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .alpha(itemAlpha)
                             )
                         }
                     }
-                    // Sombra-difuminado: las líneas se funden con el fondo
-                    // al pasar por debajo del header
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.background,
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0f)
-                                    )
-                                )
-                            )
-                    )
                 }
             }
         }
