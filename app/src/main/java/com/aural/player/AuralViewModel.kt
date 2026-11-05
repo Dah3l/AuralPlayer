@@ -309,13 +309,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setIslandAppearance(mode) }
     }
 
-    /** Cometa luminoso de Dynamic Aural activado. */
+    /** Aural Light de Dynamic Aural activado. */
     val cometEnabled: StateFlow<Boolean> = settings.cometEnabled.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
     )
 
     fun setCometEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.setCometEnabled(enabled) }
+    }
+
+    /** Color de Aural Light: "auto" o un hex de otro tema. */
+    val auralLightColor: StateFlow<String> = settings.auralLightColor.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "auto"
+    )
+
+    fun setAuralLightColor(color: String) {
+        viewModelScope.launch { settings.setAuralLightColor(color) }
     }
 
     // ------------------------- v1.0.8 -------------------------
