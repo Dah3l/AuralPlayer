@@ -1178,7 +1178,11 @@ private fun CoverCarousel(
         val pageWidth = maxWidth
         // Margen lateral de la portada (el resplandor dibujado vive dentro
         // de la página y nunca se recorta).
-        val coverSideMargin = 20.dp
+        // Margen lateral de la portada: 28dp para que la sombra de 28dp
+        // quepa ÍNTEGRA dentro de la página (ni el pager ni nada la
+        // recorta). La portada se achica ~5% a cambio de una sombra
+        // sin límites.
+        val coverSideMargin = 28.dp
         HorizontalPager(
             state = coverPagerState,
             modifier = Modifier.fillMaxWidth()
@@ -1217,6 +1221,7 @@ private fun CoverCarousel(
                     size = pageWidth - coverSideMargin * 2,
                     cornerRadius = 16.dp,
                     showBorder = false,
+                    showPlaceholderBackground = false,
                     modifier = Modifier.shadow(
                         elevation = 28.dp,
                         shape = coverShape,
