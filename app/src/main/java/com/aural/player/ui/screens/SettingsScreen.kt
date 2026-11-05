@@ -5,7 +5,11 @@ package com.aural.player.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
@@ -70,6 +74,12 @@ fun SettingsScreen(
     onToggleIsland: () -> Unit,
     islandAppearance: String,
     onIslandAppearance: (String) -> Unit,
+    auraEnabled: Boolean,
+    onToggleAura: () -> Unit,
+    auraMode: String,
+    onAuraMode: (String) -> Unit,
+    auraColors: List<String>,
+    onAuraColors: (List<String>) -> Unit,
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
@@ -202,6 +212,15 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 56.dp, top = 4.dp)
+                    )
+                    // v1.0.8: aura luminosa animada alrededor de la píldora.
+                    AuraSettings(
+                        enabled = auraEnabled,
+                        onToggle = onToggleAura,
+                        mode = auraMode,
+                        onMode = onAuraMode,
+                        colors = auraColors,
+                        onColors = onAuraColors
                     )
                 }
             }
@@ -348,8 +367,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsSection(title: String) {
-    Text(
+private fun SettingsSection(title: String) {    Text(
         text = title,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
@@ -394,5 +412,133 @@ private fun SettingsRow(
             }
         }
         trailing?.invoke()
+    }
+}
+
+/**
+ * v1.0.8: ajustes del aura luminosa de Dynamic Aural.
+ * Interruptor + modo (Automático con los colores del tema / Personalizado
+ * con 1 o 2 colores de la paleta).
+ */
+@Composable
+private fun AuraSettings(
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    mode: String,
+    onMode: (String) -> Unit,
+    colors: List<String>,
+    onColors: (List<String>) -> Unit
+) {
+    val palette = listOf(
+        "#2ED3B7", "#8B5CF6", "#EC4899", "#3B82F6",
+        "#22C55E", "#F59E0B", "#EF4444", "#FFFFFF"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(Modifier.width(40.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Aura luminosa",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Luz que recorre la píldora",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = { onToggle() })
+        }
+        if (enabled) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.width(56.dp))
+                FilterChip(
+                    selected = mode == "auto",
+                    onClick = { onMode("auto") },
+                    label = { Text("Automático") },
+                    leadingIcon = if (mode == "auto") {
+                        { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+                FilterChip(
+                    selected = mode == "custom",
+                    onClick = { onMode("custom") },
+                    label = { Text("Personalizado") },
+                    leadingIcon = if (mode == "custom") {
+                        { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+            }
+            if (mode == "custom") {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(start = 56.dp)
+                ) {
+                    palette.forEach { hex ->
+                        val selected = hex in colors
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Color(
+                                        hex.removePrefix("#").toLong(16) or 0xFF000000L
+                                    )
+                                )
+                                .border(
+                                    width = if (selected) 3.dp else 1.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    val next = colors.toMutableList()
+                                    if (hex in next) {
+                                        if (next.size > 1) next.remove(hex)
+                                    } else {
+                                        if (next.size >= 2) next.removeAt(0)
+                                        next.add(hex)
+                                    }
+                                    onColors(next)
+                                }
+                        )
+                    }
+                }
+                Text(
+                    text = "Toca 1 o 2 colores",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 56.dp, top = 4.dp)
+                )
+            } else {
+                Text(
+                    text = "Usa los colores de tu tema.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 56.dp, top = 4.dp)
+                )
+            }
+        }
     }
 }
