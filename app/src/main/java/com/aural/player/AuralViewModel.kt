@@ -309,6 +309,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setIslandAppearance(mode) }
     }
 
+    /** Cometa luminoso de Dynamic Aural activado. */
+    val cometEnabled: StateFlow<Boolean> = settings.cometEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    fun setCometEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setCometEnabled(enabled) }
+    }
+
     // ------------------------- v1.0.8 -------------------------
 
     /** Orden de pestañas de la biblioteca elegido por el usuario. */
