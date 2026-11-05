@@ -793,10 +793,24 @@ fun NowPlayingScreen(
         val lrcPath = song?.let { lrcMapState[it.id] }
         if (lrcPath != null) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                modifier = Modifier.fillMaxSize()
             ) {
+                // Mesh ambiental con la paleta de la portada (la misma
+                // del Now Playing): la ventana de letras vive en el
+                // mismo mundo visual.
+                NowPlayingAmbientBackground(
+                    palette = glassPalette,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Velo extra de la ventana de letras: el fondo queda
+                // más tapado que en el Now Playing para que las líneas
+                // se lean sin esfuerzo; los colores del mesh asoman
+                // suave en los bordes.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
+                )
                 // Scrim hermano: bloquea lo que LyricsScreen no consumió
                 // (el botón ⋮ está casi en el mismo sitio que el de
                 // compartir de la cabecera de letras), sin robarle sus
