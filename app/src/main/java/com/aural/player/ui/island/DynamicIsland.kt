@@ -938,8 +938,12 @@ private fun Modifier.islandAura(
         if (total <= 0f) return@drawWithContent
         // Cometa: cabeza brillante (c1) + estela (c2). La fase se lee aquí
         // (draw) para no recomponer 60 veces por segundo.
-        val headLen = total * 0.14f
-        val tailLen = total * 0.32f
+        // Cada parte se dibuja en 3 capas (halo ancho tenue → núcleo fino
+        // brillante): así la luz se DIFUMINA como un glow de verdad, no
+        // como líneas duras. Todo en colores sólidos: cero shaders por
+        // cuadro → 60fps fluidos.
+        val headLen = total * 0.12f
+        val tailLen = total * 0.38f
         val headEnd = phase.value * total
         fun drawComet(fromDist: Float, toDist: Float, color: Color, widthDp: Float) {
             val f = ((fromDist % total) + total) % total
@@ -961,11 +965,15 @@ private fun Modifier.islandAura(
                 drawPath(seg2, color, style = style)
             }
         }
-        // Estela: ancha y tenue (c2).
-        drawComet(headEnd - tailLen, headEnd - headLen * 0.5f,
-            c2.copy(alpha = 0.30f * a), 7f)
-        // Cabeza: fina y brillante (c1).
-        drawComet(headEnd - headLen, headEnd,
-            c1.copy(alpha = 0.90f * a), 3f)
+        fun drawGlow(fromDist: Float, toDist: Float, base: Color, alphaScale: Float) {
+            // Halo → medio → núcleo: el falloff hace el efecto glow.
+            drawComet(fromDist, toDist, base.copy(alpha = 0.32f * alphaScale * a), 9f)
+            drawComet(fromDist, toDist, base.copy(alpha = 0.65f * alphaScale * a), 5f)
+            drawComet(fromDist, toDist, base.copy(alpha = 1.00f * alphaScale * a), 2.5f)
+        }
+        // Estela (c2, tenue y larga).
+        drawGlow(headEnd - tailLen, headEnd - headLen * 0.4f, c2, 0.30f)
+        // Cabeza (c1, brillante y corta).
+        drawGlow(headEnd - headLen, headEnd, c1, 0.90f)
     }
 )
