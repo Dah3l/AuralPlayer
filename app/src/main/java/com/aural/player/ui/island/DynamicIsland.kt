@@ -78,6 +78,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathMeasure
@@ -869,7 +870,6 @@ private fun hexToColor(hex: String): Color =
  * recalculan cada frame con la fase, así la luz viaja alrededor de la
  * píldora sin rotar la geometría (funciona con cualquier forma).
  */
-@Composable
 /**
  * Fase del cometa del aura (0..1, una vuelta cada 3.6s). Devuelve el State
  * en vez del Float: el draw lo lee sin recomponer, solo redibuja → 60fps.
@@ -926,7 +926,11 @@ private fun Modifier.islandAura(
             .coerceAtMost(minOf(w, h) / 2f)
         val border = Path().apply {
             addRoundRect(
-                RoundRect(Offset(inset, inset), Size(w, h), CornerRadius(corner))
+                RoundRect(
+                    Rect(Offset(inset, inset), Size(w, h)),
+                    CornerRadius(corner)
+                )
+            )
             )
         }
         val measure = PathMeasure()
