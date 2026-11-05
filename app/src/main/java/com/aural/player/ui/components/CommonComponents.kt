@@ -81,19 +81,22 @@ fun CoverArt(
     size: Dp,
     cornerRadius: Dp = size / 6,
     modifier: Modifier = Modifier,
-    showBorder: Boolean = true
+    showBorder: Boolean = true,
+    showPlaceholderBackground: Boolean = true
 ) {
     Box(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.colorScheme.surface
+            .then(
+                if (showPlaceholderBackground) Modifier.background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surface
+                        )
                     )
-                )
+                ) else Modifier
             )
             .then(
                 if (showBorder) Modifier.border(
