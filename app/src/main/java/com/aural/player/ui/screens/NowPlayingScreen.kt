@@ -25,18 +25,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.toArgb
 import kotlin.math.abs
-import coil.Coil
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import androidx.core.graphics.drawable.toBitmap
-import androidx.palette.graphics.Palette
-import android.graphics.Bitmap
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.aural.player.data.Song
@@ -418,49 +410,9 @@ fun NowPlayingScreen(
                 }
             }
 
-            // ---- Color dominante por canción (glow del fondo) ----
-            // Cache id -> (uri usada, color): si el usuario cambia la
-            // carátula personalizada, la uri cambia y se recalcula.
-            val context = LocalContext.current
-            val dominantCache = remember { mutableStateMapOf<Long, Pair<String?, Color>>() }
-            val fallbackDominant = MaterialTheme.colorScheme.primary
-            val paletteTargets = remember(coverItems) {
-                coverItems.mapNotNull { it?.let { item -> item.id to item.uri } }
-                    .distinctBy { it.first }
-            }
-            LaunchedEffect(paletteTargets, fallbackDominant) {
-                val loader = Coil.imageLoader(context)
-                val fallbackArgb = fallbackDominant.toArgb()
-                paletteTargets.forEach { (id, uri) ->
-                    if (uri.isNullOrBlank()) return@forEach
-                    if (dominantCache[id]?.first == uri) return@forEach
-                    try {
-                        val result = loader.execute(
-                            ImageRequest.Builder(context)
-                                .data(uri)
-                                .allowHardware(false)
-                                .build()
-                        )
-                        val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
-                        if (bitmap != null) {
-                            val small = Bitmap.createScaledBitmap(bitmap, 96, 96, false)
-                            val dominant = withContext(Dispatchers.Default) {
-                                Palette.from(small).generate()
-                                    .getDominantColor(fallbackArgb)
-                            }
-                            dominantCache[id] = uri to Color(dominant)
-                        }
-                    } catch (_: Exception) { /* fallback: color primario */ }
-                }
-            }
-
             CoverCarousel(
                 coverPagerState = coverPagerState,
                 coverItems = coverItems,
-                coverCenterPage = coverCenterPage,
-                currentSongId = song.id,
-                dominantColors = dominantCache,
-                fallbackDominant = fallbackDominant,
                 isHalloweenTheme = isHalloweenTheme,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1198,44 +1150,16 @@ private data class CoverItem(
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
-    coverCenterPage: Int,
-    currentSongId: Long,
-    dominantColors: Map<Long, Pair<String?, Color>>,
-    fallbackDominant: Color,
     isHalloweenTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Lecturas del scroll: limitadas a este scope.
-    val currentPage = coverPagerState.currentPage
-    val offsetFraction = coverPagerState.currentPageOffsetFraction
-    fun distanceToCenter(page: Int): Float =
-        abs((currentPage - page) + offsetFraction).coerceIn(0f, 1f)
-
-    // Glow: en reposo, el dominante de la actual. Durante el arrastre
-    // funde hacia el dominante de la portada entrante (la vecina más
-    // cercana al centro, distinta de la actual).
-    val currentDominant = dominantColors[currentSongId]?.second ?: fallbackDominant
-    var incomingPage = -1
-    var incomingD = Float.MAX_VALUE
-    for (p in coverItems.indices) {
-        if (p == coverCenterPage) continue
-        val d = distanceToCenter(p)
-        if (d < incomingD) {
-            incomingD = d
-            incomingPage = p
-        }
-    }
-    val glowBase = if (incomingPage < 0) {
-        currentDominant
-    } else {
-        val incomingDominant = coverItems.getOrNull(incomingPage)?.id
-            ?.let { dominantColors[it]?.second } ?: currentDominant
-        lerp(currentDominant, incomingDominant, (1f - incomingD).coerceIn(0f, 1f))
-    }
+    // Un solo glow ambiente con el primario del tema (sin cortes, sin
+    // cajas): vive detrás de la portada y los controles.
+    val primary = MaterialTheme.colorScheme.primary
     // Con el tema Halloween el glow se tiñe más naranja calabaza.
     val glowColor =
-        if (isHalloweenTheme) lerp(glowBase, HalloweenPumpkin, 0.45f)
-        else glowBase
+        if (isHalloweenTheme) lerp(primary, HalloweenPumpkin, 0.45f)
+        else primary
 
     BoxWithConstraints(
         modifier
@@ -1292,6 +1216,7 @@ private fun CoverCarousel(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
                     cornerRadius = 16.dp,
+                    showBorder = false,
                     modifier = Modifier.shadow(
                         elevation = 28.dp,
                         shape = coverShape,
