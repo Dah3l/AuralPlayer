@@ -4,6 +4,7 @@
 package com.aural.player.ui.island
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -74,8 +75,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -246,6 +251,14 @@ fun IslandOverlayContent(
         modifier = Modifier
             .padding(16.dp)
             .size(widthA.value.dp, heightA.value.dp)
+            // Cometa: ANTES de shadow/clip/fondo para que nada lo recorte
+            // ni lo tape. Se funde con la píldora (pillAlpha) durante el
+            // morph en vez de aparecer/desaparecer de golpe.
+            .cometBorder(
+                color = scheme.primary,
+                cornerRadius = cornerA.value.dp,
+                fade = pillAlpha.value
+            )
             .shadow(14.dp, islandShape)
             .clip(islandShape)
             .background(islandBg.copy(alpha = 0.97f))
@@ -834,3 +847,112 @@ private fun handleQuickAction(app: com.aural.player.AuralApp, action: QuickActio
     ctx.startActivity(intent)
 }
 
+// ---------------------------------------------------------------------------
+// Cometa de la isla (código de Claude, adaptado): una luz que recorre el
+// borde de la píldora en movimiento continuo. Sin shaders por cuadro (los
+// Path se reutilizan, el contorno solo se recalcula al cambiar el tamaño) y
+// sin costura (el segmento que cruza el inicio se parte en dos).
+// Adaptación: parámetro fade para que se funda con la píldora durante el
+// morph (pillAlpha), en vez de aparecer/desaparecer de golpe. La animación
+// infinita corre siempre (es un solo float); el draw retorna temprano
+// cuando fade es ~0, así que no hay costo de dibujo con la isla expandida.
+// Se usa ANTES de clip/background: drawWithContent dibuja la píldora y
+// luego el cometa encima, fuera de ambos.
+// ---------------------------------------------------------------------------
+
+private const val COMET_STEPS = 20 // segmentos de la cola
+
+private class CometGeometry {
+    private val outline = Path()
+    private val measure = PathMeasure()
+    val segments = Array(COMET_STEPS) { Path() }
+    var length = 0f; private set
+    private var w = -1f; private var h = -1f; private var r = -1f; private var inset = -1f
+
+    fun update(w: Float, h: Float, r: Float, inset: Float) {
+        if (w == this.w && h == this.h && r == this.r && inset == this.inset) return
+        this.w = w; this.h = h; this.r = r; this.inset = inset
+        outline.rewind()
+        outline.addRoundRect(
+            RoundRect(inset, inset, w - inset, h - inset, CornerRadius((r - inset).coerceAtLeast(0f)))
+        )
+        measure.setPath(outline, false)
+        length = measure.length
+    }
+
+    fun position(d: Float): Offset = measure.getPosition(d)
+
+    fun build(head: Float, tail: Float) {
+        for (i in 0 until COMET_STEPS) {
+            val s = head - tail * (1f - i / COMET_STEPS.toFloat())
+            val e = head - tail * (1f - (i + 1) / COMET_STEPS.toFloat())
+            fill(segments[i], s, e)
+        }
+    }
+
+    // Parte el segmento si cruza el punto de inicio del path: sin costura.
+    private fun fill(out: Path, s0: Float, e0: Float) {
+        out.rewind()
+        var s = s0; var e = e0
+        if (e <= 0f) { s += length; e += length }
+        if (s < 0f) {
+            measure.getSegment(s + length, length, out, true)
+            measure.getSegment(0f, e, out, true)
+        } else {
+            measure.getSegment(s, e, out, true)
+        }
+    }
+}
+
+@Composable
+fun Modifier.cometBorder(
+    color: Color,
+    cornerRadius: Dp,
+    strokeWidth: Dp = 1.5.dp,
+    glowRadius: Dp = 12.dp, // se limita a 14dp (ventana con 16dp de aire)
+    tailFraction: Float = 0.35f, // largo de la cola respecto al perímetro
+    periodMillis: Int = 2400,
+    fade: Float = 1f,
+): Modifier {
+    val progress = rememberInfiniteTransition(label = "comet").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(periodMillis, easing = LinearEasing)),
+        label = "cometProgress",
+    )
+    val geo = remember { CometGeometry() }
+
+    return drawWithContent {
+        drawContent() // primero la píldora; el cometa va encima y sin recorte
+        val f = fade.coerceIn(0f, 1f)
+        if (f <= 0.01f) return@drawWithContent
+        val stroke = strokeWidth.toPx()
+        val glow = glowRadius.coerceAtMost(14.dp).toPx()
+        geo.update(size.width, size.height, cornerRadius.toPx(), stroke / 2f)
+
+        val head = progress.value * geo.length // se lee solo en fase de dibujo
+        geo.build(head, geo.length * tailFraction)
+
+        // (ancho, alpha) de cada pasada: 3 capas de glow + núcleo.
+        val passes = arrayOf(
+            (stroke + glow * 2f) to 0.10f,
+            (stroke + glow * 1.24f) to 0.16f,
+            (stroke + glow * 0.60f) to 0.26f,
+            stroke to 1f,
+        )
+        for ((width, layerAlpha) in passes) {
+            val style = Stroke(width = width, cap = StrokeCap.Butt)
+            for (i in 0 until COMET_STEPS) {
+                val t = (i + 0.5f) / COMET_STEPS
+                val a = t * t * layerAlpha * f // cola con caída suave + fade
+                if (a < 0.01f) continue
+                drawPath(geo.segments[i], color.copy(alpha = a), style = style)
+            }
+        }
+        // Cabeza luminosa.
+        val p = geo.position(head)
+        drawCircle(color.copy(alpha = 0.14f * f), radius = glow * 0.5f, center = p)
+        drawCircle(color.copy(alpha = 0.30f * f), radius = glow * 0.28f, center = p)
+        drawCircle(color.copy(alpha = f), radius = stroke * 1.1f, center = p)
+    }
+}
