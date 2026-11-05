@@ -75,6 +75,8 @@ fun SettingsScreen(
     onToggleIsland: () -> Unit,
     islandAppearance: String,
     onIslandAppearance: (String) -> Unit,
+    cometEnabled: Boolean,
+    onToggleComet: () -> Unit,
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
@@ -207,6 +209,16 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 56.dp, top = 4.dp)
+                    )
+                    // Cometa luminoso: luz que recorre el borde de la píldora.
+                    SettingsRow(
+                        icon = Icons.Rounded.AutoAwesome,
+                        title = "Cometa luminoso",
+                        subtitle = "Luz que recorre el borde de la píldora",
+                        trailing = {
+                            Switch(checked = cometEnabled, onCheckedChange = { onToggleComet() })
+                        },
+                        onClick = onToggleComet
                     )
                 }
             }
