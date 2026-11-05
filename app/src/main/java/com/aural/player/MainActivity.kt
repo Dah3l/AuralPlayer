@@ -598,6 +598,7 @@ private fun AuralApp(viewModel: AuralViewModel,
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
         val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
         val cometOn by viewModel.cometEnabled.collectAsStateWithLifecycle()
+        val lightColor by viewModel.auralLightColor.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
@@ -607,6 +608,8 @@ private fun AuralApp(viewModel: AuralViewModel,
             onIslandAppearance = { viewModel.setIslandAppearance(it) },
             cometEnabled = cometOn,
             onToggleComet = { viewModel.setCometEnabled(!cometOn) },
+            auralLightColor = lightColor,
+            onLightColorChange = { viewModel.setAuralLightColor(it) },
             viewModel = viewModel
         )
     }
