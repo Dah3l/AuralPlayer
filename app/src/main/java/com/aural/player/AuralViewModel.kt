@@ -309,6 +309,44 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setIslandAppearance(mode) }
     }
 
+    // ------------------------- v1.0.8 -------------------------
+
+    /** Orden de pestañas de la biblioteca elegido por el usuario. */
+    val libraryTabOrder: StateFlow<List<String>> = settings.libraryTabOrder.stateIn(
+        viewModelScope, SharingStarted.Eagerly, com.aural.player.data.defaultTabOrder
+    )
+
+    fun setLibraryTabOrder(order: List<String>) {
+        viewModelScope.launch { settings.setLibraryTabOrder(order) }
+    }
+
+    /** Aura luminosa de Dynamic Aural activada. */
+    val auraEnabled: StateFlow<Boolean> = settings.auraEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    fun setAuraEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setAuraEnabled(enabled) }
+    }
+
+    /** Modo del aura: "auto" (colores del tema) o "custom". */
+    val auraMode: StateFlow<String> = settings.auraMode.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "auto"
+    )
+
+    fun setAuraMode(mode: String) {
+        viewModelScope.launch { settings.setAuraMode(mode) }
+    }
+
+    /** Colores personalizados del aura en hex. */
+    val auraColors: StateFlow<List<String>> = settings.auraColors.stateIn(
+        viewModelScope, SharingStarted.Eagerly, listOf("#2ED3B7")
+    )
+
+    fun setAuraColors(colors: List<String>) {
+        viewModelScope.launch { settings.setAuraColors(colors) }
+    }
+
     // Mapa id→canción con caché: se reconstruye solo cuando cambia la lista
     // de la biblioteca (evita reconstruirlo en cada llamada durante la
     // composición de las pantallas de playlist).
