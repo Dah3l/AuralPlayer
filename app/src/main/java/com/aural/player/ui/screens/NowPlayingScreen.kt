@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -1284,32 +1283,21 @@ private fun CoverCarousel(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Resplandor: degradado radial con el color dominante
-                // (sigue el lerp del arrastre vía glowColor), de alpha
-                // 0.35 en el centro a transparente en el borde.
-                // OJO: el radio tiene que ser explícito (mitad del cuadro);
-                // sin radio el degradado no fundía y se veía como una
-                // tarjeta plana con el borde duro.
-                val glowSize = pageWidth - coverSideMargin * 2 + 32.dp
-                val glowRadiusPx = with(LocalDensity.current) { (glowSize / 2).toPx() }
-                Box(
-                    Modifier
-                        .size(glowSize)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    glowColor.copy(alpha = 0.35f),
-                                    glowColor.copy(alpha = 0.12f),
-                                    Color.Transparent
-                                ),
-                                radius = glowRadiusPx
-                            )
-                        )
-                )
+                // Sombra sutil con el color primario del tema (como la de
+                // la píldora de la Dynamic Aural): sin cajas de degradado,
+                // sin cálculos raros.
+                val coverShape = RoundedCornerShape(16.dp)
+                val shadowColor = MaterialTheme.colorScheme.primary
                 com.aural.player.ui.components.CoverArt(
                     uri = item?.uri,
                     size = pageWidth - coverSideMargin * 2,
-                    cornerRadius = 16.dp
+                    cornerRadius = 16.dp,
+                    modifier = Modifier.shadow(
+                        elevation = 28.dp,
+                        shape = coverShape,
+                        ambientColor = shadowColor.copy(alpha = 0.45f),
+                        spotColor = shadowColor.copy(alpha = 0.45f)
+                    )
                 )
             }
         }
