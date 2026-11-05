@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -78,6 +79,8 @@ fun SettingsScreen(
     onIslandAppearance: (String) -> Unit,
     cometEnabled: Boolean,
     onToggleComet: () -> Unit,
+    auralLightColor: String,
+    onLightColorChange: (String) -> Unit,
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
@@ -221,6 +224,50 @@ fun SettingsScreen(
                         },
                         onClick = onToggleComet
                     )
+                    // Color de Aural Light: auto (primario del tema) o el
+                    // color de otro tema (p. ej. Sakura con Neon Prime).
+                    if (cometEnabled) {
+                        Text(
+                            text = "Color de Aural Light",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 56.dp, top = 8.dp, bottom = 8.dp)
+                        )
+                        FlowRow(
+                            modifier = Modifier.padding(start = 56.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            FilterChip(
+                                selected = auralLightColor == "auto",
+                                onClick = { onLightColorChange("auto") },
+                                label = { Text("Auto") },
+                                leadingIcon = if (auralLightColor == "auto") {
+                                    {
+                                        Icon(
+                                            Icons.Rounded.Check, null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor =
+                                        MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor =
+                                        MaterialTheme.colorScheme.onPrimary,
+                                    selectedLeadingIconColor =
+                                        MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                            for ((_, hex) in AuralLightColors) {
+                                AuralLightColorDot(
+                                    hex = hex,
+                                    selected = auralLightColor == hex,
+                                    onClick = { onLightColorChange(hex) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
             SettingsSection("Biblioteca")
@@ -411,5 +458,52 @@ private fun SettingsRow(
             }
         }
         trailing?.invoke()
+    }
+}
+
+/** Paleta de Aural Light: los primarios más vivos de los temas. */
+private val AuralLightColors = listOf(
+    "Sakura" to "#FF4D8D",
+    "Neón" to "#00F0FF",
+    "Bosque" to "#2ED3B7",
+    "Océano" to "#4DA6FF",
+    "Atardecer" to "#FFFF8C42",
+    "Navidad" to "#E63946",
+    "Medianoche" to "#9D7BFF",
+    "Sakura noche" to "#FF6FA5",
+    "Azul royal" to "#014BAA",
+    "Naranja" to "#EC5E27"
+)
+
+/** Punto de color de Aural Light: borde + marca cuando está elegido. */
+@Composable
+private fun AuralLightColorDot(
+    hex: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val color = Color(android.graphics.Color.parseColor(hex))
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(
+                2.dp,
+                if (selected) MaterialTheme.colorScheme.onSurface
+                else Color.Transparent,
+                CircleShape
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                Icons.Rounded.Check, null,
+                // Marca oscura sobre colores claros y blanca sobre oscuros.
+                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
