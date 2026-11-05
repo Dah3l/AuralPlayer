@@ -249,8 +249,10 @@ class MusicService : MediaSessionService() {
         val statusBarPx = if (statusBarId > 0) resources.getDimensionPixelSize(statusBarId)
         else (24 * density).toInt()
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            // v1.0.8: tamaño exacto de la píldora (ver collapsedWindowPx())
+            // en vez de WRAP_CONTENT, para no bloquear toques fuera de ella.
+            collapsedWindowPx().first,
+            collapsedWindowPx().second,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -322,7 +324,8 @@ class MusicService : MediaSessionService() {
         val screenWdp = metrics.widthPixels / d
         val screenHdp = metrics.heightPixels / d
         val islandW = minOf(340f, (screenWdp - 32f).coerceAtLeast(200f))
-        val islandH = minOf(308f, (screenHdp - 140f).coerceAtLeast(220f))
+        // v1.0.8: 308→320 (parejo con DynamicIsland.kt) para el botón ^ de 48dp.
+        val islandH = minOf(320f, (screenHdp - 140f).coerceAtLeast(220f))
         // +32dp del padding anti-recorte y +32dp de aire para que la
         // sombra (14dp) respire dentro de la ventana sin recortarse.
         params.width = ((islandW + 64f) * d).toInt()
@@ -334,11 +337,25 @@ class MusicService : MediaSessionService() {
         } catch (_: Exception) { }
     }
 
+    /**
+     * v1.0.8: tamaño exacto de la ventana en estado colapsado.
+     * La píldora mide 135×44dp + 16dp de aire anti-recorte por lado.
+     * Antes era WRAP_CONTENT, pero la caja exterior (fillMaxSize, del fix
+     * de la sombra) medía la pantalla completa y la ventana invisible
+     * bloqueaba los toques de la app de abajo en toda la pantalla.
+     */
+    private fun collapsedWindowPx(): Pair<Int, Int> {
+        val d = resources.displayMetrics.density
+        return Pair(((135f + 32f) * d).toInt(), ((44f + 32f) * d).toInt())
+    }
+
     private fun collapseIslandWindow() {
         val view = islandView ?: return
         val params = islandParams ?: return
-        params.width = WindowManager.LayoutParams.WRAP_CONTENT
-        params.height = WindowManager.LayoutParams.WRAP_CONTENT
+        // v1.0.8: tamaño exacto en vez de WRAP_CONTENT (ver collapsedWindowPx).
+        val (w, h) = collapsedWindowPx()
+        params.width = w
+        params.height = h
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: Exception) { }
