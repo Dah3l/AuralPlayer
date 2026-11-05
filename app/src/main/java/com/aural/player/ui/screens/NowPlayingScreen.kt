@@ -1207,17 +1207,21 @@ private fun CoverCarousel(
         if (!currentArtUri.isNullOrBlank() &&
             android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
         ) {
+            // Cuadrado de la portada, NO fillMaxSize: con fillMaxSize la
+            // caja se estiraba a toda la altura y el scrim pintaba una
+            // lámina oscura sobre toda la pantalla (en Sakura se veía
+            // gris, en oscuro un vacío negro).
             AsyncImage(
                 model = currentArtUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .size(pageWidth)
                     .blur(50.dp)
             )
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .size(pageWidth)
                     .background(Color.Black.copy(alpha = 0.55f))
             )
         }
