@@ -931,7 +931,6 @@ private fun Modifier.islandAura(
                     CornerRadius(corner)
                 )
             )
-            )
         }
         val measure = PathMeasure()
         measure.setPath(border, false)
