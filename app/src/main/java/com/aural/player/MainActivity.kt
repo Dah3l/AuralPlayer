@@ -597,6 +597,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     if (showSettingsScreen) {
         val islandOn by viewModel.islandEnabled.collectAsStateWithLifecycle()
         val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
+        val cometOn by viewModel.cometEnabled.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
@@ -604,6 +605,8 @@ private fun AuralApp(viewModel: AuralViewModel,
             onToggleIsland = onToggleIsland,
             islandAppearance = islandLook,
             onIslandAppearance = { viewModel.setIslandAppearance(it) },
+            cometEnabled = cometOn,
+            onToggleComet = { viewModel.setCometEnabled(!cometOn) },
             viewModel = viewModel
         )
     }
