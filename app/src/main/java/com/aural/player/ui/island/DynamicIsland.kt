@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -936,44 +937,43 @@ private fun Modifier.islandAura(
         measure.setPath(border, false)
         val total = measure.length
         if (total <= 0f) return@drawWithContent
-        // Cometa: cabeza brillante (c1) + estela (c2). La fase se lee aquí
-        // (draw) para no recomponer 60 veces por segundo.
-        // Cada parte se dibuja en 3 capas (halo ancho tenue → núcleo fino
-        // brillante): así la luz se DIFUMINA como un glow de verdad, no
-        // como líneas duras. Todo en colores sólidos: cero shaders por
+        // Estela-cometa: 28 segmentos solapados que forman UNA línea de al
+        // menos la mitad del perímetro, con degradado suave c1→c2 (sin
+        // cortes bruscos), más gruesa y fuerte en la cabeza y más fina y
+        // tenue hacia la cola. Todo en colores sólidos: cero shaders por
         // cuadro → 60fps fluidos.
-        val headLen = total * 0.12f
-        val tailLen = total * 0.38f
+        val segs = 28
+        val cometLen = total * 0.55f
+        val segLen = cometLen / segs * 1.7f // 70% de solape: línea continua
         val headEnd = phase.value * total
-        fun drawComet(fromDist: Float, toDist: Float, color: Color, widthDp: Float) {
-            val f = ((fromDist % total) + total) % total
-            val len = toDist - fromDist
-            if (len <= 0f) return
-            val style = Stroke(widthDp.dp.toPx(), cap = StrokeCap.Round)
+        fun drawRange(from: Float, to: Float, color: Color, widthPx: Float) {
+            if (to <= from) return
+            val f = ((from % total) + total) % total
+            val len = to - from
+            val style = Stroke(widthPx, cap = StrokeCap.Round)
             val t = f + len
             if (t <= total) {
-                val seg = Path()
-                measure.getSegment(f, t, seg, true)
-                drawPath(seg, color, style = style)
+                val p = Path()
+                measure.getSegment(f, t, p, true)
+                drawPath(p, color, style = style)
             } else {
                 // Cruza el punto de cierre: dos segmentos.
-                val seg1 = Path()
-                measure.getSegment(f, total, seg1, true)
-                drawPath(seg1, color, style = style)
-                val seg2 = Path()
-                measure.getSegment(0f, t - total, seg2, true)
-                drawPath(seg2, color, style = style)
+                val p1 = Path()
+                measure.getSegment(f, total, p1, true)
+                drawPath(p1, color, style = style)
+                val p2 = Path()
+                measure.getSegment(0f, t - total, p2, true)
+                drawPath(p2, color, style = style)
             }
         }
-        fun drawGlow(fromDist: Float, toDist: Float, base: Color, alphaScale: Float) {
-            // Halo → medio → núcleo: el falloff hace el efecto glow.
-            drawComet(fromDist, toDist, base.copy(alpha = 0.32f * alphaScale * a), 9f)
-            drawComet(fromDist, toDist, base.copy(alpha = 0.65f * alphaScale * a), 5f)
-            drawComet(fromDist, toDist, base.copy(alpha = 1.00f * alphaScale * a), 2.5f)
+        // De la cola a la cabeza: la cabeza queda encima (más brillante).
+        for (i in segs - 1 downTo 0) {
+            val t = i / (segs - 1f) // 0 = cabeza, 1 = fin de la estela
+            val segEnd = headEnd - t * cometLen
+            val col = lerp(c1, c2, t)
+            val wPx = (7f - t * 5f).dp.toPx() // 7dp → 2dp
+            val alpha = (1f - t) * (1f - t) * 0.85f * a
+            drawRange(segEnd - segLen, segEnd, col.copy(alpha = alpha), wPx)
         }
-        // Estela (c2, tenue y larga).
-        drawGlow(headEnd - tailLen, headEnd - headLen * 0.4f, c2, 0.30f)
-        // Cabeza (c1, brillante y corta).
-        drawGlow(headEnd - headLen, headEnd, c1, 0.90f)
     }
 )
