@@ -875,7 +875,7 @@ private fun handleQuickAction(app: com.aural.player.AuralApp, action: QuickActio
 // luego el cometa encima, fuera de ambos.
 // ---------------------------------------------------------------------------
 
-private const val COMET_STEPS = 20 // segmentos de la cola
+private const val COMET_STEPS = 40 // segmentos de la cola: más segmentos = caída más suave, sin bandas
 
 private class CometGeometry {
     private val outline = Path()
@@ -947,14 +947,18 @@ fun Modifier.cometBorder(
         geo.build(head, geo.length * tailFraction)
 
         // Solo la línea: sin capas de glow ni halos, solo el núcleo
-        // con la cola desvanecida. La cabeza es redondeada por el
-        // propio trazo (Round): mismo ancho que la línea, sin punto.
-        val style = Stroke(width = stroke, cap = StrokeCap.Round)
+        // con la cola desvanecida. Los segmentos usan Butt para que las
+        // juntas no se vean (con Round cada junta dejaba un bulto y la
+        // cola se veía por secciones); la cabeza se redondea con un
+        // círculo del mismo ancho que la línea (radio = stroke/2).
+        val style = Stroke(width = stroke, cap = StrokeCap.Butt)
         for (i in 0 until COMET_STEPS) {
             val t = (i + 0.5f) / COMET_STEPS
             val a = t * t * f // cola con caída suave + fade
             if (a < 0.01f) continue
             drawPath(geo.segments[i], color.copy(alpha = a), style = style)
         }
+        // Cabeza redondeada: mismo ancho que la línea, sin punto.
+        drawCircle(color.copy(alpha = f), radius = stroke / 2f, center = geo.position(head))
     }
 }
