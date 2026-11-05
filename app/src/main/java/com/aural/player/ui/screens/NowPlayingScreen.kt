@@ -1218,7 +1218,6 @@ private fun CoverCarousel(
                     size = pageWidth - coverSideMargin * 2,
                     cornerRadius = 16.dp,
                     showBorder = false,
-                    showPlaceholderBackground = false,
                     modifier = Modifier.shadow(
                         elevation = 12.dp,
                         shape = coverShape
