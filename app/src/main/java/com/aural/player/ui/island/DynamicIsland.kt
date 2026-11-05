@@ -234,6 +234,8 @@ fun IslandOverlayContent(
     // v1.0.8: favoritas para el corazón del panel + aura luminosa animada.
     val favorites by app.settings.favorites
         .collectAsStateWithLifecycle(initialValue = emptySet())
+    val cometOn by app.settings.cometEnabled
+        .collectAsStateWithLifecycle(initialValue = true)
 
     // La caja morphéa por fases; el contenido solo se renderiza
     // en su fase (con fade), nunca durante el morph.
@@ -253,11 +255,14 @@ fun IslandOverlayContent(
             .size(widthA.value.dp, heightA.value.dp)
             // Cometa: ANTES de shadow/clip/fondo para que nada lo recorte
             // ni lo tape. Se funde con la píldora (pillAlpha) durante el
-            // morph en vez de aparecer/desaparecer de golpe.
-            .cometBorder(
-                color = scheme.primary,
-                cornerRadius = cornerA.value.dp,
-                fade = pillAlpha.value
+            // morph en vez de aparecer/desaparecer de golpe. Se apaga
+            // desde Ajustes (interruptor "Cometa luminoso").
+            .then(
+                if (cometOn) Modifier.cometBorder(
+                    color = scheme.primary,
+                    cornerRadius = cornerA.value.dp,
+                    fade = pillAlpha.value
+                ) else Modifier
             )
             .shadow(14.dp, islandShape)
             .clip(islandShape)
@@ -908,10 +913,9 @@ private class CometGeometry {
 fun Modifier.cometBorder(
     color: Color,
     cornerRadius: Dp,
-    strokeWidth: Dp = 1.5.dp,
-    glowRadius: Dp = 12.dp, // se limita a 14dp (ventana con 16dp de aire)
+    strokeWidth: Dp = 2.5.dp, // solo la línea: más gruesa y visible
     tailFraction: Float = 0.35f, // largo de la cola respecto al perímetro
-    periodMillis: Int = 2400,
+    periodMillis: Int = 4800, // recorrido lento, como un brillo
     fade: Float = 1f,
 ): Modifier {
     val progress = rememberInfiniteTransition(label = "comet").animateFloat(
@@ -927,32 +931,21 @@ fun Modifier.cometBorder(
         val f = fade.coerceIn(0f, 1f)
         if (f <= 0.01f) return@drawWithContent
         val stroke = strokeWidth.toPx()
-        val glow = glowRadius.coerceAtMost(14.dp).toPx()
         geo.update(size.width, size.height, cornerRadius.toPx(), stroke / 2f)
 
         val head = progress.value * geo.length // se lee solo en fase de dibujo
         geo.build(head, geo.length * tailFraction)
 
-        // (ancho, alpha) de cada pasada: 3 capas de glow + núcleo.
-        val passes = arrayOf(
-            (stroke + glow * 2f) to 0.10f,
-            (stroke + glow * 1.24f) to 0.16f,
-            (stroke + glow * 0.60f) to 0.26f,
-            stroke to 1f,
-        )
-        for ((width, layerAlpha) in passes) {
-            val style = Stroke(width = width, cap = StrokeCap.Butt)
-            for (i in 0 until COMET_STEPS) {
-                val t = (i + 0.5f) / COMET_STEPS
-                val a = t * t * layerAlpha * f // cola con caída suave + fade
-                if (a < 0.01f) continue
-                drawPath(geo.segments[i], color.copy(alpha = a), style = style)
-            }
+        // Solo la línea: sin capas de glow ni halos, solo el núcleo
+        // con la cola desvanecida y el punto sólido de la cabeza.
+        val style = Stroke(width = stroke, cap = StrokeCap.Butt)
+        for (i in 0 until COMET_STEPS) {
+            val t = (i + 0.5f) / COMET_STEPS
+            val a = t * t * f // cola con caída suave + fade
+            if (a < 0.01f) continue
+            drawPath(geo.segments[i], color.copy(alpha = a), style = style)
         }
-        // Cabeza luminosa.
         val p = geo.position(head)
-        drawCircle(color.copy(alpha = 0.14f * f), radius = glow * 0.5f, center = p)
-        drawCircle(color.copy(alpha = 0.30f * f), radius = glow * 0.28f, center = p)
         drawCircle(color.copy(alpha = f), radius = stroke * 1.1f, center = p)
     }
 }
