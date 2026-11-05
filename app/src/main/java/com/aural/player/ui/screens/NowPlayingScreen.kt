@@ -1154,7 +1154,6 @@ private data class CoverItem(
  * Solo este composable se recompone durante el arrastre (lee el offset
  * del pager); el resto de la pantalla no se entera.
  */
-@Composable
 // ---------------------------------------------------------------------------
 // Glow de la carátula (código de Claude): halo de color difuminado hecho
 // con capas concéntricas, sin blur ni shadow. Evita lo que hacía ver
@@ -1190,6 +1189,7 @@ fun Modifier.artworkGlow(
     }
 }
 
+@Composable
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
