@@ -1188,7 +1188,6 @@ fun Modifier.artworkGlow(
     }
 }
 
-@Composable
 /**
  * Fondo ambiental del Now Playing: la portada difuminada a pantalla
  * completa + un velo del fondo del tema. Sin portada (o en Android
@@ -1250,6 +1249,7 @@ private fun NowPlayingAmbientBackground(
     }
 }
 
+@Composable
 private fun CoverCarousel(
     coverPagerState: PagerState,
     coverItems: List<CoverItem?>,
