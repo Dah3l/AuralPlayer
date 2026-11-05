@@ -57,6 +57,7 @@ class SettingsStore(private val context: Context) {
         val KEY_THEME_BEFORE_CHRISTMAS = stringPreferencesKey("theme_before_christmas")
         val KEY_ISLAND_ENABLED = booleanPreferencesKey("island_enabled")
         val KEY_ISLAND_APPEARANCE = stringPreferencesKey("island_appearance")
+        val KEY_COMET_ENABLED = booleanPreferencesKey("comet_enabled")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
         val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
     }
@@ -629,6 +630,17 @@ class SettingsStore(private val context: Context) {
     suspend fun setIslandAppearance(mode: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ISLAND_APPEARANCE] = mode
+        }
+    }
+
+    /** Cometa luminoso de Dynamic Aural: activado por defecto. */
+    val cometEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_COMET_ENABLED] ?: true
+    }
+
+    suspend fun setCometEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_COMET_ENABLED] = enabled
         }
     }
 
