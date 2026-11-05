@@ -50,6 +50,12 @@ const val DONATION_CARD_CUP = "9227-9598-7391-3011"
 const val DONATION_QVAPAY_USER = "@Dah3l"
 
 /**
+ * v1.0.8: número de WhatsApp al que el donante confirma su donación.
+ * Es el mismo número de contacto del desarrollador.
+ */
+const val DONATION_CONFIRM_NUMBER = "56803949"
+
+/**
  * v1.0.7: pantalla de apoyo. Sin backend ni verificación: el flujo es
  * manual (el usuario dona desde su app de pago y Dahel lo ve en sus
  * registros). Icono de corazón, como pide el diseño.
@@ -60,11 +66,15 @@ fun DonateScreen(onBack: () -> Unit) {
     // Feedback visual al copiar: el botón pasa a ✔️ por 2 s.
     var copiedCard by remember { mutableStateOf(false) }
     var copiedQva by remember { mutableStateOf(false) }
+    var copiedConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(copiedCard) {
         if (copiedCard) { delay(2000); copiedCard = false }
     }
     LaunchedEffect(copiedQva) {
         if (copiedQva) { delay(2000); copiedQva = false }
+    }
+    LaunchedEffect(copiedConfirm) {
+        if (copiedConfirm) { delay(2000); copiedConfirm = false }
     }
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -165,6 +175,54 @@ fun DonateScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ---- v1.0.8: confirmación de la donación ----
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        text = "¿Ya donaste? Confírmalo",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Escríbeme por WhatsApp al $DONATION_CONFIRM_NUMBER para saber que tu apoyo llegó. ¡Gracias! ❤",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = DONATION_CONFIRM_NUMBER,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = {
+                            clipboard.setText(AnnotatedString(DONATION_CONFIRM_NUMBER))
+                            copiedConfirm = true
+                        }) {
+                            Icon(
+                                if (copiedConfirm) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = if (copiedConfirm) "Copiado" else "Copiar número",
+                                tint = if (copiedConfirm) androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
 
