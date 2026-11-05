@@ -87,10 +87,11 @@ fun LyricsScreen(
         }
     }
 
+    // Sin fondo propio: el mesh vive detrás (en el overlay del Now
+    // Playing) y el velo de la ventana da el contraste para leer.
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
     ) {
         // Cabecera tipo Spotify (con margen de la barra de estado para
         // que no quede pegada): portada + título + artista de la canción
