@@ -46,6 +46,10 @@ Busca y descarga audio de YouTube sin salir de la app. Todo lo que bajas se orga
 
 Letras sincronizadas que avanzan con la música, en una vista completa con portada y progreso. ¿Tu canción no trae letra? Agrega tu propio archivo .lrc o búscala en línea gratis, sin registros ni claves.
 
+## Tu música, en colores
+
+El reproductor se tiñe con los colores de la portada que suena: el fondo, el brillo detrás de la portada y hasta la ventana de letras llevan sus tonos, y cambian solos con cada canción. Sin portada, entran los colores de tu tema.
+
 ## Comparte lo que escuchas
 
 Con Aural Cards, elige hasta 6 versos y crea una tarjeta con la portada y la letra, lista para compartir en WhatsApp, Instagram o Telegram. O guárdala directo en tu galería, en la carpeta Aural.
