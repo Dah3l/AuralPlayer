@@ -10,6 +10,8 @@ en GitHub salen de aquí.
 - **La isla ya gira los modos de reproducción** — en el panel expandido, el botón de la izquierda rota entre repetir todo 🔁, repetir una 🔂 y aleatorio 🔀, mostrando siempre el modo activo. El corazón de la derecha marca la canción como favorita sin salir de la isla.
 - **YouTube y el micrófono, junto a "Abrir Aural"** — ahora flanquean el botón como dos botones circulares con su mismo estilo, para que el panel quede más ordenado.
 - **El Now Playing se tiñe con la portada** — el fondo es un degradado de manchas con los colores reales de la portada, que se mueven lento y se funden al cambiar de canción. Funciona igual en todos los teléfonos. Sin portada, o si es en blanco y negro, entran los colores de tu tema.
+- **El brillo de la portada, con sus colores** — el resplandor detrás de la portada ahora sale del color dominante de la propia portada, más chico y más suave, para que nunca desentone con el fondo.
+- **Las letras también se tiñen** — la ventana de letras completas lleva el mismo fondo de colores de la portada, con un velo extra para que las líneas se lean sin esfuerzo, y las líneas se desvanecen solas al subir, fundiéndose en el fondo.
 - **Aural Light, a tu color** — la luz que recorre la píldora va más lenta, es solo una línea fina sin punto en la cabeza, y se puede apagar o ponerle el color de otro tema (Sakura con Neon Prime, por ejemplo) desde Ajustes → Interfaz → Dynamic Aural.
 - **Ordena las pestañas de la biblioteca** — toca el lápiz al final de las pestañas y arrastra para ponerlas en el orden que quieras (Canciones, Artistas, Álbumes, Playlists, Descargas, Carpetas). Se guarda y se mantiene al actualizar.
 - **"Seleccionar todas" en la selección múltiple** — nuevo botón que marca de una vez todas las canciones visibles (respeta tu búsqueda o filtro activo).
@@ -17,7 +19,7 @@ en GitHub salen de aquí.
 - **Agregar canciones a playlists existentes** — en la cabecera de cada playlist, junto a reproducir y aleatorio, hay un botón ＋ que abre el selector; las que ya están aparecen marcadas y no se duplican.
 - **Contacto con el desarrollador** — nueva pantalla desde el menú ⋮ → "Contacto": WhatsApp, correo e Instagram de Aural, todo a un toque.
 - **Confirma tu donación** — en ❤ Apoyar a Aural ahora aparece el número de WhatsApp para confirmar que tu apoyo llegó.
-- **Arreglos** — repaso del borde de la sombra de la isla para que no se recorte sobre fondos claros.
+- **Arreglos** — repaso del borde de la sombra de la isla para que no se recorte sobre fondos claros; el ecualizador ya abre desde Ajustes; en el Now Playing, Compartir vuelve a su sitio, penúltimo del menú.
 
 ## v1.0.7 — 2026-11-01
 
