@@ -534,6 +534,27 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Quita varias canciones de favoritos (con su orden). v1.0.9. */
+    suspend fun removeFavorites(songIds: Collection<Long>) {
+        if (songIds.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = decodeFavorites(prefs[KEY_FAVORITES]).toMutableSet()
+            val order = decodeFavoriteOrder(prefs[KEY_FAVORITE_ORDER]).toMutableList()
+            current.removeAll(songIds)
+            order.removeAll(songIds)
+            prefs[KEY_FAVORITES] = JSONArray(current.toList()).toString()
+            prefs[KEY_FAVORITE_ORDER] = JSONArray(order).toString()
+        }
+    }
+
+    /** Quita varias canciones de TODAS las playlists. v1.0.9. */
+    suspend fun removeSongsFromAllPlaylists(songIds: Collection<Long>) =
+        mutatePlaylists { list ->
+            list.map { pl ->
+                pl.copy(songIds = pl.songIds.filterNot { it in songIds })
+            }
+        }
+
     /** Guarda el orden completo de favoritos (la UI reordena en local y confirma al soltar). */
     suspend fun setFavoriteOrder(songIds: List<Long>) {
         context.dataStore.edit { prefs ->
