@@ -4,6 +4,12 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.0.9 — 2026-11-07
+
+### Novedades
+- **Agregadas recientemente** — nueva lista en Playlists con las 50 canciones más nuevas que llegaron a tu biblioteca, ordenadas por fecha de agregado. Tócala para verlas o dale a reproducir y suenan en ese orden.
+- **Eliminar canciones** — ahora puedes borrar canciones de verdad: desde el menú ⋮ del reproductor ("Eliminar canción") o con el nuevo botón "Eliminar" de la selección múltiple. La app te pide confirmar y en Android 10+ el sistema también lo confirma; el archivo se borra del dispositivo y la canción desaparece de favoritos, playlists y la cola (si estaba sonando, pasa a la siguiente).
+
 ## v1.0.8 — 2026-11-04
 
 ### Novedades
