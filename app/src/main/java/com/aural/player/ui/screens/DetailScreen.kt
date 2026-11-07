@@ -306,6 +306,28 @@ fun DetailScreen(
     // arriba para cubrir la franja del notch con su mismo color
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
+    // v1.0.8: picker de canciones para playlists vacías y existentes.
+    // Vive AQUÍ, antes del return temprano de las listas vacías: si no,
+    // en una playlist recién creada el botón "Agregar canciones" no abría
+    // nada (bug reportado por Purry, 2026-11-07). Las que ya están en la
+    // playlist aparecen marcadas y no se duplican.
+    if (showPicker && removableFromPlaylistId != null) {
+        SongPickerDialog(
+            songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
+            preselected = songs.map { it.id }.toSet(),
+            onDismiss = { showPicker = false },
+            onConfirm = { selected ->
+                val existing = songs.map { it.id }.toSet()
+                selected.forEach { song ->
+                    if (song.id !in existing) {
+                        viewModel.addToPlaylist(removableFromPlaylistId, song.id)
+                    }
+                }
+                showPicker = false
+            }
+        )
+    }
+
     if (songs.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
             // ---- Barra superior con volver ----
@@ -611,24 +633,6 @@ fun DetailScreen(
             onDismiss = { pendingCropUri = null },
             onConfirm = cropConfirm
         )
-        // v1.0.8: picker de canciones para playlists vacías y existentes.
-        // Las que ya están en la playlist aparecen marcadas y no se duplican.
-        if (showPicker && removableFromPlaylistId != null) {
-            SongPickerDialog(
-                songs = viewModel.library.collectAsStateWithLifecycle().value.songs,
-                preselected = songs.map { it.id }.toSet(),
-                onDismiss = { showPicker = false },
-                onConfirm = { selected ->
-                    val existing = songs.map { it.id }.toSet()
-                    selected.forEach { song ->
-                        if (song.id !in existing) {
-                            viewModel.addToPlaylist(removableFromPlaylistId, song.id)
-                        }
-                    }
-                    showPicker = false
-                }
-            )
-        }
 }
 
 
