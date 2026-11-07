@@ -14,6 +14,8 @@ package com.aural.player.data
  * @param albumArtUri   URI de la carátula obtenida del sistema
  * @param trackNumber   Número de pista dentro del álbum
  * @param folderPath    Ruta relativa de la carpeta (MediaStore RELATIVE_PATH)
+ * @param dateAddedSec  Segundos desde epoch en que el archivo se agregó a
+ *                      MediaStore (DATE_ADDED); ordena "Agregadas recientemente"
  */
 data class Song(
     val id: Long,
@@ -25,7 +27,8 @@ data class Song(
     val uri: String,
     val albumArtUri: String?,
     val trackNumber: Int = 0,
-    val folderPath: String = ""
+    val folderPath: String = "",
+    val dateAddedSec: Long = 0
 )
 
 /**
