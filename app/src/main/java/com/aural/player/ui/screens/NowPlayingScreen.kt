@@ -991,6 +991,22 @@ private fun NowPlayingMenu(
             }
         )
         DropdownMenuItem(
+            text = { Text("Compartir Aural link") },
+            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+            onClick = {
+                onDismiss()
+                song?.let {
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, com.aural.player.AuralLink.shareText(it))
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(shareIntent, "Compartir Aural link")
+                    )
+                }
+            }
+        )
+        DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
             leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
             onClick = {
