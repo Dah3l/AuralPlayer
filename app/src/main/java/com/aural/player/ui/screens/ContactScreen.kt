@@ -42,7 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** WhatsApp del desarrollador (código de país incluido). */
-const val DEV_WHATSAPP_NUMBER = "5356803949"
+const val DEV_WHATSAPP_NUMBER = "5359648522"
 
 /** Correo del desarrollador. */
 const val DEV_EMAIL = "auralplayeroficial@gmail.com"
@@ -99,7 +99,7 @@ fun ContactScreen(onBack: () -> Unit) {
                     ContactRow(
                         icon = Icons.Rounded.Chat,
                         title = "WhatsApp",
-                        subtitle = "+53 56803949",
+                        subtitle = "+53 59648522",
                         onClick = {
                             context.startActivity(
                                 Intent(
