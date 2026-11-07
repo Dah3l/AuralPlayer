@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuralPlayer — Tu música, en colores</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #121212;
+    color: #f5f5f5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  main { max-width: 420px; width: 100%; text-align: center; }
+  .bars { display: flex; gap: 5px; justify-content: center; align-items: flex-end; height: 44px; margin-bottom: 20px; }
+  .bars span { width: 7px; background: #2ED3B7; border-radius: 4px; }
+  .bars span:nth-child(1) { height: 22px; }
+  .bars span:nth-child(2) { height: 44px; }
+  .bars span:nth-child(3) { height: 30px; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  .tagline { color: #9a9a9a; font-size: 16px; margin-bottom: 28px; }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    margin-bottom: 12px;
+  }
+  .btn.primary { background: #2ED3B7; color: #06231d; }
+  .btn.ghost { background: #1c1c1c; color: #f5f5f5; border: 1px solid #2a2a2a; }
+  .foot { color: #666; font-size: 13px; margin-top: 24px; }
+  .foot a { color: #2ED3B7; text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bars"><span></span><span></span><span></span></div>
+  <h1>AuralPlayer</h1>
+  <p class="tagline">Tu música, en colores. Gratis, sin anuncios, sin cuentas.</p>
+  <a class="btn primary" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
+  <a class="btn ghost" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
+  <p class="foot">Código abierto en <a href="https://github.com/Dah3l/AuralPlayer">GitHub</a></p>
+</main>
+</body>
+</html>
