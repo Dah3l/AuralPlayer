@@ -524,6 +524,9 @@ private fun AuralApp(viewModel: AuralViewModel,
                         // auto-generadas: sus canciones no se pueden quitar
                         // a mano (rotan solas)
                         removableFromPlaylistId = if (isDaily || isRecent) null else s.id,
+                        // v1.0.9: solo Agregadas recientemente lleva el
+                        // selector de periodo.
+                        showPeriodFilter = isRecent,
                         // Solo las playlists creadas tienen foto editable;
                         // Favoritas, Descargas y la del día conservan su identidad
                         playlistCoverId = if (isFavorites || isDownloads || isDaily) null else s.id,
