@@ -9,6 +9,7 @@ en GitHub salen de aquí.
 ### Novedades
 - **Agregadas recientemente** — nueva lista en Playlists con las 50 canciones más nuevas que llegaron a tu biblioteca, ordenadas por fecha de agregado. Tócala para verlas o dale a reproducir y suenan en ese orden.
 - **Eliminar canciones** — ahora puedes borrar canciones de verdad: desde el menú ⋮ del reproductor ("Eliminar canción") o con el nuevo botón "Eliminar" de la selección múltiple. La app te pide confirmar y en Android 10+ el sistema también lo confirma; el archivo se borra del dispositivo y la canción desaparece de favoritos, playlists y la cola (si estaba sonando, pasa a la siguiente).
+- **Arreglos** — "Agregar canciones" en una playlist recién creada (vacía) no abría el selector: el botón no hacía nada. Ahora abre el picker y se pueden agregar canciones desde el primer momento. El botón "Todas" de la selección múltiple se mudó a la barra de arriba, junto al conteo, para que la barra de abajo no se apriete con el botón "Eliminar".
 
 ## v1.0.8 — 2026-11-04
 
