@@ -117,6 +117,7 @@ import com.aural.player.ui.components.CoverPickerDialog
 import com.aural.player.ui.components.EditMetadataDialog
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Speaker
@@ -897,6 +898,20 @@ private fun NowPlayingMenu(
     val hasLrc = song?.let { lrcMap.containsKey(it.id) } ?: false
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+    // v1.0.9: eliminar la canción actual (borra el archivo del dispositivo).
+    var showDeleteConfirm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var pendingDeleteId by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Long?>(null) }
+    val deleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val id = pendingDeleteId
+        if (result.resultCode == android.app.Activity.RESULT_OK && id != null) {
+            viewModel.confirmDelete(listOf(id))
+            android.widget.Toast.makeText(context, "Canción eliminada", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        pendingDeleteId = null
+    }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
@@ -986,9 +1001,52 @@ private fun NowPlayingMenu(
                 }
             }
         )
+        DropdownMenuItem(
+            text = { Text("Eliminar canción", color = MaterialTheme.colorScheme.error) },
+            leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
+            onClick = {
+                onDismiss()
+                song?.let {
+                    pendingDeleteId = it.id
+                    showDeleteConfirm = true
+                }
+            }
+        )
     }
 
     // (v1.0.7: el ecualizador ahora es pantalla propia, se abre con onOpenEqualizer)
+
+    // v1.0.9: confirmación antes de borrar el archivo de la canción.
+    if (showDeleteConfirm && song != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false; pendingDeleteId = null },
+            title = { Text("Eliminar canción") },
+            text = {
+                Text("¿Eliminar \"${effectiveSong?.title ?: song.title}\"? Se borrará el archivo del dispositivo.")
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showDeleteConfirm = false
+                    val id = pendingDeleteId
+                    if (id != null) {
+                        val request = viewModel.buildDeleteRequest(listOf(id))
+                        if (request != null) {
+                            deleteLauncher.launch(
+                                androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build()
+                            )
+                        } else {
+                            // API <30: el borrado directo ya se hizo en el ViewModel.
+                            android.widget.Toast.makeText(context, "Canción eliminada", android.widget.Toast.LENGTH_SHORT).show()
+                            pendingDeleteId = null
+                        }
+                    }
+                }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false; pendingDeleteId = null }) { Text("Cancelar") }
+            }
+        )
+    }
 
     // Diálogo: editar metadatos
     if (showEditMetadata && song != null) {
