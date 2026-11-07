@@ -300,6 +300,22 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    /**
+     * Quita de la cola todas las canciones indicadas (por id). Si la que
+     * suena está entre ellas, ExoPlayer avanza sola a la siguiente.
+     * v1.0.9 (eliminar canciones).
+     */
+    fun removeSongsFromQueue(songIds: Set<Long>) {
+        val c = controller ?: return
+        if (songIds.isEmpty() || c.mediaItemCount == 0) return
+        // Índices descendentes para que no se muevan al borrar.
+        val indices = (c.mediaItemCount - 1 downTo 0).filter { i ->
+            c.getMediaItemAt(i).mediaId.toLongOrNull() in songIds
+        }
+        indices.forEach { c.removeMediaItem(it) }
+        publishState()
+    }
+
     /** Mueve un elemento dentro de la cola (para reordenar por arrastre). */
     fun moveInQueue(fromIndex: Int, toIndex: Int) {
         val c = controller ?: return
