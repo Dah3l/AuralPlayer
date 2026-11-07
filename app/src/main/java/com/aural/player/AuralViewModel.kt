@@ -12,8 +12,10 @@ import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
+import android.app.PendingIntent
 import android.content.ContentValues
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
@@ -373,6 +375,13 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Agregadas recientemente: las 50 canciones más nuevas por fecha de
+     * agregado a MediaStore (DATE_ADDED). v1.0.9.
+     */
+    fun recentlyAddedSongs(): List<Song> =
+        _library.value.songs.sortedByDescending { it.dateAddedSec }.take(50)
+
+    /**
      * Guarda la Playlist del día como permanente: crea una copia ESTÁTICA
      * en las playlists normales (con el nombre indicado, único). La del
      * día sigue su rotación normal.
@@ -420,6 +429,61 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deletePlaylist(id: String) {
         viewModelScope.launch { settings.deletePlaylist(id) }
+    }
+
+    /**
+     * Prepara la eliminación de canciones (borra los ARCHIVOS del
+     * dispositivo). En API 30+ devuelve el PendingIntent del sistema: la
+     * UI lo lanza y el usuario confirma en el diálogo del sistema; al
+     * volver con RESULT_OK hay que llamar a [confirmDelete]. En API <30
+     * borra directo y devuelve null (ya se llamó a [confirmDelete]).
+     * v1.0.9.
+     */
+    fun buildDeleteRequest(ids: List<Long>): PendingIntent? {
+        if (ids.isEmpty()) return null
+        val byId = libraryById()
+        val uris = ids.mapNotNull { byId[it]?.uri?.let { uri -> Uri.parse(uri) } }
+        if (uris.isEmpty()) return null
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                MediaStore.createDeleteRequest(application.contentResolver, uris)
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            viewModelScope.launch {
+                var deleted = 0
+                uris.forEach { uri ->
+                    try {
+                        if (application.contentResolver.delete(uri, null, null) > 0) deleted++
+                    } catch (_: Exception) {
+                    }
+                }
+                if (deleted > 0) confirmDelete(ids)
+            }
+            null
+        }
+    }
+
+    /**
+     * Tras confirmar la eliminación (diálogo del sistema o borrado
+     * directo): limpia favoritos, playlists, metadatos, portadas y letras
+     * de esos ids, las saca de la cola y reescanea la biblioteca. v1.0.9.
+     */
+    fun confirmDelete(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val set = ids.toSet()
+        playback.removeSongsFromQueue(set)
+        viewModelScope.launch {
+            settings.removeFavorites(set)
+            settings.removeSongsFromAllPlaylists(set)
+            ids.forEach { id ->
+                settings.setCustomMetadata(id, "", "", "")
+                settings.setCustomCover(id, "")
+                settings.removeLrcForSong(id)
+            }
+            rescan()
+        }
     }
 
     fun renamePlaylist(id: String, newName: String) {
