@@ -32,7 +32,8 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.IS_MUSIC,
-            MediaStore.Audio.Media.RELATIVE_PATH
+            MediaStore.Audio.Media.RELATIVE_PATH,
+            MediaStore.Audio.Media.DATE_ADDED
         )
 
         // Solo pistas musicales reales, con duración mínima razonable
@@ -50,6 +51,8 @@ class MusicRepository(private val context: Context) {
                 val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 // RELATIVE_PATH solo existe en API 29+; en versiones anteriores vale ""
                 val relPathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+                // DATE_ADDED (segundos): alimenta "Agregadas recientemente". v1.0.9.
+                val dateAddedCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
@@ -69,7 +72,8 @@ class MusicRepository(private val context: Context) {
                         albumArtUri = albumArtUriFor(cursor.getLong(albumIdCol)),
                         trackNumber = cursor.getInt(trackCol),
                         folderPath = if (relPathCol >= 0)
-                            cursor.getString(relPathCol) ?: "" else ""
+                            cursor.getString(relPathCol) ?: "" else "",
+                        dateAddedSec = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0
                     )
                 }
             }
