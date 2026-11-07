@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuralPlayer — Te compartieron una canción</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #121212;
+    color: #f5f5f5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  main { max-width: 420px; width: 100%; text-align: center; }
+  .bars { display: flex; gap: 5px; justify-content: center; align-items: flex-end; height: 44px; margin-bottom: 20px; }
+  .bars span { width: 7px; background: #2ED3B7; border-radius: 4px; }
+  .bars span:nth-child(1) { height: 22px; }
+  .bars span:nth-child(2) { height: 44px; }
+  .bars span:nth-child(3) { height: 30px; }
+  h1 { font-size: 22px; line-height: 1.35; margin-bottom: 6px; }
+  .artist { color: #9a9a9a; font-size: 16px; margin-bottom: 28px; }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    margin-bottom: 12px;
+  }
+  .btn.primary { background: #2ED3B7; color: #06231d; }
+  .btn.ghost { background: #1c1c1c; color: #f5f5f5; border: 1px solid #2a2a2a; }
+  .hint { color: #9a9a9a; font-size: 14px; margin: 20px 0 12px; }
+  .foot { color: #666; font-size: 13px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bars"><span></span><span></span><span></span></div>
+  <h1 id="songTitle">Te compartieron una canción</h1>
+  <p class="artist" id="songArtist">en AuralPlayer</p>
+  <a class="btn primary" id="openBtn" href="#">Abrir en AuralPlayer</a>
+  <p class="hint">¿No tienes la app? Descárgala gratis:</p>
+  <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
+  <a class="btn ghost" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
+  <p class="foot">AuralPlayer — Tu música, en colores.</p>
+</main>
+<script>
+  var q = new URLSearchParams(location.search);
+  var t = q.get('t') || '', a = q.get('a') || '';
+  if (t) document.getElementById('songTitle').textContent = '\uD83C\uDFB5 ' + t;
+  if (a) document.getElementById('songArtist').textContent = a;
+  var deep = 'aural://song?t=' + encodeURIComponent(t) + '&a=' + encodeURIComponent(a);
+  document.getElementById('openBtn').href = deep;
+  // Intento silencioso de abrir la app: si no está instalada, la página
+  // queda visible con los botones de descarga (el iframe no navega fuera).
+  setTimeout(function () {
+    var f = document.createElement('iframe');
+    f.style.display = 'none';
+    f.src = deep;
+    document.body.appendChild(f);
+  }, 600);
+</script>
+</body>
+</html>
