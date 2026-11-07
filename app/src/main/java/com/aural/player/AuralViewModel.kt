@@ -375,11 +375,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Agregadas recientemente: las 50 canciones más nuevas por fecha de
-     * agregado a MediaStore (DATE_ADDED). v1.0.9.
+     * Agregadas recientemente: TODAS las canciones ordenadas por fecha de
+     * agregado a MediaStore (DATE_ADDED), de la más nueva a la más vieja.
+     * El periodo (semana/mes/año/todas) se filtra en la UI. v1.0.9.
      */
     fun recentlyAddedSongs(): List<Song> =
-        _library.value.songs.sortedByDescending { it.dateAddedSec }.take(50)
+        _library.value.songs.sortedByDescending { it.dateAddedSec }
 
     /**
      * Guarda la Playlist del día como permanente: crea una copia ESTÁTICA
