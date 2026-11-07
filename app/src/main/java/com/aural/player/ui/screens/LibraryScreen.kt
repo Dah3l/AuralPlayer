@@ -802,6 +802,24 @@ fun LibraryScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
+                // v1.0.9: "Todas" vive aquí arriba, junto al conteo — la
+                // barra de abajo queda con 4 acciones y no se aprieta.
+                TextButton(
+                    onClick = {
+                        // Selecciona las canciones VISIBLES (respeta el
+                        // filtro/búsqueda activo, que ya viene en `songs`).
+                        selectedIds.addAll(songs.map { it.id }.filter { it !in selectedIds })
+                    },
+                    enabled = songs.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Rounded.SelectAll,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Todas")
+                }
             }
         }
     }
@@ -837,16 +855,6 @@ fun LibraryScreen(
                     label = "Playlist",
                     enabled = selectedIds.isNotEmpty(),
                     onClick = { showPlaylistPicker = true }
-                )
-                SelectionActionButton(
-                    icon = Icons.Rounded.SelectAll,
-                    label = "Todas",
-                    enabled = songs.isNotEmpty(),
-                    onClick = {
-                        // v1.0.8: selecciona las canciones VISIBLES (respeta
-                        // el filtro/búsqueda activo, que ya viene aplicado en `songs`).
-                        selectedIds.addAll(songs.map { it.id }.filter { it !in selectedIds })
-                    }
                 )
                 SelectionActionButton(
                     icon = Icons.Rounded.QueueMusic,
