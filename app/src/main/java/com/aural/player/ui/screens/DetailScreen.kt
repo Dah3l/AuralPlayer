@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -97,6 +98,47 @@ import androidx.compose.ui.draw.clip
  * con el título encima (abajo a la izquierda) y los botones debajo.
  * Se reutiliza para Álbum, Artista, Playlist y Favoritas.
  */
+/** Periodo del filtro de Agregadas recientemente (ventanas móviles). v1.0.9. */
+enum class RecentPeriod(val label: String, val days: Long?) {
+    WEEK("Esta semana", 7),
+    MONTH("Este mes", 30),
+    YEAR("Este año", 365),
+    ALL("Todas", null);
+
+    /** Segundos epoch a partir de los cuales cuenta una canción (null = sin límite). */
+    fun cutoffSeconds(): Long? = days?.let {
+        System.currentTimeMillis() / 1000 - it * 86_400
+    }
+}
+
+/** Selector de periodo (dropdown) para Agregadas recientemente. v1.0.9. */
+@Composable
+private fun PeriodFilterDropdown(
+    period: RecentPeriod,
+    onChange: (RecentPeriod) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        TextButton(
+            onClick = { expanded = true },
+            shape = CircleShape,
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+        ) {
+            Text(period.label, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Rounded.ArrowDropDown, "Periodo")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            RecentPeriod.entries.forEach { p ->
+                DropdownMenuItem(
+                    text = { Text(p.label) },
+                    onClick = { onChange(p); expanded = false }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun DetailHeader(
     coverUri: String?,
@@ -108,6 +150,9 @@ private fun DetailHeader(
     onImageHeightChanged: (Int) -> Unit = {},
     /** v1.0.8: si no es null, muestra el botón "Agregar canciones" en la cabecera. */
     onAddSongs: (() -> Unit)? = null,
+    /** v1.0.9: si no es null, muestra el selector de periodo junto a los botones. */
+    periodFilter: RecentPeriod? = null,
+    onPeriodFilterChange: (RecentPeriod) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier) {
@@ -230,6 +275,14 @@ private fun DetailHeader(
                         modifier = Modifier.size(24.dp))
                 }
             }
+            // v1.0.9: selector de periodo, justo al lado de los botones.
+            if (periodFilter != null) {
+                PeriodFilterDropdown(
+                    period = periodFilter,
+                    onChange = onPeriodFilterChange,
+                    modifier = Modifier.height(52.dp)
+                )
+            }
         }
     }
 }
@@ -253,7 +306,9 @@ fun DetailScreen(
     playlistCoverId: String? = null,
     /** La playlist Descargas vacía manda a la pestaña Descargas en vez de al picker. */
     isDownloadsPlaylist: Boolean = false,
-    onGoToDownloadsTab: (() -> Unit)? = null
+    onGoToDownloadsTab: (() -> Unit)? = null,
+    /** v1.0.9: muestra el selector de periodo (solo Agregadas recientemente). */
+    showPeriodFilter: Boolean = false
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -291,8 +346,14 @@ fun DetailScreen(
     }
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
 
-    // v1.0.8: el picker de canciones sirve para playlists vacías Y existentes.
+    // v1.0.9: el picker de canciones sirve para playlists vacías Y existentes.
     var showPicker by remember { mutableStateOf(false) }
+    // v1.0.9: filtro por periodo en Agregadas recientemente.
+    var recentPeriod by remember { mutableStateOf(RecentPeriod.ALL) }
+    val visibleSongs = if (showPeriodFilter) {
+        val cutoff = recentPeriod.cutoffSeconds()
+        if (cutoff == null) songs else songs.filter { it.dateAddedSec >= cutoff }
+    } else songs
     // Confirmar el recorte: guarda el cuadrado y lo pone de portada
     val cropConfirm: (Bitmap) -> Unit = { cropped ->
         pendingCropUri = null
@@ -328,7 +389,7 @@ fun DetailScreen(
         )
     }
 
-    if (songs.isEmpty()) {
+    if (visibleSongs.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
             // ---- Barra superior con volver ----
             Row(
@@ -347,6 +408,14 @@ fun DetailScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                // v1.0.9: el selector también aquí, si no al filtrar a un
+                // periodo sin canciones no habría forma de volver.
+                if (showPeriodFilter) {
+                    PeriodFilterDropdown(
+                        period = recentPeriod,
+                        onChange = { recentPeriod = it }
+                    )
+                }
                 if (playlistCoverId != null) {
                     val pid = playlistCoverId
                     CoverMenuButton(
@@ -394,7 +463,9 @@ fun DetailScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Esta lista está esperando su primera canción. ¿Le damos vida?",
+                    if (showPeriodFilter && songs.isNotEmpty())
+                        "No hay canciones agregadas en este periodo. Prueba con otro."
+                    else "Esta lista está esperando su primera canción. ¿Le damos vida?",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -431,7 +502,7 @@ fun DetailScreen(
             playlistCoverId != null && playlistCovers[playlistCoverId] != null ->
                 playlistCovers[playlistCoverId]
             else ->
-                songs.firstOrNull()?.let { customCovers[it.id] } ?: coverUri
+                visibleSongs.firstOrNull()?.let { customCovers[it.id] } ?: coverUri
         }
 
         // ---- Lista de canciones (reordenable en playlists) ----
@@ -441,7 +512,7 @@ fun DetailScreen(
         // En playlists el reorden es LOCAL e instantáneo, como la cola (que vive
         // en memoria): el orden definitivo se guarda una sola vez, al soltar.
         val reorderable = removableFromPlaylistId != null
-        var displaySongs by remember(removableFromPlaylistId) { mutableStateOf(songs) }
+        var displaySongs by remember(removableFromPlaylistId) { mutableStateOf(visibleSongs) }
         val moveLocal: (Int, Int) -> Unit = { from, to ->
             val current = displaySongs
             if (from in current.indices && to in current.indices && from != to) {
@@ -464,9 +535,9 @@ fun DetailScreen(
             }
         }
         // Seguir a la fuente cuando cambia por fuera (altas/bajas), nunca a mitad de arrastre
-        LaunchedEffect(songs) {
-            if (!reorderableState.isAnyItemDragging && displaySongs.map { it.id } != songs.map { it.id }) {
-                displaySongs = songs
+        LaunchedEffect(visibleSongs) {
+            if (!reorderableState.isAnyItemDragging && displaySongs.map { it.id } != visibleSongs.map { it.id }) {
+                displaySongs = visibleSongs
             }
         }
         // Al soltar, persistir el orden local si difiere del guardado
@@ -482,7 +553,7 @@ fun DetailScreen(
                 }
             }
         }
-        val listSongs = if (reorderable) displaySongs else songs
+        val listSongs = if (reorderable) displaySongs else visibleSongs
 
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -494,15 +565,18 @@ fun DetailScreen(
                 DetailHeader(
                     coverUri = headerCoverUri,
                     title = title,
-                    subtitle = "${songs.size} canciones · ${formatDuration(songs.sumOf { it.durationMs })}",
-                    onPlay = { viewModel.playSongs(songs, 0, fromPlaylistId = removableFromPlaylistId) },
-                    onShuffle = { viewModel.playSongs(songs.shuffled(), 0, shuffle = true, fromPlaylistId = removableFromPlaylistId) },
+                    subtitle = "${visibleSongs.size} canciones · ${formatDuration(visibleSongs.sumOf { it.durationMs })}",
+                    onPlay = { viewModel.playSongs(visibleSongs, 0, fromPlaylistId = removableFromPlaylistId) },
+                    onShuffle = { viewModel.playSongs(visibleSongs.shuffled(), 0, shuffle = true, fromPlaylistId = removableFromPlaylistId) },
                     // v1.0.8: agregar canciones a playlists de usuario existentes.
                     onAddSongs = if (removableFromPlaylistId != null &&
                         removableFromPlaylistId != FAVORITES_ID && !isDownloadsPlaylist
                     ) {
                         { showPicker = true }
                     } else null,
+                    // v1.0.9: selector de periodo (solo Agregadas recientemente).
+                    periodFilter = if (showPeriodFilter) recentPeriod else null,
+                    onPeriodFilterChange = { recentPeriod = it },
                     titleAlpha = bigTitleAlpha,
                     onImageHeightChanged = { imageHeightPx = it },
                     modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
