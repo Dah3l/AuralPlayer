@@ -446,7 +446,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         if (uris.isEmpty()) return null
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
-                MediaStore.createDeleteRequest(application.contentResolver, uris)
+                MediaStore.createDeleteRequest(getApplication<Application>().contentResolver, uris)
             } catch (e: Exception) {
                 null
             }
@@ -455,7 +455,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 var deleted = 0
                 uris.forEach { uri ->
                     try {
-                        if (application.contentResolver.delete(uri, null, null) > 0) deleted++
+                        if (getApplication<Application>().contentResolver.delete(uri, null, null) > 0) deleted++
                     } catch (_: Exception) {
                     }
                 }
