@@ -53,7 +53,7 @@ const val DONATION_QVAPAY_USER = "@Dah3l"
  * v1.0.8: número de WhatsApp al que el donante confirma su donación.
  * Es el mismo número de contacto del desarrollador.
  */
-const val DONATION_CONFIRM_NUMBER = "56803949"
+const val DONATION_CONFIRM_NUMBER = "59648522"
 
 /**
  * v1.0.7: pantalla de apoyo. Sin backend ni verificación: el flujo es
