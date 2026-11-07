@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         handleAudioSearchIntent(intent)
         handleIslandIntent(intent)
+        handleAuralLinkIntent(intent)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
         enableEdgeToEdge()
         requestNeededPermissions()
@@ -148,6 +149,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handleAudioSearchIntent(intent)
         handleIslandIntent(intent)
+        handleAuralLinkIntent(intent)
     }
 
     /** Abre la búsqueda por audio si el intent viene del tile de ajustes rápidos. */
@@ -180,6 +182,19 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(EXTRA_OPEN_HOME, false) == true) {
             pendingIslandHome = true
         }
+    }
+
+    /**
+     * v1.0.9: Aural link — un enlace compartido abre la app en Descargas
+     * buscando la canción. Reusa requestYouTubeSearch: LibraryScreen cambia
+     * sola a la pestaña y busca (el mismo mecanismo del reconocimiento).
+     */
+    private fun handleAuralLinkIntent(intent: android.content.Intent?) {
+        if (intent?.action != android.content.Intent.ACTION_VIEW) return
+        val query = com.aural.player.AuralLink.parseToQuery(intent.data) ?: return
+        pendingIslandTab = 4 // pestaña Descargas
+        pendingIslandHome = true
+        viewModel.requestYouTubeSearch(query)
     }
 
     companion object {
@@ -650,6 +665,18 @@ private fun AuralApp(viewModel: AuralViewModel,
                 songMenuTarget = null
                 songMenuPlaylistId = null
             },
+            onShareAuralLink = {
+                val link = com.aural.player.AuralLink.shareText(song)
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, link)
+                }
+                updateContext.startActivity(
+                    android.content.Intent.createChooser(shareIntent, "Compartir Aural link")
+                )
+                songMenuTarget = null
+                songMenuPlaylistId = null
+            },
             onAddToPlaylist = { plId ->
                 viewModel.addToPlaylist(plId, song.id)
                 songMenuTarget = null
@@ -753,6 +780,7 @@ private fun SongMenuSheet(
     removeFromPlaylistId: String? = null,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onShareAuralLink: () -> Unit = {},
     onAddToPlaylist: (String) -> Unit,
     onEnqueue: () -> Unit,
     onRemoveFromPlaylist: () -> Unit = {}
@@ -772,6 +800,9 @@ private fun SongMenuSheet(
         }
         TextButton(onClick = onToggleFavorite, modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)) {
             Text(if (isFavorite) "Quitar de favoritas" else "Marcar como favorita")
+        }
+        TextButton(onClick = onShareAuralLink, modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)) {
+            Text("Compartir Aural link")
         }
         if (removeFromPlaylistId != null) {
             // Abierto desde una playlist: quitar de esta lista en vez de añadir a otra
