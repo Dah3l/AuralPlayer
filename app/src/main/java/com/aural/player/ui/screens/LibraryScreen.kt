@@ -96,6 +96,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import com.aural.player.youtube.YouTubeManager
@@ -215,6 +216,9 @@ fun LibraryScreen(
     // v1.0.7: selección múltiple en Canciones.
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
+    // v1.0.9: eliminar las canciones seleccionadas (borra los archivos).
+    var showDeleteSongsConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteIds by remember { mutableStateOf<List<Long>>(emptyList()) }
     var showPlaylistPicker by remember { mutableStateOf(false) }
     // v1.0.8: crear playlist nueva desde el picker y agregarle la selección.
     var pendingIdsForNewPlaylist by remember { mutableStateOf<List<Long>?>(null) }
@@ -224,6 +228,24 @@ fun LibraryScreen(
     var manualUpdateMessage by remember { mutableStateOf<String?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     val appContext = LocalContext.current
+    // v1.0.9: confirmación del sistema para borrar archivos (API 30+).
+    // Al volver con OK se confirma la eliminación en el ViewModel.
+    val deleteSongsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.confirmDelete(pendingDeleteIds)
+            android.widget.Toast.makeText(
+                appContext,
+                if (pendingDeleteIds.size == 1) "Canción eliminada"
+                else "${pendingDeleteIds.size} canciones eliminadas",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+        pendingDeleteIds = emptyList()
+        selectionMode = false
+        selectedIds.clear()
+    }
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
         val query = audioSearchRequest ?: return@LaunchedEffect
@@ -520,6 +542,7 @@ fun LibraryScreen(
                                 val toPlay = when (id) {
                                     FAVORITES_ID -> viewModel.favoriteSongs()
                                     DAILY_PLAYLIST_ID -> viewModel.dailyPlaylistSongs()
+                                    RECENTLY_ADDED_ID -> viewModel.recentlyAddedSongs()
                                     else -> playlists.firstOrNull { it.id == id }?.let { viewModel.songsOfPlaylist(it) }
                                         ?: emptyList()
                                 }
@@ -554,6 +577,7 @@ fun LibraryScreen(
                         "playlists" -> {
                             val downloadsPl = playlists.firstOrNull { it.name == "Descargas" }
                             val dailySongs = viewModel.dailyPlaylistSongs()
+                            val recentSongs = viewModel.recentlyAddedSongs()
                             PlaylistsTab(
                                 playlists = playlists,
                                 songCount = { viewModel.songsOfPlaylist(it).size },
@@ -577,6 +601,14 @@ fun LibraryScreen(
                                     if (dailySongs.isNotEmpty()) onPlayList(dailySongs, 0, DAILY_PLAYLIST_ID)
                                 },
                                 onSaveDailyPermanent = { showSaveDaily = true },
+                                recentSongCount = recentSongs.size,
+                                recentCoverUri = recentSongs.firstOrNull()?.let { song ->
+                                    customCovers[song.id] ?: song.albumArtUri
+                                },
+                                onOpenRecent = { onOpenPlaylist(RECENTLY_ADDED_ID) },
+                                onPlayRecent = {
+                                    if (recentSongs.isNotEmpty()) onPlayList(recentSongs, 0, RECENTLY_ADDED_ID)
+                                },
                                 listState = playlistsListState,
                                 playlistCovers = playlistCovers,
                                 firstSongCover = { pl ->
@@ -838,6 +870,16 @@ fun LibraryScreen(
                         selectedIds.clear()
                     }
                 )
+                SelectionActionButton(
+                    icon = Icons.Rounded.Delete,
+                    label = "Eliminar",
+                    enabled = selectedIds.isNotEmpty(),
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        pendingDeleteIds = selectedIds.toList()
+                        showDeleteSongsConfirm = true
+                    }
+                )
             }
         }
     }
@@ -867,6 +909,53 @@ fun LibraryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // v1.0.9: confirmación antes de borrar los archivos seleccionados.
+    if (showDeleteSongsConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteSongsConfirm = false
+                pendingDeleteIds = emptyList()
+            },
+            title = { Text("Eliminar canciones") },
+            text = {
+                Text(
+                    "¿Eliminar ${pendingDeleteIds.size} " +
+                        "${if (pendingDeleteIds.size == 1) "canción" else "canciones"}? " +
+                        "Se borrarán los archivos del dispositivo."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteSongsConfirm = false
+                    val ids = pendingDeleteIds
+                    val request = viewModel.buildDeleteRequest(ids)
+                    if (request != null) {
+                        deleteSongsLauncher.launch(
+                            androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build()
+                        )
+                    } else {
+                        // API <30: el borrado directo ya se hizo en el ViewModel.
+                        android.widget.Toast.makeText(
+                            appContext,
+                            if (ids.size == 1) "Canción eliminada"
+                            else "${ids.size} canciones eliminadas",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        pendingDeleteIds = emptyList()
+                        selectionMode = false
+                        selectedIds.clear()
+                    }
+                }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteSongsConfirm = false
+                    pendingDeleteIds = emptyList()
+                }) { Text("Cancelar") }
             }
         )
     }
@@ -1063,6 +1152,9 @@ const val FAVORITES_ID = "favorites"
 
 /** ID virtual para la Playlist del día dentro de las playlists. */
 const val DAILY_PLAYLIST_ID = "daily_playlist"
+
+/** ID virtual para Agregadas recientemente dentro de las playlists. v1.0.9. */
+const val RECENTLY_ADDED_ID = "recently_added"
 
 /** Contenedor centrado simple. */
 @Composable
@@ -1364,6 +1456,10 @@ private fun PlaylistsTab(
     onOpenDaily: () -> Unit,
     onPlayDaily: () -> Unit,
     onSaveDailyPermanent: () -> Unit,
+    recentSongCount: Int,
+    recentCoverUri: String?,
+    onOpenRecent: () -> Unit,
+    onPlayRecent: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     playlistCovers: Map<String, String>,
     firstSongCover: (Playlist) -> String?,
@@ -1518,6 +1614,50 @@ private fun PlaylistsTab(
                             }
                         )
                     }
+                }
+            }
+        }
+        // Entrada fija de Agregadas recientemente (v1.0.9): las 50 más
+        // nuevas por fecha de agregado, sin guardarse como playlist.
+        item {
+            val recentInteraction = remember { MutableInteractionSource() }
+            val recentPressed by recentInteraction.collectIsPressedAsState()
+            val recentScale by animateFloatAsState(
+                targetValue = if (recentPressed) 0.98f else 1f,
+                label = "recent_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(recentScale)
+                    .clickable(
+                        interactionSource = recentInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenRecent() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = recentCoverUri, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Agregadas recientemente", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (recentSongCount > 0)
+                            "$recentSongCount ${if (recentSongCount == 1) "canción nueva" else "canciones nuevas"}"
+                        else "Todavía no hay canciones",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onPlayRecent) {
+                    Icon(Icons.Rounded.PlayArrow, "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
