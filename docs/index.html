@@ -64,6 +64,12 @@
   .card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .card h3 { font-size: 18px; margin-bottom: 6px; }
   .card p { color: var(--mut); font-size: 15px; }
+  .review-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .avatar { width: 44px; height: 44px; flex: none; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .who b { display: block; font-size: 16px; }
+  .who span { display: block; color: var(--mut); font-size: 13px; }
+  .stars { color: #F59E0B; font-size: 17px; letter-spacing: 2px; margin-bottom: 10px; }
+  .review p { color: var(--txt); }
   .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
   .shot { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; text-align: center; }
   .shot .mini { height: 190px; background: #0a0a0a; border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
@@ -129,7 +135,7 @@
         <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
       </div>
       <div class="chips"><span class="chip">Gratis</span><span class="chip">Sin anuncios</span><span class="chip">Sin cuentas</span></div>
-      <p class="proof"><span class="star">★ 5.0</span> en Apklis · <b>178 descargas</b> · v1.0.9 · Actualizada el 7 de noviembre de 2026</p>
+      <p class="proof"><span class="star">★ 5.0</span> en Apklis · <b>200+ usuarios</b> · v1.0.9 · Actualizada el 7 de noviembre de 2026</p>
     </div>
     <div class="phone" aria-hidden="true">
       <div class="screen">
@@ -170,6 +176,29 @@
       <div class="shot">
         <img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center">
         <h3>Letras en pantalla</h3><p>La letra te acompaña mientras suena la canción.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <h2>Lo que dicen los usuarios</h2>
+    <p class="sec-sub">Reseñas reales de Apklis.</p>
+    <div class="grid">
+      <div class="card review">
+        <div class="review-head">
+          <span class="avatar">MB</span>
+          <span class="who"><b>Marlon Batista</b><span>2 nov 2026</span></span>
+        </div>
+        <div class="stars">★★★★★</div>
+        <p>Graruita, Descarga música, y encima sin ADS, joyita🙌🏻</p>
+      </div>
+      <div class="card review">
+        <div class="review-head">
+          <span class="avatar">DA</span>
+          <span class="who"><b>Daniel Acosta Vega</b><span>1 nov 2026</span></span>
+        </div>
+        <div class="stars">★★★★★</div>
+        <p>Durísimaaa, y permite descargas de YouTube, osea ¿puede mejorar?</p>
       </div>
     </div>
   </section>
