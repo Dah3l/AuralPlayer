@@ -5,8 +5,8 @@ import android.net.Uri
 import com.aural.player.data.Song
 
 object AuralLink {
-    /** Página de aterrizaje (GitHub Pages): la abre quien no tiene la app. */
-    const val WEB_BASE = "https://dah3l.github.io/AuralPlayer/l/"
+    /** Página de aterrizaje (Render): la abre quien no tiene la app. */
+    const val WEB_BASE = "https://auralplayer.onrender.com/l/"
     const val SCHEME = "aural"
     const val HOST = "song"
 
@@ -44,8 +44,10 @@ object AuralLink {
     fun parseToQuery(uri: Uri?): String? {
         if (uri == null) return null
         val isDeep = uri.scheme == SCHEME && uri.host == HOST
-        val isWeb = uri.scheme == "https" && uri.host == "dah3l.github.io" &&
-            (uri.path ?: "").startsWith("/AuralPlayer/l")
+        val isWeb = uri.scheme == "https" && (
+            (uri.host == "auralplayer.onrender.com" && (uri.path ?: "").startsWith("/l")) ||
+            (uri.host == "dah3l.github.io" && (uri.path ?: "").startsWith("/AuralPlayer/l"))
+        )
         if (!isDeep && !isWeb) return null
         val title = uri.getQueryParameter("t")?.trim().orEmpty()
         val artist = uri.getQueryParameter("a")?.trim().orEmpty()
