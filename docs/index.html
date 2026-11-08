@@ -26,8 +26,10 @@
   nav { display: flex; gap: 18px; margin-left: auto; }
   nav a { color: var(--mut); font-size: 15px; }
   nav a:hover { color: var(--txt); }
+  nav a.active { color: var(--teal); font-weight: 700; }
   .head-cta { padding: 9px 18px; font-size: 14px; border-radius: 10px; flex: none; }
   .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 56px 0 64px; scroll-margin-top: 84px; }
+  .hero-logo { width: 56px; height: 56px; border-radius: 14px; margin-bottom: 16px; }
   .hero h1 { font-size: clamp(34px, 6vw, 46px); line-height: 1.08; margin-bottom: 12px; }
   .tagline { font-size: clamp(18px, 2.5vw, 21px); color: var(--teal); font-weight: 700; margin-bottom: 12px; }
   .sub { color: var(--mut); font-size: 17px; max-width: 520px; margin-bottom: 24px; }
@@ -73,11 +75,6 @@
   .dots i { width: 26px; height: 26px; border-radius: 50%; }
   .lyr { width: 85%; text-align: center; font-size: 13px; line-height: 2; color: var(--mut); }
   .lyr b { color: var(--teal); }
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; counter-reset: step; }
-  .step { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; text-align: center; }
-  .step .n { width: 40px; height: 40px; border-radius: 50%; background: var(--teal); color: #06231d; font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
-  .step h3 { font-size: 17px; margin-bottom: 6px; }
-  .step p { color: var(--mut); font-size: 14px; }
   .faq { max-width: 680px; margin: 0 auto; }
   .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
   .faq summary { font-weight: 700; font-size: 16px; cursor: pointer; }
@@ -98,6 +95,7 @@
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
+    .hero-logo { margin-left: auto; margin-right: auto; }
     .sub { margin-left: auto; margin-right: auto; }
     .btns, .chips { justify-content: center; }
     .phone { margin-top: 8px; }
@@ -117,7 +115,7 @@
 <header>
   <div class="wrap head-in">
     <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
-    <nav><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#contacto">Contacto</a></nav>
+    <nav><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#faq">FAQ</a><a href="#contacto">Contacto</a></nav>
     <a class="btn primary head-cta" href="#inicio">Descargar</a>
   </div>
 </header>
@@ -125,6 +123,7 @@
 
   <div class="hero" id="inicio">
     <div>
+      <img class="hero-logo" src="favicon.svg" alt="AuralPlayer">
       <h1>El sonido,<br>sin ruido.</h1>
       <p class="tagline">Tu música, en colores.</p>
       <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
@@ -178,17 +177,7 @@
     </div>
   </section>
 
-  <section class="reveal">
-    <h2>Comparte música con un enlace</h2>
-    <p class="sec-sub">Así funciona el Aural link: sin cuentas, sin vueltas.</p>
-    <div class="steps">
-      <div class="step"><div class="n">1</div><h3>Comparte la canción</h3><p>Desde el reproductor o el menú de la canción, toca "Compartir Aural link".</p></div>
-      <div class="step"><div class="n">2</div><h3>Tu amigo lo abre</h3><p>El enlace abre AuralPlayer en su teléfono, directo en Descargas.</p></div>
-      <div class="step"><div class="n">3</div><h3>Lista para bajar</h3><p>La canción ya está buscada y lista para descargar. Así de simple.</p></div>
-    </div>
-  </section>
-
-  <section class="reveal">
+  <section class="reveal" id="faq">
     <h2>Preguntas frecuentes</h2>
     <p class="sec-sub">Lo que nos preguntan siempre.</p>
     <div class="faq">
@@ -237,6 +226,19 @@ document.addEventListener('DOMContentLoaded', function () {
     entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('visible'); io.unobserve(en.target); } });
   }, { threshold: 0.1 });
   els.forEach(function (e) { io.observe(e); });
+  // Scrollspy: ilumina en el header la sección que se está viendo.
+  var navLinks = document.querySelectorAll('nav a[href^="#"]');
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) {
+        navLinks.forEach(function (l) { l.classList.toggle('active', l.getAttribute('href') === '#' + en.target.id); });
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  ['funciones', 'se-ve', 'faq', 'contacto'].forEach(function (id) {
+    var s = document.getElementById(id);
+    if (s) spy.observe(s);
+  });
 });
 </script>
 </body>
