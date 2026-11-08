@@ -18,12 +18,16 @@
   body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
   a { color: var(--teal); text-decoration: none; }
   .wrap { max-width: 1020px; margin: 0 auto; padding: 0 20px; }
-  header { padding: 18px 0; display: flex; align-items: center; justify-content: space-between; }
+  html { scroll-behavior: smooth; }
+  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .head-in { display: flex; align-items: center; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--txt); }
   .brand img { width: 30px; height: 30px; border-radius: 8px; }
-  nav a { color: var(--mut); margin-left: 18px; font-size: 15px; }
+  nav { display: flex; gap: 18px; margin-left: auto; }
+  nav a { color: var(--mut); font-size: 15px; }
   nav a:hover { color: var(--txt); }
-  .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 56px 0 64px; }
+  .head-cta { padding: 9px 18px; font-size: 14px; border-radius: 10px; flex: none; }
+  .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 56px 0 64px; scroll-margin-top: 84px; }
   .hero h1 { font-size: clamp(34px, 6vw, 46px); line-height: 1.08; margin-bottom: 12px; }
   .tagline { font-size: clamp(18px, 2.5vw, 21px); color: var(--teal); font-weight: 700; margin-bottom: 12px; }
   .sub { color: var(--mut); font-size: 17px; max-width: 520px; margin-bottom: 24px; }
@@ -48,7 +52,7 @@
   .phone .ctrl { display: flex; justify-content: center; align-items: center; gap: 18px; }
   .phone .ctrl span { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #262626; font-size: 14px; }
   .phone .ctrl span.play { width: 48px; height: 48px; background: var(--teal); color: #06231d; font-size: 18px; }
-  section { padding: 48px 0; }
+  section { padding: 48px 0; scroll-margin-top: 84px; }
   h2 { font-size: clamp(24px, 3.5vw, 27px); margin-bottom: 8px; text-align: center; }
   .sec-sub { color: var(--mut); text-align: center; margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -78,11 +82,17 @@
   .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
   .faq summary { font-weight: 700; font-size: 16px; cursor: pointer; }
   .faq p { color: var(--mut); font-size: 15px; margin-top: 8px; }
-  .dl { text-align: center; }
-  .ver { color: var(--mut); font-size: 14px; margin-top: 16px; }
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .contact-card { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; color: var(--txt); min-height: 76px; transition: transform .2s ease, border-color .2s ease; }
+  .contact-card:hover { transform: translateY(-3px); border-color: var(--teal); }
+  .contact-card .ico { width: 44px; height: 44px; flex: none; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; }
+  .contact-card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .contact-card .ct b { display: block; font-size: 16px; }
+  .contact-card .ct span { display: block; color: var(--mut); font-size: 14px; overflow-wrap: anywhere; }
+  .ver { color: var(--mut); font-size: 14px; }
   footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
-  footer .links a { margin: 0 10px; }
   footer p { margin-top: 12px; }
+  footer p:first-child { margin-top: 0; }
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .reveal.visible { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
@@ -94,22 +104,26 @@
   }
   @media (max-width: 700px) {
     section { padding: 36px 0; }
-    header { flex-wrap: wrap; row-gap: 10px; }
-    nav { width: 100%; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 16px; }
-    nav a { margin-left: 0; }
+    section, .hero { scroll-margin-top: 120px; }
+    .head-in { flex-wrap: wrap; row-gap: 10px; }
+    nav { width: 100%; justify-content: center; flex-wrap: wrap; gap: 4px 16px; order: 3; }
+    .head-cta { margin-left: auto; }
     .btns { flex-direction: column; }
     .btns .btn { text-align: center; }
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
+<header>
+  <div class="wrap head-in">
     <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
-    <nav><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#descargar">Descargar</a><a href="#contacto">Contacto</a></nav>
-  </header>
+    <nav><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#contacto">Contacto</a></nav>
+    <a class="btn primary head-cta" href="#inicio">Descargar</a>
+  </div>
+</header>
+<div class="wrap">
 
-  <div class="hero">
+  <div class="hero" id="inicio">
     <div>
       <h1>El sonido,<br>sin ruido.</h1>
       <p class="tagline">Tu música, en colores.</p>
@@ -186,26 +200,33 @@
     </div>
   </section>
 
-  <section class="dl reveal" id="descargar">
-    <h2>Descarga AuralPlayer</h2>
-    <p class="sec-sub">Gratis, para siempre.</p>
-    <div class="btns">
-      <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
-      <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
+  <section class="reveal" id="contacto">
+    <h2>Contacto</h2>
+    <p class="sec-sub">¿Dudas, ideas o soporte? Escríbenos por donde prefieras.</p>
+    <div class="contact-grid">
+      <a class="contact-card" href="https://wa.me/5359648522">
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
+        <span class="ct"><b>WhatsApp</b><span>+53 59648522</span></span>
+      </a>
+      <a class="contact-card" href="mailto:auralplayeroficial@gmail.com">
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+        <span class="ct"><b>Correo</b><span>auralplayeroficial@gmail.com</span></span>
+      </a>
+      <a class="contact-card" href="https://instagram.com/auralplayer">
+        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></span>
+        <span class="ct"><b>Instagram</b><span>@auralplayer</span></span>
+      </a>
+      <a class="contact-card" href="https://github.com/Dah3l/AuralPlayer">
+        <span class="ico"><svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></span>
+        <span class="ct"><b>GitHub</b><span>Dah3l / AuralPlayer</span></span>
+      </a>
     </div>
-    <p class="ver">Versión actual v1.0.9 · Actualizada el 7 de noviembre de 2026 · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/CHANGELOG.md">Ver cambios</a></p>
   </section>
 
-  <footer id="contacto">
-    <div class="links">
-      <a href="https://wa.me/5359648522">WhatsApp</a>
-      <a href="mailto:auralplayeroficial@gmail.com">Correo</a>
-      <a href="https://instagram.com/auralplayer">Instagram</a>
-      <a href="https://github.com/Dah3l/AuralPlayer">GitHub</a>
-      <a href="privacidad.html">Privacidad</a>
-      <a href="https://github.com/Dah3l/AuralPlayer/blob/main/LICENSE">Licencia</a>
-    </div>
+  <footer>
+    <p class="ver">Versión actual v1.0.9 · Actualizada el 7 de noviembre de 2026 · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/CHANGELOG.md">Ver cambios</a></p>
     <p>Hecho con cariño en Cuba 🇨🇺 · AuralPlayer es gratis y de código abierto.</p>
+    <p><a href="privacidad.html">Privacidad</a> · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/LICENSE">Licencia</a></p>
   </footer>
 </div>
 <script>
