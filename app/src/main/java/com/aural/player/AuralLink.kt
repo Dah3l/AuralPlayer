@@ -19,18 +19,26 @@ object AuralLink {
         meta?.second?.ifBlank { song.artist } ?: song.artist
 
     /** Enlace web para compartir: lleva título y artista en la propia URL. */
-    fun buildWebLink(song: Song, meta: Triple<String, String, String>? = null): String {
-        val title = Uri.encode(effectiveTitle(song, meta))
-        val artist = Uri.encode(displayArtist(effectiveArtist(song, meta)))
-        return "$WEB_BASE?t=$title&a=$artist"
+    fun buildWebLink(title: String, artist: String): String {
+        val t = Uri.encode(title)
+        val a = Uri.encode(displayArtist(artist))
+        return "$WEB_BASE?t=$t&a=$a"
+    }
+
+    /** Enlace web para compartir: lleva título y artista en la propia URL. */
+    fun buildWebLink(song: Song, meta: Triple<String, String, String>? = null): String =
+        buildWebLink(effectiveTitle(song, meta), effectiveArtist(song, meta))
+
+    /** Enlace directo a la app (lo usa la página de aterrizaje). */
+    fun buildDeepLink(title: String, artist: String): String {
+        val t = Uri.encode(title)
+        val a = Uri.encode(displayArtist(artist))
+        return "$SCHEME://$HOST?t=$t&a=$a"
     }
 
     /** Enlace directo a la app (lo usa la página de aterrizaje). */
-    fun buildDeepLink(song: Song, meta: Triple<String, String, String>? = null): String {
-        val title = Uri.encode(effectiveTitle(song, meta))
-        val artist = Uri.encode(displayArtist(effectiveArtist(song, meta)))
-        return "$SCHEME://$HOST?t=$title&a=$artist"
-    }
+    fun buildDeepLink(song: Song, meta: Triple<String, String, String>? = null): String =
+        buildDeepLink(effectiveTitle(song, meta), effectiveArtist(song, meta))
 
     /** Artista para el link: vacío si es desconocido. */
     fun displayArtist(artist: String): String {
@@ -39,11 +47,15 @@ object AuralLink {
     }
 
     /** Texto para compartir por WhatsApp y demás. */
-    fun shareText(song: Song, meta: Triple<String, String, String>? = null): String {
-        val artist = displayArtist(effectiveArtist(song, meta))
-        val who = if (artist.isEmpty()) "" else " de $artist"
-        return "🎵 \"${effectiveTitle(song, meta)}\"$who — escúchala en AuralPlayer: ${buildWebLink(song, meta)}"
+    fun shareText(title: String, artist: String): String {
+        val a = displayArtist(artist)
+        val who = if (a.isEmpty()) "" else " de $a"
+        return "🎵 \"$title\"$who — escúchala en AuralPlayer: ${buildWebLink(title, artist)}"
     }
+
+    /** Texto para compartir por WhatsApp y demás. */
+    fun shareText(song: Song, meta: Triple<String, String, String>? = null): String =
+        shareText(effectiveTitle(song, meta), effectiveArtist(song, meta))
 
     /**
      * Lee un link entrante (aural:// o el https de la página) y devuelve
