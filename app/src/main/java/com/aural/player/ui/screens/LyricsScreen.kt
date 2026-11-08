@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import com.aural.player.data.LrcLine
 import com.aural.player.data.LrcParser
+import com.aural.player.AuralLink
 import com.aural.player.ui.components.CoverArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -211,7 +212,8 @@ fun LyricsScreen(
             artist = artist,
             coverUri = coverUri,
             lines = lines.map { it.text }.filter { it.isNotBlank() },
-            onDismiss = { showCardSheet = false }
+            onDismiss = { showCardSheet = false },
+            linkText = AuralLink.shareText(title, artist)
         )
     }
 }
