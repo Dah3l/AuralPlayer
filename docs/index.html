@@ -67,14 +67,11 @@
   .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
   .shot { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; text-align: center; }
   .shot .mini { height: 190px; background: #0a0a0a; border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
+  .shot img { width: 100%; height: 190px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; display: block; }
   .shot h3 { font-size: 16px; margin-bottom: 4px; }
   .shot p { color: var(--mut); font-size: 14px; }
-  .island { width: 90%; background: #262626; border-radius: 999px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
-  .island i { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); flex: none; }
   .dots { display: flex; gap: 10px; }
   .dots i { width: 26px; height: 26px; border-radius: 50%; }
-  .lyr { width: 85%; text-align: center; font-size: 13px; line-height: 2; color: var(--mut); }
-  .lyr b { color: var(--teal); }
   .faq { max-width: 680px; margin: 0 auto; }
   .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
   .faq summary { font-weight: 700; font-size: 16px; cursor: pointer; }
@@ -163,7 +160,7 @@
     <p class="sec-sub">Un vistazo a lo que hace diferente a AuralPlayer.</p>
     <div class="shots">
       <div class="shot">
-        <div class="mini"><div class="island"><i></i> Tu canción · ▶</div><div class="island" style="opacity:.55"><i style="background:#FF4D8D"></i> Otra canción · ❚❚</div></div>
+        <img src="isla.png" alt="Dynamic Aural flotando sobre otra app" style="object-position: top">
         <h3>La isla siempre contigo</h3><p>Dynamic Aural flota sobre todo, con tus controles a un toque.</p>
       </div>
       <div class="shot">
@@ -171,7 +168,7 @@
         <h3>18 temas</h3><p>Bosque, Sakura, Medianoche y más. La app cambia contigo.</p>
       </div>
       <div class="shot">
-        <div class="mini"><div class="lyr">La música suena<br><b>Y tú cantas con ella</b><br>línea tras línea</div></div>
+        <img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center">
         <h3>Letras en pantalla</h3><p>La letra te acompaña mientras suena la canción.</p>
       </div>
     </div>
