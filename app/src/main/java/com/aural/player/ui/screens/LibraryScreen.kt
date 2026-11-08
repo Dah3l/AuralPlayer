@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
@@ -606,9 +607,6 @@ fun LibraryScreen(
                                     customCovers[song.id] ?: song.albumArtUri
                                 },
                                 onOpenRecent = { onOpenPlaylist(RECENTLY_ADDED_ID) },
-                                onPlayRecent = {
-                                    if (recentSongs.isNotEmpty()) onPlayList(recentSongs, 0, RECENTLY_ADDED_ID)
-                                },
                                 listState = playlistsListState,
                                 playlistCovers = playlistCovers,
                                 firstSongCover = { pl ->
@@ -1467,7 +1465,6 @@ private fun PlaylistsTab(
     recentSongCount: Int,
     recentCoverUri: String?,
     onOpenRecent: () -> Unit,
-    onPlayRecent: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     playlistCovers: Map<String, String>,
     firstSongCover: (Playlist) -> String?,
@@ -1564,6 +1561,52 @@ private fun PlaylistsTab(
                 }
             }
         }
+        // Entrada fija de Agregadas recientemente (v1.0.9): va ANTES de la
+        // Playlist del día; su icono de la derecha es un reloj (lista
+        // basada en tiempo) que abre la lista, como el corazón de
+        // Favoritas y el icono de Descargas.
+        item {
+            val recentInteraction = remember { MutableInteractionSource() }
+            val recentPressed by recentInteraction.collectIsPressedAsState()
+            val recentScale by animateFloatAsState(
+                targetValue = if (recentPressed) 0.98f else 1f,
+                label = "recent_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(recentScale)
+                    .clickable(
+                        interactionSource = recentInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenRecent() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = recentCoverUri, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Agregadas recientemente", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (recentSongCount > 0)
+                            "$recentSongCount ${if (recentSongCount == 1) "canción nueva" else "canciones nuevas"}"
+                        else "Todavía no hay canciones",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onOpenRecent) {
+                    Icon(Icons.Rounded.Schedule, "Abrir",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         // Entrada fija de Playlist del día (UNA sola instancia; rota a diario)
         item {
             val dailyInteraction = remember { MutableInteractionSource() }
@@ -1622,50 +1665,6 @@ private fun PlaylistsTab(
                             }
                         )
                     }
-                }
-            }
-        }
-        // Entrada fija de Agregadas recientemente (v1.0.9): las 50 más
-        // nuevas por fecha de agregado, sin guardarse como playlist.
-        item {
-            val recentInteraction = remember { MutableInteractionSource() }
-            val recentPressed by recentInteraction.collectIsPressedAsState()
-            val recentScale by animateFloatAsState(
-                targetValue = if (recentPressed) 0.98f else 1f,
-                label = "recent_press"
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .scale(recentScale)
-                    .clickable(
-                        interactionSource = recentInteraction,
-                        indication = androidx.compose.foundation.LocalIndication.current
-                    ) { onOpenRecent() }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CoverArt(uri = recentCoverUri, size = 48.dp)
-                Spacer(Modifier.height(0.dp))
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)
-                ) {
-                    Text("Agregadas recientemente", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (recentSongCount > 0)
-                            "$recentSongCount ${if (recentSongCount == 1) "canción nueva" else "canciones nuevas"}"
-                        else "Todavía no hay canciones",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(onClick = onPlayRecent) {
-                    Icon(Icons.Rounded.PlayArrow, "Reproducir",
-                        tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
