@@ -340,20 +340,32 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setLibraryTabOrder(order) }
     }
 
+    /** Canciones visibles: con metadatos efectivos y sin las de carpetas ocultas.
+     *  Es la base de todas las listas derivadas (recientes, favoritas, del día,
+     *  playlists): lo oculto no aparece en ninguna lista. v1.0.9. */
+    private fun visibleSongs(): List<Song> {
+        val hidden = hiddenFolders.value
+        val songs = songsFlow.value
+        return if (hidden.isEmpty()) songs else songs.filter { it.folderPath !in hidden }
+    }
+
     // Mapa id→canción con caché: se reconstruye solo cuando cambia la lista
-    // de la biblioteca (evita reconstruirlo en cada llamada durante la
-    // composición de las pantallas de playlist).
-    private var libraryByIdCache: Pair<List<Song>, Map<Long, Song>>? = null
+    // de la biblioteca o las carpetas ocultas (evita reconstruirlo en cada
+    // llamada durante la composición de las pantallas de playlist).
+    // Solo incluye canciones visibles: lo oculto no se resuelve nunca.
+    private var libraryByIdCache: Triple<List<Song>, Set<String>, Map<Long, Song>>? = null
     private fun libraryById(): Map<Long, Song> {
-        val songs = _library.value.songs
+        val songs = songsFlow.value
+        val hidden = hiddenFolders.value
         val cached = libraryByIdCache
-        if (cached != null && cached.first === songs) return cached.second
-        return songs.associateBy { it.id }.also { libraryByIdCache = songs to it }
+        if (cached != null && cached.first === songs && cached.second === hidden) return cached.third
+        val visible = if (hidden.isEmpty()) songs else songs.filter { it.folderPath !in hidden }
+        return visible.associateBy { it.id }.also { libraryByIdCache = Triple(songs, hidden, it) }
     }
 
     fun favoriteSongs(): List<Song> {
         val order = favoriteOrder.value.withIndex().associate { it.value to it.index }
-        val songs = _library.value.songs
+        val songs = visibleSongs()
         val indexById = songs.withIndex().associate { it.value.id to it.index }
         return songs
             .filter { favorites.value.contains(it.id) }
@@ -375,12 +387,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Agregadas recientemente: TODAS las canciones ordenadas por fecha de
-     * agregado a MediaStore (DATE_ADDED), de la más nueva a la más vieja.
+     * Agregadas recientemente: TODAS las canciones VISIBLES ordenadas por fecha
+     * de agregado a MediaStore (DATE_ADDED), de la más nueva a la más vieja.
      * El periodo (semana/mes/año/todas) se filtra en la UI. v1.0.9.
      */
     fun recentlyAddedSongs(): List<Song> =
-        _library.value.songs.sortedByDescending { it.dateAddedSec }
+        visibleSongs().sortedByDescending { it.dateAddedSec }
 
     /**
      * Guarda la Playlist del día como permanente: crea una copia ESTÁTICA
