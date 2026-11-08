@@ -77,6 +77,9 @@ class MusicService : MediaSessionService() {
                 /* handleAudioFocus = */ true // gestiona automáticamente el foco de audio
             )
             .setWakeMode(C.WAKE_MODE_NETWORK) // permite seguir reproduciendo con pantalla apagada
+            // v1.0.9: al desconectar los audífonos (cable o Bluetooth) la música
+            // se pausa sola (Android avisa con AUDIO_BECOMING_NOISY).
+            .setHandleAudioBecomingNoisy(true)
             .build()
 
         // Ecualizador y normalización atados a la sesión de audio
