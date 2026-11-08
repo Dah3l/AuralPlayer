@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +53,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -111,7 +113,10 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Timer
@@ -151,7 +156,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.material.icons.rounded.Search
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.pager.HorizontalPager
@@ -301,7 +305,7 @@ fun NowPlayingScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Cerrar",
+                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Cerrar",
                         tint = MaterialTheme.colorScheme.onSurface)
                 }
                 Spacer(Modifier.weight(1f))
@@ -886,8 +890,7 @@ private fun NowPlayingMenu(
     var showPlaylists by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showTimer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showSpeed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var showLrcPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var showLyricsSearch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showLyricsPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCoverPicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showEditMetadata by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -989,29 +992,17 @@ private fun NowPlayingMenu(
             onClick = { onDismiss(); showEditMetadata = true }
         )
         DropdownMenuItem(
-            text = { Text(if (hasLrc) "Ver letra" else "Agregar letra") },
+            text = { Text("Agregar letra") },
             leadingIcon = { Icon(Icons.Rounded.MusicNote, null) },
             onClick = {
                 onDismiss()
-                if (hasLrc) {
-                    onShowLyrics()
-                } else {
-                    showLrcPicker = true
-                    lrcLoading = true
-                    scope.launch {
-                        lrcFiles = viewModel.scanLrcFiles()
-                        lrcLoading = false
-                    }
-                }
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("Buscar letra en línea") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            onClick = {
-                onDismiss()
                 lyricsSearchError = null
-                showLyricsSearch = true
+                showLyricsPicker = true
+                lrcLoading = true
+                scope.launch {
+                    lrcFiles = viewModel.scanLrcFiles()
+                    lrcLoading = false
+                }
             }
         )
         DropdownMenuItem(
@@ -1265,14 +1256,16 @@ private fun NowPlayingMenu(
         )
     }
 
-    // Diálogo buscar letra en línea
-    if (showLyricsSearch) {
-        com.aural.player.ui.components.LyricsSearchDialog(
+    // Diálogo unificado para agregar letra: en línea primero, local después.
+    if (showLyricsPicker) {
+        LyricsPickerDialog(
             initialTrack = effectiveSong?.title ?: "",
             initialArtist = effectiveSong?.artist ?: "",
             isSearching = isSearchingLyrics,
             errorMessage = lyricsSearchError,
-            onDismiss = { showLyricsSearch = false },
+            lrcFiles = lrcFiles,
+            lrcLoading = lrcLoading,
+            onDismiss = { showLyricsPicker = false },
             onSearch = { track, artist ->
                 isSearchingLyrics = true
                 lyricsSearchError = null
@@ -1282,25 +1275,16 @@ private fun NowPlayingMenu(
                     } ?: false
                     isSearchingLyrics = false
                     if (found) {
-                        showLyricsSearch = false
+                        showLyricsPicker = false
                         onShowLyrics()
                     } else {
                         lyricsSearchError = "No se encontró la letra. Prueba con otro nombre."
                     }
                 }
-            }
-        )
-    }
-
-    // Diálogo selector de .lrc
-    if (showLrcPicker) {
-        com.aural.player.ui.components.LrcPickerDialog(
-            lrcFiles = lrcFiles,
-            isLoading = lrcLoading,
-            onDismiss = { showLrcPicker = false },
-            onSelect = { lrcPath ->
+            },
+            onSelectLrc = { lrcPath ->
                 song?.let { viewModel.setLrcForSong(it.id, lrcPath) }
-                showLrcPicker = false
+                showLyricsPicker = false
             }
         )
     }
@@ -1443,6 +1427,158 @@ private fun ShareRow(
             )
         }
     }
+}
+
+/**
+ * Diálogo unificado para agregar letra (v1.0.9): en el menú del reproductor
+ * queda una sola opción "Agregar letra" y aquí salen las dos vías juntas:
+ * primero buscar en línea y después elegir un .lrc del teléfono.
+ */
+@Composable
+private fun LyricsPickerDialog(
+    initialTrack: String,
+    initialArtist: String,
+    isSearching: Boolean,
+    errorMessage: String?,
+    lrcFiles: List<Pair<String, String>>,
+    lrcLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSearch: (track: String, artist: String) -> Unit,
+    onSelectLrc: (String) -> Unit
+) {
+    var track by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(initialTrack) }
+    var artist by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(initialArtist.takeUnless { it == "Artista misterioso" } ?: "")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Agregar letra") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+            ) {
+                // 1) En línea
+                Text(
+                    text = "En línea",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = track,
+                    onValueChange = { track = it },
+                    label = { Text("Canción") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSearching
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = artist,
+                    onValueChange = { artist = it },
+                    label = { Text("Artista") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSearching
+                )
+                Spacer(Modifier.height(8.dp))
+                if (isSearching) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                } else {
+                    Button(
+                        onClick = { onSearch(track.trim(), artist.trim()) },
+                        enabled = track.isNotBlank() && artist.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Buscar en línea")
+                    }
+                }
+                errorMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
+                // 2) En el teléfono
+                Text(
+                    text = "En el teléfono",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(8.dp))
+                if (lrcLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (lrcFiles.isEmpty()) {
+                    Text(
+                        "No se encontraron archivos .lrc en el dispositivo. " +
+                        "Coloca el archivo .lrc en tu carpeta de música.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "${lrcFiles.size} archivos encontrados",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(lrcFiles) { (name, path) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelectLrc(path) }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.MusicNote,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSearching) { Text("Cancelar") }
+        }
+    )
 }
 
 
