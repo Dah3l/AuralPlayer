@@ -42,8 +42,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.lerp
 import kotlin.math.abs
 import kotlin.math.pow
+import java.io.File
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import com.aural.player.data.LrcParser
 import com.aural.player.data.Song
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -68,8 +70,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,6 +84,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
@@ -106,12 +111,15 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Edit
 import com.aural.player.ui.components.CoverPickerDialog
 import com.aural.player.ui.components.EditMetadataDialog
@@ -912,6 +920,39 @@ private fun NowPlayingMenu(
         pendingDeleteId = null
     }
 
+    // v1.0.9: hoja única de compartir + hoja de la Aural Card.
+    var showShareSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showCardSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var cardLines by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<String>>(emptyList()) }
+    var cardLinkDefaultOn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Abre la hoja de la Aural Card: lee y parsea la letra (.lrc) de la canción.
+    // `withLink` = la tarjeta acompaña al Aural link (su interruptor nace encendido).
+    val openCardSheet: (Boolean) -> Unit = { withLink ->
+        val s = song
+        if (s == null) {
+            android.widget.Toast.makeText(context, "Sin canción", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            scope.launch {
+                val lines = withContext(Dispatchers.IO) {
+                    try {
+                        val path = lrcMap[s.id] ?: return@withContext emptyList<String>()
+                        LrcParser.parse(File(path).readText()).map { it.text }.filter { it.isNotBlank() }
+                    } catch (e: Exception) {
+                        emptyList<String>()
+                    }
+                }
+                if (lines.isEmpty()) {
+                    android.widget.Toast.makeText(context, "No se pudo leer la letra", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    cardLines = lines
+                    cardLinkDefaultOn = withLink
+                    showCardSheet = true
+                }
+            }
+        }
+    }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
@@ -976,35 +1017,7 @@ private fun NowPlayingMenu(
         DropdownMenuItem(
             text = { Text("Compartir") },
             leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = {
-                onDismiss()
-                song?.let {
-                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "audio/*"
-                        putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(it.uri))
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(
-                        android.content.Intent.createChooser(shareIntent, "Compartir canción")
-                    )
-                }
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("Compartir Aural link") },
-            leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = {
-                onDismiss()
-                song?.let {
-                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_TEXT, com.aural.player.AuralLink.shareText(it, customMetadata[it.id]))
-                    }
-                    context.startActivity(
-                        android.content.Intent.createChooser(shareIntent, "Compartir Aural link")
-                    )
-                }
-            }
+            onClick = { onDismiss(); showShareSheet = true }
         )
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
@@ -1027,6 +1040,59 @@ private fun NowPlayingMenu(
                     showDeleteConfirm = true
                 }
             }
+        )
+    }
+
+    // v1.0.9: hoja única de compartir (archivo / Aural link / Aural Card).
+    if (showShareSheet && song != null) {
+        ShareSheet(
+            title = effectiveSong?.title ?: song.title,
+            artist = effectiveSong?.artist ?: song.artist,
+            coverUri = customCovers[song.id] ?: song.albumArtUri,
+            hasLrc = hasLrc,
+            onShareFile = {
+                showShareSheet = false
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "audio/*"
+                    putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(song.uri))
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(
+                    android.content.Intent.createChooser(shareIntent, "Compartir canción")
+                )
+            },
+            onShareLink = { withCard ->
+                showShareSheet = false
+                if (withCard) {
+                    openCardSheet(true)
+                } else {
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, com.aural.player.AuralLink.shareText(effectiveSong ?: song, customMetadata[song.id]))
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(shareIntent, "Compartir Aural link")
+                    )
+                }
+            },
+            onShareCard = {
+                showShareSheet = false
+                openCardSheet(false)
+            },
+            onDismiss = { showShareSheet = false }
+        )
+    }
+
+    // Hoja de la Aural Card (se abre desde el panel de compartir).
+    if (showCardSheet && song != null) {
+        LyricCardSheet(
+            title = effectiveSong?.title ?: song.title,
+            artist = effectiveSong?.artist ?: song.artist,
+            coverUri = customCovers[song.id] ?: song.albumArtUri,
+            lines = cardLines,
+            onDismiss = { showCardSheet = false },
+            linkText = com.aural.player.AuralLink.shareText(effectiveSong ?: song, customMetadata[song.id]),
+            linkDefaultOn = cardLinkDefaultOn
         )
     }
 
@@ -1237,6 +1303,145 @@ private fun NowPlayingMenu(
                 showLrcPicker = false
             }
         )
+    }
+}
+
+/**
+ * Hoja única de compartir (v1.0.9): el menú del reproductor tiene una sola
+ * opción "Compartir" y aquí salen las tres formas: archivo, Aural link y
+ * Aural Card. El link y la card se pueden combinar: el link con su
+ * interruptor abre la tarjeta (imagen + enlace en un solo envío), y la
+ * tarjeta lleva su propio interruptor para añadir el link.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShareSheet(
+    title: String,
+    artist: String,
+    coverUri: String?,
+    hasLrc: Boolean,
+    onShareFile: () -> Unit,
+    onShareLink: (withCard: Boolean) -> Unit,
+    onShareCard: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var linkWithCard by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        ) {
+            // Cabecera: portada + título + artista de la canción
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CoverArt(uri = coverUri, size = 56.dp, cornerRadius = 12.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            // Compartir el archivo de audio
+            ShareRow(
+                icon = Icons.Rounded.Audiotrack,
+                title = "Compartir archivo",
+                subtitle = "Envía el archivo de audio",
+                onClick = onShareFile
+            )
+            // Compartir el Aural link, solo o con la tarjeta
+            ShareRow(
+                icon = Icons.Rounded.Link,
+                title = "Compartir Aural link",
+                subtitle = "Un enlace que abre la canción en AuralPlayer",
+                onClick = { onShareLink(linkWithCard) }
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 52.dp, top = 2.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Con Aural Card",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (hasLrc) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = linkWithCard,
+                    onCheckedChange = { linkWithCard = it },
+                    enabled = hasLrc
+                )
+            }
+            // Compartir la Aural Card (tarjeta con la letra)
+            ShareRow(
+                icon = Icons.Rounded.Image,
+                title = "Compartir Aural Card",
+                subtitle = if (hasLrc) "Una imagen con la letra y la marca Aural"
+                else "Añade una letra para crear la tarjeta",
+                enabled = hasLrc,
+                onClick = onShareCard
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/** Una fila del panel de compartir: icono + título + subtítulo. */
+@Composable
+private fun ShareRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onClick() }
+            .padding(vertical = 12.dp)
+            .alpha(if (enabled) 1f else 0.4f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
