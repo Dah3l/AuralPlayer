@@ -59,9 +59,11 @@
   var deep = 'aural://song?t=' + encodeURIComponent(t) + '&a=' + encodeURIComponent(a);
   // El botón usa intent:// (el mecanismo nativo de Chrome para abrir apps):
   // si AuralPlayer está instalada, abre directo; si no, vuelve a esta página.
+  // NOTA: package apunta al DEBUG (com.aural.player.debug) mientras se prueba;
+  // en la release hay que cambiarlo a com.aural.player.
   var fallback = encodeURIComponent(location.href.split('#')[0]);
   var intentUrl = 'intent://song?t=' + encodeURIComponent(t) + '&a=' + encodeURIComponent(a) +
-    '#Intent;scheme=aural;S.browser_fallback_url=' + fallback + ';end';
+    '#Intent;scheme=aural;package=com.aural.player.debug;S.browser_fallback_url=' + fallback + ';end';
   document.getElementById('openBtn').href = intentUrl;
   // Intento silencioso de abrir la app: si no está instalada, la página
   // queda visible con los botones de descarga (el iframe no navega fuera).
