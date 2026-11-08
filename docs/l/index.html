@@ -57,7 +57,12 @@
   if (t) document.getElementById('songTitle').textContent = '\uD83C\uDFB5 ' + t;
   if (a) document.getElementById('songArtist').textContent = a;
   var deep = 'aural://song?t=' + encodeURIComponent(t) + '&a=' + encodeURIComponent(a);
-  document.getElementById('openBtn').href = deep;
+  // El botón usa intent:// (el mecanismo nativo de Chrome para abrir apps):
+  // si AuralPlayer está instalada, abre directo; si no, vuelve a esta página.
+  var fallback = encodeURIComponent(location.href.split('#')[0]);
+  var intentUrl = 'intent://song?t=' + encodeURIComponent(t) + '&a=' + encodeURIComponent(a) +
+    '#Intent;scheme=aural;S.browser_fallback_url=' + fallback + ';end';
+  document.getElementById('openBtn').href = intentUrl;
   // Intento silencioso de abrir la app: si no está instalada, la página
   // queda visible con los botones de descarga (el iframe no navega fuera).
   setTimeout(function () {
