@@ -50,6 +50,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -383,8 +384,9 @@ private suspend fun captureLyricCard(
     }
 }
 
-/** Guarda el PNG en caché y lo comparte con la hoja del sistema. */
-private suspend fun shareBitmap(context: Context, bitmap: Bitmap) {
+/** Guarda el PNG en caché y lo comparte con la hoja del sistema. Si se pasa
+ *  `extraText`, se adjunta como texto del envío (p. ej. el Aural link). */
+private suspend fun shareBitmap(context: Context, bitmap: Bitmap, extraText: String? = null) {
     val file = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "lyric_cards").apply { mkdirs() }
         val out = File(dir, "aural-lyric.png")
@@ -399,6 +401,7 @@ private suspend fun shareBitmap(context: Context, bitmap: Bitmap) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
+        if (extraText != null) putExtra(Intent.EXTRA_TEXT, extraText)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Compartir letra"))
@@ -466,7 +469,11 @@ fun LyricCardSheet(
     artist: String,
     coverUri: String?,
     lines: List<String>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Texto del Aural link: si se pasa, se ofrece añadirlo al compartir la tarjeta. */
+    linkText: String? = null,
+    /** Si es true, el interruptor de añadir el link nace encendido. */
+    linkDefaultOn: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -477,6 +484,7 @@ fun LyricCardSheet(
     var bgChoice by remember { mutableStateOf<CardBackground>(CardBackground.Auto) }
     var sharing by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var addLink by remember { mutableStateOf(linkDefaultOn) }
     var pendingSaveBitmap by remember { mutableStateOf<Bitmap?>(null) }
     // En Android 9 y anteriores, guardar en la galería exige permiso:
     // si se concede, se guarda el PNG que quedó pendiente
@@ -639,6 +647,21 @@ fun LyricCardSheet(
                     }
                     Spacer(Modifier.height(16.dp))
                 }
+                // Añadir el Aural link al compartir la tarjeta (imagen + enlace)
+                if (linkText != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Añadir Aural link",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(checked = addLink, onCheckedChange = { addLink = it })
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.OutlinedButton(
                         onClick = { step = 0 },
@@ -661,7 +684,10 @@ fun LyricCardSheet(
                                         background = background,
                                         lineFontSize = cardFont
                                     )
-                                    shareBitmap(context, bitmap)
+                                    shareBitmap(
+                                        context, bitmap,
+                                        extraText = if (addLink) linkText else null
+                                    )
                                 } catch (e: Exception) {
                                 } finally {
                                     sharing = false
