@@ -998,7 +998,7 @@ private fun NowPlayingMenu(
                 song?.let {
                     val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_TEXT, com.aural.player.AuralLink.shareText(it))
+                        putExtra(android.content.Intent.EXTRA_TEXT, com.aural.player.AuralLink.shareText(it, customMetadata[it.id]))
                     }
                     context.startActivity(
                         android.content.Intent.createChooser(shareIntent, "Compartir Aural link")
