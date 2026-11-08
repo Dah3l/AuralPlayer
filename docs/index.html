@@ -4,50 +4,115 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AuralPlayer — Tu música, en colores</title>
+<meta name="description" content="AuralPlayer: tu música, en colores. Gratis, sin anuncios, sin cuentas. Descárgala para Android.">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #121212;
-    color: #f5f5f5;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+  :root { --teal: #2ED3B7; --bg: #121212; --card: #1c1c1c; --line: #2a2a2a; --txt: #f5f5f5; --mut: #9a9a9a; }
+  body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
+  a { color: var(--teal); text-decoration: none; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 18px 0; display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; }
+  .bars { display: flex; gap: 3px; align-items: flex-end; height: 22px; }
+  .bars span { width: 4px; background: var(--teal); border-radius: 2px; }
+  .bars span:nth-child(1) { height: 11px; }
+  .bars span:nth-child(2) { height: 22px; }
+  .bars span:nth-child(3) { height: 15px; }
+  nav a { color: var(--mut); margin-left: 18px; font-size: 15px; }
+  nav a:hover { color: var(--txt); }
+  .hero { text-align: center; padding: 64px 0 56px; }
+  .hero .bars { height: 56px; gap: 6px; justify-content: center; margin-bottom: 22px; }
+  .hero .bars span { width: 8px; }
+  .hero .bars span:nth-child(1) { height: 28px; }
+  .hero .bars span:nth-child(2) { height: 56px; }
+  .hero .bars span:nth-child(3) { height: 38px; }
+  h1 { font-size: 44px; line-height: 1.1; margin-bottom: 12px; }
+  .tagline { font-size: 20px; color: var(--teal); font-weight: 700; margin-bottom: 10px; }
+  .sub { color: var(--mut); font-size: 17px; max-width: 560px; margin: 0 auto 28px; }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; }
+  .btn.primary { background: var(--teal); color: #06231d; }
+  .btn.ghost { background: var(--card); color: var(--txt); border: 1px solid var(--line); }
+  .note { color: var(--mut); font-size: 13px; margin-top: 16px; }
+  section { padding: 40px 0; }
+  h2 { font-size: 26px; margin-bottom: 8px; text-align: center; }
+  .sec-sub { color: var(--mut); text-align: center; margin-bottom: 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
+  .card .ico { font-size: 30px; margin-bottom: 10px; }
+  .card h3 { font-size: 18px; margin-bottom: 6px; }
+  .card p { color: var(--mut); font-size: 15px; }
+  .link-banner { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; text-align: center; }
+  .link-banner h3 { font-size: 21px; margin-bottom: 6px; }
+  .link-banner p { color: var(--mut); max-width: 560px; margin: 0 auto; }
+  .dl { text-align: center; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
+  footer .links a { margin: 0 10px; }
+  footer p { margin-top: 12px; }
+  @media (max-width: 600px) {
+    h1 { font-size: 34px; }
+    .hero { padding: 44px 0 40px; }
+    nav a { margin-left: 12px; }
   }
-  main { max-width: 420px; width: 100%; text-align: center; }
-  .bars { display: flex; gap: 5px; justify-content: center; align-items: flex-end; height: 44px; margin-bottom: 20px; }
-  .bars span { width: 7px; background: #2ED3B7; border-radius: 4px; }
-  .bars span:nth-child(1) { height: 22px; }
-  .bars span:nth-child(2) { height: 44px; }
-  .bars span:nth-child(3) { height: 30px; }
-  h1 { font-size: 28px; margin-bottom: 8px; }
-  .tagline { color: #9a9a9a; font-size: 16px; margin-bottom: 28px; }
-  .btn {
-    display: block;
-    width: 100%;
-    padding: 15px;
-    border-radius: 14px;
-    font-size: 16px;
-    font-weight: 700;
-    text-decoration: none;
-    margin-bottom: 12px;
-  }
-  .btn.primary { background: #2ED3B7; color: #06231d; }
-  .btn.ghost { background: #1c1c1c; color: #f5f5f5; border: 1px solid #2a2a2a; }
-  .foot { color: #666; font-size: 13px; margin-top: 24px; }
-  .foot a { color: #2ED3B7; text-decoration: none; }
 </style>
 </head>
 <body>
-<main>
-  <div class="bars"><span></span><span></span><span></span></div>
-  <h1>AuralPlayer</h1>
-  <p class="tagline">Tu música, en colores. Gratis, sin anuncios, sin cuentas.</p>
-  <a class="btn primary" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
-  <a class="btn ghost" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
-  <p class="foot">Código abierto en <a href="https://github.com/Dah3l/AuralPlayer">GitHub</a></p>
-</main>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="bars"><span></span><span></span><span></span></span> AuralPlayer</div>
+    <nav><a href="#funciones">Funciones</a><a href="#descargar">Descargar</a><a href="#contacto">Contacto</a></nav>
+  </header>
+
+  <div class="hero">
+    <div class="bars"><span></span><span></span><span></span></div>
+    <h1>AuralPlayer</h1>
+    <p class="tagline">Tu música, en colores.</p>
+    <p class="sub">Tu reproductor para Android: gratis, sin anuncios y sin cuentas. Tu biblioteca, tus playlists y tus colores.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
+      <a class="btn ghost" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
+    </div>
+    <p class="note">Android 8.0 o superior · Gratis · Sin anuncios · Sin cuentas</p>
+  </div>
+
+  <section id="funciones">
+    <h2>Hecha para vivir la música</h2>
+    <p class="sec-sub">Todo lo que necesitas, nada de lo que sobra.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">✨</div><h3>Dynamic Aural</h3><p>Tu música flota en una isla siempre a la vista: pausa, cambia y marca favoritas sin abrir la app.</p></div>
+      <div class="card"><div class="ico">🎨</div><h3>El color de tu música</h3><p>El reproductor se tiñe con los colores reales de cada portada, canción a canción.</p></div>
+      <div class="card"><div class="ico">🎤</div><h3>Letras en pantalla</h3><p>Canta con la letra de cada canción, con su ventana dedicada y desplazamiento suave.</p></div>
+      <div class="card"><div class="ico">🌸</div><h3>18 temas</h3><p>Del Bosque a Sakura: cambia el color de toda la app con un toque. Hay uno para cada ánimo.</p></div>
+      <div class="card"><div class="ico">⬇️</div><h3>Descargas</h3><p>Busca canciones y bájalas sin salir de la app, listas para escuchar sin conexión.</p></div>
+      <div class="card"><div class="ico">🔗</div><h3>Aural link</h3><p>Comparte cualquier canción con un solo enlace: quien lo abre la tiene lista para descargar.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="link-banner">
+      <h3>¿Te pasaron un Aural link? 🎵</h3>
+      <p>Ábrelo y la canción te espera en Descargas, lista para bajarla. Y si todavía no tienes la app, el mismo enlace te lleva a descargarla.</p>
+    </div>
+  </section>
+
+  <section class="dl" id="descargar">
+    <h2>Descarga AuralPlayer</h2>
+    <p class="sec-sub">Gratis, para siempre.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
+      <a class="btn ghost" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
+    </div>
+  </section>
+
+  <footer id="contacto">
+    <div class="links">
+      <a href="https://wa.me/5359648522">WhatsApp</a>
+      <a href="mailto:auralplayeroficial@gmail.com">Correo</a>
+      <a href="https://instagram.com/auralplayer">Instagram</a>
+      <a href="https://github.com/Dah3l/AuralPlayer">GitHub</a>
+    </div>
+    <p>Hecho con cariño en Cuba 🇨🇺 · AuralPlayer es gratis y de código abierto.</p>
+  </footer>
+</div>
 </body>
 </html>
