@@ -12,6 +12,10 @@ en GitHub salen de aquí.
 - **Eliminar canciones** — ahora puedes borrar canciones de verdad: desde el menú ⋮ del reproductor ("Eliminar canción") o con el nuevo botón "Eliminar" de la selección múltiple. La app te pide confirmar y en Android 10+ el sistema también lo confirma; el archivo se borra del dispositivo y la canción desaparece de favoritos, playlists y la cola (si estaba sonando, pasa a la siguiente).
 - **Compartir, en un solo panel** — el menú del reproductor se acortó: una sola opción "Compartir" abre un panel con la portada, el título y el artista, y tres formas de compartir: el archivo de audio, el Aural link y la Aural Card. El link y la tarjeta se pueden combinar: el link puede salir con la tarjeta (imagen + enlace en un solo envío) y al crear la tarjeta se puede añadir el Aural link.
 - **Pausa al quitar los audífonos** — si se desconectan los audífonos, con cable o Bluetooth, la música se pausa sola.
+- **Carpetas ocultas en todo** — esconder una carpeta ahora la saca de todas partes: Recientes, Favoritas, la Playlist del día, las playlists y la selección múltiple. Antes Recientes (y las demás listas) seguían mostrando esas canciones.
+- **Recientes primero y con reloj** — en la pestaña Playlists, "Agregadas recientemente" ahora va antes de la Playlist del día, y su icono de la derecha es un reloj que abre la lista.
+- **Letras en un solo modal** — el menú del reproductor queda con una sola opción, "Agregar letra": el modal trae primero la búsqueda en línea y después los archivos .lrc del teléfono.
+- **Cerrar con flecha** — el botón para cerrar el reproductor ya no es una X, es una flecha hacia abajo.
 - **Arreglos** — "Agregar canciones" en una playlist recién creada (vacía) no abría el selector: el botón no hacía nada. Ahora abre el picker y se pueden agregar canciones desde el primer momento. El botón "Todas" de la selección múltiple se mudó a la barra de arriba, junto al conteo, para que la barra de abajo no se apriete con el botón "Eliminar". El WhatsApp del desarrollador y el número para confirmar donaciones ahora es el +53 59648522.
 
 ## v1.0.8 — 2026-11-04
