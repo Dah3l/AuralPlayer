@@ -10,31 +10,39 @@ object AuralLink {
     const val SCHEME = "aural"
     const val HOST = "song"
 
+    /** Título efectivo: el editado por el usuario si existe, si no el original. */
+    fun effectiveTitle(song: Song, meta: Triple<String, String, String>?): String =
+        meta?.first?.ifBlank { song.title } ?: song.title
+
+    /** Artista efectivo: el editado por el usuario si existe, si no el original. */
+    fun effectiveArtist(song: Song, meta: Triple<String, String, String>?): String =
+        meta?.second?.ifBlank { song.artist } ?: song.artist
+
     /** Enlace web para compartir: lleva título y artista en la propia URL. */
-    fun buildWebLink(song: Song): String {
-        val title = Uri.encode(song.title)
-        val artist = Uri.encode(displayArtist(song))
+    fun buildWebLink(song: Song, meta: Triple<String, String, String>? = null): String {
+        val title = Uri.encode(effectiveTitle(song, meta))
+        val artist = Uri.encode(displayArtist(effectiveArtist(song, meta)))
         return "$WEB_BASE?t=$title&a=$artist"
     }
 
     /** Enlace directo a la app (lo usa la página de aterrizaje). */
-    fun buildDeepLink(song: Song): String {
-        val title = Uri.encode(song.title)
-        val artist = Uri.encode(displayArtist(song))
+    fun buildDeepLink(song: Song, meta: Triple<String, String, String>? = null): String {
+        val title = Uri.encode(effectiveTitle(song, meta))
+        val artist = Uri.encode(displayArtist(effectiveArtist(song, meta)))
         return "$SCHEME://$HOST?t=$title&a=$artist"
     }
 
     /** Artista para el link: vacío si es desconocido. */
-    fun displayArtist(song: Song): String {
-        val a = song.artist.trim()
+    fun displayArtist(artist: String): String {
+        val a = artist.trim()
         return if (a.isEmpty() || a == "Artista misterioso") "" else a
     }
 
     /** Texto para compartir por WhatsApp y demás. */
-    fun shareText(song: Song): String {
-        val artist = displayArtist(song)
+    fun shareText(song: Song, meta: Triple<String, String, String>? = null): String {
+        val artist = displayArtist(effectiveArtist(song, meta))
         val who = if (artist.isEmpty()) "" else " de $artist"
-        return "🎵 \"${song.title}\"$who — escúchala en AuralPlayer: ${buildWebLink(song)}"
+        return "🎵 \"${effectiveTitle(song, meta)}\"$who — escúchala en AuralPlayer: ${buildWebLink(song, meta)}"
     }
 
     /**
