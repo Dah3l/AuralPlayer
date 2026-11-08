@@ -49,6 +49,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.aural.player.data.LrcParser
 import com.aural.player.data.Song
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
