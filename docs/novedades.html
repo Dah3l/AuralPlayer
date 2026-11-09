@@ -27,6 +27,7 @@
   nav a:hover { color: var(--txt); }
   nav a.active { color: var(--teal); font-weight: 700; }
   .head-cta { padding: 9px 18px; font-size: 14px; border-radius: 10px; flex: none; }
+  .menu-btn { display: none; }
   .btn { display: inline-block; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; }
   .btn.primary { background: var(--teal); color: #06231d; }
   .hero { padding: 48px 0 8px; }
@@ -49,7 +50,11 @@
   footer a { color: var(--mut); }
   footer a:hover { color: var(--teal); }
   @media (max-width: 700px) {
+    .menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--txt); font-size: 20px; cursor: pointer; }
     nav { display: none; }
+    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; width: auto; margin: 0; padding: 6px 20px 14px; background: rgba(18,18,18,.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    header.menu-open nav a { width: 100%; padding: 12px 0; font-size: 16px; border-top: 1px solid var(--line); }
+    header.menu-open nav a:first-child { border-top: none; }
     .ver { padding: 20px; }
   }
 </style>
@@ -65,6 +70,7 @@
       <a href="index.html#contacto">Contacto</a>
       <a href="novedades.html" class="active">Novedades</a>
     </nav>
+    <button class="menu-btn" id="menuBtn" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <a class="btn primary head-cta" href="index.html#inicio">Descargar</a>
   </div>
 </header>
@@ -144,6 +150,25 @@
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(render)
     .catch(fallback);
+})();
+</script>
+<script>
+// Menú hamburguesa en móvil.
+(function () {
+  var menuBtn = document.getElementById('menuBtn');
+  var headerEl = document.querySelector('header');
+  if (!menuBtn) return;
+  menuBtn.addEventListener('click', function () {
+    var open = headerEl.classList.toggle('menu-open');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuBtn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+  });
+  document.querySelectorAll('nav a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      headerEl.classList.remove('menu-open');
+      menuBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
 })();
 </script>
 </body>
