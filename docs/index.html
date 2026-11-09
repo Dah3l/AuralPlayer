@@ -44,22 +44,26 @@
   nav a:hover { color: var(--txt); }
   nav a.active { color: var(--teal); font-weight: 700; }
   .head-cta { padding: 9px 18px; font-size: 14px; border-radius: 10px; flex: none; }
-  .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 56px 0 64px; scroll-margin-top: 84px; }
+  .menu-btn { display: none; }
+  .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 72px 0 88px; scroll-margin-top: 84px; position: relative; }
+  .hero::before { content: ""; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 680px; max-width: 100%; height: 480px; background: radial-gradient(closest-side, rgba(46,211,183,.20), transparent); pointer-events: none; }
   .hero-logo { width: 56px; height: 56px; border-radius: 14px; margin-bottom: 16px; }
   .hero h1 { font-size: clamp(34px, 6vw, 46px); line-height: 1.08; margin-bottom: 12px; }
   .tagline { font-size: clamp(18px, 2.5vw, 21px); color: var(--teal); font-weight: 700; margin-bottom: 12px; }
   .sub { color: var(--mut); font-size: 17px; max-width: 520px; margin-bottom: 24px; }
   .btns { display: flex; gap: 12px; flex-wrap: wrap; }
-  .btn { display: inline-block; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; }
+  .btn { display: inline-block; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
   .btn.primary { background: var(--teal); color: #06231d; }
+  .btn.primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 28px rgba(46,211,183,.35); }
   .btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); }
-  .btn.ghost:hover { border-color: var(--teal); }
+  .btn.ghost:hover { transform: translateY(-2px); border-color: var(--teal); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
   .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--txt); }
   .proof { color: var(--mut); font-size: 14px; margin-top: 16px; }
   .proof b { color: var(--txt); }
   .proof .star { color: var(--teal); }
-  .phone { width: 250px; margin: 0 auto; background: #0a0a0a; border: 1px solid var(--line); border-radius: 36px; padding: 14px 14px 20px; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+  .phone { position: relative; width: 250px; margin: 0 auto; background: #0a0a0a; border: 1px solid var(--line); border-radius: 36px; padding: 14px 14px 20px; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+  .phone::before { content: ""; position: absolute; inset: -60px -80px; background: radial-gradient(closest-side, rgba(46,211,183,.20), transparent); filter: blur(10px); z-index: -1; pointer-events: none; }
   .phone .screen { background: #181818; border-radius: 26px; padding: 20px 16px; text-align: center; }
   .phone .cover { width: 150px; height: 150px; margin: 6px auto 14px; border-radius: 16px; background: #181818; display: flex; align-items: center; justify-content: center; }
   .phone .cover img { width: 110px; height: 110px; }
@@ -70,11 +74,11 @@
   .phone .ctrl { display: flex; justify-content: center; align-items: center; gap: 18px; }
   .phone .ctrl span { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #262626; font-size: 14px; }
   .phone .ctrl span.play { width: 48px; height: 48px; background: var(--teal); color: #06231d; font-size: 18px; }
-  section { padding: 48px 0; scroll-margin-top: 84px; }
+  section { padding: 72px 0; scroll-margin-top: 84px; }
   h2 { font-size: clamp(24px, 3.5vw, 27px); margin-bottom: 8px; text-align: center; }
   .sec-sub { color: var(--mut); text-align: center; margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; transition: transform .2s ease, border-color .2s ease; }
+  .card { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 22px; transition: transform .2s ease, border-color .2s ease; }
   .card:hover { transform: translateY(-3px); border-color: var(--teal); }
   .card .ico { width: 44px; height: 44px; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
   .card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -87,7 +91,7 @@
   .stars { color: #F59E0B; font-size: 17px; letter-spacing: 2px; margin-bottom: 10px; }
   .review p { color: var(--txt); }
   .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; text-align: center; }
+  .shot { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 18px; text-align: center; }
   .shot .mini { height: 190px; background: #0a0a0a; border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
   .shot img { width: 100%; height: 190px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; display: block; }
   .shot h3 { font-size: 16px; margin-bottom: 4px; }
@@ -99,7 +103,7 @@
   .faq summary { font-weight: 700; font-size: 16px; cursor: pointer; }
   .faq p { color: var(--mut); font-size: 15px; margin-top: 8px; }
   .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .contact-card { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; color: var(--txt); min-height: 76px; transition: transform .2s ease, border-color .2s ease; }
+  .contact-card { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 18px 20px; color: var(--txt); min-height: 76px; transition: transform .2s ease, border-color .2s ease; }
   .contact-card:hover { transform: translateY(-3px); border-color: var(--teal); }
   .contact-card .ico { width: 44px; height: 44px; flex: none; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; }
   .contact-card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -111,7 +115,24 @@
   footer p:first-child { margin-top: 0; }
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .reveal.visible { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+  .phone-wrap { position: relative; }
+  .island { position: absolute; top: -24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 7px 16px 7px 9px; box-shadow: 0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(46,211,183,.20); z-index: 2; white-space: nowrap; }
+  .island img { width: 26px; height: 26px; border-radius: 50%; }
+  .island-song { font-size: 13px; font-weight: 700; }
+  .eq { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+  .eq i { width: 3px; border-radius: 2px; background: var(--teal); transform-origin: bottom; animation: eq 1s ease-in-out infinite; }
+  .eq i:nth-child(1) { height: 60%; animation-delay: 0s; }
+  .eq i:nth-child(2) { height: 100%; animation-delay: .18s; }
+  .eq i:nth-child(3) { height: 45%; animation-delay: .36s; }
+  .eq i:nth-child(4) { height: 80%; animation-delay: .54s; }
+  @keyframes eq { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+  .theme-dots { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .theme-dots button { width: 26px; height: 26px; border-radius: 50%; background: var(--c); border: 2px solid transparent; cursor: pointer; padding: 0; transition: transform .15s ease, box-shadow .15s ease; }
+  .theme-dots button:hover { transform: scale(1.18); }
+  .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
+  .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
+  .theme-name b { color: var(--txt); }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
     .hero-logo { margin-left: auto; margin-right: auto; }
@@ -120,13 +141,17 @@
     .phone { margin-top: 8px; }
   }
   @media (max-width: 700px) {
-    section { padding: 36px 0; }
+    section { padding: 52px 0; }
     section, .hero { scroll-margin-top: 120px; }
-    .head-in { flex-wrap: wrap; row-gap: 10px; }
-    nav { width: 100%; justify-content: center; flex-wrap: wrap; gap: 4px 16px; order: 3; }
-    .head-cta { margin-left: auto; }
+    .menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--txt); font-size: 20px; cursor: pointer; }
+    .head-cta { margin-left: 0; }
+    nav { display: none; }
+    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; width: auto; margin: 0; padding: 6px 20px 14px; background: rgba(18,18,18,.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    header.menu-open nav a { width: 100%; padding: 12px 0; font-size: 16px; border-top: 1px solid var(--line); }
+    header.menu-open nav a:first-child { border-top: none; }
     .btns { flex-direction: column; }
     .btns .btn { text-align: center; }
+    .island { top: -20px; }
   }
 </style>
 </head>
@@ -134,7 +159,8 @@
 <header>
   <div class="wrap head-in">
     <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
-    <nav><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#faq">FAQ</a><a href="#contacto">Contacto</a><a href="novedades.html">Novedades</a></nav>
+    <nav id="mainNav"><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#faq">FAQ</a><a href="#contacto">Contacto</a><a href="novedades.html">Novedades</a></nav>
+    <button class="menu-btn" id="menuBtn" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <a class="btn primary head-cta" href="#inicio">Descargar</a>
   </div>
 </header>
@@ -153,7 +179,9 @@
       <div class="chips"><span class="chip">Gratis</span><span class="chip">Sin anuncios</span><span class="chip">Sin cuentas</span></div>
       <p class="proof"><span class="star">★ 5.0</span> en Apklis · <b>200+ usuarios</b> · v1.0.9 · Actualizada el 7 de noviembre de 2026</p>
     </div>
-    <div class="phone" aria-hidden="true">
+    <div class="phone-wrap">
+      <div class="island" aria-hidden="true"><img src="favicon.svg" alt=""><span class="island-song">Tu canción favorita</span><span class="eq"><i></i><i></i><i></i><i></i></span></div>
+      <div class="phone" aria-hidden="true">
       <div class="screen">
         <div class="cover"><img src="favicon.svg" alt="AuralPlayer"></div>
         <div class="song">Tu canción favorita</div>
@@ -161,6 +189,7 @@
         <div class="bar"><i></i></div>
         <div class="ctrl"><span>⏮</span><span class="play">▶</span><span>⏭</span></div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -171,7 +200,7 @@
       <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="4"/><circle cx="8" cy="12" r="1.6" fill="#2ED3B7" stroke="none"/><path d="M12.5 10.5v3l2.5-1.5z" fill="#2ED3B7" stroke="none"/></svg></div><h3>Dynamic Aural</h3><p>Tu música flota en una isla siempre a la vista: pausa, cambia y marca favoritas sin abrir la app.</p></div>
       <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3.2"/><circle cx="16" cy="9" r="3.2"/><circle cx="12" cy="16" r="3.2"/></svg></div><h3>El color de tu música</h3><p>El reproductor se tiñe con los colores reales de cada portada, canción a canción.</p></div>
       <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4"/><path d="M8 23h8"/></svg></div><h3>Letras en pantalla</h3><p>Canta con la letra de cada canción, con su ventana dedicada y desplazamiento suave.</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4" fill="#2ED3B7" stroke="none"/><circle cx="12" cy="12" r="2.4" fill="#FF4D8D" stroke="none"/><circle cx="18" cy="12" r="2.4" fill="#4DA6FF" stroke="none"/></svg></div><h3>18 temas</h3><p>Del Bosque a Sakura: cambia el color de toda la app con un toque. Hay uno para cada ánimo.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4" fill="#2ED3B7" stroke="none"/><circle cx="12" cy="12" r="2.4" fill="#FF4D8D" stroke="none"/><circle cx="18" cy="12" r="2.4" fill="#4DA6FF" stroke="none"/></svg></div><h3>18 temas</h3><p>Del Bosque a Sakura: cambia el color de toda la app con un toque. Hay uno para cada ánimo.</p><div class="theme-dots"><button style="--c:#2ED3B7" data-c="#2ED3B7" data-n="Bosque" class="on" aria-label="Bosque"></button><button style="--c:#FF4D8D" data-c="#FF4D8D" data-n="Rosa" aria-label="Rosa"></button><button style="--c:#4DA6FF" data-c="#4DA6FF" data-n="Océano" aria-label="Océano"></button><button style="--c:#FF8C42" data-c="#FF8C42" data-n="Atardecer" aria-label="Atardecer"></button><button style="--c:#9D7BFF" data-c="#9D7BFF" data-n="Medianoche" aria-label="Medianoche"></button><button style="--c:#00F0FF" data-c="#00F0FF" data-n="Neón" aria-label="Neón"></button><button style="--c:#E63946" data-c="#E63946" data-n="Navidad" aria-label="Navidad"></button><button style="--c:#7F011F" data-c="#7F011F" data-n="Vino" aria-label="Vino"></button></div><p class="theme-name">Tema: <b id="themeName">Bosque</b> · toca un color y prueba</p></div>
       <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div><h3>Descargas</h3><p>Busca canciones y bájalas sin salir de la app, listas para escuchar sin conexión.</p></div>
       <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div><h3>Aural link</h3><p>Comparte cualquier canción con un solo enlace: quien lo abre la tiene lista para descargar.</p></div>
     </div>
@@ -280,6 +309,32 @@ document.addEventListener('DOMContentLoaded', function () {
   ['funciones', 'se-ve', 'faq', 'contacto'].forEach(function (id) {
     var s = document.getElementById(id);
     if (s) spy.observe(s);
+  });
+  // Menú hamburguesa en móvil.
+  var menuBtn = document.getElementById('menuBtn');
+  var headerEl = document.querySelector('header');
+  if (menuBtn) {
+    menuBtn.addEventListener('click', function () {
+      var open = headerEl.classList.toggle('menu-open');
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menuBtn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    });
+    document.querySelectorAll('nav a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        headerEl.classList.remove('menu-open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
+  // Temas interactivos: tocan el acento de la página en vivo.
+  var themeName = document.getElementById('themeName');
+  document.querySelectorAll('.theme-dots button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.documentElement.style.setProperty('--teal', b.getAttribute('data-c'));
+      if (themeName) themeName.textContent = b.getAttribute('data-n');
+      document.querySelectorAll('.theme-dots button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
   });
 });
 </script>
