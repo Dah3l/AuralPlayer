@@ -48,7 +48,7 @@
   .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 72px 0 88px; scroll-margin-top: 84px; position: relative; }
   .hero::before { content: ""; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 680px; max-width: 100%; height: 480px; background: radial-gradient(closest-side, rgba(46,211,183,.20), transparent); pointer-events: none; }
   .hero-logo { width: 56px; height: 56px; border-radius: 14px; margin-bottom: 16px; }
-  .hero h1 { font-size: clamp(34px, 6vw, 46px); line-height: 1.08; margin-bottom: 12px; }
+  .hero h1 { font-size: clamp(40px, 7vw, 56px); line-height: 1.08; margin-bottom: 12px; }
   .tagline { font-size: clamp(18px, 2.5vw, 21px); color: var(--teal); font-weight: 700; margin-bottom: 12px; }
   .sub { color: var(--mut); font-size: 17px; max-width: 520px; margin-bottom: 24px; }
   .btns { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -160,11 +160,12 @@
   .reveal.visible .sec-ico--msg svg { animation: tada 1s ease both; }
   .splash { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .splash-bg { position: absolute; inset: 0; background: var(--bg); transition: opacity .6s ease; }
-  .splash-word { position: relative; font-size: clamp(44px, 13vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
+  .splash-word { position: relative; font-size: clamp(52px, 14vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
   .splash-word span { color: var(--teal); }
   .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; }
   @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
   #heroWordmark { transition: opacity .35s ease; }
+  #heroWordmark span { color: var(--teal); }
   body.splashing #heroWordmark { opacity: 0; }
   @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
   @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
@@ -241,9 +242,9 @@
   <div class="hero" id="inicio">
     <div>
       <img class="hero-logo" src="favicon.svg" alt="AuralPlayer">
-      <p class="eyebrow"><span id="heroWordmark">AuralPlayer</span> · para Android</p>
-      <h1>El sonido,<br>sin ruido.</h1>
-      <p class="tagline">Tu música, en colores.</p>
+      <p class="eyebrow">Para Android</p>
+      <h1><span id="heroWordmark">Aural<span>Player</span></span></h1>
+      <p class="tagline">El sonido, sin ruido.</p>
       <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
       <div class="btns">
         <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis<span class="btn-arrow"><span class="btn-arrow-slide"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg></span></span></a>
