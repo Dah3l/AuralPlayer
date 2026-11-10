@@ -108,7 +108,8 @@
   .pro-hero img { width: 56px; height: 56px; border-radius: 14px; }
   .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
   .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
-  .pro-card.popular { border-color: var(--teal); background: rgba(46,211,183,.07); box-shadow: 0 0 32px rgba(46,211,183,.18); }
+  .pro-card.popular { position: relative; overflow: hidden; }
+  .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
   .pro-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 36px; }
@@ -266,21 +267,22 @@
         <h3>Mensual</h3>
         <p class="pro-price">100 CUP <span>/ mes</span></p>
         <p class="pro-note">Para probar Pro sin compromiso.</p>
-        <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Activar por WhatsApp</a>
+        <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Obtener plan</a>
       </div>
       <div class="card pro-card popular">
-        <span class="pro-badge-slot"><span class="pro-badge">El más popular</span></span>
+        <span class="pro-ribbon">Popular</span>
+        <span class="pro-badge-slot"></span>
         <h3>Anual</h3>
         <p class="pro-price">500 CUP <span>/ año</span></p>
         <p class="pro-note">≈ 42 CUP al mes · ahorras 700 CUP frente al mensual.</p>
-        <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Anual">Activar por WhatsApp</a>
+        <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Anual">Obtener plan</a>
       </div>
       <div class="card pro-card">
         <span class="pro-badge-slot"><span class="pro-badge">Premium</span></span>
         <h3>Lifetime</h3>
         <p class="pro-price">1000 CUP</p>
         <p class="pro-note">Paga una vez, para siempre.</p>
-        <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Activar por WhatsApp</a>
+        <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Obtener plan</a>
       </div>
     </div>
     <div class="pro-steps">
