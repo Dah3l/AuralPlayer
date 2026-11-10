@@ -104,7 +104,7 @@
   footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
   footer p { margin-top: 12px; }
   footer p:first-child { margin-top: 0; }
-  .pro-hero { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; }
+  .pro-hero { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; animation: float-y 4s ease-in-out infinite; }
   .pro-hero img { width: 56px; height: 56px; border-radius: 14px; }
   .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
   .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
@@ -112,8 +112,16 @@
   .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
-  .pro-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 36px; }
-  .pro-step { text-align: center; }
+  .pro-steps { display: flex; align-items: flex-start; justify-content: center; gap: 12px; margin-top: 36px; }
+  .pro-step { text-align: center; flex: 1 1 150px; max-width: 200px; }
+  .pro-arrow { color: var(--teal); font-size: 26px; font-weight: 800; line-height: 1; margin-top: 7px; flex: 0 0 auto; animation: arrow-bounce-x 1.8s ease-in-out infinite; }
+  .reveal.visible .pro-step { animation: step-in .55s ease both; }
+  .reveal.visible .pro-step:nth-child(3) { animation-delay: .12s; }
+  .reveal.visible .pro-step:nth-child(5) { animation-delay: .24s; }
+  @media (max-width: 640px) {
+    .pro-steps { flex-direction: column; gap: 2px; }
+    .pro-arrow { margin-top: 0; animation: arrow-bounce-y 1.8s ease-in-out infinite; }
+  }
   .pro-step b { display: flex; width: 40px; height: 40px; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 17px; }
   .pro-step p { color: var(--mut); font-size: 15px; }
   .pro-pay { text-align: center; color: var(--mut); font-size: 14px; margin-top: 20px; }
@@ -130,6 +138,20 @@
   .pro-table td.no { color: var(--mut); }
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .reveal.visible { opacity: 1; transform: none; }
+  @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+  @keyframes float-y { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  @keyframes step-in { from { opacity: 0; transform: translateY(14px) rotate(-3deg); } to { opacity: 1; transform: none; } }
+  @keyframes arrow-bounce-x { 0%,100% { transform: translateX(0); opacity: .55; } 50% { transform: translateX(7px); opacity: 1; } }
+  @keyframes arrow-bounce-y { 0%,100% { transform: rotate(90deg) translateX(0); opacity: .55; } 50% { transform: rotate(90deg) translateX(7px); opacity: 1; } }
+  .hero > div:first-child > * { animation: fade-in-up .7s ease both; }
+  .hero > div:first-child > :nth-child(3) { animation-delay: .1s; }
+  .hero > div:first-child > :nth-child(4) { animation-delay: .18s; }
+  .hero > div:first-child > :nth-child(5) { animation-delay: .26s; }
+  .hero > div:first-child > :nth-child(6) { animation-delay: .34s; }
+  .hero > div:first-child > :nth-child(7) { animation-delay: .42s; }
+  .hero > div:first-child > :nth-child(8) { animation-delay: .5s; }
+  .island-stage { animation: zoom-in .8s ease .15s both; }
   .island { position: relative; display: flex; align-items: center; gap: 12px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 10px 18px 10px 11px; box-shadow: 0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(46,211,183,.20); cursor: pointer; transition: opacity .35s ease; }
   .island img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
   .island-text { display: flex; flex-direction: column; min-width: 0; }
@@ -153,7 +175,7 @@
   .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
   .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
   .theme-name b { color: var(--txt); }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .pro-arrow, .reveal.visible .pro-step { animation: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
     .hero-logo { margin-left: auto; margin-right: auto; }
@@ -287,7 +309,9 @@
     </div>
     <div class="pro-steps">
       <div class="pro-step"><b>1</b><p>Elige tu plan</p></div>
+      <span class="pro-arrow" aria-hidden="true">→</span>
       <div class="pro-step"><b>2</b><p>Escríbenos por WhatsApp</p></div>
+      <span class="pro-arrow" aria-hidden="true" style="animation-delay:.45s">→</span>
       <div class="pro-step"><b>3</b><p>Te activamos Pro</p></div>
     </div>
     <p class="pro-pay">Pago por Transfermóvil (CUP) o QvaPay. Activación manual por WhatsApp, con tu código.</p>
