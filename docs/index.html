@@ -104,6 +104,14 @@
   footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
   footer p { margin-top: 12px; }
   footer p:first-child { margin-top: 0; }
+  .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .pro-card.popular { border-color: var(--teal); background: rgba(46,211,183,.07); }
+  .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; margin-bottom: 12px; }
+  .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; }
+  .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
+  .pro-note { min-height: 44px; }
+  .pro-card .btn { margin-top: 16px; width: 100%; text-align: center; }
+  .pro-feats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 30px; }
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .reveal.visible { opacity: 1; transform: none; }
   .island { position: relative; display: flex; align-items: center; gap: 12px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 10px 18px 10px 11px; box-shadow: 0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(46,211,183,.20); cursor: pointer; transition: opacity .35s ease; }
@@ -154,7 +162,7 @@
 <header>
   <div class="wrap head-in">
     <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
-    <nav id="mainNav"><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#faq">FAQ</a><a href="#contacto">Contacto</a><a href="novedades.html">Novedades</a></nav>
+    <nav id="mainNav"><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#faq">FAQ</a><a href="#pro">Pro</a><a href="#contacto">Contacto</a><a href="novedades.html">Novedades</a></nav>
     <button class="menu-btn" id="menuBtn" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <a class="btn primary head-cta" href="#inicio">Descargar</a>
   </div>
@@ -252,6 +260,38 @@
       <details><summary>¿Funciona sin conexión?</summary><p>Sí. Tu biblioteca y tus descargas suenan sin internet. Solo necesitas conexión para buscar y descargar canciones nuevas.</p></details>
       <details><summary>¿Es seguro instalar el APK fuera de la tienda?</summary><p>Sí. El APK oficial sale de nuestro GitHub o de Apklis, la tienda cubana. Android te pedirá permiso para instalar desde el navegador: es el aviso normal para apps fuera de Google Play. Además el código es abierto: cualquiera puede revisarlo en GitHub.</p></details>
       <details><summary>¿Cuánto cuesta?</summary><p>Nada. AuralPlayer es gratis, sin anuncios y sin cuentas. Lo que ves es lo que hay.</p></details>
+    </div>
+  </section>
+
+  <section class="reveal" id="pro">
+    <h2>Aural Pro</h2>
+    <p class="sec-sub">Todo lo de Pro, en los 3 planes. Solo cambia la duración.</p>
+    <div class="pro-feats">
+      <span class="chip">Streaming en línea</span>
+      <span class="chip">Radio por internet</span>
+      <span class="chip">Descarga de playlists de YouTube</span>
+      <span class="chip">Compartir playlists por Aural link</span>
+    </div>
+    <div class="grid">
+      <div class="card pro-card">
+        <h3>Mensual</h3>
+        <p class="pro-price">100 <span>CUP / mes</span></p>
+        <p class="pro-note">Para probar Pro sin compromiso.</p>
+        <a class="btn ghost" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Mensual%20(100%20CUP)">Quiero el Mensual</a>
+      </div>
+      <div class="card pro-card popular">
+        <span class="pro-badge">Más popular</span>
+        <h3>Anual</h3>
+        <p class="pro-price">500 <span>CUP / año</span></p>
+        <p class="pro-note">~42 CUP al mes. Te ahorras 700 CUP contra el mensual.</p>
+        <a class="btn primary" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Anual%20(500%20CUP)">Quiero el Anual</a>
+      </div>
+      <div class="card pro-card">
+        <h3>Lifetime</h3>
+        <p class="pro-price">1000 <span>CUP</span></p>
+        <p class="pro-note">Un solo pago. Pro para siempre.</p>
+        <a class="btn ghost" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Lifetime%20(1000%20CUP)">Quiero el Lifetime</a>
+      </div>
     </div>
   </section>
 
