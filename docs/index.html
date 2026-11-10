@@ -160,7 +160,7 @@
   .reveal.visible .sec-ico--msg svg { animation: tada 1s ease both; }
   .splash { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .splash-bg { position: absolute; inset: 0; background: var(--bg); transition: opacity .6s ease; }
-  .splash-word { position: relative; font-size: clamp(52px, 14vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
+  .splash-word { display: inline-block; position: relative; font-size: clamp(52px, 14vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
   .splash-word span { color: var(--teal); }
   .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; }
   @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
