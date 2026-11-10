@@ -105,8 +105,15 @@
   footer p { margin-top: 12px; }
   footer p:first-child { margin-top: 0; }
   .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
-  .pro-card.popular { border-color: var(--teal); background: rgba(46,211,183,.07); }
+  .pro-card.popular { border-color: var(--teal); background: rgba(46,211,183,.07); box-shadow: 0 0 32px rgba(46,211,183,.18); padding: 28px 22px; }
+  .pro-card.lifetime { border-color: rgba(245,158,11,.45); }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; margin-bottom: 12px; }
+  .pro-badge.gold { background: #F59E0B; color: #231600; }
+  .pro-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 36px; }
+  .pro-step { text-align: center; }
+  .pro-step b { display: flex; width: 40px; height: 40px; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 17px; }
+  .pro-step p { color: var(--mut); font-size: 15px; }
+  .pro-pay { text-align: center; color: var(--mut); font-size: 14px; margin-top: 20px; }
   .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; }
   .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
   .pro-note { min-height: 44px; }
@@ -175,7 +182,7 @@
       <p class="eyebrow">AuralPlayer · para Android</p>
       <h1>El sonido,<br>sin ruido.</h1>
       <p class="tagline">Tu música, en colores.</p>
-      <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
+      <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas. Aural Pro es opcional.</p>
       <div class="btns">
         <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
         <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
@@ -228,6 +235,45 @@
     </div>
   </section>
 
+  <section class="reveal" id="pro">
+    <h2>Aural Pro: lleva tu música más lejos</h2>
+    <p class="sec-sub">AuralPlayer sigue siendo gratis. Pro añade streaming, radio y más.</p>
+    <div class="pro-feats">
+      <span class="chip">Streaming en línea</span>
+      <span class="chip">Radio por internet</span>
+      <span class="chip">Descarga de playlists de YouTube</span>
+      <span class="chip">Compartir playlists por Aural link</span>
+    </div>
+    <div class="grid">
+      <div class="card pro-card">
+        <h3>Mensual</h3>
+        <p class="pro-price">100 <span>CUP / mes</span></p>
+        <p class="pro-note">Para probar Pro sin compromiso.</p>
+        <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Activar por WhatsApp</a>
+      </div>
+      <div class="card pro-card popular">
+        <span class="pro-badge">El más popular</span>
+        <h3>Anual</h3>
+        <p class="pro-price">500 <span>CUP / año</span></p>
+        <p class="pro-note">~42 CUP al mes. Ahorras 700 CUP al año.</p>
+        <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Anual">Activar por WhatsApp</a>
+      </div>
+      <div class="card pro-card lifetime">
+        <span class="pro-badge gold">Premium</span>
+        <h3>Lifetime</h3>
+        <p class="pro-price">1000 <span>CUP</span></p>
+        <p class="pro-note">Paga una vez, para siempre.</p>
+        <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Activar por WhatsApp</a>
+      </div>
+    </div>
+    <div class="pro-steps">
+      <div class="pro-step"><b>1</b><p>Elige tu plan</p></div>
+      <div class="pro-step"><b>2</b><p>Escríbenos por WhatsApp</p></div>
+      <div class="pro-step"><b>3</b><p>Te activamos Pro</p></div>
+    </div>
+    <p class="pro-pay">Pago por Transfermóvil (CUP) o QvaPay. Activación manual por WhatsApp, con tu código.</p>
+  </section>
+
   <section class="reveal">
     <h2>Lo que dicen los usuarios</h2>
     <p class="sec-sub">Reseñas reales de Apklis.</p>
@@ -259,39 +305,9 @@
       <details><summary>¿De dónde salen las canciones?</summary><p>De tu teléfono: AuralPlayer lee los archivos de audio que ya tienes. Además puedes buscar y descargar canciones desde dentro de la app.</p></details>
       <details><summary>¿Funciona sin conexión?</summary><p>Sí. Tu biblioteca y tus descargas suenan sin internet. Solo necesitas conexión para buscar y descargar canciones nuevas.</p></details>
       <details><summary>¿Es seguro instalar el APK fuera de la tienda?</summary><p>Sí. El APK oficial sale de nuestro GitHub o de Apklis, la tienda cubana. Android te pedirá permiso para instalar desde el navegador: es el aviso normal para apps fuera de Google Play. Además el código es abierto: cualquiera puede revisarlo en GitHub.</p></details>
-      <details><summary>¿Cuánto cuesta?</summary><p>Nada. AuralPlayer es gratis, sin anuncios y sin cuentas. Lo que ves es lo que hay.</p></details>
-    </div>
-  </section>
-
-  <section class="reveal" id="pro">
-    <h2>Aural Pro</h2>
-    <p class="sec-sub">Todo lo de Pro, en los 3 planes. Solo cambia la duración.</p>
-    <div class="pro-feats">
-      <span class="chip">Streaming en línea</span>
-      <span class="chip">Radio por internet</span>
-      <span class="chip">Descarga de playlists de YouTube</span>
-      <span class="chip">Compartir playlists por Aural link</span>
-    </div>
-    <div class="grid">
-      <div class="card pro-card">
-        <h3>Mensual</h3>
-        <p class="pro-price">100 <span>CUP / mes</span></p>
-        <p class="pro-note">Para probar Pro sin compromiso.</p>
-        <a class="btn ghost" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Mensual%20(100%20CUP)">Quiero el Mensual</a>
-      </div>
-      <div class="card pro-card popular">
-        <span class="pro-badge">Más popular</span>
-        <h3>Anual</h3>
-        <p class="pro-price">500 <span>CUP / año</span></p>
-        <p class="pro-note">~42 CUP al mes. Te ahorras 700 CUP contra el mensual.</p>
-        <a class="btn primary" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Anual%20(500%20CUP)">Quiero el Anual</a>
-      </div>
-      <div class="card pro-card">
-        <h3>Lifetime</h3>
-        <p class="pro-price">1000 <span>CUP</span></p>
-        <p class="pro-note">Un solo pago. Pro para siempre.</p>
-        <a class="btn ghost" href="https://wa.me/5359648522?text=Quiero%20Aural%20Pro%20Lifetime%20(1000%20CUP)">Quiero el Lifetime</a>
-      </div>
+      <details><summary>¿Cuánto cuesta?</summary><p>La app es gratis, sin anuncios y sin cuentas. Aural Pro es opcional: 100 CUP al mes, 500 CUP al año o 1000 CUP para siempre.</p></details>
+      <details><summary>¿Qué pasa si no pago?</summary><p>Nada: sigues usando todo lo gratis — tu biblioteca, descargas, letras, temas y Dynamic Aural. Pro solo añade streaming, radio y más.</p></details>
+      <details><summary>¿Cómo se activa Pro si no hay cuentas?</summary><p>Pro se activa por dispositivo, con un código. Nos escribes por WhatsApp, pagas por Transfermóvil o QvaPay, y te enviamos tu código de activación. Sin cuentas ni contraseñas.</p></details>
     </div>
   </section>
 
