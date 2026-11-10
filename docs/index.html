@@ -119,18 +119,13 @@
   .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
-  .pro-steps { display: flex; align-items: flex-start; justify-content: center; gap: 12px; margin-top: 36px; }
-  .pro-step { text-align: center; flex: 1 1 150px; max-width: 200px; }
-  .pro-arrow { color: var(--teal); font-size: 26px; font-weight: 800; line-height: 1; margin-top: 7px; flex: 0 0 auto; animation: arrow-bounce-x 1.8s ease-in-out infinite; }
-  .reveal.visible .pro-step { animation: step-in .55s ease both; }
-  .reveal.visible .pro-step:nth-child(3) { animation-delay: .12s; }
-  .reveal.visible .pro-step:nth-child(5) { animation-delay: .24s; }
+  .pro-steps { display: flex; justify-content: center; gap: 32px; margin: 0 auto 36px; max-width: 760px; }
+  .pro-step { text-align: center; flex: 1 1 0; max-width: 220px; }
   @media (max-width: 640px) {
-    .pro-steps { flex-direction: column; align-items: center; gap: 6px; }
-    .pro-step { flex: 0 0 auto; max-width: none; width: 100%; }
-    .pro-arrow { margin-top: 0; font-size: 22px; animation: arrow-bounce-y 1.8s ease-in-out infinite; }
+    .pro-steps { flex-direction: column; align-items: center; gap: 28px; }
+    .pro-step { flex: 0 0 auto; max-width: 280px; width: 100%; }
   }
-  .pro-step b { display: flex; width: 40px; height: 40px; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 17px; }
+  .pro-step b { display: block; font-size: 52px; font-weight: 800; color: var(--teal); line-height: 1; margin-bottom: 8px; }
   .pro-step p { color: var(--mut); font-size: 15px; }
   .pro-pay { text-align: center; color: var(--mut); font-size: 14px; margin-top: 20px; }
   .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
@@ -149,9 +144,6 @@
   @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
   @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
   @keyframes float-y { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-  @keyframes step-in { from { opacity: 0; transform: translateY(14px) rotate(-3deg); } to { opacity: 1; transform: none; } }
-  @keyframes arrow-bounce-x { 0%,100% { transform: translateX(0); opacity: .55; } 50% { transform: translateX(7px); opacity: 1; } }
-  @keyframes arrow-bounce-y { 0%,100% { transform: rotate(90deg) translateX(0); opacity: .55; } 50% { transform: rotate(90deg) translateX(7px); opacity: 1; } }
   .hero > div:first-child > * { animation: fade-in-up .7s ease both; }
   .hero > div:first-child > :nth-child(3) { animation-delay: .1s; }
   .hero > div:first-child > :nth-child(4) { animation-delay: .18s; }
@@ -183,7 +175,7 @@
   .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
   .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
   .theme-name b { color: var(--txt); }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .pro-arrow, .reveal.visible .pro-step, .card, .shot { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .card, .shot { animation: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
     .hero-logo { margin-left: auto; margin-right: auto; }
@@ -291,6 +283,11 @@
       <tr><td>Descarga de playlists de YouTube</td><td class="no">—</td><td class="yes">✓</td></tr>
       <tr><td>Compartir playlists por Aural link</td><td class="no">—</td><td class="yes">✓</td></tr>
     </table>
+    <div class="pro-steps">
+      <div class="pro-step"><b>1</b><p>Elige tu plan</p></div>
+      <div class="pro-step"><b>2</b><p>Escríbenos por WhatsApp</p></div>
+      <div class="pro-step"><b>3</b><p>Te activamos Pro</p></div>
+    </div>
     <div class="grid">
       <div class="card pro-card">
         <span class="pro-badge-slot"></span>
@@ -314,13 +311,6 @@
         <p class="pro-note">Paga una vez, para siempre.</p>
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Obtener plan</a>
       </div>
-    </div>
-    <div class="pro-steps">
-      <div class="pro-step"><b>1</b><p>Elige tu plan</p></div>
-      <span class="pro-arrow" aria-hidden="true">→</span>
-      <div class="pro-step"><b>2</b><p>Escríbenos por WhatsApp</p></div>
-      <span class="pro-arrow" aria-hidden="true" style="animation-delay:.45s">→</span>
-      <div class="pro-step"><b>3</b><p>Te activamos Pro</p></div>
     </div>
     <p class="pro-pay">Pago por Transfermóvil (CUP) o QvaPay. Activación manual por WhatsApp, con tu código.</p>
   </section>
