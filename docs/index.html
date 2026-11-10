@@ -162,11 +162,15 @@
   .splash-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(46,211,183,.18), rgba(46,211,183,0) 70%), #0d0d0d; transition: opacity .6s ease; }
   .splash-word { display: inline-block; position: relative; font-size: clamp(52px, 14vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
   .splash-word span { color: var(--teal); }
-  .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; }
+  .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; animation-delay: .35s; }
+  .splash-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .splash-logo { display: block; width: 104px; height: 104px; animation: splash-fade .7s ease both, rubber-band .9s ease both; }
   @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
   #heroWordmark { transition: opacity .35s ease; }
   #heroWordmark span { color: var(--teal); }
+  #heroLogo { transition: opacity .35s ease; }
   body.splashing #heroWordmark { opacity: 0; }
+  body.splashing #heroLogo { opacity: 0; }
   @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
   @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
   @keyframes rubber-band { 0% { transform: scale3d(1, 1, 1); } 30% { transform: scale3d(1.25, .75, 1); } 40% { transform: scale3d(.75, 1.25, 1); } 50% { transform: scale3d(1.15, .85, 1); } 65% { transform: scale3d(.95, 1.05, 1); } 75% { transform: scale3d(1.05, .95, 1); } 100% { transform: scale3d(1, 1, 1); } }
@@ -227,7 +231,7 @@
 </style>
 </head>
 <body>
-<div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div>
+<div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><div class="splash-inner"><img class="splash-logo" id="splashLogo" src="favicon.svg" alt=""><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div></div>
 <noscript><style>.splash { display: none; }</style></noscript>
 <header>
   <div class="wrap head-in">
@@ -241,7 +245,7 @@
 
   <div class="hero" id="inicio">
     <div>
-      <img class="hero-logo" src="favicon.svg" alt="AuralPlayer">
+      <img class="hero-logo" id="heroLogo" src="favicon.svg" alt="AuralPlayer">
       <p class="eyebrow">Para Android</p>
       <h1><span id="heroWordmark">Aural<span>Player</span></span></h1>
       <p class="tagline">El sonido, sin ruido.</p>
@@ -425,8 +429,9 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // Splash: el nombre aparece en grande y vuela hasta su sitio en el hero (una sola vez por carga).
-  // El fondo neutro tapa la página durante todo el vuelo y solo se va cuando el texto ya aterrizó.
+  // Splash: el logo entra primero, luego el nombre, y ambos vuelan juntos
+  // hasta su sitio en el hero (una sola vez por carga). El fondo neutro tapa
+  // la página durante todo el vuelo y solo se va cuando ya aterrizaron.
   (function () {
     var splash = document.getElementById('splash');
     if (!splash) return;
@@ -434,36 +439,45 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { done(); return; }
     var word = document.getElementById('splashWord');
     var target = document.getElementById('heroWordmark');
-    if (!word || !target || !word.animate) { done(); return; }
+    var logo = document.getElementById('splashLogo');
+    var logoTarget = document.getElementById('heroLogo');
+    if (!word || !target || !logo || !logoTarget || !word.animate || !logo.animate) { done(); return; }
     document.body.classList.add('splashing');
     document.body.style.overflow = 'hidden';
     var failsafe = setTimeout(done, 5000);
+    function fly(el, dest) {
+      var s = el.getBoundingClientRect();
+      var t = dest.getBoundingClientRect();
+      if (!s.width || !t.width) return null;
+      var dx = (t.left + t.width / 2) - (s.left + s.width / 2);
+      var dy = (t.top + t.height / 2) - (s.top + s.height / 2);
+      var scale = t.width / s.width;
+      var end = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + scale.toFixed(3) + ')';
+      el.animate([{ transform: 'none' }, { transform: end }], { duration: 1100, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+      return end;
+    }
+    function offScreen(r) { return r.top < 0 || r.bottom > window.innerHeight || r.left < 0; }
     setTimeout(function () {
-      var s = word.getBoundingClientRect();
       var t = target.getBoundingClientRect();
-      if (!s.width || !t.width) { clearTimeout(failsafe); done(); return; }
+      var lt = logoTarget.getBoundingClientRect();
       // Si se entró con un ancla (#pro, #faq...), el destino está fuera de pantalla: solo desvanece.
-      if (t.top < 0 || t.bottom > window.innerHeight || t.left < 0) {
+      if (!t.width || !lt.width || offScreen(t) || offScreen(lt)) {
         var bg0 = splash.querySelector('.splash-bg'); if (bg0) bg0.style.opacity = '0';
         document.body.classList.remove('splashing');
         setTimeout(function () { clearTimeout(failsafe); done(); }, 700);
         return;
       }
-      var dx = (t.left + t.width / 2) - (s.left + s.width / 2);
-      var dy = (t.top + t.height / 2) - (s.top + s.height / 2);
-      var scale = t.width / s.width;
-      var endTransform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + scale.toFixed(3) + ')';
-      // Una sola animación: el mismo texto se traslada y se achica hasta el hero.
-      word.animate(
-        [{ transform: 'none' }, { transform: endTransform }],
-        { duration: 1100, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' }
-      );
-      // Al aterrizar: el título del hero aparece en ese mismo sitio, la palabra
-      // del splash se desvanece y el fondo neutro revela la página ya formada.
+      var endWord = fly(word, target);
+      var endLogo = fly(logo, logoTarget);
+      if (!endWord || !endLogo) { clearTimeout(failsafe); done(); return; }
+      // Al aterrizar: el logo y el título del hero aparecen en su sitio, las
+      // piezas del splash se desvanecen y el fondo neutro revela la página.
       setTimeout(function () {
         document.body.classList.remove('splashing');
-        word.style.transform = endTransform;
+        word.style.transform = endWord;
+        logo.style.transform = endLogo;
         word.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 350, fill: 'forwards' });
+        logo.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 350, fill: 'forwards' });
         var bg = splash.querySelector('.splash-bg'); if (bg) bg.style.opacity = '0';
       }, 1100);
       setTimeout(function () { clearTimeout(failsafe); done(); }, 1800);
