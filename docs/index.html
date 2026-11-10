@@ -115,6 +115,7 @@
   .pro-hero img { width: 56px; height: 56px; border-radius: 14px; }
   .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
   .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .pro-card h3 { font-size: 24px; font-weight: 800; }
   .pro-card.popular { position: relative; overflow: hidden; }
   .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
@@ -133,12 +134,11 @@
     .steps li { flex-direction: column; gap: 14px; padding-bottom: 0; }
     .steps li:not(:last-child)::after { left: 52px; right: -20px; top: 19px; bottom: auto; width: auto; height: 1px; background: linear-gradient(90deg, rgba(46,211,183,.45), rgba(46,211,183,.05)); }
   }
-  .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+  .pro-price { font-size: 44px; font-weight: 800; color: var(--teal); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
   .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
   .pro-sub { color: var(--mut); font-size: 14px; margin: 2px 0 0; min-height: 40px; }
-  .pro-features { list-style: none; width: 100%; margin: 16px 0 20px; padding: 16px 0 0; border-top: 1px solid var(--line); text-align: left; }
-  .pro-features li { position: relative; padding: 6px 0 6px 26px; font-size: 14px; }
-  .pro-features li::before { content: "✓"; position: absolute; left: 4px; color: var(--teal); font-weight: 700; }
+  .pro-duration { width: 100%; margin: 16px 0 20px; padding: 16px 0 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; color: var(--mut); }
+  .pro-duration b { color: var(--txt); }
   .pro-card .btn { margin-top: auto; width: 100%; text-align: center; }
   .pro-table { width: 100%; max-width: 640px; margin: 0 auto 36px; border-collapse: collapse; font-size: 15px; }
   .pro-table th, .pro-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: center; }
@@ -302,12 +302,7 @@
         <h3>Mensual</h3>
         <p class="pro-sub">Para probar Pro sin compromiso.</p>
         <p class="pro-price">100 CUP <span>/ mes</span></p>
-        <ul class="pro-features">
-          <li>Streaming en línea</li>
-          <li>Radio por internet</li>
-          <li>Descarga de playlists de YouTube</li>
-          <li>Compartir playlists por Aural link</li>
-        </ul>
+        <p class="pro-duration"><b>1 mes</b> de Pro completo. Al terminar, renuevas por WhatsApp.</p>
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Obtener plan</a>
       </div>
       <div class="card pro-card popular">
@@ -316,12 +311,7 @@
         <h3>Anual</h3>
         <p class="pro-sub">≈ 42 CUP al mes · ahorras 700 CUP frente al mensual.</p>
         <p class="pro-price">500 CUP <span>/ año</span></p>
-        <ul class="pro-features">
-          <li>Streaming en línea</li>
-          <li>Radio por internet</li>
-          <li>Descarga de playlists de YouTube</li>
-          <li>Compartir playlists por Aural link</li>
-        </ul>
+        <p class="pro-duration"><b>12 meses</b> de Pro completo, sin interrupciones.</p>
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Anual">Obtener plan</a>
       </div>
       <div class="card pro-card">
@@ -329,12 +319,7 @@
         <h3>Lifetime</h3>
         <p class="pro-sub">Paga una vez, para siempre.</p>
         <p class="pro-price">1000 CUP</p>
-        <ul class="pro-features">
-          <li>Streaming en línea</li>
-          <li>Radio por internet</li>
-          <li>Descarga de playlists de YouTube</li>
-          <li>Compartir playlists por Aural link</li>
-        </ul>
+        <p class="pro-duration"><b>Para siempre</b>, con un solo pago. Sin renovaciones.</p>
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Obtener plan</a>
       </div>
     </div>
