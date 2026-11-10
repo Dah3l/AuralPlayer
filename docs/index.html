@@ -158,6 +158,10 @@
   .reveal.visible .sec-ico--star svg { animation: rubber-band 1s ease both; }
   .reveal.visible .sec-ico--faq svg { animation: rotational-wave 1.2s ease both; }
   .reveal.visible .sec-ico--msg svg { animation: tada 1s ease both; }
+  .splash { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .splash-bg { position: absolute; inset: 0; background: var(--bg); transition: opacity .6s ease; }
+  .splash-word { position: relative; font-size: clamp(44px, 13vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
+  .splash-word span { color: var(--teal); }
   @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
   @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
   @keyframes rubber-band { 0% { transform: scale3d(1, 1, 1); } 30% { transform: scale3d(1.25, .75, 1); } 40% { transform: scale3d(.75, 1.25, 1); } 50% { transform: scale3d(1.15, .85, 1); } 65% { transform: scale3d(.95, 1.05, 1); } 75% { transform: scale3d(1.05, .95, 1); } 100% { transform: scale3d(1, 1, 1); } }
@@ -196,7 +200,7 @@
   .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
   .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
   .theme-name b { color: var(--txt); }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .card, .shot, .sec-ico svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .card, .shot, .sec-ico svg { animation: none; } .splash { display: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
     .hero-logo { margin-left: auto; margin-right: auto; }
@@ -218,6 +222,8 @@
 </style>
 </head>
 <body>
+<div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><span class="splash-word" id="splashWord">Aural<span>Player</span></span></div>
+<noscript><style>.splash { display: none; }</style></noscript>
 <header>
   <div class="wrap head-in">
     <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
@@ -231,10 +237,10 @@
   <div class="hero" id="inicio">
     <div>
       <img class="hero-logo" src="favicon.svg" alt="AuralPlayer">
-      <p class="eyebrow">AuralPlayer · para Android</p>
+      <p class="eyebrow"><span id="heroWordmark">AuralPlayer</span> · para Android</p>
       <h1>El sonido,<br>sin ruido.</h1>
       <p class="tagline">Tu música, en colores.</p>
-      <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas. Aural Pro es opcional.</p>
+      <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
       <div class="btns">
         <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis<span class="btn-arrow"><span class="btn-arrow-slide"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg></span></span></a>
         <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub<span class="btn-arrow"><span class="btn-arrow-slide"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg></span></span></a>
@@ -414,6 +420,36 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // Splash: el nombre aparece en grande y vuela hasta su sitio en el hero (una sola vez por carga).
+  (function () {
+    var splash = document.getElementById('splash');
+    if (!splash) return;
+    function done() { if (splash.parentNode) splash.parentNode.removeChild(splash); document.body.style.overflow = ''; }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { done(); return; }
+    var word = document.getElementById('splashWord');
+    var target = document.getElementById('heroWordmark');
+    if (!word || !target) { done(); return; }
+    document.body.style.overflow = 'hidden';
+    var failsafe = setTimeout(done, 3000);
+    setTimeout(function () {
+      var s = word.getBoundingClientRect();
+      var t = target.getBoundingClientRect();
+      if (!s.width || !t.width) { clearTimeout(failsafe); done(); return; }
+      // Si se entró con un ancla (#pro, #faq...), el destino está fuera de pantalla: solo desvanece.
+      if (t.top < 0 || t.bottom > window.innerHeight || t.left < 0) {
+        var bg0 = splash.querySelector('.splash-bg'); if (bg0) bg0.style.opacity = '0';
+        setTimeout(function () { clearTimeout(failsafe); done(); }, 700);
+        return;
+      }
+      var dx = (t.left + t.width / 2) - (s.left + s.width / 2);
+      var dy = (t.top + t.height / 2) - (s.top + s.height / 2);
+      var scale = t.width / s.width;
+      word.style.transition = 'transform .9s cubic-bezier(.22,1,.36,1)';
+      word.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + scale.toFixed(3) + ')';
+      setTimeout(function () { var bg = splash.querySelector('.splash-bg'); if (bg) bg.style.opacity = '0'; }, 300);
+      setTimeout(function () { clearTimeout(failsafe); done(); }, 1400);
+    }, 600);
+  })();
   var els = document.querySelectorAll('.reveal');
   if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('visible'); }); return; }
   var io = new IntersectionObserver(function (entries) {
