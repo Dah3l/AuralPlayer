@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AuralPlayer — El sonido, sin ruido</title>
-<meta name="description" content="AuralPlayer: el sonido, sin ruido. Gratis, sin anuncios y sin cuentas. Descárgala para Android.">
+<meta name="description" content="AuralPlayer: el sonido, sin ruido. Gratis, sin anuncios y sin cuentas. Aural Pro opcional. Descárgala para Android.">
 <meta name="google-site-verification" content="fwv0qUnSvrugjCYFffXKNVu9GOIelJJCOEnPPIe9y_o">
 <meta property="og:title" content="AuralPlayer — El sonido, sin ruido">
 <meta property="og:description" content="Gratis, sin anuncios y sin cuentas. Descárgala para Android.">
@@ -109,20 +109,24 @@
   .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
   .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
   .pro-card.popular { border-color: var(--teal); background: rgba(46,211,183,.07); box-shadow: 0 0 32px rgba(46,211,183,.18); }
-  .pro-card.lifetime { border-color: rgba(245,158,11,.45); }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
-  .pro-badge.gold { background: #F59E0B; color: #231600; }
   .pro-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 36px; }
   .pro-step { text-align: center; }
   .pro-step b { display: flex; width: 40px; height: 40px; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 17px; }
   .pro-step p { color: var(--mut); font-size: 15px; }
   .pro-pay { text-align: center; color: var(--mut); font-size: 14px; margin-top: 20px; }
-  .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; }
+  .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
   .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
   .pro-note { min-height: 48px; margin-bottom: 16px; }
   .pro-card .btn { margin-top: auto; width: 100%; text-align: center; }
-  .pro-feats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 30px; }
+  .pro-table { width: 100%; max-width: 640px; margin: 0 auto 36px; border-collapse: collapse; font-size: 15px; }
+  .pro-table th, .pro-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: center; }
+  .pro-table th:first-child, .pro-table td:first-child { text-align: left; }
+  .pro-table th { font-size: 16px; }
+  .pro-table th.pro-col { color: var(--teal); }
+  .pro-table td.yes { color: var(--teal); font-weight: 700; }
+  .pro-table td.no { color: var(--mut); }
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
   .reveal.visible { opacity: 1; transform: none; }
   .island { position: relative; display: flex; align-items: center; gap: 12px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 10px 18px 10px 11px; box-shadow: 0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(46,211,183,.20); cursor: pointer; transition: opacity .35s ease; }
@@ -245,32 +249,36 @@
       <span class="pro-logo-badge">PRO</span>
     </div>
     <h2>Aural Pro: lleva tu música más lejos</h2>
-    <p class="sec-sub">Lo gratis sigue igual. Pro potencia tu música: streaming, radio y más.</p>
-    <div class="pro-feats">
-      <span class="chip">Streaming en línea</span>
-      <span class="chip">Radio por internet</span>
-      <span class="chip">Descarga de playlists de YouTube</span>
-      <span class="chip">Compartir playlists por Aural link</span>
-    </div>
+    <p class="sec-sub">Lo gratis sigue igual. Pro potencia tu música: escucha en línea, oye la radio y baja playlists enteras de YouTube.</p>
+    <table class="pro-table">
+      <tr><th></th><th>Gratis</th><th class="pro-col">Pro</th></tr>
+      <tr><td>Tu biblioteca y descargas</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Letras y temas</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Dynamic Aural</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Streaming en línea</td><td class="no">—</td><td class="yes">✓</td></tr>
+      <tr><td>Radio por internet</td><td class="no">—</td><td class="yes">✓</td></tr>
+      <tr><td>Descarga de playlists de YouTube</td><td class="no">—</td><td class="yes">✓</td></tr>
+      <tr><td>Compartir playlists por Aural link</td><td class="no">—</td><td class="yes">✓</td></tr>
+    </table>
     <div class="grid">
       <div class="card pro-card">
         <span class="pro-badge-slot"></span>
         <h3>Mensual</h3>
-        <p class="pro-price">100 <span>CUP / mes</span></p>
+        <p class="pro-price">100 CUP <span>/ mes</span></p>
         <p class="pro-note">Para probar Pro sin compromiso.</p>
         <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Activar por WhatsApp</a>
       </div>
       <div class="card pro-card popular">
         <span class="pro-badge-slot"><span class="pro-badge">El más popular</span></span>
         <h3>Anual</h3>
-        <p class="pro-price">500 <span>CUP / año</span></p>
-        <p class="pro-note">~42 CUP al mes. Ahorras 700 CUP al año.</p>
+        <p class="pro-price">500 CUP <span>/ año</span></p>
+        <p class="pro-note">≈ 42 CUP al mes · ahorras 700 CUP frente al mensual.</p>
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Anual">Activar por WhatsApp</a>
       </div>
-      <div class="card pro-card lifetime">
-        <span class="pro-badge-slot"><span class="pro-badge gold">Premium</span></span>
+      <div class="card pro-card">
+        <span class="pro-badge-slot"><span class="pro-badge">Premium</span></span>
         <h3>Lifetime</h3>
-        <p class="pro-price">1000 <span>CUP</span></p>
+        <p class="pro-price">1000 CUP</p>
         <p class="pro-note">Paga una vez, para siempre.</p>
         <a class="btn ghost" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Activar por WhatsApp</a>
       </div>
