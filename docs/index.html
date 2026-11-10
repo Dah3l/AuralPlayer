@@ -119,15 +119,8 @@
   .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
   .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
   .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
-  .pro-steps { display: flex; justify-content: center; gap: 32px; margin: 0 auto 36px; max-width: 760px; }
-  .pro-step { text-align: center; flex: 1 1 0; max-width: 220px; }
-  @media (max-width: 640px) {
-    .pro-steps { flex-direction: column; align-items: center; gap: 28px; }
-    .pro-step { flex: 0 0 auto; max-width: 280px; width: 100%; }
-  }
-  .pro-step b { display: block; font-size: 52px; font-weight: 800; color: var(--teal); line-height: 1; margin-bottom: 8px; }
-  .pro-step p { color: var(--mut); font-size: 15px; }
-  .pro-pay { text-align: center; color: var(--mut); font-size: 14px; margin-top: 20px; }
+  .pro-how { max-width: 640px; margin: 0 auto 36px; text-align: center; color: var(--mut); font-size: 16px; line-height: 1.6; }
+  .pro-how b { color: var(--txt); }
   .pro-price { font-size: 44px; font-weight: 800; color: var(--txt); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
   .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
   .pro-note { min-height: 48px; margin-bottom: 16px; }
@@ -283,11 +276,7 @@
       <tr><td>Descarga de playlists de YouTube</td><td class="no">—</td><td class="yes">✓</td></tr>
       <tr><td>Compartir playlists por Aural link</td><td class="no">—</td><td class="yes">✓</td></tr>
     </table>
-    <div class="pro-steps">
-      <div class="pro-step"><b>1</b><p>Elige tu plan</p></div>
-      <div class="pro-step"><b>2</b><p>Escríbenos por WhatsApp</p></div>
-      <div class="pro-step"><b>3</b><p>Te activamos Pro</p></div>
-    </div>
+    <p class="pro-how"><b>Cómo funciona:</b> elige tu plan, escríbenos por WhatsApp y te activamos Pro. Pago por Transfermóvil (CUP) o QvaPay. Activación manual por WhatsApp, con tu código.</p>
     <div class="grid">
       <div class="card pro-card">
         <span class="pro-badge-slot"></span>
@@ -312,7 +301,6 @@
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Lifetime">Obtener plan</a>
       </div>
     </div>
-    <p class="pro-pay">Pago por Transfermóvil (CUP) o QvaPay. Activación manual por WhatsApp, con tu código.</p>
   </section>
 
   <section class="reveal">
