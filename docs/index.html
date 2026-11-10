@@ -164,7 +164,7 @@
   .splash-word span { color: var(--teal); }
   .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; animation-delay: .35s; }
   .splash-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-  .splash-logo { display: block; width: 104px; height: 104px; animation: splash-fade .7s ease both, rubber-band .9s ease both; }
+  .splash-logo { display: block; width: clamp(168px, 32vw, 224px); height: clamp(168px, 32vw, 224px); animation: splash-fade .7s ease both, rubber-band .9s ease both; }
   @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
   #heroWordmark { transition: opacity .35s ease; }
   #heroWordmark span { color: var(--teal); }
