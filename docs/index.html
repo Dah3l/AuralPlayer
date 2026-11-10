@@ -71,6 +71,8 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
   .card { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 22px; transition: transform .2s ease, border-color .2s ease; }
   .card:hover { transform: translateY(-3px); border-color: var(--teal); }
+  @keyframes zoom-in-scroll { from { opacity: 0; scale: .92; } to { opacity: 1; scale: 1; } }
+  .card, .shot { animation: zoom-in-scroll linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
   .card .ico { width: 44px; height: 44px; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
   .card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .card h3 { font-size: 18px; margin-bottom: 6px; }
@@ -119,8 +121,9 @@
   .reveal.visible .pro-step:nth-child(3) { animation-delay: .12s; }
   .reveal.visible .pro-step:nth-child(5) { animation-delay: .24s; }
   @media (max-width: 640px) {
-    .pro-steps { flex-direction: column; gap: 2px; }
-    .pro-arrow { margin-top: 0; animation: arrow-bounce-y 1.8s ease-in-out infinite; }
+    .pro-steps { flex-direction: column; align-items: center; gap: 6px; }
+    .pro-step { flex: 0 0 auto; max-width: none; width: 100%; }
+    .pro-arrow { margin-top: 0; font-size: 22px; animation: arrow-bounce-y 1.8s ease-in-out infinite; }
   }
   .pro-step b { display: flex; width: 40px; height: 40px; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 17px; }
   .pro-step p { color: var(--mut); font-size: 15px; }
@@ -175,7 +178,7 @@
   .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
   .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
   .theme-name b { color: var(--txt); }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .pro-arrow, .reveal.visible .pro-step { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .pro-arrow, .reveal.visible .pro-step, .card, .shot { animation: none; } }
   @media (max-width: 900px) {
     .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
     .hero-logo { margin-left: auto; margin-right: auto; }
