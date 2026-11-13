@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.aural.player.data.LrcLine
 import com.aural.player.data.LrcParser
 import com.aural.player.data.LyricsTranslator
-import com.aural.player.data.MeaningClient
+// APARCADO 2026-11-13: import com.aural.player.data.MeaningClient
 import com.aural.player.AuralLink
 import com.aural.player.ui.components.CoverArt
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +58,13 @@ fun LyricsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    /* SIGNIFICADO APARCADO 2026-11-13 — para reactivar, quitar este comentario,
+       el del item de la lista y el del import de MeaningClient.
     // --- Significado (se busca solo si el usuario baja hasta el final) ---
     var meaningRequested by remember(title, artist) { mutableStateOf(false) }
     var meaningText by remember(title, artist) { mutableStateOf<String?>(null) }
     var meaningDone by remember(title, artist) { mutableStateOf(false) }
+    */
 
     // --- Traducción al español (ML Kit, en el teléfono) ---
     var detectedLang by remember(title, artist) { mutableStateOf<String?>(null) }
@@ -325,6 +328,8 @@ fun LyricsScreen(
                                     .alpha(itemAlpha)
                             )
                         }
+/* SIGNIFICADO APARCADO 2026-11-13 — item de la lista. Para reactivar, quitar este comentario. */
+/*
                         item {
                             // Significado: se busca al llegar al final de la letra
                             LaunchedEffect(Unit) {
@@ -397,6 +402,7 @@ fun LyricsScreen(
                                 }
                             }
                         }
+                        */
                     }
                 }
             }
