@@ -1064,11 +1064,6 @@ private fun NowPlayingMenu(
             onClick = { onDismiss(); showShareSheet = true }
         )
         DropdownMenuItem(
-            text = { Text("Compartir escuchando ahora") },
-            leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = { onDismiss(); shareNowPlaying(false) }
-        )
-        DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
             leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null) },
             onClick = {
