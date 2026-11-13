@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,9 +81,16 @@ fun AlarmDialog(
         return meta?.first?.ifBlank { song.title } ?: song.title
     }
 
+    fun displayArtist(song: Song): String {
+        val meta = customMetadata[song.id]
+        return meta?.second?.ifBlank { song.artist } ?: song.artist
+    }
+
     val selectedSong = library.songs.firstOrNull { it.id == selectedSongId }
     val selectedPlaylist = playlists.firstOrNull { it.id == selectedPlaylistId }
-    val hasSelection = if (mode == "song") selectedSong != null else selectedPlaylist != null
+    // Una playlist vacía no es selección válida: sonaría en silencio.
+    val hasSelection = if (mode == "song") selectedSong != null
+    else selectedPlaylist != null && selectedPlaylist.songIds.isNotEmpty()
     val exactOk = AlarmScheduler.canScheduleExact(context)
 
     AlertDialog(
@@ -201,8 +209,12 @@ fun AlarmDialog(
             }
         },
         confirmButton = {
+            // Sin selección no se puede guardar una alarma ACTIVA, pero
+            // desactivarla sí debe poder guardarse siempre (si la canción
+            // o playlist guardada ya no existe, si no, no habría forma de
+            // apagarla desde aquí).
             TextButton(
-                enabled = hasSelection,
+                enabled = hasSelection || !enabled,
                 onClick = {
                     val config = if (mode == "song") {
                         AlarmConfig(
@@ -301,7 +313,7 @@ fun AlarmDialog(
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         Text(
-                                            song.artist,
+                                            displayArtist(song),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                             style = MaterialTheme.typography.bodySmall,
@@ -318,10 +330,13 @@ fun AlarmDialog(
                     } else {
                         LazyColumn(modifier = Modifier.height(420.dp)) {
                             items(playlists, key = { it.id }) { pl: Playlist ->
+                                // Las vacías no se pueden elegir: sonarían en silencio.
+                                val plEmpty = pl.songIds.isEmpty()
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
-                                        .clickable {
+                                        .alpha(if (plEmpty) 0.5f else 1f)
+                                        .clickable(enabled = !plEmpty) {
                                             selectedPlaylistId = pl.id
                                             showPicker = false
                                         }
@@ -330,6 +345,7 @@ fun AlarmDialog(
                                 ) {
                                     RadioButton(
                                         selected = pl.id == selectedPlaylistId,
+                                        enabled = !plEmpty,
                                         onClick = {
                                             selectedPlaylistId = pl.id
                                             showPicker = false
