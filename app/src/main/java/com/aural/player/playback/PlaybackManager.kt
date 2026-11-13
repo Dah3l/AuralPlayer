@@ -12,6 +12,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,9 @@ import kotlinx.coroutines.withContext
 
 /** Modos de repetición del reproductor. */
 enum class RepeatMode { OFF, ONE, ALL }
+
+/** Parada programada: al terminar la canción actual o la lista entera. */
+enum class StopMode { SONG, QUEUE }
 
 /** Estado observable de la reproducción que consume la interfaz. */
 data class PlayerUiState(
@@ -58,6 +62,22 @@ class PlaybackManager(private val context: Context) {
 
     private var controller: MediaController? = null
     private val settings = SettingsStore(context)
+
+    /** Parada programada activa (null = ninguna). La consume el diálogo del temporizador. */
+    private val _stopMode = MutableStateFlow<StopMode?>(null)
+    val stopMode: StateFlow<StopMode?> = _stopMode.asStateFlow()
+
+    /** Registro de escucha para "Tu semana en Aural". */
+    private val playHistory = PlayHistoryStore(context)
+
+    /**
+     * Segundos acumulados por canción en esta sesión (id -> título, artista,
+     * milisegundos). Se vuelca al registro al cambiar de canción, al
+     * pausar y cada minuto; nunca interfiere con la reproducción.
+     */
+    private val trackedMillis = mutableMapOf<Long, Triple<String, String, Long>>()
+    private var lastTrackedId: Long? = null
+    private var tickerTickCount = 0
 
     /** Caché de metadatos personalizados: songId -> (título, artista, álbum). */
     private var customMetadataCache: Map<Long, Triple<String, String, String>> = emptyMap()
@@ -141,7 +161,75 @@ class PlaybackManager(private val context: Context) {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             publishState()
-            if (isPlaying) startTicker() else stopTicker()
+            if (isPlaying) startTicker() else {
+                stopTicker()
+                flushTracking()
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // La lista terminó sola (sin repetir): la parada programada
+            // ya no tiene nada que hacer.
+            if (playbackState == Player.STATE_ENDED && _stopMode.value != null) {
+                _stopMode.value = null
+            }
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            // Solo importan los saltos automáticos (una canción que
+            // termina y pasa a la siguiente, o que vuelve a empezar).
+            if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) return
+            val c = controller ?: return
+            when (_stopMode.value) {
+                StopMode.SONG -> {
+                    // Queda en pausa al inicio de la siguiente canción.
+                    c.pause()
+                    _stopMode.value = null
+                    publishState()
+                }
+                StopMode.QUEUE -> {
+                    // Con repetir-todo, la lista "termina" al volver al
+                    // inicio: se vuelve a la última canción y se pausa.
+                    // Con aleatorio el orden no es lineal y no aplica.
+                    if (!c.shuffleModeEnabled &&
+                        newPosition.windowIndex < oldPosition.windowIndex
+                    ) {
+                        c.seekTo(oldPosition.windowIndex, 0L)
+                        c.pause()
+                        _stopMode.value = null
+                        publishState()
+                    }
+                }
+                null -> {}
+            }
+        }
+    }
+
+    /** Activa o cancela la parada programada. */
+    fun setStopMode(mode: StopMode?) {
+        _stopMode.value = mode
+    }
+
+    /** Vuelca al registro los segundos acumulados en esta sesión. */
+    private fun flushTracking() {
+        if (trackedMillis.isEmpty()) return
+        val snapshot = trackedMillis.toMap()
+        trackedMillis.clear()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                snapshot.forEach { (id, data) ->
+                    val seconds = data.third / 1000
+                    if (seconds > 0) {
+                        playHistory.record(id, data.first, data.second, seconds)
+                    }
+                }
+            } catch (e: Exception) {
+                // El registro nunca debe romper la reproducción
+            }
         }
     }
 
@@ -179,6 +267,8 @@ class PlaybackManager(private val context: Context) {
     fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
         val c = controller ?: return
         if (songs.isEmpty()) return
+        // Cola nueva = intención nueva: se cancela la parada programada.
+        _stopMode.value = null
         val items = songs.map { it.toMediaItem() }
         c.setMediaItems(items, startIndex.coerceIn(0, items.size - 1), 0L)
         c.shuffleModeEnabled = shuffle
@@ -374,11 +464,14 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun stop() {
+        _stopMode.value = null
+        flushTracking()
         controller?.stop()
         publishState()
     }
 
     fun release() {
+        flushTracking()
         stopTicker()
         controller?.removeListener(playerListener)
         controller?.release()
@@ -451,6 +544,30 @@ class PlaybackManager(private val context: Context) {
                         durationMs = if (_state.value.durationMs <= 0) it.duration.coerceAtLeast(0)
                         else _state.value.durationMs
                     )
+                }
+                // Registro de escucha: 500 ms más para la canción actual.
+                try {
+                    val current = _state.value.currentSong
+                    if (current != null) {
+                        if (current.id != lastTrackedId) {
+                            flushTracking()
+                            lastTrackedId = current.id
+                        }
+                        val prev = trackedMillis[current.id]
+                        val meta = customMetadataCache[current.id]
+                        trackedMillis[current.id] = Triple(
+                            meta?.first?.ifBlank { current.title } ?: current.title,
+                            meta?.second?.ifBlank { current.artist } ?: current.artist,
+                            (prev?.third ?: 0L) + 500L
+                        )
+                        tickerTickCount++
+                        if (tickerTickCount >= 120) {
+                            tickerTickCount = 0
+                            flushTracking()
+                        }
+                    }
+                } catch (e: Exception) {
+                    // El registro nunca debe romper el ticker
                 }
                 delay(500)
             }
