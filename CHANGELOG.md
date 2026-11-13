@@ -4,6 +4,20 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.1.0 — 2026-11-13
+
+### Novedades
+- **Tu Top 10** — nueva pantalla en el menú ⋮ de la biblioteca con tus 10 canciones más escuchadas en Aural, ordenadas por tiempo de escucha. Con botones para compartir tu Top 10 como imagen o guardarla en la galería (la tarjeta lleva el logo y el color de tu tema). El conteo empieza con esta versión: los primeros días el Top 10 va creciendo a medida que escuchas.
+- **Traducción de letras** — en la vista de letras, el botón de traducir muestra la letra en español, línea por línea y alineada con la original. La primera vez hay que descargar los modelos de traducción (unos 36 MB entre los dos, con tu confirmación antes); después funciona sin internet, y la descarga sigue en segundo plano aunque cambies de canción.
+- **Despertador** — en Ajustes, programa la hora y despiértate con una canción o una playlist, solo una vez o todos los días. Suena aunque la app esté cerrada, y vuelve a programarse solo tras reiniciar el teléfono.
+- **Respaldo** — en Ajustes, exporta tus playlists, favoritos, metadatos, portadas, letras y ajustes a un archivo JSON, e impórtalo en cualquier momento para recuperarlos (te pide confirmar antes de reemplazar).
+- **Apagar al terminar** — en el temporizador del reproductor, además de los minutos, ahora puedes elegir "Al terminar la canción" o "Al terminar la lista": la música se detiene sola, sin tocar nada.
+- **Compartir Escuchando ahora** — en el panel de compartir, nueva opción que genera una imagen con la portada y la canción que suena, con interruptor para añadir el Aural link. Las tarjetas salen en alta resolución (2160 px), con el logo original y el color de tu tema.
+- **Perfil y cumpleaños** — la app te pregunta tu nombre (y tu cumpleaños, si quieres) para saludarte y felicitarte en tu día. Todo queda guardado solo en tu teléfono, se puede cambiar o borrar en Ajustes → Tu perfil, y el cumpleaños se guarda sin el año.
+- **Novedades al actualizar** — al abrir la app tras una actualización, un modal te cuenta lo nuevo de la versión, y las funciones nuevas llevan un puntito del color del tema que desaparece al usarlas.
+- **Letras más fiables** — la búsqueda en línea ahora limpia mejor los nombres (versiones, remixes, artistas invitados) y tiene un respaldo en texto plano cuando no hay letra sincronizada. Además, cuando no se encuentra la letra ya no aparece un "null" en la pantalla: sale el aviso de siempre.
+- **Arreglos y detalles** — el usuario de QvaPay para donaciones ahora es @AuralPlayer; en Contacto se agregó la página web oficial; la parada al terminar la lista también funciona con una sola canción en la cola; el despertador ya no se queda sin poder apagarse si la canción o playlist elegida se borró, y las playlists vacías no se pueden elegir para sonar en silencio.
+
 ## v1.0.9 — 2026-11-07
 
 ### Novedades
