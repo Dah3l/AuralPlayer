@@ -568,6 +568,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         return try {
             val durationSec = durationMs?.takeIf { it > 0 }?.let { (it / 1000).toInt() }
             val lrcContent = com.aural.player.data.LrcLibClient.searchLyrics(artist, track, durationSec)
+                ?.takeIf { it.isNotBlank() }
                 ?: return false
             // Guardar el .lrc en almacenamiento interno
             val file = java.io.File(
