@@ -1,4 +1,4 @@
-// Tarjetas para compartir: "Escuchando ahora" y "Tu semana en Aural".
+// Tarjetas para compartir: "Escuchando ahora" y "Tu Top 10".
 // Mismo patrón de captura que la tarjeta de letras (LyricCard): la vista
 // se monta invisible sobre la actividad a densidad fija (320 dpi, 1440 px
 // de ancho) y se dibuja a un bitmap que se comparte por el sistema.
@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.Coil
 import coil.request.ImageRequest
+import com.aural.player.R
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +113,7 @@ suspend fun captureCard(
                 0, android.view.View.MeasureSpec.UNSPECIFIED
             )
             composeView.measure(widthSpec, heightSpec)
-            val height = composeView.measuredHeight.coerceIn(1, 1920)
+            val height = composeView.measuredHeight.coerceIn(1, 2400)
             composeView.layout(0, 0, width, height)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             composeView.draw(android.graphics.Canvas(bitmap))
@@ -150,6 +152,38 @@ suspend fun shareCardImage(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, chooserTitle))
+}
+
+/** Pie de marca de las tarjetas: el logo ORIGINAL de Aural (el vector del
+ * lanzador, tal cual, sin retocar ni teñir) + nombre y eslogan. */
+@Composable
+private fun CardBrandFooter() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(44.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        androidx.compose.material3.Text(
+            text = "Aural",
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold
+        )
+        androidx.compose.material3.Text(
+            text = "Player",
+            color = CardTeal,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.width(12.dp))
+        androidx.compose.material3.Text(
+            text = "· El sonido, sin ruido.",
+            color = CardMuted,
+            fontSize = 24.sp
+        )
+    }
 }
 
 @Composable
@@ -216,81 +250,54 @@ fun NowPlayingCardContent(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(Modifier.height(40.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Text(
-                text = "Aural",
-                color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
-            androidx.compose.material3.Text(
-                text = "Player",
-                color = CardTeal,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.width(12.dp))
-            androidx.compose.material3.Text(
-                text = "· El sonido, sin ruido.",
-                color = CardMuted,
-                fontSize = 24.sp
-            )
-        }
+        CardBrandFooter()
     }
 }
 
 @Composable
-fun WeekCardContent(
-    totalSeconds: Long,
-    distinctSongs: Int,
-    topSongs: List<com.aural.player.data.WeekSongStat>,
+fun Top10CardContent(
+    topSongs: List<com.aural.player.data.TopSong>,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(CardBg)
-            .padding(48.dp)
+            .padding(36.dp)
     ) {
         androidx.compose.material3.Text(
-            text = "TU SEMANA EN AURAL",
+            text = "TU TOP 10",
             color = CardTeal,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 4.sp
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(12.dp))
         androidx.compose.material3.Text(
-            text = formatListeningTime(totalSeconds),
-            color = Color.White,
-            fontSize = 64.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-        androidx.compose.material3.Text(
-            text = "de música esta semana · $distinctSongs canciones distintas",
+            text = "Las canciones que más has escuchado en Aural",
             color = CardMuted,
-            fontSize = 24.sp
+            fontSize = 22.sp
         )
-        Spacer(Modifier.height(36.dp))
-        topSongs.take(3).forEachIndexed { index, song ->
+        Spacer(Modifier.height(24.dp))
+        topSongs.take(10).forEachIndexed { index, song ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp)
+                    .padding(vertical = 5.dp)
             ) {
                 androidx.compose.material3.Text(
                     text = "${index + 1}",
                     color = CardTeal,
-                    fontSize = 36.sp,
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(48.dp)
+                    modifier = Modifier.width(44.dp)
                 )
                 Column(Modifier.weight(1f)) {
                     androidx.compose.material3.Text(
                         text = song.title,
                         color = Color.White,
-                        fontSize = 28.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -298,7 +305,7 @@ fun WeekCardContent(
                     androidx.compose.material3.Text(
                         text = song.artist,
                         color = CardMuted,
-                        fontSize = 22.sp,
+                        fontSize = 19.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -307,30 +314,11 @@ fun WeekCardContent(
                 androidx.compose.material3.Text(
                     text = formatListeningTime(song.seconds),
                     color = Color.White,
-                    fontSize = 24.sp
+                    fontSize = 22.sp
                 )
             }
         }
-        Spacer(Modifier.height(36.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Text(
-                text = "Aural",
-                color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
-            androidx.compose.material3.Text(
-                text = "Player",
-                color = CardTeal,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.width(12.dp))
-            androidx.compose.material3.Text(
-                text = "· El sonido, sin ruido.",
-                color = CardMuted,
-                fontSize = 24.sp
-            )
-        }
+        Spacer(Modifier.height(24.dp))
+        CardBrandFooter()
     }
 }
