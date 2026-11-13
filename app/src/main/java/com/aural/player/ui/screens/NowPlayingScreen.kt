@@ -103,6 +103,8 @@ import androidx.compose.ui.unit.dp
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
+import com.aural.player.ui.components.FeatureDot
+import com.aural.player.ui.components.FeatureKeys
 import com.aural.player.ui.components.HalloweenGhosts
 import com.aural.player.ui.components.formatDuration
 import com.aural.player.ui.theme.AppTheme
@@ -192,6 +194,7 @@ fun NowPlayingScreen(
     var showLyrics by remember { mutableStateOf(false) }
     val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
+    val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     // Decoración Halloween: solo si el tema activo es Halloween (tema real del menú).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
@@ -848,7 +851,9 @@ fun NowPlayingScreen(
                     } ?: "",
                     coverUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
                     currentPositionMs = { state.positionMs },
-                    onBack = { showLyrics = false }
+                    onBack = { showLyrics = false },
+                    showTranslateDot = FeatureKeys.TRANSLATE !in seenFeatures,
+                    onTranslateInteracted = { viewModel.markFeatureSeen(FeatureKeys.TRANSLATE) }
                 )
             }
         } else {
@@ -878,6 +883,9 @@ private fun NowPlayingMenu(
     val stopMode by viewModel.stopMode.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+
+    // Funciones nuevas ya vistas (sin puntito).
+    val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
 
     // Canción con metadatos personalizados aplicados
     val effectiveSong = song?.let { s ->
@@ -1027,7 +1035,14 @@ private fun NowPlayingMenu(
                 )
             },
             leadingIcon = { Icon(Icons.Rounded.Timer, null) },
-            onClick = { onDismiss(); showTimer = true }
+            trailingIcon = if (FeatureKeys.STOP_MODE !in seenFeatures) {
+                { FeatureDot() }
+            } else null,
+            onClick = {
+                onDismiss()
+                viewModel.markFeatureSeen(FeatureKeys.STOP_MODE)
+                showTimer = true
+            }
         )
         DropdownMenuItem(
             text = { Text("Velocidad de reproducción") },
@@ -1130,8 +1145,10 @@ private fun NowPlayingMenu(
             },
             onShareNowPlaying = { withLink ->
                 showShareSheet = false
+                viewModel.markFeatureSeen(FeatureKeys.SHARE_NOW_PLAYING)
                 shareNowPlaying(withLink)
             },
+            showNowPlayingDot = FeatureKeys.SHARE_NOW_PLAYING !in seenFeatures,
             onDismiss = { showShareSheet = false }
         )
     }
@@ -1388,6 +1405,7 @@ private fun ShareSheet(
     onShareLink: (withCard: Boolean) -> Unit,
     onShareCard: () -> Unit,
     onShareNowPlaying: (withLink: Boolean) -> Unit,
+    showNowPlayingDot: Boolean = false,
     onDismiss: () -> Unit
 ) {
     var linkWithCard by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -1472,6 +1490,7 @@ private fun ShareSheet(
                 icon = Icons.Rounded.MusicNote,
                 title = "Compartir escuchando ahora",
                 subtitle = "Una imagen con la portada y la canción que suena",
+                showDot = showNowPlayingDot,
                 onClick = { onShareNowPlaying(nowPlayingWithLink) }
             )
             Row(
@@ -1503,6 +1522,7 @@ private fun ShareRow(
     title: String,
     subtitle: String,
     enabled: Boolean = true,
+    showDot: Boolean = false,
     onClick: () -> Unit
 ) {
     Row(
@@ -1531,6 +1551,10 @@ private fun ShareRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (showDot) {
+            Spacer(Modifier.width(8.dp))
+            FeatureDot()
         }
     }
 }
