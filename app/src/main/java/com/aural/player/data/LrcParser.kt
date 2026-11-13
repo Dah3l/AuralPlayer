@@ -26,6 +26,10 @@ object LrcParser {
 
             val text = TIME_REGEX.replace(line, "").trim()
             if (text.isEmpty()) continue
+            // Basura de APIs que devuelven el null como texto: una línea
+            // que es solo "null" no es letra (también sana archivos
+            // guardados con ese contenido en versiones anteriores).
+            if (text.equals("null", ignoreCase = true)) continue
 
             for (m in matches) {
                 val min = m.groupValues[1].toLongOrNull() ?: continue
