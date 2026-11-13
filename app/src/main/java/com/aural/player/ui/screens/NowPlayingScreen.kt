@@ -1272,7 +1272,7 @@ private fun NowPlayingMenu(
                 lyricsSearchError = null
                 scope.launch {
                     val found = song?.let {
-                        viewModel.searchAndSaveLyrics(it.id, track, artist)
+                        viewModel.searchAndSaveLyrics(it.id, track, artist, it.durationMs)
                     } ?: false
                     isSearchingLyrics = false
                     if (found) {
