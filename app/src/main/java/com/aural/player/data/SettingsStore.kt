@@ -9,8 +9,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.aural.player.alarm.AlarmConfig
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -61,6 +66,8 @@ class SettingsStore(private val context: Context) {
         val KEY_AURAL_LIGHT_COLOR = stringPreferencesKey("aural_light_color")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
         val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
+        // v1.1.0: despertador (JSON de AlarmConfig).
+        val KEY_ALARM = stringPreferencesKey("alarm_json")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -735,5 +742,139 @@ class SettingsStore(private val context: Context) {
                 }
             }
         } catch (e: Exception) { emptyMap() }
+    }
+
+    // ----------------------------- Despertador -----------------------------
+
+    /** Flujo reactivo de la configuración del despertador (null = sin alarma). */
+    val alarm: Flow<AlarmConfig?> = context.dataStore.data.map { prefs ->
+        AlarmConfig.fromJson(prefs[KEY_ALARM])
+    }
+
+    /** Guarda la configuración del despertador (null la borra). */
+    suspend fun setAlarm(config: AlarmConfig?) {
+        context.dataStore.edit { prefs ->
+            if (config == null) prefs.remove(KEY_ALARM)
+            else prefs[KEY_ALARM] = config.toJson()
+        }
+    }
+
+    // ----------------------------- Respaldo -----------------------------
+
+    /**
+     * Claves que entran en el respaldo: todo lo que el usuario perdería
+     * al desinstalar (playlists, favoritos, metadatos, portadas, letras,
+     * tema, isla, pestañas y despertador). Fuera quedan los datos
+     * transitorios (última reproducción, playlist del día, avisos de
+     * actualización y marcadores estacionales).
+     */
+    private val backupStringKeys = listOf(
+        "playlists_json" to KEY_PLAYLISTS,
+        "favorites_json" to KEY_FAVORITES,
+        "lrc_map_json" to KEY_LRC_MAP,
+        "app_theme" to KEY_THEME,
+        "custom_covers_json" to KEY_CUSTOM_COVERS,
+        "favorite_order_json" to KEY_FAVORITE_ORDER,
+        "playlist_covers_json" to KEY_PLAYLIST_COVERS,
+        "playlist_play_counts_json" to KEY_PLAYLIST_PLAY_COUNTS,
+        "custom_metadata_json" to KEY_CUSTOM_METADATA,
+        "hidden_folders_json" to KEY_HIDDEN_FOLDERS,
+        "library_tab_order" to KEY_TAB_ORDER,
+        "island_appearance" to KEY_ISLAND_APPEARANCE,
+        "aural_light_color" to KEY_AURAL_LIGHT_COLOR,
+        "alarm_json" to KEY_ALARM
+    )
+
+    private val backupBooleanKeys = listOf(
+        "island_enabled" to KEY_ISLAND_ENABLED,
+        "comet_enabled" to KEY_COMET_ENABLED
+    )
+
+    /**
+     * Exporta el respaldo como JSON: versión, fecha, valores de las
+     * claves y el contenido de los archivos .lrc guardados por la app
+     * (los de filesDir, que se pierden al desinstalar).
+     */
+    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
+        val prefs = context.dataStore.data.first()
+        val data = JSONObject()
+        for ((name, key) in backupStringKeys) {
+            prefs[key]?.let { data.put(name, it) }
+        }
+        for ((name, key) in backupBooleanKeys) {
+            prefs[key]?.let { data.put(name, it) }
+        }
+        // Letras guardadas por la app: van dentro del JSON.
+        val lyrics = JSONObject()
+        val filesDirPath = context.filesDir.absolutePath
+        decodeLrcMap(prefs[KEY_LRC_MAP]).forEach { (id, path) ->
+            if (path.startsWith(filesDirPath)) {
+                try {
+                    val file = File(path)
+                    if (file.exists()) lyrics.put(id.toString(), file.readText())
+                } catch (e: Exception) {
+                    // Esa letra no entra en el respaldo
+                }
+            }
+        }
+        JSONObject().apply {
+            put("version", 1)
+            put("exportedAt", System.currentTimeMillis())
+            put("prefs", data)
+            put("lyrics", lyrics)
+        }.toString()
+    }
+
+    /**
+     * Importa un respaldo: reemplaza los datos actuales con los del JSON
+     * y restaura los archivos .lrc (regenerando sus rutas en filesDir).
+     * Devuelve false si el JSON no es un respaldo válido.
+     */
+    suspend fun importBackupJson(json: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val root = JSONObject(json)
+            if (root.optInt("version", -1) != 1) return@withContext false
+            val prefsJson = root.optJSONObject("prefs") ?: return@withContext false
+            val lyricsJson = root.optJSONObject("lyrics")
+            context.dataStore.edit { prefs ->
+                for ((name, key) in backupStringKeys) {
+                    if (prefsJson.has(name)) prefs[key] = prefsJson.getString(name)
+                }
+                for ((name, key) in backupBooleanKeys) {
+                    if (prefsJson.has(name)) prefs[key] = prefsJson.getBoolean(name)
+                }
+            }
+            // Letras: escribir los archivos y regenerar las rutas del mapa
+            // (las rutas viejas de filesDir no valen en otra instalación;
+            // las rutas fuera de filesDir se conservan tal cual).
+            if (prefsJson.has("lrc_map_json")) {
+                val filesDirPath = context.filesDir.absolutePath
+                val importedMap = decodeLrcMap(prefsJson.getString("lrc_map_json"))
+                val newMap = importedMap.mapValues { (id, path) ->
+                    if (path.startsWith(filesDirPath)) {
+                        val target = File(context.filesDir, path.substringAfterLast('/'))
+                        val content = lyricsJson?.optString(id.toString())
+                        if (!content.isNullOrEmpty()) {
+                            try {
+                                target.writeText(content)
+                            } catch (e: Exception) {
+                                // Se conserva la ruta aunque el archivo falle
+                            }
+                        }
+                        target.absolutePath
+                    } else {
+                        path
+                    }
+                }
+                context.dataStore.edit { prefs ->
+                    prefs[KEY_LRC_MAP] = JSONObject(
+                        newMap.mapKeys { it.key.toString() } as Map<String, String>
+                    ).toString()
+                }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 }
