@@ -13,8 +13,8 @@ android {
         applicationId = "com.aural.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 11
+        versionName = "1.1.0"
 
         // Solo ABIs de teléfonos reales (sin x86 de emuladores): las
         // librerías nativas de ML Kit pesan mucho y esto recorta el APK.
