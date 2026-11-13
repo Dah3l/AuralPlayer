@@ -102,6 +102,16 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope, SharingStarted.Eagerly, null
     )
 
+    /** Funciones nuevas ya vistas (sin puntito). */
+    val seenFeatures: StateFlow<Set<String>> = settings.seenFeatures.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptySet()
+    )
+
+    /** Última versión con novedades mostradas. */
+    val lastNewsVersion: StateFlow<String?> = settings.lastNewsVersion.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
     /** Parada programada activa (null = ninguna). */
     val stopMode: StateFlow<StopMode?> = playback.stopMode
 
@@ -877,6 +887,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Marca el día en que se mostró el modal de cumpleaños. */
     fun markBirthdayShown(dateKey: String) {
         viewModelScope.launch { settings.setBirthdayShown(dateKey) }
+    }
+
+    // ---- Novedades ----
+
+    /** Marca una función nueva como vista (su puntito desaparece). */
+    fun markFeatureSeen(key: String) {
+        viewModelScope.launch { settings.markFeatureSeen(key) }
+    }
+
+    /** Guarda la versión de las novedades mostradas. */
+    fun setLastNewsVersion(version: String) {
+        viewModelScope.launch { settings.setLastNewsVersion(version) }
     }
 
     // ---- Respaldo ----
