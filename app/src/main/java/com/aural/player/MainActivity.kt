@@ -317,8 +317,8 @@ private fun AuralApp(viewModel: AuralViewModel,
     var showEqualizerScreen by remember { mutableStateOf(false) }
     // v1.0.7: pantalla de Ajustes (lo que antes vivía en el menú ⋮).
     var showSettingsScreen by remember { mutableStateOf(false) }
-    // v1.1.0: pantalla "Tu semana en Aural" (overlay a pantalla completa).
-    var showWeekScreen by remember { mutableStateOf(false) }
+    // v1.1.0: pantalla "Tu Top 10" (overlay a pantalla completa).
+    var showTop10Screen by remember { mutableStateOf(false) }
     // v1.0.7: la isla pide ir al Home: Biblioteca visible y sin overlays
     // (ni Now Playing, ni Ajustes, ni Ecualizador) para que la pestaña
     // pedida se abra directamente donde toca.
@@ -328,7 +328,7 @@ private fun AuralApp(viewModel: AuralViewModel,
             showNowPlaying = false
             showEqualizerScreen = false
             showSettingsScreen = false
-            showWeekScreen = false
+            showTop10Screen = false
             onConsumeIslandHome()
         }
     }
@@ -433,7 +433,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenDonate = { screen = Screen.Donate },
                     onOpenContact = { screen = Screen.Contact },
                     onOpenSettings = { showSettingsScreen = true },
-                    onOpenWeek = { showWeekScreen = true },
+                    onOpenTop10 = { showTop10Screen = true },
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
@@ -641,10 +641,10 @@ private fun AuralApp(viewModel: AuralViewModel,
             viewModel = viewModel
         )
     }
-    // ---- v1.1.0: pantalla "Tu semana en Aural" ----
-    if (showWeekScreen) {
-        com.aural.player.ui.screens.WeekScreen(
-            onBack = { showWeekScreen = false },
+    // ---- v1.1.0: pantalla "Tu Top 10" ----
+    if (showTop10Screen) {
+        com.aural.player.ui.screens.Top10Screen(
+            onBack = { showTop10Screen = false },
             viewModel = viewModel
         )
     }
