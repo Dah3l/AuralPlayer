@@ -15,6 +15,13 @@ android {
         targetSdk = 34
         versionCode = 10
         versionName = "1.0.9"
+
+        // Solo ABIs de teléfonos reales (sin x86 de emuladores): las
+        // librerías nativas de ML Kit pesan mucho y esto recorta el APK.
+        ndk {
+            abiFilters += "armeabi-v7a"
+            abiFilters += "arm64-v8a"
+        }
     }
 
     signingConfigs {
