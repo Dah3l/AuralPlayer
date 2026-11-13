@@ -960,7 +960,8 @@ private fun NowPlayingMenu(
 
     // Comparte la tarjeta "Escuchando ahora" (portada + canción).
     // La usan el ítem del menú y la hoja de compartir.
-    fun shareNowPlaying() {
+    // withLink: añade el Aural link como texto junto a la imagen.
+    fun shareNowPlaying(withLink: Boolean) {
         val s = effectiveSong ?: song
         if (s == null) {
             android.widget.Toast.makeText(
@@ -984,7 +985,8 @@ private fun NowPlayingMenu(
                         context = context,
                         bitmap = bitmap,
                         fileName = "aural-escuchando.png",
-                        chooserTitle = "Compartir escuchando ahora"
+                        chooserTitle = "Compartir escuchando ahora",
+                        extraText = if (withLink) com.aural.player.AuralLink.shareText(s, customMetadata[s.id]) else null
                     )
                 } catch (e: Exception) {
                     android.widget.Toast.makeText(
@@ -1064,7 +1066,7 @@ private fun NowPlayingMenu(
         DropdownMenuItem(
             text = { Text("Compartir escuchando ahora") },
             leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = { onDismiss(); shareNowPlaying() }
+            onClick = { onDismiss(); shareNowPlaying(false) }
         )
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
@@ -1126,9 +1128,9 @@ private fun NowPlayingMenu(
                 showShareSheet = false
                 openCardSheet(false)
             },
-            onShareNowPlaying = {
+            onShareNowPlaying = { withLink ->
                 showShareSheet = false
-                shareNowPlaying()
+                shareNowPlaying(withLink)
             },
             onDismiss = { showShareSheet = false }
         )
@@ -1385,10 +1387,11 @@ private fun ShareSheet(
     onShareFile: () -> Unit,
     onShareLink: (withCard: Boolean) -> Unit,
     onShareCard: () -> Unit,
-    onShareNowPlaying: () -> Unit,
+    onShareNowPlaying: (withLink: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var linkWithCard by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var nowPlayingWithLink by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1469,8 +1472,25 @@ private fun ShareSheet(
                 icon = Icons.Rounded.MusicNote,
                 title = "Compartir escuchando ahora",
                 subtitle = "Una imagen con la portada y la canción que suena",
-                onClick = onShareNowPlaying
+                onClick = { onShareNowPlaying(nowPlayingWithLink) }
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 52.dp, top = 2.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Con Aural link",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = nowPlayingWithLink,
+                    onCheckedChange = { nowPlayingWithLink = it }
+                )
+            }
             Spacer(Modifier.height(16.dp))
         }
     }
