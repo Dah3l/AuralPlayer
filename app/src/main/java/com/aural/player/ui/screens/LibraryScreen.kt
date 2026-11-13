@@ -82,11 +82,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
+import com.aural.player.data.birthdayDisplayName
+import com.aural.player.data.isBirthdayToday
+import com.aural.player.data.todayDateKey
+import com.aural.player.ui.components.BirthdayModal
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
 import com.aural.player.ui.components.HalloweenHomeAmbient
 import com.aural.player.ui.components.ChristmasHomeAmbient
 import com.aural.player.ui.components.MediaGridCard
+import com.aural.player.ui.components.ProfileFormDialog
 import com.aural.player.ui.theme.HalloweenFontFamily
 import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
@@ -182,6 +187,32 @@ fun LibraryScreen(
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val songs by viewModel.filteredSongsFlow.collectAsStateWithLifecycle()
+
+    // ---- Perfil: nombre y cumpleaños (saludo personalizado) ----
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
+    val birthday by viewModel.birthday.collectAsStateWithLifecycle()
+
+    // Tarjeta de bienvenida: una sola vez, poco después de abrir la app
+    // (el retardo deja que DataStore cargue el valor real de profileAsked).
+    var showWelcomeDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(600)
+        if (!viewModel.profileAsked.value) showWelcomeDialog = true
+    }
+
+    // Modal de cumpleaños: una vez al día, si hoy es la fecha guardada.
+    var showBirthdayModal by remember { mutableStateOf(false) }
+    LaunchedEffect(birthday, userName) {
+        val md = birthday
+        val name = userName
+        if (!md.isNullOrBlank() && !name.isNullOrBlank() && isBirthdayToday(md)) {
+            val today = todayDateKey()
+            if (viewModel.birthdayShownDate.value != today) {
+                viewModel.markBirthdayShown(today)
+                showBirthdayModal = true
+            }
+        }
+    }
     val artists by viewModel.artistsFlow.collectAsStateWithLifecycle()
     val albums by viewModel.albumsFlow.collectAsStateWithLifecycle()
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
@@ -360,7 +391,7 @@ fun LibraryScreen(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = greetingForHour(),
+                text = greetingForHour(userName),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1155,6 +1186,35 @@ fun LibraryScreen(
         ChristmasHomeAmbient(Modifier.fillMaxSize())
     }
 
+    // ---- Bienvenida del perfil (una sola vez) ----
+    if (showWelcomeDialog) {
+        ProfileFormDialog(
+            initialName = "",
+            initialBirthday = null,
+            title = "¿Cómo te llamas?",
+            subtitle = "Para saludarte por tu nombre y felicitarte en tu cumpleaños. " +
+                "Todo queda guardado solo en tu teléfono.",
+            confirmLabel = "Guardar",
+            showSkip = true,
+            showDelete = false,
+            onSkip = { showWelcomeDialog = false; viewModel.setProfileAsked() },
+            onDelete = {},
+            onDismiss = { showWelcomeDialog = false; viewModel.setProfileAsked() },
+            onConfirm = { name, md ->
+                showWelcomeDialog = false
+                viewModel.saveUserProfile(name, md)
+            }
+        )
+    }
+
+    // ---- Modal de cumpleaños (una vez al día) ----
+    if (showBirthdayModal) {
+        BirthdayModal(
+            displayName = birthdayDisplayName(userName ?: "", birthday ?: ""),
+            onDismiss = { showBirthdayModal = false }
+        )
+    }
+
 }
 
 
@@ -1946,15 +2006,19 @@ private fun SaveDailyPlaylistDialog(onDismiss: () -> Unit, onConfirm: (String) -
 }
 
 /**
- * Saludo según la hora del día, estilo cálido.
+ * Saludo según la hora del día, estilo cálido. Con nombre guardado,
+ * saludo personalizado con el primer nombre.
  */
-private fun greetingForHour(): String {
+private fun greetingForHour(userName: String?): String {
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    return when (hour) {
+    val base = when (hour) {
         in 5..11 -> "Buenos días"
         in 12..17 -> "Buenas tardes"
         else -> "Buenas noches"
     }
+    val firstName = userName?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotBlank() }
+    return if (firstName == null) base
+    else "$base, $firstName. ¿Qué quieres escuchar hoy?"
 }
 
 /**
