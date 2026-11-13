@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.sp
 const val DONATION_CARD_CUP = "9227-9598-7391-3011"
 
 /** Usuario de QvaPay para donaciones (sin montos fijos: el usuario dona lo que desee). */
-const val DONATION_QVAPAY_USER = "@Dah3l"
+const val DONATION_QVAPAY_USER = "@AuralPlayer"
 
 /**
  * v1.0.8: número de WhatsApp al que el donante confirma su donación.
