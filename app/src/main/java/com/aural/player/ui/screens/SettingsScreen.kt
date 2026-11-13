@@ -162,10 +162,15 @@ fun SettingsScreen(
     // Subtítulo del perfil según los datos guardados.
     val profileName by viewModel.userName.collectAsStateWithLifecycle()
     val profileBirthday by viewModel.birthday.collectAsStateWithLifecycle()
-    val profileSubtitle = when {
-        profileName.isNullOrBlank() -> "Añade tu nombre y tu cumpleaños"
-        profileBirthday.isNullOrBlank() -> profileName
-        else -> "$profileName · ${formatMonthDay(profileBirthday)}"
+    val profileSubtitle = run {
+        // Locales: las propiedades delegadas no admiten smart cast.
+        val name = profileName
+        val bday = profileBirthday
+        when {
+            name.isNullOrBlank() -> "Añade tu nombre y tu cumpleaños"
+            bday.isNullOrBlank() -> name
+            else -> "$name · ${formatMonthDay(bday)}"
+        }
     }
     val alarmSubtitle = run {
         val a = alarmState
