@@ -317,6 +317,8 @@ private fun AuralApp(viewModel: AuralViewModel,
     var showEqualizerScreen by remember { mutableStateOf(false) }
     // v1.0.7: pantalla de Ajustes (lo que antes vivía en el menú ⋮).
     var showSettingsScreen by remember { mutableStateOf(false) }
+    // v1.1.0: pantalla "Tu semana en Aural" (overlay a pantalla completa).
+    var showWeekScreen by remember { mutableStateOf(false) }
     // v1.0.7: la isla pide ir al Home: Biblioteca visible y sin overlays
     // (ni Now Playing, ni Ajustes, ni Ecualizador) para que la pestaña
     // pedida se abra directamente donde toca.
@@ -326,6 +328,7 @@ private fun AuralApp(viewModel: AuralViewModel,
             showNowPlaying = false
             showEqualizerScreen = false
             showSettingsScreen = false
+            showWeekScreen = false
             onConsumeIslandHome()
         }
     }
@@ -430,6 +433,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenDonate = { screen = Screen.Donate },
                     onOpenContact = { screen = Screen.Contact },
                     onOpenSettings = { showSettingsScreen = true },
+                    onOpenWeek = { showWeekScreen = true },
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
@@ -634,6 +638,13 @@ private fun AuralApp(viewModel: AuralViewModel,
             onToggleComet = { viewModel.setCometEnabled(!cometOn) },
             auralLightColor = lightColor,
             onLightColorChange = { viewModel.setAuralLightColor(it) },
+            viewModel = viewModel
+        )
+    }
+    // ---- v1.1.0: pantalla "Tu semana en Aural" ----
+    if (showWeekScreen) {
+        com.aural.player.ui.screens.WeekScreen(
+            onBack = { showWeekScreen = false },
             viewModel = viewModel
         )
     }
