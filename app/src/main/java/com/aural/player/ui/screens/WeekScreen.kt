@@ -18,11 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +52,46 @@ fun Top10Screen(
     val topSongs by viewModel.topSongs.collectAsStateWithLifecycle()
     // Color del tema activo: tiñe la tarjeta compartida.
     val accent = MaterialTheme.colorScheme.primary
+
+    // Genera la tarjeta y la comparte o la guarda en la galería.
+    fun onTop10Action(saveLocally: Boolean) {
+        scope.launch {
+            try {
+                val bitmap = captureCard(context) {
+                    Top10CardContent(
+                        topSongs = topSongs,
+                        accentColor = accent
+                    )
+                }
+                if (saveLocally) {
+                    val uri = saveCardImageLocally(
+                        context = context,
+                        bitmap = bitmap,
+                        fileName = "aural-top10.png"
+                    )
+                    android.widget.Toast.makeText(
+                        context,
+                        if (uri != null) "Guardado en la galería"
+                        else "No se pudo guardar",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    shareCardImage(
+                        context = context,
+                        bitmap = bitmap,
+                        fileName = "aural-top10.png",
+                        chooserTitle = "Compartir mi Top 10"
+                    )
+                }
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(
+                    context,
+                    "No se pudo compartir",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshTopSongs()
@@ -114,35 +156,21 @@ fun Top10Screen(
                     }
                     Spacer(Modifier.height(24.dp))
                     Button(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val bitmap = captureCard(context) {
-                                        Top10CardContent(
-                                            topSongs = topSongs,
-                                            accentColor = accent
-                                        )
-                                    }
-                                    shareCardImage(
-                                        context = context,
-                                        bitmap = bitmap,
-                                        fileName = "aural-top10.png",
-                                        chooserTitle = "Compartir mi Top 10"
-                                    )
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "No se pudo compartir",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        },
+                        onClick = { onTop10Action(false) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Rounded.Share, null)
                         Spacer(Modifier.width(8.dp))
                         Text("Compartir mi Top 10")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { onTop10Action(true) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Rounded.Download, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Guardar imagen")
                     }
                     Spacer(Modifier.height(24.dp))
                 }
