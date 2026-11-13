@@ -11,7 +11,7 @@ import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
-import com.aural.player.data.WeekStats
+import com.aural.player.data.TopSong
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
 import android.app.PendingIntent
@@ -85,10 +85,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Parada programada activa (null = ninguna). */
     val stopMode: StateFlow<StopMode?> = playback.stopMode
 
-    /** Registro de escucha y resumen semanal. */
+    /** Registro de escucha y Top 10. */
     private val playHistory = PlayHistoryStore(auralApp)
-    private val _weekStats = MutableStateFlow(WeekStats())
-    val weekStats: StateFlow<WeekStats> = _weekStats.asStateFlow()
+    private val _topSongs = MutableStateFlow<List<TopSong>>(emptyList())
+    val topSongs: StateFlow<List<TopSong>> = _topSongs.asStateFlow()
 
     /** Playlist del día: UNA sola instancia { fecha, ids } que rota a diario. */
     val dailyPlaylist: StateFlow<SettingsStore.DailyPlaylist?> = settings.dailyPlaylist.stateIn(
@@ -828,12 +828,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---- Tu semana en Aural ----
+    // ---- Tu Top 10 ----
 
-    /** Recarga el resumen de los últimos 7 días. */
-    fun refreshWeekStats() {
+    /** Recarga las 10 canciones más escuchadas. */
+    fun refreshTopSongs() {
         viewModelScope.launch {
-            _weekStats.value = playHistory.getWeekStats()
+            _topSongs.value = playHistory.getTopSongs()
         }
     }
 
