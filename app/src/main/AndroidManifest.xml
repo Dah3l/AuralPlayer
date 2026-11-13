@@ -29,6 +29,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- v1.0.7: isla dinámica (overlay sobre otras apps) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- v1.1.0: despertador con música (alarmas exactas + reprogramar al reiniciar) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".AuralApp"
@@ -74,6 +77,22 @@
             android:name=".PackageReplacedReceiver"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- v1.1.0: despertador — suena la alarma (solo la dispara la app) -->
+        <receiver
+            android:name=".alarm.AlarmReceiver"
+            android:exported="false" />
+
+        <!-- v1.1.0: tras reiniciar o actualizar, reprograma la alarma activa -->
+        <receiver
+            android:name=".alarm.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
