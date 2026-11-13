@@ -159,7 +159,7 @@ fun LibraryScreen(
     onOpenDonate: () -> Unit = {},
     onOpenContact: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onOpenWeek: () -> Unit = {},
+    onOpenTop10: () -> Unit = {},
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -754,8 +754,8 @@ fun LibraryScreen(
                     onClick = { showGeneralMenu = false; onOpenContact() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Tu semana en Aural") },
-                    onClick = { showGeneralMenu = false; onOpenWeek() }
+                    text = { Text("Tu Top 10") },
+                    onClick = { showGeneralMenu = false; onOpenTop10() }
                 )
                 DropdownMenuItem(
                     text = { Text("Ajustes") },
