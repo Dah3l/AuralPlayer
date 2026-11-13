@@ -9,7 +9,15 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,6 +30,43 @@ object LyricsTranslator {
 
     /** Tamaño aproximado de cada modelo de idioma (ML Kit no expone el tamaño real antes de bajar). */
     const val MODEL_SIZE_MB_EACH = 30
+
+    /** Estado de los modelos de un idioma. */
+    enum class ModelState { IDLE, DOWNLOADING, READY, FAILED }
+
+    /**
+     * Descargas en segundo plano, fuera de cualquier pantalla: cambiar de
+     * canción o de pantalla NO cancela la descarga, y el usuario sigue
+     * usando la app mientras baja. Una sola descarga por idioma.
+     */
+    private val downloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val downloadJobs = mutableMapOf<String, Job>()
+    private val _modelStates = MutableStateFlow<Map<String, ModelState>>(emptyMap())
+    val modelStates: StateFlow<Map<String, ModelState>> = _modelStates.asStateFlow()
+
+    /** Arranca la descarga de los modelos (no hace nada si ya está bajando o lista). */
+    fun startDownload(sourceTag: String) {
+        synchronized(downloadJobs) {
+            if (downloadJobs[sourceTag]?.isActive == true) return
+            if (_modelStates.value[sourceTag] == ModelState.READY) return
+            downloadJobs[sourceTag] = downloadScope.launch {
+                _modelStates.update { it + (sourceTag to ModelState.DOWNLOADING) }
+                val ok = downloadModels(sourceTag)
+                _modelStates.update {
+                    it + (sourceTag to if (ok) ModelState.READY else ModelState.FAILED)
+                }
+            }
+        }
+    }
+
+    /** Revisa si los modelos ya están bajados y actualiza el estado. */
+    suspend fun refreshState(sourceTag: String) {
+        val ready = areModelsReady(sourceTag)
+        _modelStates.update { current ->
+            if (current[sourceTag] == ModelState.DOWNLOADING) current
+            else current + (sourceTag to if (ready) ModelState.READY else ModelState.IDLE)
+        }
+    }
 
     /**
      * Detecta el idioma de un texto. Devuelve el tag BCP-47 ("en", "pt"...)
