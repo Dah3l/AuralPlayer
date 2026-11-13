@@ -1,7 +1,7 @@
-// Pantalla "Tu semana en Aural": resumen de lo escuchado en los
-// últimos 7 días (minutos, canciones distintas y las más escuchadas),
+// Pantalla "Tu Top 10": las 10 canciones más escuchadas en Aural,
 // con tarjeta para compartir. Los datos empiezan a contarse desde que
-// se instala esta versión.
+// se instala esta versión. (El archivo conserva el nombre WeekScreen.kt
+// porque la pantalla nació como "Tu semana en Aural".)
 package com.aural.player.ui.screens
 
 import androidx.activity.compose.BackHandler
@@ -37,20 +37,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
-import com.aural.player.data.WeekSongStat
+import com.aural.player.data.TopSong
 import kotlinx.coroutines.launch
 
 @Composable
-fun WeekScreen(
+fun Top10Screen(
     onBack: () -> Unit,
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val stats by viewModel.weekStats.collectAsStateWithLifecycle()
+    val topSongs by viewModel.topSongs.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        viewModel.refreshWeekStats()
+        viewModel.refreshTopSongs()
     }
 
     BackHandler(onBack = onBack)
@@ -74,7 +74,7 @@ fun WeekScreen(
                     )
                 }
                 Text(
-                    text = "Tu semana en Aural",
+                    text = "Tu Top 10",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -85,48 +85,30 @@ fun WeekScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
             ) {
-                if (stats.totalSeconds <= 0) {
+                if (topSongs.isEmpty()) {
                     Spacer(Modifier.height(48.dp))
                     Text(
-                        text = "Todavía no hay nada que contar.",
+                        text = "Todavía no hay un Top 10.",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Escucha música y tu semana aparecerá aquí: " +
-                            "minutos, canciones distintas y tus más escuchadas.",
+                        text = "Escucha música y tus 10 canciones más " +
+                            "escuchadas aparecerán aquí.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = formatListeningTime(stats.totalSeconds),
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "de música en los últimos 7 días",
+                        text = "Las canciones que más has escuchado en Aural",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "${stats.distinctSongs} canciones distintas",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    Text(
-                        text = "Tus más escuchadas",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    stats.topSongs.forEachIndexed { index, song ->
-                        WeekSongRow(rank = index + 1, song = song)
+                    Spacer(Modifier.height(16.dp))
+                    topSongs.forEachIndexed { index, song ->
+                        Top10SongRow(rank = index + 1, song = song)
                     }
                     Spacer(Modifier.height(24.dp))
                     Button(
@@ -134,17 +116,13 @@ fun WeekScreen(
                             scope.launch {
                                 try {
                                     val bitmap = captureCard(context) {
-                                        WeekCardContent(
-                                            totalSeconds = stats.totalSeconds,
-                                            distinctSongs = stats.distinctSongs,
-                                            topSongs = stats.topSongs
-                                        )
+                                        Top10CardContent(topSongs = topSongs)
                                     }
                                     shareCardImage(
                                         context = context,
                                         bitmap = bitmap,
-                                        fileName = "aural-semana.png",
-                                        chooserTitle = "Compartir mi semana"
+                                        fileName = "aural-top10.png",
+                                        chooserTitle = "Compartir mi Top 10"
                                     )
                                 } catch (e: Exception) {
                                     android.widget.Toast.makeText(
@@ -159,7 +137,7 @@ fun WeekScreen(
                     ) {
                         Icon(Icons.Rounded.Share, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Compartir mi semana")
+                        Text("Compartir mi Top 10")
                     }
                     Spacer(Modifier.height(24.dp))
                 }
@@ -169,7 +147,7 @@ fun WeekScreen(
 }
 
 @Composable
-private fun WeekSongRow(rank: Int, song: WeekSongStat) {
+private fun Top10SongRow(rank: Int, song: TopSong) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
