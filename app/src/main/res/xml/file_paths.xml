@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Rutas que FileProvider puede compartir: tarjetas de letras en caché -->
+<!-- Rutas que FileProvider puede compartir: tarjetas en caché -->
 <paths>
     <cache-path name="lyric_cards" path="lyric_cards/" />
+    <!-- v1.1.0: tarjetas "Escuchando ahora" y "Tu semana en Aural" -->
+    <cache-path name="share_cards" path="share_cards/" />
 </paths>
