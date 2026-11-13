@@ -95,7 +95,10 @@ suspend fun captureCard(
     }
     val fixedContext = context.createConfigurationContext(fixedConfig)
     val composeView = ComposeView(fixedContext)
-    composeView.setContent(content)
+    // OJO: el contenido va INVOCADO dentro del lambda de setContent, no
+    // pasado como valor: así lo hace la tarjeta de letras (que funciona)
+    // y así el compilador de Compose lo compone de verdad.
+    composeView.setContent { content() }
     val decor = activity.window.decorView as ViewGroup
     composeView.visibility = android.view.View.INVISIBLE
     decor.addView(composeView, width, ViewGroup.LayoutParams.WRAP_CONTENT)
