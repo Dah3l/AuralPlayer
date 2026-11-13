@@ -512,12 +512,14 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Busca la letra en línea (LRCLIB) y la guarda asociada a la canción.
+     * Busca la letra en línea (LRCLIB + respaldo) y la guarda asociada a la canción.
+     * La duración (si se pasa) afina la búsqueda: LRCLIB la usa para desempatar.
      * Devuelve true si se encontró y guardó.
      */
-    suspend fun searchAndSaveLyrics(songId: Long, track: String, artist: String): Boolean {
+    suspend fun searchAndSaveLyrics(songId: Long, track: String, artist: String, durationMs: Long? = null): Boolean {
         return try {
-            val lrcContent = com.aural.player.data.LrcLibClient.searchLyrics(artist, track)
+            val durationSec = durationMs?.takeIf { it > 0 }?.let { (it / 1000).toInt() }
+            val lrcContent = com.aural.player.data.LrcLibClient.searchLyrics(artist, track, durationSec)
                 ?: return false
             // Guardar el .lrc en almacenamiento interno
             val file = java.io.File(
