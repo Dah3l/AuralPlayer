@@ -5,6 +5,10 @@ package com.aural.player.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -14,7 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -34,7 +37,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
@@ -43,6 +48,7 @@ import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -58,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +76,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.installedVersionName
+import com.aural.player.ui.components.AlarmDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -86,9 +97,70 @@ fun SettingsScreen(
     viewModel: AuralViewModel
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showHiddenFolders by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showAlarmDialog by remember { mutableStateOf(false) }
+    var pendingImportJson by remember { mutableStateOf<String?>(null) }
+
+    // Respaldo: exportar (crear archivo) e importar (elegir archivo).
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val json = viewModel.exportBackupJson()
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use {
+                            it.write(json.toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                    Toast.makeText(context, "Respaldo guardado", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context, "No se pudo guardar el respaldo", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val json = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use {
+                            it.readBytes().toString(Charsets.UTF_8)
+                        }
+                    }
+                    if (json.isNullOrBlank()) {
+                        Toast.makeText(context, "El archivo está vacío", Toast.LENGTH_SHORT).show()
+                    } else {
+                        pendingImportJson = json
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context, "No se pudo leer el archivo", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    // Subtítulo del despertador según su estado actual.
+    val alarmState by viewModel.alarm.collectAsStateWithLifecycle()
+    val alarmSubtitle = run {
+        val a = alarmState
+        when {
+            a == null || !a.enabled -> "Desactivado"
+            a.repeatDaily -> "%d:%02d · Todos los días".format(a.hour, a.minute)
+            else -> "%d:%02d · Solo una vez".format(a.hour, a.minute)
+        }
+    }
 
     // El botón atrás del sistema vuelve a la pantalla anterior.
     BackHandler(onBack = onBack)
@@ -286,6 +358,49 @@ fun SettingsScreen(
                 },
                 onClick = { showHiddenFolders = true }
             )
+            SettingsSection("Respaldo")
+            SettingsRow(
+                icon = Icons.Rounded.Backup,
+                title = "Exportar respaldo",
+                subtitle = "Playlists, favoritos, metadatos y portadas en un archivo",
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    val date = java.text.SimpleDateFormat(
+                        "yyyy-MM-dd", java.util.Locale.US
+                    ).format(java.util.Date())
+                    exportLauncher.launch("aural-respaldo-$date.json")
+                }
+            )
+            SettingsRow(
+                icon = Icons.Rounded.Restore,
+                title = "Importar respaldo",
+                subtitle = "Restaura tus datos desde un archivo guardado",
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { importLauncher.launch(arrayOf("application/json")) }
+            )
+            SettingsSection("Despertador")
+            SettingsRow(
+                icon = Icons.Rounded.Alarm,
+                title = "Despertador",
+                subtitle = alarmSubtitle,
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { showAlarmDialog = true }
+            )
             SettingsSection("Aural")
             SettingsRow(
                 icon = Icons.Rounded.Info,
@@ -333,6 +448,45 @@ fun SettingsScreen(
             }
         }
     }
+    }
+
+    // ---- Diálogo del despertador ----
+    if (showAlarmDialog) {
+        AlarmDialog(
+            viewModel = viewModel,
+            onDismiss = { showAlarmDialog = false }
+        )
+    }
+
+    // ---- Confirmación de importar respaldo ----
+    if (pendingImportJson != null) {
+        AlertDialog(
+            onDismissRequest = { pendingImportJson = null },
+            title = { Text("Importar respaldo") },
+            text = {
+                Text(
+                    "Esto reemplaza tus playlists, favoritos, metadatos y " +
+                        "ajustes actuales con los del respaldo. ¿Continuar?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val json = pendingImportJson
+                    pendingImportJson = null
+                    scope.launch {
+                        val ok = viewModel.importBackupJson(json ?: "")
+                        Toast.makeText(
+                            context,
+                            if (ok) "Respaldo importado" else "Archivo no válido",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }) { Text("Importar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImportJson = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     // ---- Carpetas ocultas ----
