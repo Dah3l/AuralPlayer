@@ -199,6 +199,7 @@ fun LibraryScreen(
 
     // ---- Modales de inicio: de uno en uno, sin solaparse ----
     // Orden: cumpleaños -> bienvenida del perfil -> novedades.
+    val context = LocalContext.current
     var birthdayPending by remember { mutableStateOf(false) }
     var welcomePending by remember { mutableStateOf(false) }
     var newsPending by remember { mutableStateOf(false) }
@@ -225,7 +226,7 @@ fun LibraryScreen(
         // Novedades: solo al actualizar (si ya hay una versión guardada
         // distinta a la actual; en instalación nueva se guarda sin mostrar).
         val current = try {
-            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
         } catch (e: Exception) {
             null
         }
