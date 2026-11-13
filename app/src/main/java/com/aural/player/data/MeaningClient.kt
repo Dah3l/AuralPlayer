@@ -24,6 +24,12 @@ object MeaningClient {
     suspend fun getMeaning(context: Context, artist: String, track: String): String? =
         withContext(Dispatchers.IO) {
             try {
+                // Migración: borrar la caché vieja, que pudo guardar ausencias
+                // por fallos de red (la versión anterior cacheaba hasta los fallos)
+                try {
+                    val oldDir = File(context.filesDir, "meanings")
+                    if (oldDir.exists()) oldDir.deleteRecursively()
+                } catch (e: Exception) { }
                 val cacheFile = cacheFile(context, artist, track)
                 if (cacheFile.exists()) {
                     val cached = cacheFile.readText()
@@ -206,7 +212,7 @@ object MeaningClient {
         val hash = MessageDigest.getInstance("SHA-1")
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-        return File(File(context.filesDir, "meanings"), "$hash.txt")
+        return File(File(context.filesDir, "meanings_v2"), "$hash.txt")
     }
 
     // ---------- HTTP ----------
