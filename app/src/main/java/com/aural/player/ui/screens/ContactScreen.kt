@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +50,9 @@ const val DEV_EMAIL = "auralplayeroficial@gmail.com"
 
 /** Instagram de Aural. */
 const val AURAL_INSTAGRAM_URL = "https://instagram.com/auralplayer"
+
+/** Página web oficial de Aural. */
+const val AURAL_WEBSITE_URL = "https://auralplayer.onrender.com"
 
 @Composable
 fun ContactScreen(onBack: () -> Unit) {
@@ -131,6 +135,19 @@ fun ContactScreen(onBack: () -> Unit) {
                                 Intent(
                                     Intent.ACTION_VIEW,
                                     Uri.parse(AURAL_INSTAGRAM_URL)
+                                )
+                            )
+                        }
+                    )
+                    ContactRow(
+                        icon = Icons.Rounded.Language,
+                        title = "Página web",
+                        subtitle = "auralplayer.onrender.com",
+                        onClick = {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(AURAL_WEBSITE_URL)
                                 )
                             )
                         }
