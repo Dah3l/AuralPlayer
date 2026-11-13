@@ -961,17 +961,28 @@ fun isBirthdayToday(monthDay: String): Boolean {
     return false
 }
 
-/** La combinación especial: Vanesa/Ness/Nessa + 13 de noviembre. */
-private fun isPurryCombination(name: String, monthDay: String): Boolean {
-    val lower = name.trim().lowercase(java.util.Locale.ROOT)
-    return (lower == "vanesa" || lower == "ness" || lower == "nessa") && monthDay == "11-13"
+/**
+ * Casos personalizados por combinación de nombre + fecha de cumpleaños.
+ * Devuelve el nombre especial o null si no aplica. El saludo y el modal
+ * de cumpleaños pueden usar nombres distintos para el mismo caso.
+ */
+private fun specialDisplayName(name: String, monthDay: String?, forBirthday: Boolean): String? {
+    if (monthDay == null) return null
+    val first = name.trim().split(" ").firstOrNull()
+        ?.lowercase(java.util.Locale.ROOT) ?: return null
+    return when {
+        first in listOf("vanesa", "ness", "nessa") && monthDay == "11-13" ->
+            if (forBirthday) "PurryPrincesa" else "Purry"
+        first in listOf("frank", "sensato") && monthDay == "10-24" -> "Sensato🗿"
+        else -> null
+    }
 }
 
 /** Nombre que muestra el mensaje de cumpleaños. Solo la combinación
  * Vanesa/Ness/Nessa + 13 de noviembre usa "PurryPrincesa". */
 fun birthdayDisplayName(name: String, monthDay: String): String {
     val clean = name.trim()
-    return if (isPurryCombination(clean, monthDay)) "PurryPrincesa" else clean
+    return specialDisplayName(clean, monthDay, forBirthday = true) ?: clean
 }
 
 /** Nombre que muestra el saludo personalizado (primer nombre). Solo la
@@ -979,6 +990,6 @@ fun birthdayDisplayName(name: String, monthDay: String): String {
 fun greetingDisplayName(name: String?, monthDay: String?): String? {
     if (name.isNullOrBlank()) return null
     val clean = name.trim()
-    if (monthDay != null && isPurryCombination(clean, monthDay)) return "Purry"
+    specialDisplayName(clean, monthDay, forBirthday = false)?.let { return it }
     return clean.split(" ").firstOrNull()?.takeIf { it.isNotBlank() }
 }
