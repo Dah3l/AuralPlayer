@@ -48,6 +48,8 @@ fun Top10Screen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val topSongs by viewModel.topSongs.collectAsStateWithLifecycle()
+    // Color del tema activo: tiñe la tarjeta compartida.
+    val accent = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(Unit) {
         viewModel.refreshTopSongs()
@@ -116,7 +118,10 @@ fun Top10Screen(
                             scope.launch {
                                 try {
                                     val bitmap = captureCard(context) {
-                                        Top10CardContent(topSongs = topSongs)
+                                        Top10CardContent(
+                                            topSongs = topSongs,
+                                            accentColor = accent
+                                        )
                                     }
                                     shareCardImage(
                                         context = context,
