@@ -875,6 +875,7 @@ private fun NowPlayingMenu(
     val context = androidx.compose.ui.platform.LocalContext.current
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val sleepMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
+    val stopMode by viewModel.stopMode.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
 
@@ -968,7 +969,18 @@ private fun NowPlayingMenu(
             onClick = { onDismiss(); showPlaylists = true }
         )
         DropdownMenuItem(
-            text = { Text(if (sleepMinutes != null) "Temporizador: ${sleepMinutes} min" else "Temporizador de suspensión") },
+            text = {
+                Text(
+                    when {
+                        sleepMinutes != null -> "Temporizador: ${sleepMinutes} min"
+                        stopMode == com.aural.player.playback.StopMode.SONG ->
+                            "Temporizador: al terminar la canción"
+                        stopMode == com.aural.player.playback.StopMode.QUEUE ->
+                            "Temporizador: al terminar la lista"
+                        else -> "Temporizador de suspensión"
+                    }
+                )
+            },
             leadingIcon = { Icon(Icons.Rounded.Timer, null) },
             onClick = { onDismiss(); showTimer = true }
         )
@@ -1010,6 +1022,46 @@ private fun NowPlayingMenu(
             text = { Text("Compartir") },
             leadingIcon = { Icon(Icons.Rounded.Share, null) },
             onClick = { onDismiss(); showShareSheet = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Compartir escuchando ahora") },
+            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+            onClick = {
+                onDismiss()
+                val s = effectiveSong ?: song
+                if (s == null) {
+                    android.widget.Toast.makeText(
+                        context, "Sin canción", android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    scope.launch {
+                        try {
+                            val cover = loadCardCoverBitmap(
+                                context,
+                                customCovers[s.id] ?: s.albumArtUri
+                            )
+                            val bitmap = captureCard(context) {
+                                NowPlayingCardContent(
+                                    title = s.title,
+                                    artist = s.artist,
+                                    coverBitmap = cover
+                                )
+                            }
+                            shareCardImage(
+                                context = context,
+                                bitmap = bitmap,
+                                fileName = "aural-escuchando.png",
+                                chooserTitle = "Compartir escuchando ahora"
+                            )
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                context, "No se pudo compartir",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
         )
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
@@ -1207,7 +1259,25 @@ private fun NowPlayingMenu(
                             Text("$mins minutos", modifier = Modifier.fillMaxWidth())
                         }
                     }
-                    if (sleepMinutes != null) {
+                    TextButton(
+                        onClick = {
+                            viewModel.setStopMode(com.aural.player.playback.StopMode.SONG)
+                            showTimer = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Al terminar la canción", modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.setStopMode(com.aural.player.playback.StopMode.QUEUE)
+                            showTimer = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Al terminar la lista", modifier = Modifier.fillMaxWidth())
+                    }
+                    if (sleepMinutes != null || stopMode != null) {
                         TextButton(
                             onClick = {
                                 viewModel.cancelSleepTimer()
