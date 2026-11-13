@@ -105,11 +105,25 @@ object LrcLibClient {
 
     /** Elige letra sincronizada válida o texto plano de un resultado de LRCLIB. */
     private fun pickFromObject(obj: JSONObject): String? {
-        val synced = obj.optString("syncedLyrics", "")
-        if (synced.isNotBlank() && isValidSynced(synced)) return synced
-        val plain = obj.optString("plainLyrics", "")
-        if (plain.isNotBlank()) return plainToLrc(plain)
-        return null
+        val synced = optLyricsString(obj, "syncedLyrics")
+        if (synced != null && isValidSynced(synced)) return synced
+        val plain = optLyricsString(obj, "plainLyrics") ?: return null
+        val lrc = plainToLrc(plain)
+        return if (lrc.isNotBlank()) lrc else null
+    }
+
+    /**
+     * Extrae un campo de letra de un JSONObject: null si falta, si es
+     * JSON null, si está en blanco o si es el literal "null" (algunas
+     * respuestas traen el null como texto y eso terminaba guardado
+     * como letra y mostrándose en la pantalla).
+     */
+    private fun optLyricsString(obj: JSONObject, key: String): String? {
+        if (obj.isNull(key)) return null
+        val value = obj.optString(key, "").trim()
+        if (value.isBlank()) return null
+        if (value.equals("null", ignoreCase = true)) return null
+        return value
     }
 
     /**
@@ -161,8 +175,9 @@ object LrcLibClient {
         val url = "https://api.lyrics.ovh/v1/${encPath(artist)}/${encPath(track)}"
         val json = httpGet(url) ?: return null
         return try {
-            val lyrics = JSONObject(json).optString("lyrics", "")
-            if (lyrics.isNotBlank()) plainToLrc(lyrics) else null
+            val lyrics = optLyricsString(JSONObject(json), "lyrics") ?: return null
+            val lrc = plainToLrc(lyrics)
+            if (lrc.isNotBlank()) lrc else null
         } catch (e: Exception) { null }
     }
 
@@ -242,8 +257,9 @@ object LrcLibClient {
     /** Convierte letra plana a formato .lrc básico (sin tiempos, solo texto). */
     private fun plainToLrc(plain: String): String {
         return plain.lines()
-            .filter { it.isNotBlank() }
-            .joinToString("\n") { "[00:00.00]" + it.trim() }
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+            .joinToString("\n") { "[00:00.00]$it" }
     }
 
     // ---------- Caché en memoria (incluye negativos, con TTL) ----------
