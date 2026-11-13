@@ -82,6 +82,26 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope, SharingStarted.Eagerly, null
     )
 
+    /** Nombre del usuario (null = no dado). */
+    val userName: StateFlow<String?> = settings.userName.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
+    /** Cumpleaños "MM-dd" (null = no dado). */
+    val birthday: StateFlow<String?> = settings.birthday.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
+    /** Si ya se mostró la tarjeta de bienvenida del perfil. */
+    val profileAsked: StateFlow<Boolean> = settings.profileAsked.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    /** Fecha en que se mostró el modal de cumpleaños por última vez. */
+    val birthdayShownDate: StateFlow<String?> = settings.birthdayShownDate.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
     /** Parada programada activa (null = ninguna). */
     val stopMode: StateFlow<StopMode?> = playback.stopMode
 
@@ -835,6 +855,28 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _topSongs.value = playHistory.getTopSongs()
         }
+    }
+
+    // ---- Perfil (nombre y cumpleaños) ----
+
+    /** Guarda nombre y cumpleaños (birthdayMd null = sin fecha). */
+    fun saveUserProfile(name: String, birthdayMd: String?) {
+        viewModelScope.launch { settings.setUserProfile(name, birthdayMd) }
+    }
+
+    /** Marca la tarjeta de bienvenida como vista. */
+    fun setProfileAsked() {
+        viewModelScope.launch { settings.setProfileAsked() }
+    }
+
+    /** Borra nombre y cumpleaños del teléfono. */
+    fun clearUserProfile() {
+        viewModelScope.launch { settings.clearUserProfile() }
+    }
+
+    /** Marca el día en que se mostró el modal de cumpleaños. */
+    fun markBirthdayShown(dateKey: String) {
+        viewModelScope.launch { settings.setBirthdayShown(dateKey) }
     }
 
     // ---- Respaldo ----
