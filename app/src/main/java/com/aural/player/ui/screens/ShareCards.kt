@@ -78,8 +78,8 @@ suspend fun loadCardCoverBitmap(context: Context, coverUri: String?): Bitmap? {
 }
 
 /**
- * Renderiza cualquier contenido Compose a un PNG de 1440 px de ancho y
- * alto ajustado al contenido (máximo 1920). Debe llamarse desde el hilo
+ * Renderiza cualquier contenido Compose a un PNG de 2160 px de ancho y
+ * alto ajustado al contenido (máximo 3600). Debe llamarse desde el hilo
  * principal (la vista se monta sobre la actividad).
  */
 suspend fun captureCard(
@@ -88,12 +88,12 @@ suspend fun captureCard(
 ): Bitmap = suspendCancellableCoroutine { cont ->
     val activity = context as? Activity
     if (activity == null) {
-        cont.resume(Bitmap.createBitmap(1440, 1920, Bitmap.Config.ARGB_8888))
+        cont.resume(Bitmap.createBitmap(2160, 2880, Bitmap.Config.ARGB_8888))
         return@suspendCancellableCoroutine
     }
-    val width = 1440
+    val width = 2160
     val fixedConfig = android.content.res.Configuration(context.resources.configuration).apply {
-        densityDpi = 320
+        densityDpi = 480
         fontScale = 1f
     }
     val fixedContext = context.createConfigurationContext(fixedConfig)
@@ -114,13 +114,13 @@ suspend fun captureCard(
                 0, android.view.View.MeasureSpec.UNSPECIFIED
             )
             composeView.measure(widthSpec, heightSpec)
-            val height = composeView.measuredHeight.coerceIn(1, 2400)
+            val height = composeView.measuredHeight.coerceIn(1, 3600)
             composeView.layout(0, 0, width, height)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             composeView.draw(android.graphics.Canvas(bitmap))
             cont.resume(bitmap)
         } catch (e: Exception) {
-            cont.resume(Bitmap.createBitmap(width, 1920, Bitmap.Config.ARGB_8888))
+            cont.resume(Bitmap.createBitmap(width, 2880, Bitmap.Config.ARGB_8888))
         } finally {
             decor.removeView(composeView)
         }
@@ -153,6 +153,36 @@ suspend fun shareCardImage(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, chooserTitle))
+}
+
+/** Guarda la tarjeta en la galería (Pictures/AuralPlayer) sin compartirla. */
+suspend fun saveCardImageLocally(
+    context: Context,
+    bitmap: Bitmap,
+    fileName: String
+): android.net.Uri? = withContext(Dispatchers.IO) {
+    try {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(
+                    android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_PICTURES + "/AuralPlayer"
+                )
+            }
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(
+            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+        ) ?: return@withContext null
+        resolver.openOutputStream(uri)?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+        uri
+    } catch (e: Exception) {
+        null
+    }
 }
 
 /** Pie de marca de las tarjetas: el logo ORIGINAL de Aural (el vector del
