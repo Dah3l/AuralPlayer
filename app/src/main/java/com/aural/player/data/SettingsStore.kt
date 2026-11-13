@@ -77,8 +77,10 @@ class SettingsStore(private val context: Context) {
         val KEY_BIRTHDAY_SHOWN = stringPreferencesKey("birthday_shown_date")
 
         // Novedades: funciones vistas y última versión anunciada.
+        // La clave lleva v2 porque la primera versión de esta función
+        // guardaba la versión en silencio sin mostrar nunca el modal.
         val KEY_SEEN_FEATURES = stringSetPreferencesKey("seen_features")
-        val KEY_LAST_NEWS_VERSION = stringPreferencesKey("last_news_version")
+        val KEY_LAST_NEWS_VERSION = stringPreferencesKey("last_news_version_v2")
     }
 
     /** Flujo reactivo de playlists del usuario. */
