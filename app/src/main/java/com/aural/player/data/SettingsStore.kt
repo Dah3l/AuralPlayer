@@ -68,6 +68,12 @@ class SettingsStore(private val context: Context) {
         val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
         // v1.1.0: despertador (JSON de AlarmConfig).
         val KEY_ALARM = stringPreferencesKey("alarm_json")
+
+        // Perfil: nombre y cumpleaños (solo día y mes, sin año).
+        val KEY_USER_NAME = stringPreferencesKey("user_name")
+        val KEY_BIRTHDAY = stringPreferencesKey("birthday_md")
+        val KEY_PROFILE_ASKED = booleanPreferencesKey("profile_asked")
+        val KEY_BIRTHDAY_SHOWN = stringPreferencesKey("birthday_shown_date")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -759,6 +765,60 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    // ----------------------------- Perfil -----------------------------
+
+    /** Nombre del usuario (null = no dado). Solo vive en este teléfono. */
+    val userName: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_USER_NAME]
+    }
+
+    /** Cumpleaños como "MM-dd" (sin año). Null = no dado. */
+    val birthday: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_BIRTHDAY]
+    }
+
+    /** Si ya se mostró (o se descartó) la tarjeta de bienvenida del perfil. */
+    val profileAsked: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PROFILE_ASKED] ?: false
+    }
+
+    /** Fecha "yyyy-MM-dd" en que se mostró el modal de cumpleaños por última vez. */
+    val birthdayShownDate: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_BIRTHDAY_SHOWN]
+    }
+
+    /** Guarda nombre y cumpleaños (birthdayMd null = sin fecha). */
+    suspend fun setUserProfile(name: String, birthdayMd: String?) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_USER_NAME] = name.trim()
+            if (birthdayMd == null) prefs.remove(KEY_BIRTHDAY)
+            else prefs[KEY_BIRTHDAY] = birthdayMd
+            prefs[KEY_PROFILE_ASKED] = true
+        }
+    }
+
+    /** Marca la tarjeta de bienvenida como vista (el usuario eligió "Ahora no"). */
+    suspend fun setProfileAsked() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PROFILE_ASKED] = true
+        }
+    }
+
+    /** Marca el día en que se mostró el modal de cumpleaños. */
+    suspend fun setBirthdayShown(dateKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_BIRTHDAY_SHOWN] = dateKey
+        }
+    }
+
+    /** Borra nombre y cumpleaños (los datos del perfil se van del teléfono). */
+    suspend fun clearUserProfile() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_USER_NAME)
+            prefs.remove(KEY_BIRTHDAY)
+        }
+    }
+
     // ----------------------------- Respaldo -----------------------------
 
     /**
@@ -782,12 +842,15 @@ class SettingsStore(private val context: Context) {
         "library_tab_order" to KEY_TAB_ORDER,
         "island_appearance" to KEY_ISLAND_APPEARANCE,
         "aural_light_color" to KEY_AURAL_LIGHT_COLOR,
-        "alarm_json" to KEY_ALARM
+        "alarm_json" to KEY_ALARM,
+        "user_name" to KEY_USER_NAME,
+        "birthday_md" to KEY_BIRTHDAY
     )
 
     private val backupBooleanKeys = listOf(
         "island_enabled" to KEY_ISLAND_ENABLED,
-        "comet_enabled" to KEY_COMET_ENABLED
+        "comet_enabled" to KEY_COMET_ENABLED,
+        "profile_asked" to KEY_PROFILE_ASKED
     )
 
     /**
@@ -876,5 +939,36 @@ class SettingsStore(private val context: Context) {
         } catch (e: Exception) {
             false
         }
+    }
+}
+
+/** Clave "yyyy-MM-dd" del día actual (para mostrar el modal una vez al día). */
+fun todayDateKey(): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+/** ¿Hoy es el cumpleaños guardado ("MM-dd")? El 29 de febrero se celebra el 28 en años no bisiestos. */
+fun isBirthdayToday(monthDay: String): Boolean {
+    val cal = java.util.Calendar.getInstance()
+    val month = cal.get(java.util.Calendar.MONTH) + 1
+    val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
+    val today = "%02d-%02d".format(month, day)
+    if (monthDay == today) return true
+    if (monthDay == "02-29" && today == "02-28") {
+        val year = cal.get(java.util.Calendar.YEAR)
+        val leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+        if (!leap) return true
+    }
+    return false
+}
+
+/** Nombre que muestra el mensaje de cumpleaños. Solo la combinación
+ * Vanesa/Ness/Nessa + 13 de noviembre usa "PurryPrincesa". */
+fun birthdayDisplayName(name: String, monthDay: String): String {
+    val clean = name.trim()
+    val lower = clean.lowercase(java.util.Locale.ROOT)
+    return if ((lower == "vanesa" || lower == "ness" || lower == "nessa") && monthDay == "11-13") {
+        "PurryPrincesa"
+    } else {
+        clean
     }
 }
