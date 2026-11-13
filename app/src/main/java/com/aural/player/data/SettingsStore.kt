@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.aural.player.alarm.AlarmConfig
 import java.io.File
@@ -74,6 +75,10 @@ class SettingsStore(private val context: Context) {
         val KEY_BIRTHDAY = stringPreferencesKey("birthday_md")
         val KEY_PROFILE_ASKED = booleanPreferencesKey("profile_asked")
         val KEY_BIRTHDAY_SHOWN = stringPreferencesKey("birthday_shown_date")
+
+        // Novedades: funciones vistas y última versión anunciada.
+        val KEY_SEEN_FEATURES = stringSetPreferencesKey("seen_features")
+        val KEY_LAST_NEWS_VERSION = stringPreferencesKey("last_news_version")
     }
 
     /** Flujo reactivo de playlists del usuario. */
@@ -816,6 +821,33 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_USER_NAME)
             prefs.remove(KEY_BIRTHDAY)
+        }
+    }
+
+    // ----------------------------- Novedades -----------------------------
+
+    /** Funciones nuevas ya vistas por el usuario (claves de FeatureKeys). */
+    val seenFeatures: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SEEN_FEATURES] ?: emptySet()
+    }
+
+    /** Marca una función nueva como vista (su puntito desaparece). */
+    suspend fun markFeatureSeen(key: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_SEEN_FEATURES] ?: emptySet()
+            prefs[KEY_SEEN_FEATURES] = current + key
+        }
+    }
+
+    /** Última versión de la que se mostraron las novedades (null = nunca). */
+    val lastNewsVersion: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_NEWS_VERSION]
+    }
+
+    /** Guarda la versión de las novedades mostradas. */
+    suspend fun setLastNewsVersion(version: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_NEWS_VERSION] = version
         }
     }
 
