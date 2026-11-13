@@ -958,6 +958,44 @@ private fun NowPlayingMenu(
         }
     }
 
+    // Comparte la tarjeta "Escuchando ahora" (portada + canción).
+    // La usan el ítem del menú y la hoja de compartir.
+    fun shareNowPlaying() {
+        val s = effectiveSong ?: song
+        if (s == null) {
+            android.widget.Toast.makeText(
+                context, "Sin canción", android.widget.Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            scope.launch {
+                try {
+                    val cover = loadCardCoverBitmap(
+                        context,
+                        customCovers[s.id] ?: s.albumArtUri
+                    )
+                    val bitmap = captureCard(context) {
+                        NowPlayingCardContent(
+                            title = s.title,
+                            artist = s.artist,
+                            coverBitmap = cover
+                        )
+                    }
+                    shareCardImage(
+                        context = context,
+                        bitmap = bitmap,
+                        fileName = "aural-escuchando.png",
+                        chooserTitle = "Compartir escuchando ahora"
+                    )
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(
+                        context, "No se pudo compartir",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
@@ -1026,42 +1064,7 @@ private fun NowPlayingMenu(
         DropdownMenuItem(
             text = { Text("Compartir escuchando ahora") },
             leadingIcon = { Icon(Icons.Rounded.Share, null) },
-            onClick = {
-                onDismiss()
-                val s = effectiveSong ?: song
-                if (s == null) {
-                    android.widget.Toast.makeText(
-                        context, "Sin canción", android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    scope.launch {
-                        try {
-                            val cover = loadCardCoverBitmap(
-                                context,
-                                customCovers[s.id] ?: s.albumArtUri
-                            )
-                            val bitmap = captureCard(context) {
-                                NowPlayingCardContent(
-                                    title = s.title,
-                                    artist = s.artist,
-                                    coverBitmap = cover
-                                )
-                            }
-                            shareCardImage(
-                                context = context,
-                                bitmap = bitmap,
-                                fileName = "aural-escuchando.png",
-                                chooserTitle = "Compartir escuchando ahora"
-                            )
-                        } catch (e: Exception) {
-                            android.widget.Toast.makeText(
-                                context, "No se pudo compartir",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                }
-            }
+            onClick = { onDismiss(); shareNowPlaying() }
         )
         DropdownMenuItem(
             text = { Text("Eliminar de la cola") },
@@ -1122,6 +1125,10 @@ private fun NowPlayingMenu(
             onShareCard = {
                 showShareSheet = false
                 openCardSheet(false)
+            },
+            onShareNowPlaying = {
+                showShareSheet = false
+                shareNowPlaying()
             },
             onDismiss = { showShareSheet = false }
         )
@@ -1378,6 +1385,7 @@ private fun ShareSheet(
     onShareFile: () -> Unit,
     onShareLink: (withCard: Boolean) -> Unit,
     onShareCard: () -> Unit,
+    onShareNowPlaying: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var linkWithCard by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -1455,6 +1463,13 @@ private fun ShareSheet(
                 else "Añade una letra para crear la tarjeta",
                 enabled = hasLrc,
                 onClick = onShareCard
+            )
+            // Compartir "Escuchando ahora" (tarjeta con portada y canción)
+            ShareRow(
+                icon = Icons.Rounded.MusicNote,
+                title = "Compartir escuchando ahora",
+                subtitle = "Una imagen con la portada y la canción que suena",
+                onClick = onShareNowPlaying
             )
             Spacer(Modifier.height(16.dp))
         }
