@@ -510,7 +510,7 @@ fun LyricsScreen(
             text = {
                 Text(
                     "Para traducir esta letra hay que descargar los modelos de $langName y español " +
-                    "(unos ${LyricsTranslator.MODEL_SIZE_MB_EACH} MB cada uno). Es una descarga única: " +
+                    "(unos ${LyricsTranslator.MODEL_SIZE_MB_TOTAL} MB entre los dos). Es una descarga única: " +
                     "después la traducción funciona sin internet. Se recomienda Wi-Fi. Si la descarga no avanza, prueba con VPN."
                 )
             },
