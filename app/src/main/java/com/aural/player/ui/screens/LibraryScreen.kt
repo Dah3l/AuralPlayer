@@ -89,9 +89,12 @@ import com.aural.player.data.todayDateKey
 import com.aural.player.ui.components.BirthdayModal
 import com.aural.player.ui.components.CoverArt
 import com.aural.player.ui.components.EmptyState
+import com.aural.player.ui.components.FeatureDot
+import com.aural.player.ui.components.FeatureKeys
 import com.aural.player.ui.components.HalloweenHomeAmbient
 import com.aural.player.ui.components.ChristmasHomeAmbient
 import com.aural.player.ui.components.MediaGridCard
+import com.aural.player.ui.components.NewsModal
 import com.aural.player.ui.components.ProfileFormDialog
 import com.aural.player.ui.theme.HalloweenFontFamily
 import com.aural.player.ui.components.SectionHeader
@@ -192,17 +195,16 @@ fun LibraryScreen(
     // ---- Perfil: nombre y cumpleaños (saludo personalizado) ----
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val birthday by viewModel.birthday.collectAsStateWithLifecycle()
+    val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
 
-    // Tarjeta de bienvenida: una sola vez, poco después de abrir la app
-    // (el retardo deja que DataStore cargue el valor real de profileAsked).
-    var showWelcomeDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(600)
-        if (!viewModel.profileAsked.value) showWelcomeDialog = true
-    }
+    // ---- Modales de inicio: de uno en uno, sin solaparse ----
+    // Orden: cumpleaños -> bienvenida del perfil -> novedades.
+    var birthdayPending by remember { mutableStateOf(false) }
+    var welcomePending by remember { mutableStateOf(false) }
+    var newsPending by remember { mutableStateOf(false) }
+    var newsVersion by remember { mutableStateOf("") }
 
     // Modal de cumpleaños: una vez al día, si hoy es la fecha guardada.
-    var showBirthdayModal by remember { mutableStateOf(false) }
     LaunchedEffect(birthday, userName) {
         val md = birthday
         val name = userName
@@ -210,7 +212,30 @@ fun LibraryScreen(
             val today = todayDateKey()
             if (viewModel.birthdayShownDate.value != today) {
                 viewModel.markBirthdayShown(today)
-                showBirthdayModal = true
+                birthdayPending = true
+            }
+        }
+    }
+
+    // Bienvenida del perfil + novedades: tras un retardo que deja que
+    // DataStore cargue los valores reales.
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(600)
+        if (!viewModel.profileAsked.value) welcomePending = true
+        // Novedades: solo al actualizar (si ya hay una versión guardada
+        // distinta a la actual; en instalación nueva se guarda sin mostrar).
+        val current = try {
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+        } catch (e: Exception) {
+            null
+        }
+        if (current != null) {
+            val last = viewModel.lastNewsVersion.value
+            if (last == null) {
+                viewModel.setLastNewsVersion(current)
+            } else if (last != current) {
+                newsVersion = current
+                newsPending = true
             }
         }
     }
@@ -787,7 +812,14 @@ fun LibraryScreen(
                 )
                 DropdownMenuItem(
                     text = { Text("Tu Top 10") },
-                    onClick = { showGeneralMenu = false; onOpenTop10() }
+                    trailingIcon = if (FeatureKeys.TOP10 !in seenFeatures) {
+                        { FeatureDot() }
+                    } else null,
+                    onClick = {
+                        showGeneralMenu = false
+                        viewModel.markFeatureSeen(FeatureKeys.TOP10)
+                        onOpenTop10()
+                    }
                 )
                 DropdownMenuItem(
                     text = { Text("Ajustes") },
@@ -1187,33 +1219,42 @@ fun LibraryScreen(
         ChristmasHomeAmbient(Modifier.fillMaxSize())
     }
 
-    // ---- Bienvenida del perfil (una sola vez) ----
-    if (showWelcomeDialog) {
-        ProfileFormDialog(
-            initialName = "",
-            initialBirthday = null,
-            title = "¿Cómo te llamas?",
-            subtitle = "Para saludarte por tu nombre y felicitarte en tu cumpleaños. " +
-                "Todo queda guardado solo en tu teléfono.",
-            confirmLabel = "Guardar",
-            showSkip = true,
-            showDelete = false,
-            onSkip = { showWelcomeDialog = false; viewModel.setProfileAsked() },
-            onDelete = {},
-            onDismiss = { showWelcomeDialog = false; viewModel.setProfileAsked() },
-            onConfirm = { name, md ->
-                showWelcomeDialog = false
-                viewModel.saveUserProfile(name, md)
-            }
-        )
-    }
-
-    // ---- Modal de cumpleaños (una vez al día) ----
-    if (showBirthdayModal) {
-        BirthdayModal(
-            displayName = birthdayDisplayName(userName ?: "", birthday ?: ""),
-            onDismiss = { showBirthdayModal = false }
-        )
+    // ---- Modales de inicio (uno a la vez, en orden) ----
+    when {
+        birthdayPending -> {
+            BirthdayModal(
+                displayName = birthdayDisplayName(userName ?: "", birthday ?: ""),
+                onDismiss = { birthdayPending = false }
+            )
+        }
+        welcomePending -> {
+            ProfileFormDialog(
+                initialName = "",
+                initialBirthday = null,
+                title = "¿Cómo te llamas?",
+                subtitle = "Para saludarte por tu nombre y felicitarte en tu cumpleaños. " +
+                    "Todo queda guardado solo en tu teléfono.",
+                confirmLabel = "Guardar",
+                showSkip = true,
+                showDelete = false,
+                onSkip = { welcomePending = false; viewModel.setProfileAsked() },
+                onDelete = {},
+                onDismiss = { welcomePending = false; viewModel.setProfileAsked() },
+                onConfirm = { name, md ->
+                    welcomePending = false
+                    viewModel.saveUserProfile(name, md)
+                }
+            )
+        }
+        newsPending -> {
+            NewsModal(
+                versionName = newsVersion,
+                onDismiss = {
+                    newsPending = false
+                    viewModel.setLastNewsVersion(newsVersion)
+                }
+            )
+        }
     }
 
 }
