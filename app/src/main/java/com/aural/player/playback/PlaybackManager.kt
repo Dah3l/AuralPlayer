@@ -67,7 +67,7 @@ class PlaybackManager(private val context: Context) {
     private val _stopMode = MutableStateFlow<StopMode?>(null)
     val stopMode: StateFlow<StopMode?> = _stopMode.asStateFlow()
 
-    /** Registro de escucha para "Tu semana en Aural". */
+    /** Registro de escucha para "Tu Top 10". */
     private val playHistory = PlayHistoryStore(context)
 
     /**
