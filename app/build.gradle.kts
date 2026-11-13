@@ -80,6 +80,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            // Comprimir las librerías nativas dentro del APK: la descarga
+            // pesa mucho menos (las de ML Kit son lo más pesado de la app).
+            // A cambio, se extraen al instalar (instalación más lenta y
+            // más espacio ocupado). Para datos móviles, compensa.
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
