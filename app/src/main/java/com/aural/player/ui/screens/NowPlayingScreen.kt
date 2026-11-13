@@ -958,6 +958,10 @@ private fun NowPlayingMenu(
         }
     }
 
+    // Color del tema activo: se lee aquí (en composición) para teñir
+    // la tarjeta con el tema que el usuario está usando.
+    val themeAccent = MaterialTheme.colorScheme.primary
+
     // Comparte la tarjeta "Escuchando ahora" (portada + canción).
     // La usan el ítem del menú y la hoja de compartir.
     // withLink: añade el Aural link como texto junto a la imagen.
@@ -978,7 +982,8 @@ private fun NowPlayingMenu(
                         NowPlayingCardContent(
                             title = s.title,
                             artist = s.artist,
-                            coverBitmap = cover
+                            coverBitmap = cover,
+                            accentColor = themeAccent
                         )
                     }
                     shareCardImage(
