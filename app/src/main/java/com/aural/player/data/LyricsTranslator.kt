@@ -28,8 +28,8 @@ object LyricsTranslator {
 
     const val TARGET_TAG = "es"
 
-    /** Tamaño aproximado de cada modelo de idioma (ML Kit no expone el tamaño real antes de bajar). */
-    const val MODEL_SIZE_MB_EACH = 30
+    /** Tamaño aproximado de los dos modelos juntos (origen + español), medido en el teléfono. */
+    const val MODEL_SIZE_MB_TOTAL = 36
 
     /** Estado de los modelos de un idioma. */
     enum class ModelState { IDLE, DOWNLOADING, READY, FAILED }
