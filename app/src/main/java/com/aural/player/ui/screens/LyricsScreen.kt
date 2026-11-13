@@ -28,6 +28,7 @@ import com.aural.player.data.LyricsTranslator
 // APARCADO 2026-11-13: import com.aural.player.data.MeaningClient
 import com.aural.player.AuralLink
 import com.aural.player.ui.components.CoverArt
+import com.aural.player.ui.components.FeatureDot
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +43,8 @@ fun LyricsScreen(
     coverUri: String?,
     currentPositionMs: () -> Long,
     onBack: () -> Unit,
+    showTranslateDot: Boolean = false,
+    onTranslateInteracted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var lines by remember { mutableStateOf<List<LrcLine>>(emptyList()) }
@@ -261,22 +264,32 @@ fun LyricsScreen(
                 )
             }
             if (langDetectionDone && detectedLang != null && detectedLang != LyricsTranslator.TARGET_TAG) {
-                IconButton(onClick = {
-                    if (translatedLines != null) showTranslation = !showTranslation
-                    else startTranslation()
-                }) {
-                    if (modelState == LyricsTranslator.ModelState.DOWNLOADING) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.Translate,
-                            contentDescription = if (showTranslation) "Ver letra original" else "Ver en español",
-                            tint = if (showTranslation) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground
+                Box {
+                    IconButton(onClick = {
+                        onTranslateInteracted()
+                        if (translatedLines != null) showTranslation = !showTranslation
+                        else startTranslation()
+                    }) {
+                        if (modelState == LyricsTranslator.ModelState.DOWNLOADING) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Translate,
+                                contentDescription = if (showTranslation) "Ver letra original" else "Ver en español",
+                                tint = if (showTranslation) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                    if (showTranslateDot) {
+                        FeatureDot(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 8.dp, end = 8.dp)
                         )
                     }
                 }
