@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Tune
@@ -78,6 +79,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.installedVersionName
 import com.aural.player.ui.components.AlarmDialog
+import com.aural.player.ui.components.ProfileFormDialog
+import com.aural.player.ui.components.formatMonthDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -103,6 +106,7 @@ fun SettingsScreen(
     var showLicenseDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showAlarmDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
     var pendingImportJson by remember { mutableStateOf<String?>(null) }
 
     // Respaldo: exportar (crear archivo) e importar (elegir archivo).
@@ -154,6 +158,15 @@ fun SettingsScreen(
 
     // Subtítulo del despertador según su estado actual.
     val alarmState by viewModel.alarm.collectAsStateWithLifecycle()
+
+    // Subtítulo del perfil según los datos guardados.
+    val profileName by viewModel.userName.collectAsStateWithLifecycle()
+    val profileBirthday by viewModel.birthday.collectAsStateWithLifecycle()
+    val profileSubtitle = when {
+        profileName.isNullOrBlank() -> "Añade tu nombre y tu cumpleaños"
+        profileBirthday.isNullOrBlank() -> profileName
+        else -> "$profileName · ${formatMonthDay(profileBirthday)}"
+    }
     val alarmSubtitle = run {
         val a = alarmState
         when {
@@ -205,6 +218,19 @@ fun SettingsScreen(
             )
         }
         Column(Modifier.verticalScroll(rememberScrollState())) {
+            SettingsSection("Tu perfil")
+            SettingsRow(
+                icon = Icons.Rounded.Person,
+                title = "Tu perfil",
+                subtitle = profileSubtitle,
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { showProfileDialog = true }
+            )
             SettingsSection("Sonido")
             SettingsRow(
                 icon = Icons.Rounded.Tune,
@@ -456,6 +482,31 @@ fun SettingsScreen(
         AlarmDialog(
             viewModel = viewModel,
             onDismiss = { showAlarmDialog = false }
+        )
+    }
+
+    // ---- Diálogo del perfil (nombre y cumpleaños) ----
+    if (showProfileDialog) {
+        ProfileFormDialog(
+            initialName = profileName ?: "",
+            initialBirthday = profileBirthday,
+            title = "Tu perfil",
+            subtitle = "Tu nombre personaliza el saludo y tu cumpleaños " +
+                "merece una felicitación. Todo queda guardado solo en tu teléfono.",
+            confirmLabel = "Guardar",
+            showSkip = false,
+            showDelete = !profileName.isNullOrBlank(),
+            onSkip = {},
+            onDelete = {
+                showProfileDialog = false
+                viewModel.clearUserProfile()
+                Toast.makeText(context, "Datos borrados", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showProfileDialog = false },
+            onConfirm = { name, md ->
+                showProfileDialog = false
+                viewModel.saveUserProfile(name, md)
+            }
         )
     }
 
