@@ -194,10 +194,15 @@ class PlaybackManager(private val context: Context) {
                 StopMode.QUEUE -> {
                     // Con repetir-todo, la lista "termina" al volver al
                     // inicio: se vuelve a la última canción y se pausa.
-                    // Con aleatorio el orden no es lineal y no aplica.
-                    if (!c.shuffleModeEnabled &&
-                        newPosition.windowIndex < oldPosition.windowIndex
-                    ) {
+                    // Con una sola canción en la cola (o repetir-una) no
+                    // hay vuelta al inicio: la lista termina al reiniciar
+                    // la canción y también hay que parar.
+                    // Con aleatorio el orden no es lineal y la vuelta no
+                    // aplica, salvo que la cola tenga una sola canción.
+                    val wrapped = newPosition.windowIndex < oldPosition.windowIndex
+                    val singleItem = c.mediaItemCount <= 1
+                    val repeatOne = c.repeatMode == Player.REPEAT_MODE_ONE
+                    if ((wrapped && !c.shuffleModeEnabled) || singleItem || repeatOne) {
                         c.seekTo(oldPosition.windowIndex, 0L)
                         c.pause()
                         _stopMode.value = null
