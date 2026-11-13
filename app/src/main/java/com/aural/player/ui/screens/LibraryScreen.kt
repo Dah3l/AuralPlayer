@@ -83,6 +83,7 @@ import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.birthdayDisplayName
+import com.aural.player.data.greetingDisplayName
 import com.aural.player.data.isBirthdayToday
 import com.aural.player.data.todayDateKey
 import com.aural.player.ui.components.BirthdayModal
@@ -391,7 +392,7 @@ fun LibraryScreen(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = greetingForHour(userName),
+                text = greetingForHour(userName, birthday),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -2007,18 +2008,18 @@ private fun SaveDailyPlaylistDialog(onDismiss: () -> Unit, onConfirm: (String) -
 
 /**
  * Saludo según la hora del día, estilo cálido. Con nombre guardado,
- * saludo personalizado con el primer nombre.
+ * saludo personalizado con el primer nombre (o "Purry" en el caso especial).
  */
-private fun greetingForHour(userName: String?): String {
+private fun greetingForHour(userName: String?, birthday: String?): String {
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val base = when (hour) {
         in 5..11 -> "Buenos días"
         in 12..17 -> "Buenas tardes"
         else -> "Buenas noches"
     }
-    val firstName = userName?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotBlank() }
-    return if (firstName == null) base
-    else "$base, $firstName. ¿Qué quieres escuchar hoy?"
+    val display = greetingDisplayName(userName, birthday)
+    return if (display == null) base
+    else "$base, $display. ¿Qué quieres escuchar hoy?"
 }
 
 /**
