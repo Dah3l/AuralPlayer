@@ -1,4 +1,4 @@
-// Registro de escucha para "Tu semana en Aural": segundos escuchados
+// Registro de escucha para "Tu Top 10": segundos escuchados
 // por canción y día, guardados en un JSON en filesDir. Agregado por día
 // (sin historial infinito) y podado a 30 días. Nunca lanza: si algo
 // falla, el registro se pierde en silencio, jamás rompe la reproducción.
@@ -16,6 +16,14 @@ import org.json.JSONObject
 
 /** Una canción dentro del resumen semanal, ordenada por tiempo escuchado. */
 data class WeekSongStat(
+    val songId: Long,
+    val title: String,
+    val artist: String,
+    val seconds: Long
+)
+
+/** Una canción del Top 10, ordenada por tiempo total escuchado. */
+data class TopSong(
     val songId: Long,
     val title: String,
     val artist: String,
@@ -92,6 +100,36 @@ class PlayHistoryStore(private val context: Context) {
             }
         } catch (e: Exception) {
             // El registro nunca debe romper la reproducción
+        }
+    }
+
+    /** Las canciones más escuchadas de todo el historial guardado (máx. 30 días). */
+    suspend fun getTopSongs(limit: Int = 10): List<TopSong> {
+        return try {
+            mutex.withLock {
+                val root = readRoot()
+                val days = root.optJSONObject("days")
+                    ?: return emptyList()
+                val agg = mutableMapOf<Long, TopSong>()
+                days.keys().forEach { dayKey ->
+                    val day = days.optJSONObject(dayKey) ?: return@forEach
+                    val songs = day.optJSONObject("songs") ?: return@forEach
+                    songs.keys().forEach { idStr ->
+                        val id = idStr.toLongOrNull() ?: return@forEach
+                        val e = songs.optJSONObject(idStr) ?: return@forEach
+                        val prev = agg[id]
+                        agg[id] = TopSong(
+                            songId = id,
+                            title = e.optString("title"),
+                            artist = e.optString("artist"),
+                            seconds = (prev?.seconds ?: 0L) + e.optLong("seconds")
+                        )
+                    }
+                }
+                agg.values.sortedByDescending { it.seconds }.take(limit)
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
