@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
@@ -155,14 +156,16 @@ suspend fun shareCardImage(
 }
 
 /** Pie de marca de las tarjetas: el logo ORIGINAL de Aural (el vector del
- * lanzador, tal cual, sin retocar ni teñir) + nombre y eslogan. */
+ * lanzador, tal cual, sin retocar) teñido con el color del tema activo,
+ * igual que los iconos del lanzador por tema + nombre y eslogan. */
 @Composable
-private fun CardBrandFooter() {
+private fun CardBrandFooter(accent: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(
             painter = painterResource(id = R.drawable.ic_launcher_foreground),
             contentDescription = null,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(44.dp),
+            colorFilter = ColorFilter.tint(accent)
         )
         Spacer(Modifier.width(12.dp))
         androidx.compose.material3.Text(
@@ -173,7 +176,7 @@ private fun CardBrandFooter() {
         )
         androidx.compose.material3.Text(
             text = "Player",
-            color = CardTeal,
+            color = accent,
             fontSize = 26.sp,
             fontWeight = FontWeight.Bold
         )
@@ -191,6 +194,7 @@ fun NowPlayingCardContent(
     title: String,
     artist: String,
     coverBitmap: Bitmap?,
+    accentColor: Color = CardTeal,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -202,7 +206,7 @@ fun NowPlayingCardContent(
     ) {
         androidx.compose.material3.Text(
             text = "ESCUCHANDO AHORA",
-            color = CardTeal,
+            color = accentColor,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 4.sp
@@ -250,13 +254,14 @@ fun NowPlayingCardContent(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(Modifier.height(40.dp))
-        CardBrandFooter()
+        CardBrandFooter(accentColor)
     }
 }
 
 @Composable
 fun Top10CardContent(
     topSongs: List<com.aural.player.data.TopSong>,
+    accentColor: Color = CardTeal,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -267,7 +272,7 @@ fun Top10CardContent(
     ) {
         androidx.compose.material3.Text(
             text = "TU TOP 10",
-            color = CardTeal,
+            color = accentColor,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 4.sp
@@ -288,7 +293,7 @@ fun Top10CardContent(
             ) {
                 androidx.compose.material3.Text(
                     text = "${index + 1}",
-                    color = CardTeal,
+                    color = accentColor,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.width(44.dp)
@@ -319,6 +324,6 @@ fun Top10CardContent(
             }
         }
         Spacer(Modifier.height(24.dp))
-        CardBrandFooter()
+        CardBrandFooter(accentColor)
     }
 }
