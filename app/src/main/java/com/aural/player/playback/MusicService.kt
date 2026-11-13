@@ -18,6 +18,8 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
@@ -29,6 +31,7 @@ import androidx.media3.session.SessionResult
 import com.aural.player.AuralApp
 import com.aural.player.MainActivity
 import com.aural.player.R
+import com.aural.player.data.MusicRepository
 import com.aural.player.ui.island.IslandOverlayContent
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.AuralTheme
@@ -41,6 +44,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * MediaSessionService que mantiene la reproducción activa cuando la app
@@ -62,6 +66,9 @@ class MusicService : MediaSessionService() {
     companion object {
         const val CMD_TOGGLE_FAVORITE = "aural_toggle_favorite"
         const val CMD_CYCLE_REPEAT = "aural_cycle_repeat"
+        /** Acción del despertador: sonar la canción o playlist elegida. */
+        const val ACTION_ALARM_PLAY = "com.aural.player.ALARM_PLAY"
+        const val EXTRA_ALARM_SONG_IDS = "alarm_song_ids"
     }
 
     override fun onCreate() {
@@ -109,6 +116,53 @@ class MusicService : MediaSessionService() {
         // v1.0.7: isla dinámica (overlay) cuando está activada y hay música
         // cargada fuera de la app.
         startIslandOverlay()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_ALARM_PLAY) {
+            handleAlarmPlay(intent)
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    /**
+     * La alarma: pone la canción o playlist elegida en el orden
+     * configurado. Si ya está sonando música (el usuario está despierto
+     * y escuchando), no roba la cola.
+     */
+    private fun handleAlarmPlay(intent: Intent) {
+        serviceScope.launch {
+            try {
+                val player = mediaSession?.player ?: return@launch
+                if (player.isPlaying) return@launch
+                val idArray = intent.getLongArrayExtra(EXTRA_ALARM_SONG_IDS)
+                    ?: return@launch
+                if (idArray.isEmpty()) return@launch
+                val order = idArray.withIndex().associate { it.value to it.index }
+                val songs = withContext(Dispatchers.IO) {
+                    MusicRepository(this@MusicService).scanSongs()
+                }.filter { it.id in order }.sortedBy { order[it.id] }
+                if (songs.isEmpty()) return@launch
+                val items = songs.map { song ->
+                    MediaItem.Builder()
+                        .setMediaId(song.id.toString())
+                        .setUri(song.uri)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(song.title)
+                                .setArtist(song.artist)
+                                .setAlbumTitle(song.album)
+                                .build()
+                        )
+                        .build()
+                }
+                player.setMediaItems(items)
+                player.prepare()
+                player.playWhenReady = true
+            } catch (e: Exception) {
+                // La alarma nunca debe crashear el servicio
+            }
+        }
     }
 
     /** Callback de sesión: comandos personalizados de la notificación. */
