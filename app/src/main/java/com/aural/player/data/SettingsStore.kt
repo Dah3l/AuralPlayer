@@ -961,14 +961,24 @@ fun isBirthdayToday(monthDay: String): Boolean {
     return false
 }
 
+/** La combinación especial: Vanesa/Ness/Nessa + 13 de noviembre. */
+private fun isPurryCombination(name: String, monthDay: String): Boolean {
+    val lower = name.trim().lowercase(java.util.Locale.ROOT)
+    return (lower == "vanesa" || lower == "ness" || lower == "nessa") && monthDay == "11-13"
+}
+
 /** Nombre que muestra el mensaje de cumpleaños. Solo la combinación
  * Vanesa/Ness/Nessa + 13 de noviembre usa "PurryPrincesa". */
 fun birthdayDisplayName(name: String, monthDay: String): String {
     val clean = name.trim()
-    val lower = clean.lowercase(java.util.Locale.ROOT)
-    return if ((lower == "vanesa" || lower == "ness" || lower == "nessa") && monthDay == "11-13") {
-        "PurryPrincesa"
-    } else {
-        clean
-    }
+    return if (isPurryCombination(clean, monthDay)) "PurryPrincesa" else clean
+}
+
+/** Nombre que muestra el saludo personalizado (primer nombre). Solo la
+ * combinación Vanesa/Ness/Nessa + 13 de noviembre usa "Purry". */
+fun greetingDisplayName(name: String?, monthDay: String?): String? {
+    if (name.isNullOrBlank()) return null
+    val clean = name.trim()
+    if (monthDay != null && isPurryCombination(clean, monthDay)) return "Purry"
+    return clean.split(" ").firstOrNull()?.takeIf { it.isNotBlank() }
 }
