@@ -28,6 +28,7 @@ import com.aural.player.data.LyricsTranslator
 // APARCADO 2026-11-13: import com.aural.player.data.MeaningClient
 import com.aural.player.AuralLink
 import com.aural.player.ui.components.CoverArt
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,8 +73,14 @@ fun LyricsScreen(
     var translatedLines by remember(title, artist) { mutableStateOf<List<String>?>(null) }
     var showTranslation by remember(title, artist) { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
-    var translateStatus by remember { mutableStateOf<String?>(null) }
+    var translateStatus by remember(title, artist) { mutableStateOf<String?>(null) }
     var translateError by remember(title, artist) { mutableStateOf<String?>(null) }
+    // El usuario pidió traducir ESTA canción y se espera a los modelos:
+    // al terminar la descarga, la traducción arranca sola.
+    var translatePending by remember(title, artist) { mutableStateOf(false) }
+    // Estado global de las descargas (sobrevive al cambio de canción).
+    val modelStates by LyricsTranslator.modelStates.collectAsStateWithLifecycle()
+    val modelState = detectedLang?.let { modelStates[it] }
 
     // Zona del desvanecido superior de las líneas (96dp): al subir, la
     // línea se funde en el mesh en vez de taparse con una sombra.
@@ -98,7 +105,47 @@ fun LyricsScreen(
         langDetectionDone = true
     }
 
-    // Flujo de traducción: caché → modelos (con diálogo) → traducir → mostrar
+    // Flujo de traducción: caché → modelos (con diálogo) → traducir → mostrar.
+    // La descarga vive en LyricsTranslator (segundo plano): si el usuario
+    // cambia de canción, la descarga sigue y al terminar traduce sola
+    // la canción que la pidió (si sigue en pantalla).
+    fun runTranslation(lang: String, originals: List<String>) {
+        scope.launch {
+            translateStatus = "Traduciendo…"
+            val result = LyricsTranslator.translateLines(originals, lang) { done, total ->
+                translateStatus = "Traduciendo… $done de $total"
+            }
+            translateStatus = null
+            if (result != null) {
+                LyricsTranslator.putCached(context, lang, originals, result)
+                translatedLines = result
+                showTranslation = true
+            } else {
+                translateError = "No se pudo traducir. Inténtalo de nuevo."
+            }
+        }
+    }
+
+    // La descarga terminó: traducir la canción que la pidió, o avisar el fallo.
+    LaunchedEffect(modelState, detectedLang, translatePending) {
+        if (!translatePending) return@LaunchedEffect
+        val lang = detectedLang ?: return@LaunchedEffect
+        when (modelState) {
+            LyricsTranslator.ModelState.READY -> {
+                if (translatedLines == null) {
+                    translatePending = false
+                    runTranslation(lang, lines.map { it.text })
+                }
+            }
+            LyricsTranslator.ModelState.FAILED -> {
+                translatePending = false
+                translateError =
+                    "No se pudieron descargar los modelos. Revisa tu conexión e inténtalo de nuevo."
+            }
+            else -> {}
+        }
+    }
+
     fun startTranslation() {
         val lang = detectedLang
         translateError = null
@@ -118,48 +165,24 @@ fun LyricsScreen(
                 showTranslation = true
                 return@launch
             }
-            if (!LyricsTranslator.areModelsReady(lang)) {
-                showDownloadDialog = true
-                return@launch
-            }
-            translateStatus = "Traduciendo…"
-            val result = LyricsTranslator.translateLines(originals, lang) { done, total ->
-                translateStatus = "Traduciendo… $done de $total"
-            }
-            translateStatus = null
-            if (result != null) {
-                LyricsTranslator.putCached(context, lang, originals, result)
-                translatedLines = result
-                showTranslation = true
-            } else {
-                translateError = "No se pudo traducir. Revisa tu conexión e inténtalo de nuevo."
-            }
-        }
-    }
-
-    fun downloadAndTranslate() {
-        val lang = detectedLang ?: return
-        val originals = lines.map { it.text }
-        showDownloadDialog = false
-        scope.launch {
-            translateStatus = "Descargando los modelos…"
-            val ok = LyricsTranslator.downloadModels(lang)
-            if (!ok) {
-                translateStatus = null
-                translateError = "No se pudieron descargar los modelos. Revisa tu conexión e inténtalo de nuevo."
-                return@launch
-            }
-            translateStatus = "Traduciendo…"
-            val result = LyricsTranslator.translateLines(originals, lang) { done, total ->
-                translateStatus = "Traduciendo… $done de $total"
-            }
-            translateStatus = null
-            if (result != null) {
-                LyricsTranslator.putCached(context, lang, originals, result)
-                translatedLines = result
-                showTranslation = true
-            } else {
-                translateError = "No se pudo traducir. Inténtalo de nuevo."
+            when (LyricsTranslator.modelStates.value[lang]) {
+                // Ya está bajando (quizás desde otra canción): esperar a que termine.
+                LyricsTranslator.ModelState.DOWNLOADING -> {
+                    translatePending = true
+                    return@launch
+                }
+                LyricsTranslator.ModelState.READY -> {
+                    runTranslation(lang, originals)
+                    return@launch
+                }
+                else -> {
+                    if (!LyricsTranslator.areModelsReady(lang)) {
+                        showDownloadDialog = true
+                        return@launch
+                    }
+                    LyricsTranslator.refreshState(lang)
+                    runTranslation(lang, originals)
+                }
             }
         }
     }
@@ -242,12 +265,20 @@ fun LyricsScreen(
                     if (translatedLines != null) showTranslation = !showTranslation
                     else startTranslation()
                 }) {
-                    Icon(
-                        Icons.Filled.Translate,
-                        contentDescription = if (showTranslation) "Ver letra original" else "Ver en español",
-                        tint = if (showTranslation) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onBackground
-                    )
+                    if (modelState == LyricsTranslator.ModelState.DOWNLOADING) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Translate,
+                            contentDescription = if (showTranslation) "Ver letra original" else "Ver en español",
+                            tint = if (showTranslation) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
             }
             if (lines.isNotEmpty()) {
@@ -261,6 +292,42 @@ fun LyricsScreen(
             }
         }
 
+
+        // Descarga de modelos en segundo plano: no bloquea la app y
+        // sigue aunque cambies de canción.
+        if (modelState == LyricsTranslator.ModelState.DOWNLOADING) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Descargando los modelos de traducción… Puedes seguir usando la app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Traduciendo (rápido, en el teléfono): texto en línea, sin diálogo.
+        if (translateStatus != null) {
+            Text(
+                translateStatus!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            )
+        }
 
         if (translateError != null) {
             Text(
@@ -435,26 +502,17 @@ fun LyricsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { downloadAndTranslate() }) { Text("Descargar") }
+                TextButton(onClick = {
+                    showDownloadDialog = false
+                    // La descarga arranca en segundo plano y la traducción
+                    // de esta canción se dispara sola al terminar.
+                    detectedLang?.let { LyricsTranslator.startDownload(it) }
+                    translatePending = true
+                }) { Text("Descargar") }
             },
             dismissButton = {
                 TextButton(onClick = { showDownloadDialog = false }) { Text("Ahora no") }
             }
-        )
-    }
-
-    // Progreso de descarga / traducción
-    if (translateStatus != null) {
-        AlertDialog(
-            onDismissRequest = { },
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Text(translateStatus!!)
-                }
-            },
-            confirmButton = { }
         )
     }
 }
