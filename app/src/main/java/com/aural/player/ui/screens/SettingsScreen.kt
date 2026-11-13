@@ -79,6 +79,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.installedVersionName
 import com.aural.player.ui.components.AlarmDialog
+import com.aural.player.ui.components.FeatureDot
+import com.aural.player.ui.components.FeatureKeys
 import com.aural.player.ui.components.ProfileFormDialog
 import com.aural.player.ui.components.formatMonthDay
 import kotlinx.coroutines.Dispatchers
@@ -162,6 +164,8 @@ fun SettingsScreen(
     // Subtítulo del perfil según los datos guardados.
     val profileName by viewModel.userName.collectAsStateWithLifecycle()
     val profileBirthday by viewModel.birthday.collectAsStateWithLifecycle()
+    // Funciones nuevas ya vistas (sin puntito).
+    val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val profileSubtitle = run {
         // Locales: las propiedades delegadas no admiten smart cast.
         val name = profileName
@@ -396,12 +400,19 @@ fun SettingsScreen(
                 title = "Exportar respaldo",
                 subtitle = "Playlists, favoritos, metadatos y portadas en un archivo",
                 trailing = {
-                    Icon(
-                        Icons.Rounded.ChevronRight, null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (FeatureKeys.BACKUP !in seenFeatures) {
+                            FeatureDot()
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Icon(
+                            Icons.Rounded.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
                 onClick = {
+                    viewModel.markFeatureSeen(FeatureKeys.BACKUP)
                     val date = java.text.SimpleDateFormat(
                         "yyyy-MM-dd", java.util.Locale.US
                     ).format(java.util.Date())
@@ -413,12 +424,21 @@ fun SettingsScreen(
                 title = "Importar respaldo",
                 subtitle = "Restaura tus datos desde un archivo guardado",
                 trailing = {
-                    Icon(
-                        Icons.Rounded.ChevronRight, null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (FeatureKeys.BACKUP !in seenFeatures) {
+                            FeatureDot()
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Icon(
+                            Icons.Rounded.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
-                onClick = { importLauncher.launch(arrayOf("application/json")) }
+                onClick = {
+                    viewModel.markFeatureSeen(FeatureKeys.BACKUP)
+                    importLauncher.launch(arrayOf("application/json"))
+                }
             )
             SettingsSection("Despertador")
             SettingsRow(
@@ -426,12 +446,21 @@ fun SettingsScreen(
                 title = "Despertador",
                 subtitle = alarmSubtitle,
                 trailing = {
-                    Icon(
-                        Icons.Rounded.ChevronRight, null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (FeatureKeys.ALARM !in seenFeatures) {
+                            FeatureDot()
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Icon(
+                            Icons.Rounded.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
-                onClick = { showAlarmDialog = true }
+                onClick = {
+                    viewModel.markFeatureSeen(FeatureKeys.ALARM)
+                    showAlarmDialog = true
+                }
             )
             SettingsSection("Aural")
             SettingsRow(
