@@ -223,21 +223,17 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(600)
         if (!viewModel.profileAsked.value) welcomePending = true
-        // Novedades: solo al actualizar (si ya hay una versión guardada
-        // distinta a la actual; en instalación nueva se guarda sin mostrar).
+        // Novedades: se muestran cuando la versión guardada es distinta
+        // a la actual (incluida la primera vez, que no hay nada guardado).
+        // Al cerrar el modal se guarda la versión y no vuelve a salir.
         val current = try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         } catch (e: Exception) {
             null
         }
-        if (current != null) {
-            val last = viewModel.lastNewsVersion.value
-            if (last == null) {
-                viewModel.setLastNewsVersion(current)
-            } else if (last != current) {
-                newsVersion = current
-                newsPending = true
-            }
+        if (current != null && viewModel.lastNewsVersion.value != current) {
+            newsVersion = current
+            newsPending = true
         }
     }
     val artists by viewModel.artistsFlow.collectAsStateWithLifecycle()
