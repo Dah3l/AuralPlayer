@@ -18,9 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -316,32 +313,17 @@ fun LyricsScreen(
                             val itemAlpha = if (itemInfo == null) 1f
                             else ((itemInfo.offset + itemInfo.size) / fadePx)
                                 .coerceIn(0f, 1f)
-                            val windowEnd = displayLines.getOrNull(index + 1)?.timeMs
-                                ?: (line.timeMs + 4000L)
-                            val karaokeWindow = windowEnd - line.timeMs >= 600L
-                            if (isActive && karaokeWindow) {
-                                KaraokeLine(
-                                    text = line.text,
-                                    startMs = line.timeMs,
-                                    endMs = windowEnd,
-                                    positionMs = currentPositionMs,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .alpha(itemAlpha)
-                                )
-                            } else {
-                                Text(
-                                    line.text,
-                                    fontSize = if (isActive) 22.sp else 17.sp,
-                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isActive) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .alpha(itemAlpha)
-                                )
-                            }
+                            Text(
+                                line.text,
+                                fontSize = if (isActive) 22.sp else 17.sp,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isActive) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .alpha(itemAlpha)
+                            )
                         }
                         item {
                             // Significado: se busca al llegar al final de la letra
@@ -443,7 +425,7 @@ fun LyricsScreen(
                 Text(
                     "Para traducir esta letra hay que descargar los modelos de $langName y español " +
                     "(unos ${LyricsTranslator.MODEL_SIZE_MB_EACH} MB cada uno). Es una descarga única: " +
-                    "después la traducción funciona sin internet. Se recomienda Wi-Fi."
+                    "después la traducción funciona sin internet. Se recomienda Wi-Fi. Si la descarga no avanza, prueba con VPN."
                 )
             },
             confirmButton = {
@@ -469,59 +451,4 @@ fun LyricsScreen(
             confirmButton = { }
         )
     }
-}
-
-/**
- * Línea de karaoke: las palabras se van iluminando según avanza la canción.
- * Los tiempos de cada palabra se interpolan según su largo dentro de la
- * ventana de la línea (las fuentes gratis no traen tiempos por palabra).
- */
-@Composable
-private fun KaraokeLine(
-    text: String,
-    startMs: Long,
-    endMs: Long,
-    positionMs: () -> Long,
-    modifier: Modifier = Modifier
-) {
-    var now by remember(text, startMs) { mutableStateOf(positionMs()) }
-    LaunchedEffect(text, startMs) {
-        while (true) {
-            kotlinx.coroutines.delay(100)
-            now = positionMs()
-        }
-    }
-    val windowMs = (endMs - startMs).coerceIn(600L, 10_000L)
-    val words = remember(text) { text.split(" ").filter { it.isNotEmpty() } }
-    // Límites de cada palabra (proporcional a su largo + 1 por el espacio)
-    val boundaries = remember(words, windowMs) {
-        val weights = words.map { it.length + 1 }
-        val total = weights.sum().coerceAtLeast(1)
-        var acc = 0L
-        weights.map { w ->
-            acc += windowMs * w / total
-            startMs + acc
-        }
-    }
-    val annotated = buildAnnotatedString {
-        var first = true
-        words.forEachIndexed { i, word ->
-            if (!first) append(" ")
-            first = false
-            val sung = now >= boundaries[i]
-            withStyle(
-                SpanStyle(
-                    color = if (sung) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) { append(word) }
-        }
-    }
-    Text(
-        annotated,
-        fontSize = 22.sp,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center,
-        modifier = modifier
-    )
 }
