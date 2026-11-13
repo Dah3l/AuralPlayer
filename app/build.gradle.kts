@@ -110,6 +110,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // await() sobre ListenableFuture (usado por MediaController)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
+    // await() sobre Task de Play Services (usado por ML Kit)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // ---- Media3 / ExoPlayer (reproducción + MediaSession + notificación) ----
     implementation("androidx.media3:media3-exoplayer:1.4.1")
@@ -122,5 +124,9 @@ dependencies {
 
     // ---- NewPipe Extractor (búsqueda y descarga de YouTube) ----
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
+
+    // ---- ML Kit (traducción de letras en el teléfono + detección de idioma) ----
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
 
 }
