@@ -7,9 +7,11 @@ import androidx.lifecycle.viewModelScope
 import com.aural.player.data.Album
 import com.aural.player.data.Artist
 import com.aural.player.data.Folder
+import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
+import com.aural.player.data.WeekStats
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
 import android.app.PendingIntent
@@ -19,7 +21,10 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import com.aural.player.alarm.AlarmConfig
+import com.aural.player.alarm.AlarmScheduler
 import com.aural.player.playback.PlayerUiState
+import com.aural.player.playback.StopMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +76,19 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     val playlists: StateFlow<List<Playlist>> = settings.playlists.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
     )
+
+    /** Despertador configurado (null = sin alarma). */
+    val alarm: StateFlow<AlarmConfig?> = settings.alarm.stateIn(
+        viewModelScope, SharingStarted.Eagerly, null
+    )
+
+    /** Parada programada activa (null = ninguna). */
+    val stopMode: StateFlow<StopMode?> = playback.stopMode
+
+    /** Registro de escucha y resumen semanal. */
+    private val playHistory = PlayHistoryStore(auralApp)
+    private val _weekStats = MutableStateFlow(WeekStats())
+    val weekStats: StateFlow<WeekStats> = _weekStats.asStateFlow()
 
     /** Playlist del día: UNA sola instancia { fecha, ids } que rota a diario. */
     val dailyPlaylist: StateFlow<SettingsStore.DailyPlaylist?> = settings.dailyPlaylist.stateIn(
@@ -770,6 +788,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startSleepTimer(minutes: Int) {
         sleepTimerJob?.cancel()
+        playback.setStopMode(null)
         _sleepTimerMinutes.value = minutes
         sleepTimerJob = viewModelScope.launch {
             kotlinx.coroutines.delay(minutes * 60_000L)
@@ -784,5 +803,57 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         sleepTimerJob?.cancel()
         sleepTimerJob = null
         _sleepTimerMinutes.value = null
+        playback.setStopMode(null)
+    }
+
+    /** Parada al terminar la canción o la lista (cancela el temporizador por minutos). */
+    fun setStopMode(mode: StopMode?) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerMinutes.value = null
+        playback.setStopMode(mode)
+    }
+
+    // ---- Despertador ----
+
+    /** Guarda la alarma y la programa (o la cancela si quedó desactivada). */
+    fun saveAlarm(config: AlarmConfig) {
+        viewModelScope.launch {
+            settings.setAlarm(config)
+            if (config.enabled) {
+                AlarmScheduler.schedule(auralApp, config)
+            } else {
+                AlarmScheduler.cancel(auralApp)
+            }
+        }
+    }
+
+    // ---- Tu semana en Aural ----
+
+    /** Recarga el resumen de los últimos 7 días. */
+    fun refreshWeekStats() {
+        viewModelScope.launch {
+            _weekStats.value = playHistory.getWeekStats()
+        }
+    }
+
+    // ---- Respaldo ----
+
+    /** Exporta el respaldo como JSON (lo escribe quien llama). */
+    suspend fun exportBackupJson(): String = settings.exportBackupJson()
+
+    /** Importa un respaldo; false si el JSON no es válido. */
+    suspend fun importBackupJson(json: String): Boolean {
+        val ok = settings.importBackupJson(json)
+        if (ok) {
+            // Si el respaldo traía una alarma, hay que reprogramarla.
+            val config = settings.alarm.first()
+            if (config != null && config.enabled) {
+                AlarmScheduler.schedule(auralApp, config)
+            } else {
+                AlarmScheduler.cancel(auralApp)
+            }
+        }
+        return ok
     }
 }
