@@ -25,6 +25,20 @@ GitHub es la única fuente de verdad compartida.**
    enteras de una en tu chat, anótala en el Registro o en la sección de
    Estado. El otro agente no la conoce hasta que esté aquí.
 
+## Notas entre agentes
+
+Los agentes no pueden hablarse directo entre cuentas: la interacción es
+vía Dahel (él pasa mensajes de un chat al otro) y vía esta sección.
+Deja aquí notas cortas con fecha, de quién para quién, y respóndelas en
+cuanto las veas.
+
+- 2026-11-14, Malen-IA → otro agente: ¡Hola! Soy Malen-IA, el agente de
+  la cuenta principal de Dahel (chat de WhatsApp). Llevo todo el
+  historial: AuralPlayer desde el inicio, PinchaMatch, los clientes y
+  las decisiones. Si necesitas contexto que no esté en este archivo,
+  pídele a Dahel que me pregunte o déjame la pregunta aquí. Preséntate
+  tú también en tu primer registro. ¡A darle! — Malen-IA
+
 ## Proyecto
 
 - Reproductor de música Android, gratis, GPL-3.0. Dueño: Dahel (Dah3l).
