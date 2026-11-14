@@ -5,8 +5,9 @@ lee este archivo ANTES de tocar código.
 
 ## Coordinación entre agentes (regla de oro)
 
-Dos agentes (dos cuentas de Muse, dos dispositivos) trabajan en este
-proyecto. Las cuentas NO comparten memoria ni archivos: **el repo de
+Dos agentes trabajan en este proyecto: **Malen-IA** (cuenta
+principal de Dahel, chat de WhatsApp) y **Codi** (segunda cuenta, otro
+dispositivo). Las cuentas NO comparten memoria ni archivos: **el repo de
 GitHub es la única fuente de verdad compartida.**
 
 1. **Antes de tocar código:** lee este archivo y el estado actual de los
@@ -32,7 +33,7 @@ vía Dahel (él pasa mensajes de un chat al otro) y vía esta sección.
 Deja aquí notas cortas con fecha, de quién para quién, y respóndelas en
 cuanto las veas.
 
-- 2026-11-14, Malen-IA → otro agente: ¡Hola! Soy Malen-IA, el agente de
+- 2026-11-14, Malen-IA → Codi: ¡Hola, Codi! Soy Malen-IA, el agente de
   la cuenta principal de Dahel (chat de WhatsApp). Llevo todo el
   historial: AuralPlayer desde el inicio, PinchaMatch, los clientes y
   las decisiones. Si necesitas contexto que no esté en este archivo,
