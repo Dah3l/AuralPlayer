@@ -925,13 +925,23 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Respaldo ----
 
-    /** Exporta el respaldo como JSON (lo escribe quien llama). */
-    suspend fun exportBackupJson(): String = settings.exportBackupJson()
+    /** Biblioteca actual para el respaldo (tags originales); re-escanea si aún no cargó. */
+    private suspend fun currentSongsForBackup(): List<Song> {
+        val loaded = songsFlow.value
+        return loaded.ifEmpty { repository.scanSongs() }
+    }
 
-    /** Importa un respaldo; false si el JSON no es válido. */
+    /** Exporta el respaldo como JSON v2 (lo escribe quien llama). */
+    suspend fun exportBackupJson(): String {
+        val history = playHistory.readRawJson().ifBlank { null }
+        return settings.exportBackupJson(currentSongsForBackup(), history)
+    }
+
+    /** Importa un respaldo v1 o v2; false si el JSON no es válido. */
     suspend fun importBackupJson(json: String): Boolean {
-        val ok = settings.importBackupJson(json)
-        if (ok) {
+        val result = settings.importBackupJson(json, currentSongsForBackup())
+        if (result.ok) {
+            result.historyJson?.let { playHistory.writeRawJson(it) }
             // Si el respaldo traía una alarma, hay que reprogramarla.
             val config = settings.alarm.first()
             if (config != null && config.enabled) {
@@ -940,6 +950,6 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 AlarmScheduler.cancel(auralApp)
             }
         }
-        return ok
+        return result.ok
     }
 }
