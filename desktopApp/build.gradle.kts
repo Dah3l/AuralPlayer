@@ -11,14 +11,14 @@ plugins {
 }
 
 kotlin {
-    jvm()
-
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     sourceSets {
-        val jvmMain by getting {
+        named("jvmMain") {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":shared"))
