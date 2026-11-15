@@ -120,6 +120,9 @@ dependencies {
     // ---- Reordenar arrastrando (cola y playlists): la que usan InnerTune/OuterTune ----
     implementation("sh.calvin.reorderable:reorderable:3.1.0")
 
+    // ---- Tags reales (v1.2.0): escribir ID3/Vorbis/MP4 en el archivo ----
+    implementation("net.jthink:jaudiotagger:3.0.1")
+
     // ---- Desugaring (sabor NIO: es el que retroporta URLEncoder con Charset,
     // igual que en la app oficial de NewPipe) ----
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
