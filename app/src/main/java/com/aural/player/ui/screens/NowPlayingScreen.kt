@@ -948,8 +948,8 @@ private fun NowPlayingMenu(
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.tagWriteEvents.collect { outcome ->
             val text = when (outcome) {
-                is AuralViewModel.TagWriteOutcome.FileSaved -> "Guardado en el archivo"
-                is AuralViewModel.TagWriteOutcome.SavedInAppOnly -> "Guardado solo en AuralPlayer"
+                is com.aural.player.AuralViewModel.TagWriteOutcome.FileSaved -> "Guardado en el archivo"
+                is com.aural.player.AuralViewModel.TagWriteOutcome.SavedInAppOnly -> "Guardado solo en AuralPlayer"
             }
             android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
         }
