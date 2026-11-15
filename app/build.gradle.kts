@@ -1,7 +1,9 @@
 // Configuración del módulo de aplicación Aural
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // Sin org.jetbrains.kotlin.android: AGP 9 trae Kotlin integrado.
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -74,11 +76,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -91,6 +88,16 @@ android {
             // más espacio ocupado). Para datos móviles, compensa.
             useLegacyPackaging = true
         }
+    }
+}
+
+// Opciones del compilador Kotlin (DSL nuevo de AGP 9: kotlinOptions
+// quedó atrás; esto es lo mismo que antes: bytecode JVM 17 + el
+// opt-in de Material3 experimental). Va FUERA del bloque android.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+        freeCompilerArgs.add("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
     }
 }
 
