@@ -25,3 +25,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Aural"
 include(":app")
+include(":shared")
+include(":desktopApp")
