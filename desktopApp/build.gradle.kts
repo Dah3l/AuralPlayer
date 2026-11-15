@@ -90,9 +90,16 @@ tasks.register<Copy>("prepareVlc") {
 }
 
 // Cinturón y tirantes: además del dependsOn del DSL, amarrar la
-// preparación de VLC a cada tarea de empaquetado/ejecución.
-tasks.matching { it.name in setOf("packageExe", "createDistributable", "run", "runDistributable") }
-    .configureEach { dependsOn("prepareVlc") }
+// preparación de VLC a cada tarea de empaquetado/ejecución. OJO:
+// prepareAppResources es la tarea del plugin que lee los recursos;
+// sin esta dependencia, Gradle la corre antes de prepareVlc y el
+// paquete sale sin las librerías (y Gradle 9 lo rechaza).
+tasks.matching {
+    it.name in setOf(
+        "packageExe", "createDistributable", "run",
+        "runDistributable", "prepareAppResources"
+    )
+}.configureEach { dependsOn("prepareVlc") }
 
 kotlin {
     jvm {
