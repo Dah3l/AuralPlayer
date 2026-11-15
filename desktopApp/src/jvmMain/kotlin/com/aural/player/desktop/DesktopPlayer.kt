@@ -24,7 +24,7 @@ class DesktopPlayer(private val scope: CoroutineScope) {
 
     private val vlc = VlcPlayer(
         onFinished = { next(auto = true) },
-        onError = { _state.update { it.copy(error = "No se pudo reproducir la canción.") } }
+        onError = { path -> _state.update { it.copy(error = "No se pudo reproducir: $path") } }
     )
     private var ticker: Job? = null
 
