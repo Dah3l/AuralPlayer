@@ -75,6 +75,27 @@ class PlayHistoryStore(private val context: Context) {
         keys.filter { it !in keep }.forEach { days.remove(it) }
     }
 
+    /** Lee el JSON crudo del historial (para incluirlo en el respaldo). "" si no existe. */
+    suspend fun readRawJson(): String {
+        return try {
+            mutex.withLock {
+                val f = file()
+                if (f.exists()) f.readText() else ""
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    /** Escribe el JSON crudo del historial (al importar un respaldo remapeado). */
+    suspend fun writeRawJson(json: String) {
+        try {
+            mutex.withLock { file().writeText(json) }
+        } catch (e: Exception) {
+            // El historial nunca debe romper la importación
+        }
+    }
+
     /** Suma segundos escuchados de una canción al día actual. */
     suspend fun record(songId: Long, title: String, artist: String, seconds: Long) {
         if (seconds <= 0) return
