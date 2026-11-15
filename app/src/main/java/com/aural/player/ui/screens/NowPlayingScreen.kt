@@ -441,7 +441,11 @@ fun NowPlayingScreen(
 
             // Canciones de la ventana (actual + vecinas), resueltas una vez
             // por ventana: durante el arrastre la ventana es estable.
-            val coverItems = remember(coverWindow, customCovers) {
+            // state.queue va en las claves: si los metadatos cambian
+            // (editar información + re-escaneo), la ventana se resuelve
+            // de nuevo y el título/artista se ven al instante, sin tener
+            // que cambiar de canción.
+            val coverItems = remember(coverWindow, customCovers, state.queue) {
                 coverWindow.map { idx ->
                     viewModel.playback.songAtTimelineIndex(idx)?.let { s ->
                         CoverItem(
