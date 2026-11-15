@@ -62,7 +62,57 @@ tasks.register<Copy>("prepareVlc") {
     dependsOn("downloadVlc")
     // El zip trae una carpeta superior (vlc-3.0.24/): se quita para
     // que libvlc.dll y plugins/ queden directo en vlc/.
+    //
+    // RECORTE SOLO-AUDIO: del zip completo (~197 MB) se copian solo
+    // las librerías base y los plugins de audio. Fuera: interfaz
+    // gráfica, video, subtítulos, streaming, idiomas y utilidades.
+    // libavcodec_plugin queda como decodificador universal de
+    // respaldo; los demuxers/codecs listados cubren mp3, m4a/aac,
+    // flac, ogg, opus, wav, wma, aiff y demás formatos de música.
     from(zipTree(vlcZipFile.get().asFile)) {
+        val top = "vlc-$vlcVersion"
+        include(
+            "$top/libvlc.dll",
+            "$top/libvlccore.dll",
+            "$top/plugins/audio_output/**",
+            "$top/plugins/audio_mixer/**",
+            "$top/plugins/audio_filter/**",
+            "$top/plugins/access/libfilesystem_plugin.dll",
+            "$top/plugins/access/libhttp_plugin.dll",
+            "$top/plugins/access/libhttps_plugin.dll",
+            "$top/plugins/codec/libavcodec_plugin.dll",
+            "$top/plugins/codec/libfaad_plugin.dll",
+            "$top/plugins/codec/libflac_plugin.dll",
+            "$top/plugins/codec/libvorbis_plugin.dll",
+            "$top/plugins/codec/libopus_plugin.dll",
+            "$top/plugins/codec/libmpg123_plugin.dll",
+            "$top/plugins/codec/libspeex_plugin.dll",
+            "$top/plugins/codec/libaraw_plugin.dll",
+            "$top/plugins/codec/liblpcm_plugin.dll",
+            "$top/plugins/codec/libadpcm_plugin.dll",
+            "$top/plugins/codec/libg711_plugin.dll",
+            "$top/plugins/codec/libspdif_plugin.dll",
+            "$top/plugins/codec/libaes3_plugin.dll",
+            "$top/plugins/demux/libmp4_plugin.dll",
+            "$top/plugins/demux/libogg_plugin.dll",
+            "$top/plugins/demux/libflacsys_plugin.dll",
+            "$top/plugins/demux/libasf_plugin.dll",
+            "$top/plugins/demux/libwav_plugin.dll",
+            "$top/plugins/demux/libaiff_plugin.dll",
+            "$top/plugins/demux/libau_plugin.dll",
+            "$top/plugins/demux/libcaf_plugin.dll",
+            "$top/plugins/demux/libmkv_plugin.dll",
+            "$top/plugins/demux/libmpc_plugin.dll",
+            "$top/plugins/demux/libtta_plugin.dll",
+            "$top/plugins/demux/libvoc_plugin.dll",
+            "$top/plugins/demux/libxa_plugin.dll",
+            "$top/plugins/demux/librawaud_plugin.dll",
+            "$top/plugins/demux/libes_plugin.dll",
+            "$top/plugins/packetizer/libpacketizer_copy_plugin.dll",
+            "$top/plugins/packetizer/libpacketizer_flac_plugin.dll",
+            "$top/plugins/packetizer/libpacketizer_mpeg4audio_plugin.dll",
+            "$top/plugins/packetizer/libpacketizer_mpegaudio_plugin.dll"
+        )
         eachFile {
             val segments = relativePath.segments
             if (segments.size > 1) {
@@ -78,12 +128,19 @@ tasks.register<Copy>("prepareVlc") {
     // falle aquí que un instalador sin VLC.
     doLast {
         val vlcDir = layout.buildDirectory.dir("appResources/windows-x64/vlc").get().asFile
-        val dll = File(vlcDir, "libvlc.dll")
-        val plugins = File(vlcDir, "plugins")
-        if (!dll.exists() || !plugins.isDirectory) {
+        val required = listOf(
+            "libvlc.dll",
+            "libvlccore.dll",
+            "plugins/codec/libavcodec_plugin.dll",
+            "plugins/codec/libfaad_plugin.dll",
+            "plugins/demux/libmp4_plugin.dll",
+            "plugins/access/libfilesystem_plugin.dll",
+            "plugins/audio_output/libdirectsound_plugin.dll"
+        )
+        val missing = required.filter { !File(vlcDir, it).exists() }
+        if (missing.isNotEmpty()) {
             throw GradleException(
-                "prepareVlc no dejó las librerías de VLC en ${vlcDir.absolutePath} " +
-                    "(libvlc.dll: ${dll.exists()}, plugins: ${plugins.exists()})."
+                "prepareVlc dejó incompleto el VLC en ${vlcDir.absolutePath}. Faltan: ${missing.joinToString(", ")}."
             )
         }
     }
@@ -130,7 +187,7 @@ compose.desktop {
             packageName = "AuralPlayer"
             // Sube en cada build de prueba: con upgradeUuid fijo, una
             // versión mayor reemplaza la instalada sin desinstalar.
-            packageVersion = "1.2.2"
+            packageVersion = "1.2.3"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
             // Recursos extra (las librerías de VLC) dentro del paquete.
