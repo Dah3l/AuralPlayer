@@ -149,23 +149,23 @@ cuanto las veas.
 
 - **v1.1.0 (versionCode 11): RELEASEADA.** Dahel confirmó el 2026-11-15
   que disparó `release.yml` hace días. Subida a Apklis sin confirmar.
-- **En curso (Malen-IA):** base de la 1.2.0 = subida del stack a
-  Kotlin 2.4.x + versiones compatibles con Compose Multiplatform
-  (preparación del port a PC), y los 3 ítems gratis de la 1.2.0
-  (portadas locales, respaldo por título+artista, tags reales) —
-  CONSTRUIDOS Y VERIFICADOS por Dahel 2026-11-15. El Pro
-  de la app (streaming, licencias) va después, desde la PC con WiFi.
+- **En curso (Malen-IA):** Aural para PC, fase 1 = estructura Compose
+  Multiplatform (módulo `shared` JVM-only + `desktopApp` con ventana
+  mínima; empaquetado EXE con jpackage en Actions). La app Android
+  queda intacta. El Pro va DESPUÉS de la PC (decisión de Dahel
+  2026-11-15, cambió el orden).
 - **En curso (Codi):** páginas web de activación Pro (ver nota del
   2026-11-15 en Notas entre agentes). Sin tocar `app/` ni `docs/index.html`.
-- **Siguiente: Aural Pro** (streaming + radio + playlists de YouTube).
+- **Después de la PC: Aural Pro** (streaming + radio + playlists de YouTube).
   Precios: Mensual 100 CUP, Anual 500 CUP, Lifetime 1000 CUP. Activación
   desde la web, opción A (página /activar + admin con clave pegada por
-  sesión, sin backend). Se construye desde la PC con WiFi. En la versión
-  del Pro se sube el stack a Kotlin 2.4.x + versiones compatibles con
-  Compose Multiplatform. Plan: `plan-auralplayer-pro.md` (en manos de
+  sesión, sin backend). Se construye desde la PC con WiFi. Plan: `plan-auralplayer-pro.md` (en manos de
   Dahel, no en este repo).
-- **Después del Pro: Aural para PC** vía Compose Multiplatform. Qt
-  evaluado y descartado.
+- **Aural para PC** vía Compose Multiplatform. Qt
+  evaluado y descartado. Motor de audio: VLCJ (decisión de Dahel
+  2026-11-15; las librerías de VLC van dentro del instalador, el
+  usuario no necesita VLC instalado). v1 PC: biblioteca + reproducción
+  + playlists + temas + letras (sin traducción ni isla).
 - Decisiones cerradas: NO importación de Spotify (nunca re-proponer),
   karaoke revertido (no re-proponer), crossfade/mezcla infinita/tema
   sigue-a-la-música aparcados, historial descartado, widget aparcado,
@@ -195,3 +195,5 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | Ítem 3 gratis 1.2.0: edición de tags reales en el archivo (TagEditor + jaudiotagger 3.0.1; permiso MediaStore createWriteRequest; re-escaneo; overlay como fallback sin pérdida) | data/TagEditor.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt, ui/components/EditMetadataDialog.kt, app/build.gradle.kts |
 | 2026-11-15 | Malen-IA | Fix tags M4A: MP3 guardaba bien, M4A no (descargas YouTube = MP4 fragmentado). Detección moof/mfra/mvex + remux sin pérdida (MediaExtractor/MediaMuxer) antes de escribir; verificación releyendo el archivo tras escribir; portada personalizada incrustada en el archivo (APIC/covr); fix refresco Now Playing (state.queue en las claves del remember de coverItems) | data/TagEditor.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt |
 | 2026-11-15 | Malen-IA | Fix refresco tras editar tags M4A: MediaStore re-indexa el archivo reemplazado y el re-escaneo devolvía la fila vieja (había que editar dos veces). Parche en memoria inmediato + repetido tras el re-escaneo (PlaybackManager.refreshSongMetadata + rescan con onDone). Resolución de portada ampliada: portada por enlace se descarga local y, si no hay personalizada, se incrusta el arte del álbum del sistema. Ítem 3 VERIFICADO por Dahel 2026-11-15 (MP3 y M4A, cambios visibles en otros reproductores) | playback/PlaybackManager.kt, AuralViewModel.kt |
+| 2026-11-15 | Malen-IA | Ítems 1 y 2 gratis 1.2.0 VERIFICADOS por Dahel (portadas locales + respaldo v2). Lado gratis de la 1.2.0 completo y verificado | — |
+| 2026-11-15 | Malen-IA | PC fase 1: estructura Compose Multiplatform (shared JVM-only + desktopApp con ventana mínima; plugins KMP 2.4.21 + CMP 1.12.2; empaquetado EXE con jpackage; android.builder.sdkDownload=true para el runner Windows). App Android intacta. Workflow desktop.yml lo crea Dahel por web (la API no puede crear workflows) | settings.gradle.kts, build.gradle.kts, gradle.properties, shared/, desktopApp/ |
