@@ -177,3 +177,5 @@ cuanto las veas.
 | 2026-11-13 | Malen-IA | Fix orden del nav (Pro antes que FAQ) + scrollspy con Pro | docs/index.html |
 | 2026-11-14 | Malen-IA | Creación de este AGENTS.md para coordinación entre dos agentes | AGENTS.md |
 | 2026-11-15 | Malen-IA | Estado 1.1.0 → releaseada; tarea para Codi: páginas web de activación Pro (/activar + /admin + promos.json + Ed25519 vendored) con el formato de código acordado | AGENTS.md |
+| 2026-11-15 | Malen-IA | Stack 1.2.0: Kotlin 2.4.21 + AGP 9.3.1 (built-in Kotlin, sin plugin kotlin.android; KGP por classpath; kotlinOptions → kotlin.compilerOptions) + Gradle 9.7.0 + BOM 2026.09.00 + compileSdk 37 + Media3 1.11.1 + lifecycle 2.11.0 + resValues=true + firma enableV1/V2Signing | build.gradle.kts, app/build.gradle.kts |
+| 2026-11-15 | Malen-IA | Ítem 1 gratis 1.2.0: portadas personalizadas guardadas en el teléfono (SongCoverStore: filesDir/song_covers/, máx 600px; fallback al enlace si falla; filtro de rutas inexistentes; borrado del archivo al quitar) | data/SongCoverStore.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt |
