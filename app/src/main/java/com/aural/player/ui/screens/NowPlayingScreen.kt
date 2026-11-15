@@ -933,6 +933,28 @@ private fun NowPlayingMenu(
         pendingDeleteId = null
     }
 
+    // v1.2.0: permiso de escritura de MediaStore para editar los tags reales.
+    val writeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.confirmTagWrite()
+        } else {
+            viewModel.discardTagWrite()
+        }
+    }
+
+    // v1.2.0: aviso tras guardar una edición (en el archivo o solo en la app).
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.tagWriteEvents.collect { outcome ->
+            val text = when (outcome) {
+                is AuralViewModel.TagWriteOutcome.FileSaved -> "Guardado en el archivo"
+                is AuralViewModel.TagWriteOutcome.SavedInAppOnly -> "Guardado solo en AuralPlayer"
+            }
+            android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // v1.0.9: hoja única de compartir + hoja de la Aural Card.
     var showShareSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showCardSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -1208,8 +1230,17 @@ private fun NowPlayingMenu(
             initialArtist = meta?.second ?: song.artist,
             initialAlbum = meta?.third ?: song.album,
             onSave = { title, artist, album ->
-                viewModel.setCustomMetadata(song.id, title, artist, album)
+                // v1.2.0: escribir los tags en el archivo; si falta el
+                // permiso, el sistema pide confirmación (un toque).
                 showEditMetadata = false
+                scope.launch {
+                    val request = viewModel.saveMetadataToFile(song, title, artist, album)
+                    if (request != null) {
+                        writeLauncher.launch(
+                            androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build()
+                        )
+                    }
+                }
             },
             onDismiss = { showEditMetadata = false }
         )
