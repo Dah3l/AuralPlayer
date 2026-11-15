@@ -915,34 +915,87 @@ class SettingsStore(private val context: Context) {
      * claves y el contenido de los archivos .lrc guardados por la app
      * (los de filesDir, que se pierden al desinstalar).
      */
-    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
-        val prefs = context.dataStore.data.first()
-        val data = JSONObject()
-        for ((name, key) in backupStringKeys) {
-            prefs[key]?.let { data.put(name, it) }
-        }
-        for ((name, key) in backupBooleanKeys) {
-            prefs[key]?.let { data.put(name, it) }
-        }
-        // Letras guardadas por la app: van dentro del JSON.
-        val lyrics = JSONObject()
-        val filesDirPath = context.filesDir.absolutePath
-        decodeLrcMap(prefs[KEY_LRC_MAP]).forEach { (id, path) ->
-            if (path.startsWith(filesDirPath)) {
-                try {
-                    val file = File(path)
-                    if (file.exists()) lyrics.put(id.toString(), file.readText())
-                } catch (e: Exception) {
-                    // Esa letra no entra en el respaldo
+    /**
+     * Exporta el respaldo como JSON (versión 2): versión, fecha, valores de
+     * las claves, el contenido de los archivos .lrc guardados por la app
+     * (los de filesDir, que se pierden al desinstalar), el índice
+     * título+artista de cada canción referenciada (para casar en otro
+     * equipo, donde los IDs de MediaStore son distintos) y el historial
+     * del Top 10. [songs] debe ser la biblioteca actual (tags originales).
+     */
+    suspend fun exportBackupJson(songs: List<Song>, historyRawJson: String?): String =
+        withContext(Dispatchers.IO) {
+            val prefs = context.dataStore.data.first()
+            val data = JSONObject()
+            for ((name, key) in backupStringKeys) {
+                prefs[key]?.let { data.put(name, it) }
+            }
+            for ((name, key) in backupBooleanKeys) {
+                prefs[key]?.let { data.put(name, it) }
+            }
+            // Letras guardadas por la app: van dentro del JSON.
+            val lyrics = JSONObject()
+            val filesDirPath = context.filesDir.absolutePath
+            decodeLrcMap(prefs[KEY_LRC_MAP]).forEach { (id, path) ->
+                if (path.startsWith(filesDirPath)) {
+                    try {
+                        val file = File(path)
+                        if (file.exists()) lyrics.put(id.toString(), file.readText())
+                    } catch (e: Exception) {
+                        // Esa letra no entra en el respaldo
+                    }
                 }
             }
+            // Índice v2: solo las canciones referenciadas por algún dato.
+            val referenced = mutableSetOf<Long>()
+            prefs[KEY_PLAYLISTS]?.let { decodePlaylists(it).forEach { pl -> referenced.addAll(pl.songIds) } }
+            prefs[KEY_FAVORITES]?.let { referenced.addAll(decodeFavorites(it)) }
+            prefs[KEY_FAVORITE_ORDER]?.let { referenced.addAll(decodeFavoriteOrder(it)) }
+            prefs[KEY_CUSTOM_COVERS]?.let { referenced.addAll(decodeCovers(it).keys) }
+            prefs[KEY_CUSTOM_METADATA]?.let { referenced.addAll(decodeMetadata(it).keys) }
+            prefs[KEY_LRC_MAP]?.let { referenced.addAll(decodeLrcMap(it).keys) }
+            AlarmConfig.fromJson(prefs[KEY_ALARM])?.let { referenced.addAll(it.songIds) }
+            referenced.addAll(parseHistoryIds(historyRawJson))
+            val byId = songs.associateBy { it.id }
+            val songKeys = JSONObject()
+            for (id in referenced) {
+                byId[id]?.let { songKeys.put(id.toString(), SongKey.fromSong(it).toJson()) }
+            }
+            JSONObject().apply {
+                put("version", 2)
+                put("exportedAt", System.currentTimeMillis())
+                put("prefs", data)
+                put("lyrics", lyrics)
+                put("songs", songKeys)
+                if (!historyRawJson.isNullOrBlank()) {
+                    try {
+                        put("history", JSONObject(historyRawJson))
+                    } catch (e: Exception) {
+                        // Historial corrupto: el respaldo sale sin él.
+                    }
+                }
+            }.toString()
         }
-        JSONObject().apply {
-            put("version", 1)
-            put("exportedAt", System.currentTimeMillis())
-            put("prefs", data)
-            put("lyrics", lyrics)
-        }.toString()
+
+    /** IDs de canción mencionados en el JSON crudo del historial. */
+    private fun parseHistoryIds(historyRawJson: String?): Set<Long> {
+        if (historyRawJson.isNullOrBlank()) return emptySet()
+        return try {
+            val ids = mutableSetOf<Long>()
+            val days = JSONObject(historyRawJson).optJSONObject("days") ?: return emptySet()
+            val dayKeys = days.keys()
+            while (dayKeys.hasNext()) {
+                val songsObj = days.optJSONObject(dayKeys.next())?.optJSONObject("songs")
+                    ?: continue
+                val keys = songsObj.keys()
+                while (keys.hasNext()) {
+                    keys.next().toLongOrNull()?.let { ids.add(it) }
+                }
+            }
+            ids
+        } catch (e: Exception) {
+            emptySet()
+        }
     }
 
     /**
@@ -950,51 +1003,196 @@ class SettingsStore(private val context: Context) {
      * y restaura los archivos .lrc (regenerando sus rutas en filesDir).
      * Devuelve false si el JSON no es un respaldo válido.
      */
-    suspend fun importBackupJson(json: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val root = JSONObject(json)
-            if (root.optInt("version", -1) != 1) return@withContext false
-            val prefsJson = root.optJSONObject("prefs") ?: return@withContext false
-            val lyricsJson = root.optJSONObject("lyrics")
-            context.dataStore.edit { prefs ->
-                for ((name, key) in backupStringKeys) {
-                    if (prefsJson.has(name)) prefs[key] = prefsJson.getString(name)
+    /** Resultado de importar: si fue válido y el historial remapeado (v2) para guardar. */
+    data class BackupImportResult(val ok: Boolean, val historyJson: String? = null)
+
+    /**
+     * Importa un respaldo. v1 (sin índice): copia textual, como antes
+     * (mismo equipo). v2: remapea cada ID por título+artista contra la
+     * biblioteca actual [songs]; lo que no tiene coincidencia se descarta
+     * en silencio. Devuelve el historial remapeado para que quien llama
+     * lo guarde en PlayHistoryStore.
+     */
+    suspend fun importBackupJson(json: String, songs: List<Song>): BackupImportResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val root = JSONObject(json)
+                val version = root.optInt("version", -1)
+                if (version != 1 && version != 2) return@withContext BackupImportResult(false)
+                val prefsJson = root.optJSONObject("prefs")
+                    ?: return@withContext BackupImportResult(false)
+                val lyricsJson = root.optJSONObject("lyrics")
+
+                // v2: resolver IDs viejos → IDs locales. v1: sin remapeo.
+                val remap: Map<Long, Long>? = if (version == 2) {
+                    val stored = mutableMapOf<Long, SongKey>()
+                    val songsJson = root.optJSONObject("songs")
+                    if (songsJson != null) {
+                        val keys = songsJson.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            val id = k.toLongOrNull() ?: continue
+                            SongKey.fromJson(songsJson.optJSONObject(k))?.let { stored[id] = it }
+                        }
+                    }
+                    resolveSongKeys(stored, songs)
+                } else {
+                    null
                 }
-                for ((name, key) in backupBooleanKeys) {
-                    if (prefsJson.has(name)) prefs[key] = prefsJson.getBoolean(name)
-                }
-            }
-            // Letras: escribir los archivos y regenerar las rutas del mapa
-            // (las rutas viejas de filesDir no valen en otra instalación;
-            // las rutas fuera de filesDir se conservan tal cual).
-            if (prefsJson.has("lrc_map_json")) {
-                val filesDirPath = context.filesDir.absolutePath
-                val importedMap = decodeLrcMap(prefsJson.getString("lrc_map_json"))
-                val newMap = importedMap.mapValues { (id, path) ->
-                    if (path.startsWith(filesDirPath)) {
-                        val target = File(context.filesDir, path.substringAfterLast('/'))
-                        val content = lyricsJson?.optString(id.toString())
-                        if (!content.isNullOrEmpty()) {
-                            try {
-                                target.writeText(content)
-                            } catch (e: Exception) {
-                                // Se conserva la ruta aunque el archivo falle
+
+                context.dataStore.edit { prefs ->
+                    for ((name, key) in backupStringKeys) {
+                        if (!prefsJson.has(name)) continue
+                        val raw = prefsJson.getString(name)
+                        prefs[key] = if (remap == null) {
+                            raw
+                        } else {
+                            when (name) {
+                                "playlists_json" ->
+                                    encodePlaylists(remapPlaylists(decodePlaylists(raw), remap))
+                                "favorites_json" ->
+                                    JSONArray(decodeFavorites(raw).mapNotNull { remap[it] }).toString()
+                                "favorite_order_json" ->
+                                    JSONArray(decodeFavoriteOrder(raw).mapNotNull { remap[it] }.distinct()).toString()
+                                "custom_covers_json" ->
+                                    encodeCovers(remapKeyedMap(decodeCovers(raw), remap))
+                                "custom_metadata_json" ->
+                                    encodeMetadata(remapKeyedMap(decodeMetadata(raw), remap))
+                                // El mapa de letras se reescribe abajo con rutas nuevas.
+                                "lrc_map_json" -> raw
+                                "alarm_json" -> remapAlarm(raw, remap)
+                                else -> raw
                             }
                         }
-                        target.absolutePath
-                    } else {
-                        path
+                    }
+                    for ((name, key) in backupBooleanKeys) {
+                        if (prefsJson.has(name)) prefs[key] = prefsJson.getBoolean(name)
                     }
                 }
-                context.dataStore.edit { prefs ->
-                    prefs[KEY_LRC_MAP] = JSONObject(
-                        newMap.mapKeys { it.key.toString() } as Map<String, String>
-                    ).toString()
+                // Letras: escribir los archivos y regenerar las rutas del mapa
+                // (las rutas viejas de filesDir no valen en otra instalación;
+                // las rutas fuera de filesDir se conservan tal cual). En v2
+                // los archivos se guardan con el ID local nuevo.
+                if (prefsJson.has("lrc_map_json")) {
+                    val importedMap = decodeLrcMap(prefsJson.getString("lrc_map_json"))
+                    val newMap = writeLyricsFiles(importedMap, lyricsJson, remap)
+                    context.dataStore.edit { prefs ->
+                        prefs[KEY_LRC_MAP] = JSONObject(
+                            newMap.mapKeys { it.key.toString() } as Map<String, String>
+                        ).toString()
+                    }
                 }
+                val historyJson = if (version == 2 && remap != null) {
+                    remapHistory(root.optJSONObject("history"), remap)
+                } else {
+                    null
+                }
+                BackupImportResult(true, historyJson)
+            } catch (e: Exception) {
+                BackupImportResult(false)
             }
-            true
+        }
+
+    /** Remapea un mapa id → valor; si dos viejos caen en el mismo nuevo, gana el primero. */
+    private fun <V> remapKeyedMap(map: Map<Long, V>, remap: Map<Long, Long>): Map<Long, V> {
+        val out = LinkedHashMap<Long, V>()
+        for ((oldId, value) in map) {
+            val newId = remap[oldId] ?: continue
+            out.putIfAbsent(newId, value)
+        }
+        return out
+    }
+
+    private fun remapPlaylists(list: List<Playlist>, remap: Map<Long, Long>): List<Playlist> =
+        list.map { pl ->
+            pl.copy(songIds = pl.songIds.mapNotNull { remap[it] }.distinct())
+        }
+
+    /** Remapea la alarma: si era por canción y ninguna existe aquí, queda apagada. */
+    private fun remapAlarm(raw: String, remap: Map<Long, Long>): String {
+        val config = AlarmConfig.fromJson(raw) ?: return raw
+        val mapped = config.songIds.mapNotNull { remap[it] }.distinct()
+        val fixed = if (config.mode == "song" && config.songIds.isNotEmpty() && mapped.isEmpty()) {
+            config.copy(songIds = emptyList(), enabled = false)
+        } else {
+            config.copy(songIds = mapped)
+        }
+        return fixed.toJson()
+    }
+
+    /**
+     * Escribe los archivos .lrc importados y devuelve el mapa nuevo.
+     * [remap] null = v1 (mismos IDs); en v2 los archivos se nombran con
+     * el ID local y las entradas sin coincidencia se descartan.
+     */
+    private fun writeLyricsFiles(
+        importedMap: Map<Long, String>,
+        lyricsJson: JSONObject?,
+        remap: Map<Long, Long>?
+    ): Map<Long, String> {
+        val filesDirPath = context.filesDir.absolutePath
+        val newMap = mutableMapOf<Long, String>()
+        for ((oldId, path) in importedMap) {
+            val newId = remap?.get(oldId) ?: if (remap == null) oldId else continue
+            if (path.startsWith(filesDirPath)) {
+                val baseName = path.substringAfterLast('/')
+                val fileName = if (baseName.startsWith("lyrics_") && baseName.endsWith(".lrc")) {
+                    "lyrics_$newId.lrc"
+                } else {
+                    baseName
+                }
+                val target = File(context.filesDir, fileName)
+                val content = lyricsJson?.optString(oldId.toString())
+                if (!content.isNullOrEmpty()) {
+                    try {
+                        target.writeText(content)
+                    } catch (e: Exception) {
+                        // Se conserva la ruta aunque el archivo falle
+                    }
+                }
+                newMap[newId] = target.absolutePath
+            } else {
+                newMap[newId] = path
+            }
+        }
+        return newMap
+    }
+
+    /** Remapea el historial del Top 10 (suma segundos si dos viejos caen en el mismo nuevo). */
+    private fun remapHistory(historyJson: JSONObject?, remap: Map<Long, Long>): String? {
+        if (historyJson == null) return null
+        return try {
+            val days = historyJson.optJSONObject("days") ?: return historyJson.toString()
+            val dayKeys = days.keys()
+            val dayList = mutableListOf<String>()
+            while (dayKeys.hasNext()) dayList.add(dayKeys.next())
+            for (dayKey in dayList) {
+                val day = days.optJSONObject(dayKey) ?: continue
+                val songsObj = day.optJSONObject("songs") ?: continue
+                val newSongs = JSONObject()
+                var newTotal = 0L
+                val keys = songsObj.keys()
+                val idList = mutableListOf<String>()
+                while (keys.hasNext()) idList.add(keys.next())
+                for (idStr in idList) {
+                    val oldId = idStr.toLongOrNull() ?: continue
+                    val newId = remap[oldId] ?: continue
+                    val entry = songsObj.optJSONObject(idStr) ?: continue
+                    val seconds = entry.optLong("seconds")
+                    val existing = newSongs.optJSONObject(newId.toString())
+                    if (existing != null) {
+                        existing.put("seconds", existing.optLong("seconds") + seconds)
+                    } else {
+                        newSongs.put(newId.toString(), JSONObject(entry.toString()))
+                    }
+                    newTotal += seconds
+                }
+                day.put("songs", newSongs)
+                day.put("seconds", newTotal)
+            }
+            historyJson.toString()
         } catch (e: Exception) {
-            false
+            null
         }
     }
 }
