@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /** Estado de la interfaz de la biblioteca. */
 data class LibraryUiState(
@@ -276,7 +277,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         artist: String,
         album: String
     ): PendingIntent? {
-        return when (TagEditor.writeTags(getApplication(), song.uri, title, artist, album)) {
+        val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(song.id) }
+        return when (TagEditor.writeTags(getApplication(), song.uri, title, artist, album, coverArt)) {
             TagWriteResult.Success -> {
                 // El archivo ya lleva la verdad: limpiar el overlay y re-escanear.
                 settings.setCustomMetadata(song.id, "", "", "")
@@ -313,7 +315,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         val pending = pendingTagEdit ?: return
         pendingTagEdit = null
         viewModelScope.launch {
-            when (TagEditor.writeTags(getApplication(), pending.uri, pending.title, pending.artist, pending.album)) {
+            val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(pending.songId) }
+            when (TagEditor.writeTags(getApplication(), pending.uri, pending.title, pending.artist, pending.album, coverArt)) {
                 TagWriteResult.Success -> {
                     settings.setCustomMetadata(pending.songId, "", "", "")
                     _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
@@ -321,6 +324,36 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 else -> applyOverlayFallback(pending.songId, pending.title, pending.artist, pending.album)
             }
+        }
+    }
+
+    /**
+     * Bytes + MIME de la portada personalizada de la canción, si está
+     * guardada en el teléfono (file:// o content://). Las portadas que
+     * son solo un enlace no se descargan durante la edición.
+     */
+    private fun resolveCoverArt(songId: Long): Pair<ByteArray, String>? {
+        val value = customCovers.value[songId] ?: return null
+        return try {
+            val bytes = when {
+                value.startsWith("file://") -> {
+                    val path = Uri.parse(value).path ?: return null
+                    File(path).readBytes()
+                }
+                value.startsWith("content://") -> {
+                    getApplication<Application>().contentResolver
+                        .openInputStream(Uri.parse(value))?.use { it.readBytes() }
+                        ?: return null
+                }
+                else -> return null
+            }
+            if (bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) return null
+            val isPng = bytes.size > 8 && bytes[0] == 0x89.toByte() &&
+                bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() &&
+                bytes[3] == 0x47.toByte()
+            bytes to if (isPng) "image/png" else "image/jpeg"
+        } catch (_: Exception) {
+            null
         }
     }
 
