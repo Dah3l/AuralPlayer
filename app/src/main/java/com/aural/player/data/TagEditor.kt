@@ -6,6 +6,10 @@
 // NeedsPermission (pedir permiso con MediaStore.createWriteRequest y
 // reintentar). El original nunca se toca hasta que la copia editada está
 // lista, y si la devolución falla a medias se intenta restaurar.
+//
+// OJO: jaudiotagger elige el lector por la EXTENSIÓN del archivo. Los
+// temporales DEBEN llevar la extensión real (.mp3, .m4a...): con ".tmp"
+// el lector no abre nada y toda edición falla en silencio.
 package com.aural.player.data
 
 import android.content.ContentValues
@@ -18,6 +22,7 @@ import kotlinx.coroutines.withContext
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import java.io.File
+import java.util.Locale
 
 sealed class TagWriteResult {
     object Success : TagWriteResult()
@@ -49,14 +54,22 @@ object TagEditor {
         var workFile: File? = null
         var backupFile: File? = null
         try {
+            // 0. Extensión real del archivo: sin ella jaudiotagger no abre
+            // el temporal (elige el lector por la extensión). Formatos
+            // sin soporte (p. ej. .webm) caen al guardado solo en la app.
+            val extension = queryExtension(context, uri)
+            if (extension == null || extension !in SUPPORTED_EXTENSIONS) {
+                Log.w(TAG, "Formato sin soporte para editar: $extension")
+                return@withContext TagWriteResult.Failed
+            }
             // 1. Copiar el original a un temporal (respaldo por si algo falla).
-            val original = File(context.cacheDir, "tag_edit_original.tmp")
+            val original = File(context.cacheDir, "tag_edit_original.$extension")
             resolver.openInputStream(uri)?.use { input ->
                 original.outputStream().use { input.copyTo(it) }
             } ?: return@withContext TagWriteResult.Failed
             backupFile = original
             // 2. Copia de trabajo: escribir los tags con jaudiotagger.
-            val work = File(context.cacheDir, "tag_edit_work.tmp")
+            val work = File(context.cacheDir, "tag_edit_work.$extension")
             original.copyTo(work, overwrite = true)
             workFile = work
             try {
@@ -107,6 +120,50 @@ object TagEditor {
             } catch (_: Exception) {
             }
         }
+    }
+
+    /** Extensiones que jaudiotagger sabe leer y escribir. */
+    private val SUPPORTED_EXTENSIONS = setOf(
+        "mp3", "mp4", "m4a", "m4b", "m4p",
+        "ogg", "oga", "opus", "flac", "wma", "wav",
+        "aif", "aiff", "aifc"
+    )
+
+    /**
+     * Extensión real del archivo: primero del nombre en MediaStore y, si
+     * no trae, del tipo MIME. Null si no se pudo averiguar.
+     */
+    private fun queryExtension(context: Context, uri: Uri): String? {
+        return try {
+            val projection = arrayOf(
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.MIME_TYPE
+            )
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return null
+                val displayName = cursor.getString(0).orEmpty()
+                val fromName = displayName.substringAfterLast('.', "")
+                    .lowercase(Locale.ROOT)
+                    .takeIf { it.isNotEmpty() && it.length <= 5 && it.all { c -> c.isLetterOrDigit() } }
+                if (fromName != null) return fromName
+                mimeToExtension(cursor.getString(1).orEmpty())
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo leer la extensión: ${e.message}")
+            null
+        }
+    }
+
+    private fun mimeToExtension(mime: String): String? = when (mime.lowercase(Locale.ROOT)) {
+        "audio/mpeg", "audio/mp3" -> "mp3"
+        "audio/mp4", "audio/x-m4a" -> "m4a"
+        "audio/flac", "audio/x-flac" -> "flac"
+        "audio/ogg", "audio/vorbis" -> "ogg"
+        "audio/opus" -> "opus"
+        "audio/x-ms-wma" -> "wma"
+        "audio/wav", "audio/x-wav" -> "wav"
+        "audio/aiff", "audio/x-aiff" -> "aiff"
+        else -> null
     }
 
     /** Best-effort: devuelve el original si la copia editada falló a medias. */
