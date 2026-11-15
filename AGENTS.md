@@ -133,6 +133,17 @@ cuanto las veas.
   anotación).
 - Contar llaves (balance 0) NO prueba anidación correcta. Revisar
   imports, ámbito y orden de declaración primero.
+- jaudiotagger elige el lector por EXTENSIÓN: los temporales deben
+  llevar la extensión real (.mp3, .m4a); con ".tmp" nada abre.
+- Las descargas de YouTube son MP4 FRAGMENTADO (moof/mvex, sin stco):
+  jaudiotagger NO puede reescribir su moov. Detectar (cajas
+  moof/mfra/mvex) y normalizar con remux sin pérdida
+  (MediaExtractor/MediaMuxer) antes de escribir tags. MP3 sí se
+  escribe directo sin problema.
+- El título/artista del Now Playing sale de `coverItems` (remember):
+  si los metadatos cambian sin cambiar la ventana, hay que incluir
+  `state.queue` en las claves del remember o la pantalla queda con la
+  info vieja hasta cambiar de canción.
 
 ## Estado actual (2026-11-15)
 
@@ -181,3 +192,4 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | Ítem 1 gratis 1.2.0: portadas personalizadas guardadas en el teléfono (SongCoverStore: filesDir/song_covers/, máx 600px; fallback al enlace si falla; filtro de rutas inexistentes; borrado del archivo al quitar) | data/SongCoverStore.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt |
 | 2026-11-15 | Malen-IA | Ítem 2 gratis 1.2.0: respaldo v2 con casado por título+artista (SongKey + resolveSongKeys; historial Top 10 incluido; v1 sigue legible; alarma sin coincidencia queda apagada) | data/SongKey.kt, data/SettingsStore.kt, data/PlayHistoryStore.kt, AuralViewModel.kt |
 | 2026-11-15 | Malen-IA | Ítem 3 gratis 1.2.0: edición de tags reales en el archivo (TagEditor + jaudiotagger 3.0.1; permiso MediaStore createWriteRequest; re-escaneo; overlay como fallback sin pérdida) | data/TagEditor.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt, ui/components/EditMetadataDialog.kt, app/build.gradle.kts |
+| 2026-11-15 | Malen-IA | Fix tags M4A: MP3 guardaba bien, M4A no (descargas YouTube = MP4 fragmentado). Detección moof/mfra/mvex + remux sin pérdida (MediaExtractor/MediaMuxer) antes de escribir; verificación releyendo el archivo tras escribir; portada personalizada incrustada en el archivo (APIC/covr); fix refresco Now Playing (state.queue en las claves del remember de coverItems) | data/TagEditor.kt, AuralViewModel.kt, ui/screens/NowPlayingScreen.kt |
