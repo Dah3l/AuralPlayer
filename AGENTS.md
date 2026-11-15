@@ -151,8 +151,9 @@ cuanto las veas.
   que disparó `release.yml` hace días. Subida a Apklis sin confirmar.
 - **En curso (Malen-IA):** base de la 1.2.0 = subida del stack a
   Kotlin 2.4.x + versiones compatibles con Compose Multiplatform
-  (preparación del port a PC), y luego los 3 ítems gratis de la 1.2.0
-  (portadas locales, respaldo por título+artista, tags reales). El Pro
+  (preparación del port a PC), y los 3 ítems gratis de la 1.2.0
+  (portadas locales, respaldo por título+artista, tags reales) —
+  CONSTRUIDOS Y VERIFICADOS por Dahel 2026-11-15. El Pro
   de la app (streaming, licencias) va después, desde la PC con WiFi.
 - **En curso (Codi):** páginas web de activación Pro (ver nota del
   2026-11-15 en Notas entre agentes). Sin tocar `app/` ni `docs/index.html`.
