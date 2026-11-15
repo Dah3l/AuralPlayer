@@ -166,6 +166,12 @@ cuanto las veas.
   si los metadatos cambian sin cambiar la ventana, hay que incluir
   `state.queue` en las claves del remember o la pantalla queda con la
   info vieja hasta cambiar de canción.
+- vlcj 4.12.1: `NativeDiscovery` está en
+  `uk.co.caprica.vlcj.factory.discovery` (NO en `.discovery`);
+  `RuntimeUtil` NO existe: usar el literal `"libvlc"` en
+  `NativeLibrary.addSearchPath`. Verificado contra el jar 2026-11-15.
+- En scripts Gradle `.kts`, `java` está sombreado: `java.net.URI`
+  NO compila; importar `java.net.URI` y usar `URI(...)`.
 
 ## Estado actual (2026-11-15)
 
