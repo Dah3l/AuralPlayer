@@ -1,4 +1,6 @@
-// Diálogo para editar metadatos (guardado en la app, no modifica el archivo).
+// Diálogo para editar la información de la canción: se escribe en el
+// archivo (ID3/Vorbis/MP4) para que la vean todos los reproductores; si
+// el archivo no se puede escribir, queda guardada solo en AuralPlayer.
 package com.aural.player.ui.components
 
 import androidx.compose.foundation.layout.*
@@ -59,7 +61,7 @@ fun EditMetadataDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Los cambios solo se muestran en AuralPlayer.",
+                    "Se guarda en el archivo de la canción, para que lo vean todos los reproductores.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
