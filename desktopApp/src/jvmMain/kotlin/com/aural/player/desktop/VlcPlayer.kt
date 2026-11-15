@@ -30,6 +30,10 @@ class VlcPlayer(
     var diagnostics: String? = null
         private set
 
+    /** Ruta del registro de VLC (diagnóstico de fallos de reproducción). */
+    val vlcLogPath: String =
+        File(System.getProperty("java.io.tmpdir"), "aural-vlc.log").absolutePath
+
     val isPlaying: Boolean get() = player?.status()?.isPlaying() == true
     val positionMs: Long get() = player?.status()?.time() ?: 0L
     val durationMs: Long get() = player?.status()?.length()?.takeIf { it > 0 } ?: 0L
@@ -48,7 +52,15 @@ class VlcPlayer(
             } else if (!NativeDiscovery().discover()) {
                 return false
             }
-            val args = mutableListOf("--quiet")
+            val args = mutableListOf(
+                // Registro detallado en un archivo: sin esto, VLC
+                // falla en silencio y no hay forma de saber si fue
+                // el acceso al archivo, el demuxer, el decodificador
+                // o la salida de audio.
+                "--verbose=2",
+                "--file-logging",
+                "--logfile=$vlcLogPath"
+            )
             if (vlcDir != null) {
                 args += "--plugin-path=${File(vlcDir, "plugins").absolutePath}"
             }
