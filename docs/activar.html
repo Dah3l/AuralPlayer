@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activar Aural Pro — AuralPlayer</title>
+<meta name="description" content="Activa Aural Pro en tu equipo: elige tu plan, pon tu ID y pide la activación por WhatsApp.">
+<!--
+  Formato de promos.json (lo edita Dahel a mano, lista empieza vacía):
+  {"codes":[{"code":"AMIGO10","percent":10,"expires":"2026-12-31"}]}
+  - code: el código tal como lo escribe el usuario (se compara sin importar mayúsculas).
+  - percent: descuento en %, de 1 a 100.
+  - expires: último día válido, fecha ISO YYYY-MM-DD. Opcional: si no está, no vence.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --teal: #2ED3B7; --bg: #121212; --card: #1c1c1c; --line: #2a2a2a; --txt: #f5f5f5; --mut: #9a9a9a; --bad: #ff6b6b; }
+  body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
+  a { color: var(--teal); text-decoration: none; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px; }
+  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .head-in { display: flex; align-items: center; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--txt); }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .head-in a.back { margin-left: auto; color: var(--mut); font-size: 15px; }
+  .head-in a.back:hover { color: var(--txt); }
+  main { padding: 36px 0 64px; }
+  h1 { font-size: clamp(28px, 6vw, 36px); line-height: 1.15; margin-bottom: 8px; }
+  .sub { color: var(--mut); font-size: 17px; margin-bottom: 28px; }
+  h2 { font-size: 19px; margin: 28px 0 12px; }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .plans { grid-template-columns: 1fr; } }
+  .plan { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px; cursor: pointer; text-align: left; color: var(--txt); font-family: inherit; transition: transform .2s ease, border-color .2s ease; }
+  .plan:hover { transform: translateY(-2px); border-color: var(--txt); }
+  .plan.sel { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+  .plan b { display: block; font-size: 17px; margin-bottom: 2px; }
+  .plan .price { display: block; font-size: 24px; font-weight: 800; color: var(--teal); margin: 6px 0 2px; }
+  .plan .price small { font-size: 14px; font-weight: 700; color: var(--txt); }
+  .plan span { color: var(--mut); font-size: 14px; }
+  .plan .tag { display: inline-block; margin-top: 8px; background: rgba(46,211,183,.12); color: var(--teal); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  label { display: block; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .hint { color: var(--mut); font-size: 14px; margin-top: 6px; }
+  input[type="text"] { width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 12px; color: var(--txt); font-size: 16px; font-family: inherit; padding: 13px 14px; outline: none; }
+  input[type="text"]:focus { border-color: var(--teal); }
+  .promo-row { display: flex; gap: 10px; }
+  .promo-row input { flex: 1; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: transform .2s ease, box-shadow .2s ease; }
+  .btn.primary { background: var(--teal); color: #06231d; width: 100%; }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(46,211,183,.35); }
+  .btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); flex: none; }
+  .btn.ghost:hover { border-color: var(--txt); }
+  .msg { font-size: 14px; margin-top: 8px; min-height: 21px; }
+  .msg.ok { color: var(--teal); }
+  .msg.bad { color: var(--bad); }
+  .total { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-top: 28px; }
+  .total .row { display: flex; justify-content: space-between; font-size: 16px; margin-bottom: 6px; }
+  .total .row.mut { color: var(--mut); font-size: 15px; }
+  .total .row.big { font-size: 20px; font-weight: 800; margin-bottom: 0; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .total .row.big span:last-child { color: var(--teal); }
+  .old { text-decoration: line-through; color: var(--mut); font-weight: 400; margin-right: 8px; }
+  .steps { margin-top: 36px; }
+  .steps ol { padding-left: 20px; color: var(--mut); }
+  .steps li { margin-bottom: 8px; }
+  .steps li b { color: var(--txt); }
+  footer { border-top: 1px solid var(--line); padding: 24px 0 32px; color: var(--mut); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap head-in">
+    <a class="brand" href="index.html"><img src="favicon.svg" alt="">AuralPlayer</a>
+    <a class="back" href="index.html">Volver a la web</a>
+  </div>
+</header>
+<main class="wrap">
+  <h1>Activar Aural Pro 🎵</h1>
+  <p class="sub">El sonido, sin ruido. Elige tu plan, pon el ID de tu equipo y pide la activación por WhatsApp.</p>
+
+  <h2>1. Elige tu plan</h2>
+  <div class="plans" id="plans" role="radiogroup" aria-label="Planes de Aural Pro">
+    <button type="button" class="plan sel" data-plan="M" data-price="100" role="radio" aria-checked="true">
+      <b>Mensual</b>
+      <span class="price">100 <small>CUP</small></span>
+      <span>al mes, cancela cuando quieras</span>
+    </button>
+    <button type="button" class="plan" data-plan="A" data-price="500" role="radio" aria-checked="false">
+      <b>Anual</b>
+      <span class="price">500 <small>CUP</small></span>
+      <span>12 meses por el precio de 5</span>
+      <span class="tag">El más elegido</span>
+    </button>
+    <button type="button" class="plan" data-plan="L" data-price="1000" role="radio" aria-checked="false">
+      <b>Lifetime</b>
+      <span class="price">1000 <small>CUP</small></span>
+      <span>pago único, para siempre</span>
+    </button>
+  </div>
+
+  <h2>2. Tu equipo</h2>
+  <label for="deviceId">ID de tu equipo</label>
+  <input type="text" id="deviceId" placeholder="Ej: a1b2c3d4e5f6a7b8" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <p class="hint">Es el ID que te muestra la app. Sin espacios, tal como aparece.</p>
+
+  <h2>3. Código de descuento (opcional)</h2>
+  <div class="promo-row">
+    <input type="text" id="promo" placeholder="Ej: AMIGO10" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button type="button" class="btn ghost" id="applyPromo">Aplicar</button>
+  </div>
+  <p class="msg" id="promoMsg"></p>
+
+  <div class="total">
+    <div class="row mut"><span>Plan</span><span id="sumPlan">Mensual</span></div>
+    <div class="row mut" id="sumDiscountRow" hidden><span>Descuento (<span id="sumCode"></span>)</span><span id="sumDiscount"></span></div>
+    <div class="row big"><span>Total</span><span><span class="old" id="sumOld" hidden></span><span id="sumTotal">100 CUP</span></span></div>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <button type="button" class="btn primary" id="waBtn">Pedir activación por WhatsApp</button>
+    <p class="msg bad" id="waMsg"></p>
+    <p class="hint" style="text-align: center;">Te abre WhatsApp con el mensaje listo. Dahel te responde con tu código de activación.</p>
+  </div>
+
+  <div class="steps">
+    <h2>¿Cómo funciona?</h2>
+    <ol>
+      <li><b>Elige tu plan</b> y pon el ID de tu equipo.</li>
+      <li><b>Pide la activación</b> por WhatsApp con el botón de arriba.</li>
+      <li><b>Recibes tu código</b> y lo pegas en la app para activar Pro.</li>
+    </ol>
+  </div>
+</main>
+<footer>
+  <div class="wrap">AuralPlayer — El sonido, sin ruido. · <a href="index.html">Volver a la web</a></div>
+</footer>
+<script>
+(function () {
+  'use strict';
+  var WA_NUMBER = '5359648522';
+  var PLANS = { M: { name: 'Mensual', price: 100 }, A: { name: 'Anual', price: 500 }, L: { name: 'Lifetime', price: 1000 } };
+  var plan = 'M';
+  var promo = null; // { code, percent }
+  var promos = [];
+
+  var deviceInput = document.getElementById('deviceId');
+  var promoInput = document.getElementById('promo');
+  var promoMsg = document.getElementById('promoMsg');
+  var waMsg = document.getElementById('waMsg');
+
+  fetch('promos.json', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('sin promos'); return r.json(); })
+    .then(function (data) { if (data && Array.isArray(data.codes)) promos = data.codes; })
+    .catch(function () { promos = []; });
+
+  function money(n) { return n + ' CUP'; }
+
+  function refreshTotal() {
+    var base = PLANS[plan].price;
+    var total = base;
+    document.getElementById('sumPlan').textContent = PLANS[plan].name;
+    if (promo) {
+      total = Math.round(base * (100 - promo.percent) / 100);
+      document.getElementById('sumDiscountRow').hidden = false;
+      document.getElementById('sumCode').textContent = promo.code;
+      document.getElementById('sumDiscount').textContent = '−' + promo.percent + '%';
+      document.getElementById('sumOld').hidden = false;
+      document.getElementById('sumOld').textContent = money(base);
+    } else {
+      document.getElementById('sumDiscountRow').hidden = true;
+      document.getElementById('sumOld').hidden = true;
+    }
+    document.getElementById('sumTotal').textContent = money(total);
+    return total;
+  }
+
+  var planBtns = document.querySelectorAll('#plans .plan');
+  planBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      planBtns.forEach(function (b) { b.classList.remove('sel'); b.setAttribute('aria-checked', 'false'); });
+      btn.classList.add('sel');
+      btn.setAttribute('aria-checked', 'true');
+      plan = btn.getAttribute('data-plan');
+      refreshTotal();
+    });
+  });
+
+  document.getElementById('applyPromo').addEventListener('click', function () {
+    var code = promoInput.value.trim().toUpperCase();
+    promoMsg.className = 'msg';
+    promoMsg.textContent = '';
+    if (!code) { promo = null; refreshTotal(); return; }
+    var found = null;
+    for (var i = 0; i < promos.length; i++) {
+      if (String(promos[i].code || '').trim().toUpperCase() === code) { found = promos[i]; break; }
+    }
+    if (!found || typeof found.percent !== 'number' || found.percent <= 0 || found.percent > 100) {
+      promo = null; refreshTotal();
+      promoMsg.className = 'msg bad';
+      promoMsg.textContent = 'Ese código no es válido.';
+      return;
+    }
+    if (found.expires) {
+      var exp = new Date(String(found.expires) + 'T23:59:59');
+      if (isNaN(exp.getTime())) {
+        promo = null; refreshTotal();
+        promoMsg.className = 'msg bad';
+        promoMsg.textContent = 'Ese código no es válido.';
+        return;
+      }
+      if (new Date() > exp) {
+        promo = null; refreshTotal();
+        promoMsg.className = 'msg bad';
+        promoMsg.textContent = 'Ese código ya venció.';
+        return;
+      }
+    }
+    promo = { code: code, percent: found.percent };
+    refreshTotal();
+    promoMsg.className = 'msg ok';
+    promoMsg.textContent = 'Código aplicado: ' + found.percent + '% de descuento.';
+  });
+
+  promoInput.addEventListener('input', function () {
+    if (!promoInput.value.trim()) { promo = null; promoMsg.textContent = ''; refreshTotal(); }
+  });
+
+  document.getElementById('waBtn').addEventListener('click', function () {
+    var deviceId = deviceInput.value.trim();
+    waMsg.textContent = '';
+    if (!deviceId) { waMsg.textContent = 'Pon primero el ID de tu equipo.'; deviceInput.focus(); return; }
+    if (/\s/.test(deviceId) || deviceId.indexOf('|') !== -1) {
+      waMsg.textContent = 'El ID no puede tener espacios ni el carácter |.';
+      deviceInput.focus();
+      return;
+    }
+    var total = refreshTotal();
+    var text = 'Hola, quiero activar Aural Pro. Mi ID de equipo es: ' + deviceId +
+      '. Plan: ' + PLANS[plan].name + '. Precio: ' + money(total) + '.';
+    if (promo) text += ' Código de descuento: ' + promo.code + ' (' + promo.percent + '%).';
+    window.open('https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(text), '_blank');
+  });
+
+  refreshTotal();
+})();
+</script>
+</body>
+</html>
