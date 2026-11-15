@@ -280,9 +280,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(song.id) }
         return when (TagEditor.writeTags(getApplication(), song.uri, title, artist, album, coverArt)) {
             TagWriteResult.Success -> {
-                // El archivo ya lleva la verdad: limpiar el overlay y re-escanear.
+                // El archivo ya lleva la verdad: limpiar el overlay,
+                // refrescar la biblioteca en memoria al instante y
+                // re-escanear para dejar todo consistente.
                 settings.setCustomMetadata(song.id, "", "", "")
                 _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
+                refreshLibrarySong(song.id, title, artist, album)
                 rescan()
                 null
             }
@@ -320,6 +323,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 TagWriteResult.Success -> {
                     settings.setCustomMetadata(pending.songId, "", "", "")
                     _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
+                    refreshLibrarySong(pending.songId, pending.title, pending.artist, pending.album)
                     rescan()
                 }
                 else -> applyOverlayFallback(pending.songId, pending.title, pending.artist, pending.album)
@@ -370,6 +374,20 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun applyOverlayFallback(songId: Long, title: String, artist: String, album: String) {
         settings.setCustomMetadata(songId, title, artist, album)
         _tagWriteEvents.emit(TagWriteOutcome.SavedInAppOnly)
+    }
+
+    /**
+     * Parchea la canción en la biblioteca en memoria (reproductor y lista)
+     * con los metadatos recién escritos, para que el cambio se vea al
+     * instante sin depender del re-escaneo de MediaStore.
+     */
+    private fun refreshLibrarySong(songId: Long, title: String, artist: String, album: String) {
+        playback.refreshSongMetadata(songId, title, artist, album)
+        _library.value = _library.value.copy(
+            songs = _library.value.songs.map { s ->
+                if (s.id == songId) s.copy(title = title, artist = artist, album = album) else s
+            }
+        )
     }
 
 
