@@ -267,14 +267,15 @@ class PlaybackManager(private val context: Context) {
     }
 
     /**
-     * Actualiza los metadatos de una canción en la biblioteca en memoria
-     * (tras editar los tags del archivo) y republica el estado al
-     * instante, sin esperar al re-escaneo de MediaStore. El re-escaneo
-     * sigue corriendo después para dejar todo consistente.
+     * Inserta o actualiza una canción en la biblioteca en memoria y
+     * republica el estado al instante, sin esperar al re-escaneo de
+     * MediaStore. Se usa tras editar los tags del archivo: el re-escaneo
+     * puede devolver la fila vieja si MediaStore aún está re-indexando
+     * el archivo reemplazado (caso M4A), y sin esto la pantalla se queda
+     * con la información vieja hasta cambiar de canción.
      */
-    fun refreshSongMetadata(songId: Long, title: String, artist: String, album: String) {
-        val old = libraryById[songId] ?: return
-        libraryById = libraryById + (songId to old.copy(title = title, artist = artist, album = album))
+    fun refreshSongMetadata(song: Song) {
+        libraryById = libraryById + (song.id to song)
         publishState()
     }
 
