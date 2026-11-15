@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Activación Pro — AuralPlayer</title>
+<meta name="description" content="Página privada de AuralPlayer para generar códigos de activación Pro.">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --teal: #2ED3B7; --bg: #121212; --card: #1c1c1c; --line: #2a2a2a; --txt: #f5f5f5; --mut: #9a9a9a; --bad: #ff6b6b; --warn: #F59E0B; }
+  body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
+  a { color: var(--teal); text-decoration: none; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px; }
+  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .head-in { display: flex; align-items: center; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--txt); }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .head-in a.back { margin-left: auto; color: var(--mut); font-size: 15px; }
+  .head-in a.back:hover { color: var(--txt); }
+  main { padding: 36px 0 64px; }
+  h1 { font-size: clamp(26px, 6vw, 32px); line-height: 1.15; margin-bottom: 8px; }
+  .sub { color: var(--mut); font-size: 16px; margin-bottom: 20px; }
+  h2 { font-size: 19px; margin: 32px 0 12px; }
+  .warn { background: rgba(245,158,11,.10); border: 1px solid rgba(245,158,11,.5); border-radius: 14px; padding: 14px 16px; font-size: 15px; margin-bottom: 8px; }
+  .warn b { color: var(--warn); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-top: 12px; }
+  label { display: block; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .hint { color: var(--mut); font-size: 14px; margin-top: 6px; }
+  input[type="text"], input[type="password"] { width: 100%; background: #121212; border: 1px solid var(--line); border-radius: 12px; color: var(--txt); font-size: 15px; font-family: inherit; padding: 12px 14px; outline: none; }
+  input:focus { border-color: var(--teal); }
+  input.mono, .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 14px; word-break: break-all; }
+  textarea.mono { width: 100%; background: #121212; border: 1px solid var(--line); border-radius: 12px; color: var(--txt); padding: 12px 14px; outline: none; resize: vertical; min-height: 64px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row input, .row textarea { flex: 1; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 22px; border-radius: 14px; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: transform .2s ease, box-shadow .2s ease; }
+  .btn.primary { background: var(--teal); color: #06231d; }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(46,211,183,.35); }
+  .btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); flex: none; }
+  .btn.ghost:hover { border-color: var(--txt); }
+  .btn.block { width: 100%; padding: 14px 26px; font-size: 16px; }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .plans { grid-template-columns: 1fr; } }
+  .plan { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; cursor: pointer; text-align: left; color: var(--txt); font-family: inherit; transition: transform .2s ease, border-color .2s ease; }
+  .plan:hover { transform: translateY(-2px); border-color: var(--txt); }
+  .plan.sel { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+  .plan b { display: block; font-size: 16px; }
+  .plan span { color: var(--mut); font-size: 14px; }
+  .msg { font-size: 14px; margin-top: 8px; min-height: 21px; }
+  .msg.ok { color: var(--teal); }
+  .msg.bad { color: var(--bad); }
+  .codebox { background: #121212; border: 1px solid var(--teal); border-radius: 12px; padding: 14px; font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 15px; word-break: break-all; line-height: 1.7; }
+  .detail { font-size: 15px; color: var(--mut); margin-top: 10px; }
+  .detail b { color: var(--txt); }
+  .field { margin-bottom: 16px; }
+  footer { border-top: 1px solid var(--line); padding: 24px 0 32px; color: var(--mut); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap head-in">
+    <a class="brand" href="index.html"><img src="favicon.svg" alt="">AuralPlayer</a>
+    <a class="back" href="index.html">Volver a la web</a>
+  </div>
+</header>
+<main class="wrap">
+  <h1>Admin — Activación Pro</h1>
+  <p class="sub">Genera los códigos de activación de Aural Pro, uno por equipo.</p>
+  <div class="warn"><b>Página privada.</b> No compartas este enlace ni esta clave con nadie. La clave privada solo vive en esta pantalla: nunca se guarda en el navegador ni se sube al repo.</div>
+
+  <h2>1. Tu clave (solo la primera vez)</h2>
+  <p class="hint">Si aún no tienes clave, genera un par. Guarda la semilla en privado (es tu clave privada) y pásale la clave pública a Malen-IA por Dahel para incrustarla en la app.</p>
+  <div style="margin-top: 12px;">
+    <button type="button" class="btn primary" id="genKeys">Generar par de claves</button>
+    <button type="button" class="btn ghost" id="clearKeys">Limpiar</button>
+  </div>
+  <div class="box" id="keysBox" hidden>
+    <div class="field">
+      <label for="seedOut">Semilla privada (32 bytes, hex) — solo tú</label>
+      <div class="row">
+        <textarea class="mono" id="seedOut" readonly rows="2"></textarea>
+        <button type="button" class="btn ghost" data-copy="seedOut">Copiar</button>
+      </div>
+      <p class="hint">Guárdala en un lugar privado. Si la pierdes, los códigos viejos no se pueden volver a generar y hay que hacer una clave nueva.</p>
+    </div>
+    <div class="field" style="margin-bottom: 0;">
+      <label for="pubOut">Clave pública (hex) — para incrustar en la app</label>
+      <div class="row">
+        <input type="text" class="mono" id="pubOut" readonly>
+        <button type="button" class="btn ghost" data-copy="pubOut">Copiar</button>
+      </div>
+      <p class="hint">Pásale esta clave pública a Malen-IA por Dahel. Sin ella, la app no puede verificar los códigos.</p>
+    </div>
+  </div>
+
+  <h2>2. Generar un código</h2>
+  <div class="field">
+    <label for="seedIn">Tu semilla privada (la pegas en el momento)</label>
+    <div class="row">
+      <input type="password" class="mono" id="seedIn" placeholder="64 caracteres hex" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button type="button" class="btn ghost" id="toggleSeed">Ver</button>
+    </div>
+    <p class="hint">No se guarda: al cerrar la página se pierde.</p>
+  </div>
+  <div class="field">
+    <label for="deviceId">ID del equipo</label>
+    <input type="text" class="mono" id="deviceId" placeholder="Ej: a1b2c3d4e5f6a7b8" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="field">
+    <label>Plan</label>
+    <div class="plans" id="plans">
+      <button type="button" class="plan sel" data-plan="M"><b>Mensual</b><span>100 CUP · 30 días</span></button>
+      <button type="button" class="plan" data-plan="A"><b>Anual</b><span>500 CUP · 365 días</span></button>
+      <button type="button" class="plan" data-plan="L"><b>Lifetime</b><span>1000 CUP · sin vencimiento</span></button>
+    </div>
+    <p class="hint" id="expiryHint"></p>
+  </div>
+  <button type="button" class="btn primary block" id="genCode">Generar código</button>
+  <p class="msg bad" id="genMsg"></p>
+
+  <div class="box" id="codeBox" hidden>
+    <label>Código de activación</label>
+    <div class="row">
+      <div class="codebox" id="codeOut" style="flex: 1;"></div>
+      <button type="button" class="btn ghost" data-copy-text="codeOut">Copiar</button>
+    </div>
+    <p class="detail" id="codeDetail"></p>
+    <p class="msg ok" id="verifyMsg"></p>
+  </div>
+</main>
+<footer>
+  <div class="wrap">AuralPlayer — página privada, no indexada.</div>
+</footer>
+<script src="ed25519.js"></script>
+<script>
+(function () {
+  'use strict';
+  if (!window.AuralEd25519) {
+    document.getElementById('genMsg').textContent = 'No cargó ed25519.js. Revisa que el archivo esté en docs/.';
+    return;
+  }
+  var E = window.AuralEd25519;
+  var plan = 'M';
+
+  function fmtDate(epochSec) {
+    return new Date(epochSec * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function refreshExpiry() {
+    var el = document.getElementById('expiryHint');
+    if (plan === 'L') { el.textContent = 'Vence: nunca (lifetime).'; return; }
+    var exp = E.expiryForPlan(plan, Math.floor(Date.now() / 1000));
+    el.textContent = 'Vence: ' + fmtDate(exp) + '.';
+  }
+
+  var planBtns = document.querySelectorAll('#plans .plan');
+  planBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      planBtns.forEach(function (b) { b.classList.remove('sel'); });
+      btn.classList.add('sel');
+      plan = btn.getAttribute('data-plan');
+      refreshExpiry();
+    });
+  });
+  refreshExpiry();
+
+  function copyText(text, btn) {
+    function done() { var old = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(function () { btn.textContent = old; }, 1500); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* sin portapapeles */ }
+      document.body.removeChild(ta);
+    }
+  }
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var el = document.getElementById(btn.getAttribute('data-copy'));
+      if (el && el.value) copyText(el.value, btn);
+    });
+  });
+  document.querySelectorAll('[data-copy-text]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var el = document.getElementById(btn.getAttribute('data-copy-text'));
+      if (el && el.textContent) copyText(el.textContent, btn);
+    });
+  });
+
+  document.getElementById('genKeys').addEventListener('click', function () {
+    var seedHex = E.randomSeedHex();
+    var kp = E.keyPairFromSeedHex(seedHex);
+    document.getElementById('seedOut').value = seedHex;
+    document.getElementById('pubOut').value = kp.publicKeyHex;
+    document.getElementById('keysBox').hidden = false;
+    document.getElementById('seedIn').value = seedHex;
+  });
+  document.getElementById('clearKeys').addEventListener('click', function () {
+    document.getElementById('seedOut').value = '';
+    document.getElementById('pubOut').value = '';
+    document.getElementById('keysBox').hidden = true;
+  });
+
+  document.getElementById('toggleSeed').addEventListener('click', function () {
+    var input = document.getElementById('seedIn');
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    this.textContent = show ? 'Ocultar' : 'Ver';
+  });
+
+  document.getElementById('genCode').addEventListener('click', function () {
+    var msg = document.getElementById('genMsg');
+    var codeBox = document.getElementById('codeBox');
+    msg.textContent = '';
+    document.getElementById('verifyMsg').textContent = '';
+    codeBox.hidden = true;
+    var seedHex = document.getElementById('seedIn').value.trim();
+    var deviceId = document.getElementById('deviceId').value.trim();
+    try {
+      var expiry = E.expiryForPlan(plan, Math.floor(Date.now() / 1000));
+      var built = E.buildCode(deviceId, plan, expiry, seedHex);
+      var parsed = E.parseCode(built.code);
+      var ok = E.verifyPayload(parsed.payload, parsed.signatureBytes, E.hexToBytes(built.publicKeyHex));
+      document.getElementById('codeOut').textContent = built.code;
+      document.getElementById('codeDetail').innerHTML =
+        'Equipo: <b></b> · Plan: <b></b> · Vence: <b></b>';
+      var bs = document.getElementById('codeDetail').querySelectorAll('b');
+      bs[0].textContent = built.deviceId;
+      bs[1].textContent = built.planName;
+      bs[2].textContent = built.expiry === 0 ? 'nunca' : fmtDate(built.expiry);
+      document.getElementById('verifyMsg').textContent = ok
+        ? '✓ Verificado: el código es válido para esta clave pública.'
+        : '⚠ Ojo: el código se generó pero la verificación interna falló. No lo envíes.';
+      codeBox.hidden = false;
+    } catch (err) {
+      msg.textContent = err && err.message ? err.message : 'No se pudo generar el código.';
+    }
+  });
+})();
+</script>
+</body>
+</html>
