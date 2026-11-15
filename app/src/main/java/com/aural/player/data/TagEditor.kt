@@ -53,6 +53,7 @@ object TagEditor {
         val resolver = context.contentResolver
         var workFile: File? = null
         var backupFile: File? = null
+        var verifyFile: File? = null
         try {
             // 0. Extensión real del archivo: sin ella jaudiotagger no abre
             // el temporal (elige el lector por la extensión). Formatos
@@ -91,7 +92,26 @@ object TagEditor {
             } catch (e: SecurityException) {
                 return@withContext TagWriteResult.NeedsPermission
             }
-            // 4. Actualizar la fila de MediaStore (mismo permiso ya concedido).
+            // 4. Verificar: releer el archivo desde el URI y comprobar que
+            // los tags quedaron escritos de verdad. Sin esta comprobación,
+            // un fallo silencioso de la copia se reportaría como éxito.
+            // La fila de MediaStore solo se toca si la verificación pasa.
+            val verify = File(context.cacheDir, "tag_verify.$extension")
+            verifyFile = verify
+            val verified = try {
+                resolver.openInputStream(uri)?.use { input ->
+                    verify.outputStream().use { input.copyTo(it) }
+                } != null && tagsMatch(verify, title, artist, album)
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo verificar la escritura: ${e.message}")
+                false
+            }
+            if (!verified) {
+                Log.w(TAG, "La verificación falló: los tags no quedaron en el archivo")
+                tryRestore(context, uri, backupFile)
+                return@withContext TagWriteResult.Failed
+            }
+            // 5. Actualizar la fila de MediaStore (mismo permiso ya concedido).
             try {
                 val values = ContentValues().apply {
                     put(MediaStore.Audio.Media.TITLE, title)
@@ -119,6 +139,23 @@ object TagEditor {
                 backupFile?.delete()
             } catch (_: Exception) {
             }
+            try {
+                verifyFile?.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** ¿El archivo [file] lleva estos tags escritos? */
+    private fun tagsMatch(file: File, title: String, artist: String, album: String): Boolean {
+        return try {
+            val tag = AudioFileIO.read(file).tag ?: return false
+            tag.getFirst(FieldKey.TITLE) == title &&
+                tag.getFirst(FieldKey.ARTIST) == artist &&
+                tag.getFirst(FieldKey.ALBUM) == album
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo releer el archivo: ${e.message}")
+            false
         }
     }
 
