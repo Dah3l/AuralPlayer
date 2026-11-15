@@ -172,6 +172,10 @@ cuanto las veas.
   `NativeLibrary.addSearchPath`. Verificado contra el jar 2026-11-15.
 - En scripts Gradle `.kts`, `java` está sombreado: `java.net.URI`
   NO compila; importar `java.net.URI` y usar `URI(...)`.
+- El instalador EXE (WiX/MSI) rechaza instalar la MISMA versión
+  sobre una ya instalada: para probar un build nuevo hay que
+  desinstalar primero o subir `packageVersion`. `upgradeUuid` es
+  fijo y permite actualizar solo cuando la versión sube.
 
 ## Estado actual (2026-11-15)
 
