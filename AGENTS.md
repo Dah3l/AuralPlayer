@@ -40,6 +40,39 @@ cuanto las veas.
   pídele a Dahel que me pregunte o déjame la pregunta aquí. Preséntate
   tú también en tu primer registro. ¡A darle! — Malen-IA
 
+- 2026-11-15, Malen-IA → Codi: TAREA PARA TI (Dahel lo aprobó):
+  construye las páginas web de activación de Aural Pro, Opción A
+  (decisión de Dahel 2026-11-13, sin backend). Archivos NUEVOS, solo
+  en `docs/`: `activar.html` (pública), `admin.html` (privada, SIN
+  enlace desde ninguna página), `promos.json` y la implementación
+  Ed25519 en un solo archivo JS dentro de `docs/` (SIN CDN: Cuba no
+  carga CDNs externos; el único fetch permitido es `promos.json` del
+  mismo origen). NO toques `docs/index.html`, `app/` ni los archivos
+  de build: yo estoy en la subida del stack + los ítems gratis.
+  FORMATO DEL CÓDIGO (lo verificará la app después, no lo cambies):
+  payload `deviceId|plan|expiry` (deviceId = ANDROID_ID como lo
+  muestra la app; plan = M/A/L = mensual/anual/lifetime; expiry =
+  segundos epoch, 0 = lifetime). Firma Ed25519 sobre los bytes UTF-8
+  del payload. Código = Base32 RFC 4648 sin padding de
+  UTF8(payload) + firma de 64 bytes, mostrado en grupos de 5 con
+  guiones. La app decodifica, separa los últimos 64 bytes como firma
+  y verifica con la clave pública embebida. `admin.html`: Dahel pega
+  su clave privada (semilla de 32 bytes en hex) EN EL MOMENTO, nunca
+  se guarda ni se sube al repo; pega deviceId + plan, la página firma
+  en el navegador y muestra el código para copiar. Incluye un
+  generador de par de claves para la primera configuración: Dahel
+  guarda la semilla en privado y me pasa la clave pública en hex por
+  Dahel para incrustarla en la app. `activar.html`: tarjetas de
+  planes (Mensual 100 CUP, Anual 500 CUP, Lifetime 1000 CUP), campo
+  de ID del equipo + plan + código de descuento opcional (validado
+  contra `promos.json`: `{codes:[{code, percent, expires}]}`,
+  empieza con lista vacía), y botón que arma el mensaje de WhatsApp
+  pre-llenado para +53 59648522 con ID + plan + precio con descuento.
+  Lenguaje sencillo, móvil primero, mismo lenguaje visual de
+  `index.html` (fondo #121212, teal #2ED3B7, fuentes del sistema,
+  CSS a mano, sin frameworks). Registra tu trabajo en el Registro y
+  respóndeme aquí cuando esté. ¡Gracias, bro! — Malen-IA
+
 ## Proyecto
 
 - Reproductor de música Android, gratis, GPL-3.0. Dueño: Dahel (Dah3l).
@@ -101,11 +134,17 @@ cuanto las veas.
 - Contar llaves (balance 0) NO prueba anidación correcta. Revisar
   imports, ámbito y orden de declaración primero.
 
-## Estado actual (2026-11-14)
+## Estado actual (2026-11-15)
 
-- **v1.1.0 (versionCode 11): construida, verificada por Dahel y lista.**
-  Pendiente: Dahel dispara `release.yml` con `v1.1.0` y pega el What's
-  New; luego sube a Apklis. La 1.1.0 sale SOLO GRATIS.
+- **v1.1.0 (versionCode 11): RELEASEADA.** Dahel confirmó el 2026-11-15
+  que disparó `release.yml` hace días. Subida a Apklis sin confirmar.
+- **En curso (Malen-IA):** base de la 1.2.0 = subida del stack a
+  Kotlin 2.4.x + versiones compatibles con Compose Multiplatform
+  (preparación del port a PC), y luego los 3 ítems gratis de la 1.2.0
+  (portadas locales, respaldo por título+artista, tags reales). El Pro
+  de la app (streaming, licencias) va después, desde la PC con WiFi.
+- **En curso (Codi):** páginas web de activación Pro (ver nota del
+  2026-11-15 en Notas entre agentes). Sin tocar `app/` ni `docs/index.html`.
 - **Siguiente: Aural Pro** (streaming + radio + playlists de YouTube).
   Precios: Mensual 100 CUP, Anual 500 CUP, Lifetime 1000 CUP. Activación
   desde la web, opción A (página /activar + admin con clave pegada por
@@ -137,3 +176,4 @@ cuanto las veas.
 | 2026-11-13 | Malen-IA | Preparación release 1.1.0: versionCode 11, CHANGELOG, web (JSON-LD, proof, footer), privacidad | app/build.gradle.kts, CHANGELOG.md, docs/index.html, docs/privacidad.html |
 | 2026-11-13 | Malen-IA | Fix orden del nav (Pro antes que FAQ) + scrollspy con Pro | docs/index.html |
 | 2026-11-14 | Malen-IA | Creación de este AGENTS.md para coordinación entre dos agentes | AGENTS.md |
+| 2026-11-15 | Malen-IA | Estado 1.1.0 → releaseada; tarea para Codi: páginas web de activación Pro (/activar + /admin + promos.json + Ed25519 vendored) con el formato de código acordado | AGENTS.md |
