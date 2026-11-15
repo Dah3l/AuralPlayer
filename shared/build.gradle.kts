@@ -10,14 +10,14 @@ plugins {
 }
 
 kotlin {
-    jvm()
-
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     sourceSets {
-        val commonMain by getting {
+        named("commonMain") {
             dependencies {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
