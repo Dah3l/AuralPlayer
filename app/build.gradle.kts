@@ -7,7 +7,9 @@ plugins {
 
 android {
     namespace = "com.aural.player"
-    compileSdk = 34
+    // compileSdk 37: lo exige Compose 1.12 (BOM 2026.09.00) + AGP 9.
+    // targetSdk se queda en 34: sin cambios de comportamiento.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.aural.player"
@@ -94,7 +96,8 @@ android {
 
 dependencies {
     // ---- Jetpack Compose + Material 3 ----
-    implementation(platform("androidx.compose:compose-bom:2024.09.02"))
+    // BOM 2026.09.00 = Compose 1.12.1, la misma base de CMP 1.12.2.
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
@@ -111,17 +114,17 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     // ---- Core KTX (ContextCompat y utilidades) ----
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.0")
 
     // ---- Actividad y ciclo de vida ----
-    implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-service:2.8.6")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-service:2.11.0")
     // v1.0.7: isla dinámica (overlay desde el servicio)
-    implementation("androidx.lifecycle:lifecycle-viewmodel:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.11.0")
 
     // ---- DataStore Preferences (ajustes) ----
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
 
     // ---- Coroutines ----
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
@@ -131,9 +134,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // ---- Media3 / ExoPlayer (reproducción + MediaSession + notificación) ----
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-session:1.4.1")
-    implementation("androidx.media3:media3-common:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-session:1.11.1")
+    implementation("androidx.media3:media3-common:1.11.1")
 
     // ---- Coil (carga de carátulas desde MediaStore) ----
     implementation("io.coil-kt:coil-compose:2.7.0")
