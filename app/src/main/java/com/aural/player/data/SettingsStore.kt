@@ -252,7 +252,26 @@ class SettingsStore(private val context: Context) {
     }
 
     val customCovers: Flow<Map<Long, String>> = context.dataStore.data.map { prefs ->
-        decodeCovers(prefs[KEY_CUSTOM_COVERS])
+        decodeCovers(prefs[KEY_CUSTOM_COVERS]).filterValues { isCoverValueUsable(it) }
+    }
+
+    /**
+     * Una portada guardada como archivo local solo vale si el archivo existe:
+     * tras reinstalar o restaurar un respaldo, la ruta puede apuntar a un
+     * archivo que ya no está; en ese caso la entrada se ignora y la canción
+     * muestra su portada del álbum. Enlaces y URIs de contenido se
+     * conservan tal cual (los resuelve Coil).
+     */
+    private fun isCoverValueUsable(value: String): Boolean {
+        return try {
+            when {
+                value.startsWith("file://") -> File(value.removePrefix("file://")).exists()
+                value.startsWith("/") -> File(value).exists()
+                else -> true
+            }
+        } catch (e: Exception) {
+            true
+        }
     }
 
     suspend fun setCustomCover(songId: Long, coverUrl: String) {
@@ -264,6 +283,10 @@ class SettingsStore(private val context: Context) {
                 current[songId] = coverUrl
             }
             prefs[KEY_CUSTOM_COVERS] = encodeCovers(current)
+        }
+        // Al quitar la portada, borrar también su archivo local (v1.2.0).
+        if (coverUrl.isBlank()) {
+            SongCoverStore.deleteCover(context, songId)
         }
     }
 
