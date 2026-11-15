@@ -277,7 +277,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         artist: String,
         album: String
     ): PendingIntent? {
-        val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(song.id) }
+        val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(song, song.id) }
         return when (TagEditor.writeTags(getApplication(), song.uri, title, artist, album, coverArt)) {
             TagWriteResult.Success -> {
                 // El archivo ya lleva la verdad: limpiar el overlay,
@@ -320,7 +320,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         val pending = pendingTagEdit ?: return
         pendingTagEdit = null
         viewModelScope.launch {
-            val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(pending.songId) }
+            val song = _library.value.songs.find { it.id == pending.songId }
+                ?: playback.state.value.queue.find { it.id == pending.songId }
+            val coverArt = withContext(Dispatchers.IO) { resolveCoverArt(song, pending.songId) }
             when (TagEditor.writeTags(getApplication(), pending.uri, pending.title, pending.artist, pending.album, coverArt)) {
                 TagWriteResult.Success -> {
                     settings.setCustomMetadata(pending.songId, "", "", "")
@@ -334,33 +336,52 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Bytes + MIME de la portada personalizada de la canción, si está
-     * guardada en el teléfono (file:// o content://). Las portadas que
-     * son solo un enlace no se descargan durante la edición.
+     * Bytes + MIME de la portada que la canción muestra en Aural, para
+     * incrustarla en el archivo. Orden: portada personalizada guardada
+     * en el teléfono; portada personalizada por enlace (se descarga y
+     * se guarda local, como el ítem 1); arte del álbum del sistema.
+     * Null si no hay ninguna portada que incrustar.
      */
-    private fun resolveCoverArt(songId: Long): Pair<ByteArray, String>? {
-        val value = customCovers.value[songId] ?: return null
-        return try {
-            val bytes = when {
-                value.startsWith("file://") -> {
-                    val path = Uri.parse(value).path ?: return null
-                    File(path).readBytes()
+    private suspend fun resolveCoverArt(song: Song?, songId: Long): Pair<ByteArray, String>? {
+        val bytes = resolveCoverBytes(song, songId)
+        if (bytes.isNullOrEmpty() || bytes.size > 2 * 1024 * 1024) return null
+        val isPng = bytes.size > 8 && bytes[0] == 0x89.toByte() &&
+            bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() &&
+            bytes[3] == 0x47.toByte()
+        return bytes to if (isPng) "image/png" else "image/jpeg"
+    }
+
+    private suspend fun resolveCoverBytes(song: Song?, songId: Long): ByteArray? {
+        val app = getApplication<Application>()
+        val value = customCovers.value[songId]
+        if (!value.isNullOrBlank()) {
+            val bytes = try {
+                when {
+                    value.startsWith("file://") ->
+                        Uri.parse(value).path?.let { File(it).readBytes() }
+                    value.startsWith("content://") ->
+                        app.contentResolver.openInputStream(Uri.parse(value))?.use { it.readBytes() }
+                    value.startsWith("http://") || value.startsWith("https://") ->
+                        SongCoverStore.saveFromUrl(app, songId, value)?.let { local ->
+                            Uri.parse(local).path?.let { File(it).readBytes() }
+                        }
+                    else -> null
                 }
-                value.startsWith("content://") -> {
-                    getApplication<Application>().contentResolver
-                        .openInputStream(Uri.parse(value))?.use { it.readBytes() }
-                        ?: return null
-                }
-                else -> return null
+            } catch (_: Exception) {
+                null
             }
-            if (bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) return null
-            val isPng = bytes.size > 8 && bytes[0] == 0x89.toByte() &&
-                bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() &&
-                bytes[3] == 0x47.toByte()
-            bytes to if (isPng) "image/png" else "image/jpeg"
-        } catch (_: Exception) {
-            null
+            if (!bytes.isNullOrEmpty()) return bytes
         }
+        // Sin portada personalizada: el arte del álbum del sistema.
+        val albumArt = song?.albumArtUri
+        if (!albumArt.isNullOrBlank()) {
+            return try {
+                app.contentResolver.openInputStream(Uri.parse(albumArt))?.use { it.readBytes() }
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return null
     }
 
     /** El usuario negó el permiso: la edición queda guardada solo en la app. */
