@@ -81,7 +81,9 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
             packageName = "AuralPlayer"
-            packageVersion = "1.2.0"
+            // Sube en cada build de prueba: con upgradeUuid fijo, una
+            // versión mayor reemplaza la instalada sin desinstalar.
+            packageVersion = "1.2.1"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
             // Recursos extra (las librerías de VLC) dentro del paquete.
