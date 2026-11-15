@@ -11,6 +11,7 @@ import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
+import com.aural.player.data.SongCoverStore
 import com.aural.player.data.TopSong
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
@@ -172,13 +173,33 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Portadas personalizadas: songId -> URL. */
+    /** Portadas personalizadas: songId -> URL o ruta local (file://). */
     val customCovers: StateFlow<Map<Long, String>> = settings.customCovers.stateIn(
         viewModelScope, SharingStarted.Eagerly, emptyMap()
     )
 
     fun setCustomCover(songId: Long, coverUrl: String) {
-        viewModelScope.launch { settings.setCustomCover(songId, coverUrl) }
+        if (coverUrl.isBlank()) {
+            // Quitar: borra la entrada y el archivo local (lo hace SettingsStore).
+            viewModelScope.launch { settings.setCustomCover(songId, "") }
+            return
+        }
+        // v1.2.0: la portada se descarga y se guarda en el teléfono; si la
+        // descarga falla, se guarda el enlace como antes (sin perderla).
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val local = SongCoverStore.saveFromUrl(app, songId, coverUrl)
+            settings.setCustomCover(songId, local ?: coverUrl)
+        }
+    }
+
+    /** Portada elegida desde la galería: se copia a la carpeta local de la app. */
+    fun setCustomCoverFromGallery(songId: Long, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val local = SongCoverStore.saveFromContentUri(app, songId, uri)
+            settings.setCustomCover(songId, local ?: uri.toString())
+        }
     }
 
     /** Orden de favoritos elegido con drag (vacío = orden de biblioteca). */
