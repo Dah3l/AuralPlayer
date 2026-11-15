@@ -47,9 +47,9 @@ class DesktopPlayer(private val scope: CoroutineScope) {
                         scanning = false,
                         error = when {
                             !vlcOk && vlc.initError != null ->
-                                "No se pudo iniciar VLC: ${vlc.initError}"
+                                "No se pudo iniciar VLC: ${vlc.initError} (${vlc.diagnostics})"
                             !vlcOk ->
-                                "No se encontraron las librerías de VLC."
+                                "No se encontraron las librerías de VLC. ${vlc.diagnostics}"
                             else -> null
                         }
                     )
