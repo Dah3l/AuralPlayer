@@ -176,6 +176,24 @@ cuanto las veas.
   sobre una ya instalada: para probar un build nuevo hay que
   desinstalar primero o subir `packageVersion`. `upgradeUuid` es
   fijo y permite actualizar solo cuando la versión sube.
+- Los fallos de carga nativa (UnsatisfiedLinkError y compañía) son
+  Error, no Exception: en el arranque del reproductor de PC hay que
+  atrapar Throwable o la corrutina muere y la UI se queda en el
+  spinner para siempre. El escaneo va ANTES de iniciar VLC y la
+  lista se muestra aunque el escaneo siga.
+- `get.videolan.org` redirige a espejos y a veces devuelve una
+  página HTML en vez del zip: la descarga de VLC debe hacerse
+  desde `download.videolan.org` (sirve el archivo directo) y
+  validar que lo bajado sea un zip real (magic PK + tamaño).
+- La tarea `prepareAppResources` del plugin de Compose lee los
+  recursos: si no depende explícitamente de `prepareVlc`, corre
+  antes y el paquete sale SIN las librerías (Gradle 9 lo rechaza
+  además como dependencia implícita). Amarrar prepareVlc a
+  prepareAppResources + packageExe + createDistributable + run.
+- VLC solo-audio: del zip (~197 MB) solo se empaquetan libvlc.dll,
+  libvlccore.dll y los plugins de audio (lista en
+  desktopApp/build.gradle.kts; libavcodec_plugin es el respaldo
+  universal). Fuera: gui, video, subtítulos, streaming, idiomas.
 
 ## Estado actual (2026-11-15)
 
@@ -242,4 +260,5 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | Ítems 1 y 2 gratis 1.2.0 VERIFICADOS por Dahel (portadas locales + respaldo v2). Lado gratis de la 1.2.0 completo y verificado | — |
 | 2026-11-15 | Malen-IA | PC fase 1: estructura Compose Multiplatform (shared JVM-only + desktopApp con ventana mínima; plugins KMP 2.4.21 + CMP 1.12.2; empaquetado EXE con jpackage; android.builder.sdkDownload=true para el runner Windows). App Android intacta. Workflow desktop.yml lo crea Dahel por web (la API no puede crear workflows) | settings.gradle.kts, build.gradle.kts, gradle.properties, shared/, desktopApp/ |
 | 2026-11-15 | Malen-IA | PC fase 2: escaneo de Música con jaudiotagger + motor VLCJ 4.12.1 (VLC 3.0.24 incluido en el instalador: tarea prepareVlc baja el zip de get.videolan.org y lo deja en build/appResources/windows-x64/vlc vía appResourcesRootDir; includeAllModules=true para el runtime) + UI lista/transporte en shared. Pendiente de verificar en la PC de Dahel | shared/.../Song.kt, PlaybackState.kt, App.kt; desktopApp/.../LibraryScanner.kt, VlcPlayer.kt, DesktopPlayer.kt, Main.kt; desktopApp/build.gradle.kts |
+| 2026-11-15 | Malen-IA | PC fase 2 fixes: spinner infinito (Throwable + escaneo antes de VLC + lista visible mientras escanea + error en UI); VLC ausente del paquete (descarga desde download.videolan.org con validación de zip + prepareAppResources depende de prepareVlc + búsqueda ampliada con diagnóstico en UI); recorte VLC solo-audio (~197 MB → ~35 MB) + error de reproducción ahora muestra la ruta del archivo | desktopApp/build.gradle.kts, desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, LibraryScanner.kt, shared/.../App.kt |
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
