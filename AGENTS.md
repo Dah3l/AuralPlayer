@@ -175,8 +175,12 @@ cuanto las veas.
   Multiplatform (módulo `shared` JVM-only + `desktopApp` con ventana
   mínima; empaquetado EXE con jpackage en Actions) — VERIFICADA
   2026-11-15: el EXE compiló en Actions y abrió en la PC de Dahel.
-  La app Android queda intacta. El Pro va DESPUÉS de la PC (decisión
-  de Dahel 2026-11-15, cambió el orden).
+  Fase 2 CONSTRUIDA 2026-11-15 (pendiente de verificar en la PC):
+  escaneo de la carpeta Música con jaudiotagger + motor VLCJ 4.12.1
+  (VLC 3.0.24 incluido en el instalador vía appResourcesRootDir;
+  tarea prepareVlc baja el zip oficial) + lista y transporte
+  mínimos. La app Android queda intacta. El Pro va DESPUÉS de la PC
+  (decisión de Dahel 2026-11-15, cambió el orden).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -227,4 +231,5 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | Fix refresco tras editar tags M4A: MediaStore re-indexa el archivo reemplazado y el re-escaneo devolvía la fila vieja (había que editar dos veces). Parche en memoria inmediato + repetido tras el re-escaneo (PlaybackManager.refreshSongMetadata + rescan con onDone). Resolución de portada ampliada: portada por enlace se descarga local y, si no hay personalizada, se incrusta el arte del álbum del sistema. Ítem 3 VERIFICADO por Dahel 2026-11-15 (MP3 y M4A, cambios visibles en otros reproductores) | playback/PlaybackManager.kt, AuralViewModel.kt |
 | 2026-11-15 | Malen-IA | Ítems 1 y 2 gratis 1.2.0 VERIFICADOS por Dahel (portadas locales + respaldo v2). Lado gratis de la 1.2.0 completo y verificado | — |
 | 2026-11-15 | Malen-IA | PC fase 1: estructura Compose Multiplatform (shared JVM-only + desktopApp con ventana mínima; plugins KMP 2.4.21 + CMP 1.12.2; empaquetado EXE con jpackage; android.builder.sdkDownload=true para el runner Windows). App Android intacta. Workflow desktop.yml lo crea Dahel por web (la API no puede crear workflows) | settings.gradle.kts, build.gradle.kts, gradle.properties, shared/, desktopApp/ |
+| 2026-11-15 | Malen-IA | PC fase 2: escaneo de Música con jaudiotagger + motor VLCJ 4.12.1 (VLC 3.0.24 incluido en el instalador: tarea prepareVlc baja el zip de get.videolan.org y lo deja en build/appResources/windows-x64/vlc vía appResourcesRootDir; includeAllModules=true para el runtime) + UI lista/transporte en shared. Pendiente de verificar en la PC de Dahel | shared/.../Song.kt, PlaybackState.kt, App.kt; desktopApp/.../LibraryScanner.kt, VlcPlayer.kt, DesktopPlayer.kt, Main.kt; desktopApp/build.gradle.kts |
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
