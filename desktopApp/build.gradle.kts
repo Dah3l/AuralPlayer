@@ -11,6 +11,7 @@ import org.gradle.api.file.RelativePath
 import org.gradle.api.tasks.Copy
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.net.URI
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -27,7 +28,7 @@ tasks.register("downloadVlc") {
         val zip = vlcZipFile.get().asFile
         if (!zip.exists()) {
             zip.parentFile.mkdirs()
-            java.net.URI("https://get.videolan.org/vlc/$vlcVersion/win64/vlc-$vlcVersion-win64.zip")
+            URI("https://get.videolan.org/vlc/$vlcVersion/win64/vlc-$vlcVersion-win64.zip")
                 .toURL().openStream().use { input ->
                     zip.outputStream().use { output -> input.copyTo(output) }
                 }
