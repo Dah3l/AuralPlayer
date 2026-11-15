@@ -92,6 +92,9 @@ compose.desktop {
             windows {
                 menuGroup = "AuralPlayer"
                 shortcut = true
+                // Código fijo para que las actualizaciones con una
+                // versión mayor reemplacen la instalada. NUNCA cambiar.
+                upgradeUuid = "1960c8b2-00ee-4247-852c-c6f85b17e563"
             }
         }
     }
