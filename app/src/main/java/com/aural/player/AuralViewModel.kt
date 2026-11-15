@@ -282,11 +282,13 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             TagWriteResult.Success -> {
                 // El archivo ya lleva la verdad: limpiar el overlay,
                 // refrescar la biblioteca en memoria al instante y
-                // re-escanear para dejar todo consistente.
+                // re-escanear para dejar todo consistente. El parche se
+                // repite tras el escaneo por si MediaStore devolvió la
+                // fila vieja (re-indexando el archivo reemplazado).
                 settings.setCustomMetadata(song.id, "", "", "")
                 _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
-                refreshLibrarySong(song.id, title, artist, album)
-                rescan()
+                refreshLibrarySong(song, song.id, title, artist, album)
+                rescan { refreshLibrarySong(song, song.id, title, artist, album) }
                 null
             }
             TagWriteResult.NeedsPermission -> {
@@ -323,8 +325,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 TagWriteResult.Success -> {
                     settings.setCustomMetadata(pending.songId, "", "", "")
                     _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
-                    refreshLibrarySong(pending.songId, pending.title, pending.artist, pending.album)
-                    rescan()
+                    refreshLibrarySong(null, pending.songId, pending.title, pending.artist, pending.album)
+                    rescan { refreshLibrarySong(null, pending.songId, pending.title, pending.artist, pending.album) }
                 }
                 else -> applyOverlayFallback(pending.songId, pending.title, pending.artist, pending.album)
             }
@@ -379,13 +381,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Parchea la canción en la biblioteca en memoria (reproductor y lista)
      * con los metadatos recién escritos, para que el cambio se vea al
-     * instante sin depender del re-escaneo de MediaStore.
+     * instante sin depender del re-escaneo de MediaStore. Si la canción
+     * no está en la lista (MediaStore la está re-indexando), se repone.
      */
-    private fun refreshLibrarySong(songId: Long, title: String, artist: String, album: String) {
-        playback.refreshSongMetadata(songId, title, artist, album)
+    private fun refreshLibrarySong(base: Song?, songId: Long, title: String, artist: String, album: String) {
+        val song = base
+            ?: _library.value.songs.find { it.id == songId }
+            ?: playback.state.value.queue.find { it.id == songId }
+            ?: return
+        val updated = song.copy(title = title, artist = artist, album = album)
+        playback.refreshSongMetadata(updated)
+        val songs = _library.value.songs
         _library.value = _library.value.copy(
-            songs = _library.value.songs.map { s ->
-                if (s.id == songId) s.copy(title = title, artist = artist, album = album) else s
+            songs = if (songs.any { it.id == songId }) {
+                songs.map { s -> if (s.id == songId) updated else s }
+            } else {
+                (songs + updated).sortedBy { it.title }
             }
         )
     }
@@ -400,7 +411,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Vuelve a escanear MediaStore (se llama al iniciar y al pedirlo el usuario). */
-    fun rescan() {
+    fun rescan(onDone: (() -> Unit)? = null) {
         viewModelScope.launch {
             // Actualización silenciosa: el loader de pantalla completa solo en
             // la primera carga; si ya hay canciones, se actualiza por debajo
@@ -411,6 +422,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             playback.setLibrary(songs)
             _library.value = _library.value.copy(songs = songs, isLoading = false)
             tryRestoreLastPlayback(songs)
+            onDone?.invoke()
         }
     }
 
