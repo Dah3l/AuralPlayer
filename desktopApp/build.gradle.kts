@@ -1,6 +1,14 @@
 // App de escritorio de AuralPlayer (Windows, vía Compose Multiplatform).
 // Se empaqueta con jpackage en EXE desde GitHub Actions
 // (runner windows-latest, workflow desktop.yml).
+//
+// Las librerías de VLC viajan DENTRO del instalador: la tarea
+// prepareVlc baja el zip oficial de VLC y lo deja en los recursos
+// de la app (appResourcesRootDir); el usuario no necesita VLC
+// instalado. El zip se baja una sola vez por runner (tarea con
+// salidas declaradas) y pesa ~79 MB.
+import org.gradle.api.file.RelativePath
+import org.gradle.api.tasks.Copy
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -8,6 +16,41 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val vlcVersion = "3.0.24"
+val vlcZipFile = layout.buildDirectory.file("vlc/vlc-$vlcVersion-win64.zip")
+
+tasks.register("downloadVlc") {
+    outputs.file(vlcZipFile)
+    doLast {
+        val zip = vlcZipFile.get().asFile
+        if (!zip.exists()) {
+            zip.parentFile.mkdirs()
+            java.net.URI("https://get.videolan.org/vlc/$vlcVersion/win64/vlc-$vlcVersion-win64.zip")
+                .toURL().openStream().use { input ->
+                    zip.outputStream().use { output -> input.copyTo(output) }
+                }
+        }
+    }
+}
+
+tasks.register<Copy>("prepareVlc") {
+    dependsOn("downloadVlc")
+    // El zip trae una carpeta superior (vlc-3.0.24/): se quita para
+    // que libvlc.dll y plugins/ queden directo en vlc/.
+    from(zipTree(vlcZipFile.get().asFile)) {
+        eachFile {
+            val segments = relativePath.segments
+            if (segments.size > 1) {
+                relativePath = RelativePath(true, *segments.drop(1).toTypedArray())
+            } else {
+                exclude()
+            }
+        }
+        includeEmptyDirs = false
+    }
+    into(layout.buildDirectory.dir("appResources/windows-x64/vlc"))
 }
 
 kotlin {
@@ -22,6 +65,9 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":shared"))
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                implementation("uk.co.caprica:vlcj:4.12.1")
+                implementation("net.jthink:jaudiotagger:3.0.1")
             }
         }
     }
@@ -30,12 +76,18 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.aural.player.desktop.MainKt"
+        dependsOn("prepareVlc")
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
             packageName = "AuralPlayer"
             packageVersion = "1.2.0"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
+            // Recursos extra (las librerías de VLC) dentro del paquete.
+            appResourcesRootDir.set(layout.buildDirectory.dir("appResources"))
+            // Todos los módulos del JDK: evita ClassNotFoundException en
+            // el runtime recortado (JNA/VLCJ tocan módulos no obvios).
+            includeAllModules = true
             windows {
                 menuGroup = "AuralPlayer"
                 shortcut = true
