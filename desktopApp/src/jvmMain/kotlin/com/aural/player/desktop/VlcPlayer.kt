@@ -19,6 +19,12 @@ class VlcPlayer(
     private val onFinished: () -> Unit,
     private val onError: (String) -> Unit
 ) {
+    companion object {
+        /** Ruta del registro de VLC (diagnóstico de fallos de reproducción). */
+        val LOG_PATH: String =
+            File(System.getProperty("java.io.tmpdir"), "aural-vlc.log").absolutePath
+    }
+
     private var factory: MediaPlayerFactory? = null
     private var player: MediaPlayer? = null
 
@@ -29,10 +35,6 @@ class VlcPlayer(
     /** Dónde se buscó VLC y qué se encontró: diagnóstico para la UI. */
     var diagnostics: String? = null
         private set
-
-    /** Ruta del registro de VLC (diagnóstico de fallos de reproducción). */
-    val vlcLogPath: String =
-        File(System.getProperty("java.io.tmpdir"), "aural-vlc.log").absolutePath
 
     val isPlaying: Boolean get() = player?.status()?.isPlaying() == true
     val positionMs: Long get() = player?.status()?.time() ?: 0L
@@ -59,7 +61,7 @@ class VlcPlayer(
                 // o la salida de audio.
                 "--verbose=2",
                 "--file-logging",
-                "--logfile=$vlcLogPath"
+                "--logfile=$LOG_PATH"
             )
             if (vlcDir != null) {
                 args += "--plugin-path=${File(vlcDir, "plugins").absolutePath}"
