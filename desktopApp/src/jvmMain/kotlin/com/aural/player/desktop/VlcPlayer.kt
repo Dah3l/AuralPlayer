@@ -17,7 +17,7 @@ import java.io.File
  */
 class VlcPlayer(
     private val onFinished: () -> Unit,
-    private val onError: () -> Unit
+    private val onError: (String) -> Unit
 ) {
     private var factory: MediaPlayerFactory? = null
     private var player: MediaPlayer? = null
@@ -60,7 +60,7 @@ class VlcPlayer(
                     }
 
                     override fun error(mediaPlayer: MediaPlayer) {
-                        onError()
+                        onError(lastPath ?: "?")
                     }
                 })
             }
@@ -76,7 +76,11 @@ class VlcPlayer(
         }
     }
 
+    /** Ruta del último archivo que se intentó reproducir (diagnóstico). */
+    private var lastPath: String? = null
+
     fun play(filePath: String): Boolean {
+        lastPath = filePath
         val mediaPlayer = player ?: return false
         return try {
             mediaPlayer.media().play(File(filePath).toURI().toString())
