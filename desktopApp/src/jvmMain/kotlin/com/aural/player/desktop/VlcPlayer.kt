@@ -22,6 +22,10 @@ class VlcPlayer(
     private var factory: MediaPlayerFactory? = null
     private var player: MediaPlayer? = null
 
+    /** Mensaje del último fallo de inicialización, para mostrarlo en la UI. */
+    var initError: String? = null
+        private set
+
     val isPlaying: Boolean get() = player?.status()?.isPlaying() == true
     val positionMs: Long get() = player?.status()?.time() ?: 0L
     val durationMs: Long get() = player?.status()?.length()?.takeIf { it > 0 } ?: 0L
@@ -57,8 +61,13 @@ class VlcPlayer(
                 })
             }
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (t: Throwable) {
+            // Los fallos de carga nativa (UnsatisfiedLinkError y
+            // compañía) son Error, no Exception: si no se atrapan
+            // aquí, matan la corrutina y la UI se queda en el
+            // spinner para siempre.
+            initError = t.message
+            t.printStackTrace()
             false
         }
     }
@@ -67,7 +76,7 @@ class VlcPlayer(
         val mediaPlayer = player ?: return false
         return try {
             mediaPlayer.media().play(File(filePath).toURI().toString())
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             false
         }
     }
@@ -80,32 +89,32 @@ class VlcPlayer(
             } else {
                 mediaPlayer.controls().play()
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
     fun seek(fraction: Float) {
         try {
             player?.controls()?.setPosition(fraction.coerceIn(0f, 1f))
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
     fun stop() {
         try {
             player?.controls()?.stop()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
     fun release() {
         try {
             player?.release()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         try {
             factory?.release()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         player = null
         factory = null
