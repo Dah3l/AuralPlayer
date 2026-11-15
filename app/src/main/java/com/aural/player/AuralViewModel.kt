@@ -12,6 +12,8 @@ import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
 import com.aural.player.data.SongCoverStore
+import com.aural.player.data.TagEditor
+import com.aural.player.data.TagWriteResult
 import com.aural.player.data.TopSong
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
@@ -27,6 +29,9 @@ import com.aural.player.alarm.AlarmScheduler
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.StopMode
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -233,6 +238,105 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setCustomMetadata(songId: Long, title: String, artist: String, album: String) {
         viewModelScope.launch { settings.setCustomMetadata(songId, title, artist, album) }
+    }
+
+    // ------------------- Edición de tags reales (v1.2.0) -------------------
+
+    /** Resultado de guardar una edición, para avisar en la UI. */
+    sealed class TagWriteOutcome {
+        object FileSaved : TagWriteOutcome()
+        object SavedInAppOnly : TagWriteOutcome()
+    }
+
+    private val _tagWriteEvents = MutableSharedFlow<TagWriteOutcome>(extraBufferCapacity = 1)
+    val tagWriteEvents: SharedFlow<TagWriteOutcome> = _tagWriteEvents.asSharedFlow()
+
+    /** Edición esperando el permiso de escritura de MediaStore. */
+    private var pendingTagEdit: PendingTagEdit? = null
+
+    private data class PendingTagEdit(
+        val songId: Long,
+        val uri: String,
+        val title: String,
+        val artist: String,
+        val album: String
+    )
+
+    /**
+     * Guarda la edición escribiendo los tags en el archivo. Si falta el
+     * permiso de MediaStore, guarda la edición pendiente y devuelve el
+     * PendingIntent para que la UI lance el diálogo del sistema; tras
+     * concederlo, la UI llama a [confirmTagWrite]. Si el archivo no se
+     * puede escribir, guarda solo en la app (comportamiento de siempre)
+     * y devuelve null.
+     */
+    suspend fun saveMetadataToFile(
+        song: Song,
+        title: String,
+        artist: String,
+        album: String
+    ): PendingIntent? {
+        return when (TagEditor.writeTags(getApplication(), song.uri, title, artist, album)) {
+            TagWriteResult.Success -> {
+                // El archivo ya lleva la verdad: limpiar el overlay y re-escanear.
+                settings.setCustomMetadata(song.id, "", "", "")
+                _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
+                rescan()
+                null
+            }
+            TagWriteResult.NeedsPermission -> {
+                pendingTagEdit = PendingTagEdit(song.id, song.uri, title, artist, album)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        MediaStore.createWriteRequest(
+                            getApplication<Application>().contentResolver,
+                            listOf(Uri.parse(song.uri))
+                        )
+                    } catch (e: Exception) {
+                        applyOverlayFallback(song.id, title, artist, album)
+                        null
+                    }
+                } else {
+                    applyOverlayFallback(song.id, title, artist, album)
+                    null
+                }
+            }
+            TagWriteResult.Failed -> {
+                applyOverlayFallback(song.id, title, artist, album)
+                null
+            }
+        }
+    }
+
+    /** Tras conceder el permiso, reintenta la escritura pendiente. */
+    fun confirmTagWrite() {
+        val pending = pendingTagEdit ?: return
+        pendingTagEdit = null
+        viewModelScope.launch {
+            when (TagEditor.writeTags(getApplication(), pending.uri, pending.title, pending.artist, pending.album)) {
+                TagWriteResult.Success -> {
+                    settings.setCustomMetadata(pending.songId, "", "", "")
+                    _tagWriteEvents.emit(TagWriteOutcome.FileSaved)
+                    rescan()
+                }
+                else -> applyOverlayFallback(pending.songId, pending.title, pending.artist, pending.album)
+            }
+        }
+    }
+
+    /** El usuario negó el permiso: la edición queda guardada solo en la app. */
+    fun discardTagWrite() {
+        val pending = pendingTagEdit ?: return
+        pendingTagEdit = null
+        viewModelScope.launch {
+            applyOverlayFallback(pending.songId, pending.title, pending.artist, pending.album)
+        }
+    }
+
+    /** Fallback: guardar la edición solo en la app (overlay) y avisar. */
+    private suspend fun applyOverlayFallback(songId: Long, title: String, artist: String, album: String) {
+        settings.setCustomMetadata(songId, title, artist, album)
+        _tagWriteEvents.emit(TagWriteOutcome.SavedInAppOnly)
     }
 
 
