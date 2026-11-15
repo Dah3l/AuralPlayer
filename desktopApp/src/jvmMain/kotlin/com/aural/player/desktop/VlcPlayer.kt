@@ -1,11 +1,10 @@
 package com.aural.player.desktop
 
 import com.sun.jna.NativeLibrary
-import uk.co.caprica.vlcj.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
+import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
-import uk.co.caprica.vlcj.runtime.RuntimeUtil
 import java.io.File
 
 /**
@@ -35,10 +34,9 @@ class VlcPlayer(
         return try {
             val vlcDir = findVlcDir()
             if (vlcDir != null) {
-                NativeLibrary.addSearchPath(
-                    RuntimeUtil.getLibVlcLibraryName(),
-                    vlcDir.absolutePath
-                )
+                // "libvlc" es el nombre que JNA resuelve a libvlc.dll
+                // en Windows (RuntimeUtil ya no existe en vlcj 4.12).
+                NativeLibrary.addSearchPath("libvlc", vlcDir.absolutePath)
             } else if (!NativeDiscovery().discover()) {
                 return false
             }
