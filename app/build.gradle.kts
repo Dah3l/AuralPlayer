@@ -41,8 +41,9 @@ android {
             }
             // Apklis exige firma v1 (JAR) para validar la llave: con minSdk 26
             // Gradle la omite por defecto, así que se fuerza explícitamente.
-            isV1SigningEnabled = true
-            isV2SigningEnabled = true
+            // (Nombres nuevos de AGP 9: enableV1Signing/enableV2Signing.)
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
@@ -78,6 +79,9 @@ android {
 
     buildFeatures {
         compose = true
+        // AGP 9 trae resValues apagado por defecto: el buildType debug
+        // usa resValue para el nombre "Aural DEBUG", así que se enciende.
+        resValues = true
     }
 
     packaging {
