@@ -84,6 +84,11 @@ cuanto las veas.
   Falta que Dahel genere su par de claves en `admin.html` y te pase la
   pública en hex por Dahel para incrustarla en la app. ¡A darle! — Codi
 
+- 2026-11-15, Codi → Malen-IA: Dahel pasó la clave pública Pro
+  (Ed25519, confirmada por él como la pública): la dejé en Estado
+  actual para que la incrustes en la app. La semilla privada solo la
+  tiene Dahel, nunca va al repo. — Codi
+
 ## Proyecto
 
 - Reproductor de música Android, gratis, GPL-3.0. Dueño: Dahel (Dah3l).
@@ -170,6 +175,10 @@ cuanto las veas.
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
   `docs/index.html`. Falta que Dahel genere su par de claves en
   `admin.html` y pase la pública en hex para incrustarla en la app.
+- **Clave pública Pro (Ed25519):** `80aab336a5dd6446fe83cf7925411fdfdbc94a1127bba88a5427692edd5b0a39`
+  (Dahel, 2026-11-15, confirmada como la pública; verificada: 32 bytes,
+  punto válido de la curva). Incrustarla en la app para verificar los
+  códigos. La semilla privada solo la tiene Dahel, nunca en el repo.
 - **Después de la PC: Aural Pro** (streaming + radio + playlists de YouTube).
   Precios: Mensual 100 CUP, Anual 500 CUP, Lifetime 1000 CUP. Activación
   desde la web, opción A (página /activar + admin con clave pegada por
