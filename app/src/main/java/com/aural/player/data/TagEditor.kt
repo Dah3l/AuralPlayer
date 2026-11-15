@@ -34,7 +34,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
-import org.jaudiotagger.tag.images.Artwork
+import org.jaudiotagger.tag.TagOptionSingleton
+import org.jaudiotagger.tag.images.AndroidArtwork
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -75,6 +76,9 @@ object TagEditor {
         var verifyFile: File? = null
         var remuxFile: File? = null
         try {
+            // En Android hay que avisarle a jaudiotagger: si no, usa
+            // clases AWT (StandardArtwork) que no existen en Android.
+            TagOptionSingleton.getInstance().isAndroid = true
             // 0. Extensión real del archivo: sin ella jaudiotagger no abre
             // el temporal (elige el lector por la extensión). Formatos
             // sin soporte (p. ej. .webm) caen al guardado solo en la app.
@@ -204,7 +208,7 @@ object TagEditor {
         tag.setField(FieldKey.ARTIST, artist)
         tag.setField(FieldKey.ALBUM, album)
         if (coverArt != null) {
-            val artwork = Artwork()
+            val artwork = AndroidArtwork()
             artwork.binaryData = coverArt.first
             artwork.mimeType = coverArt.second
             tag.setField(artwork)
