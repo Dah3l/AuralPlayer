@@ -907,7 +907,7 @@ private fun NowPlayingMenu(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            song?.let { s -> viewModel.setCustomCover(s.id, it.toString()) }
+            song?.let { s -> viewModel.setCustomCoverFromGallery(s.id, it) }
         }
         showCoverPicker = false
     }
