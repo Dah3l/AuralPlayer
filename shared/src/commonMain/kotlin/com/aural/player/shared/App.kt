@@ -78,12 +78,26 @@ fun App(
                     color = AuralMuted,
                     fontSize = 13.sp
                 )
+                if (state.scanning) {
+                    Spacer(modifier = Modifier.width(16.dp))
+                    CircularProgressIndicator(
+                        color = AuralTeal,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Buscando música…",
+                        color = AuralMuted,
+                        fontSize = 13.sp
+                    )
+                }
             }
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(AuralLine))
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    state.scanning -> {
+                    state.scanning && state.songs.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 CircularProgressIndicator(color = AuralTeal, modifier = Modifier.size(36.dp))
@@ -92,7 +106,7 @@ fun App(
                             }
                         }
                     }
-                    state.songs.isEmpty() -> {
+                    !state.scanning && state.songs.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 "No se encontraron canciones en tu carpeta Música.",
