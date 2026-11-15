@@ -28,17 +28,37 @@ class DesktopPlayer(private val scope: CoroutineScope) {
     )
     private var ticker: Job? = null
 
-    /** Inicializa VLC y escanea la carpeta Música en segundo plano. */
+    /** Escanea la carpeta Música en segundo plano e inicializa VLC. */
     fun start() {
         scope.launch(Dispatchers.IO) {
-            val vlcOk = vlc.init()
-            val songs = LibraryScanner.scan(LibraryScanner.defaultMusicDir())
-            _state.update {
-                it.copy(
-                    songs = songs,
-                    scanning = false,
-                    error = if (!vlcOk) "No se encontraron las librerías de VLC." else null
-                )
+            try {
+                // Primero el escaneo (en tandas: la lista se va
+                // llenando) y después VLC, para que un fallo del
+                // motor nunca deje la pantalla en blanco.
+                val found = mutableListOf<com.aural.player.shared.Song>()
+                val songs = LibraryScanner.scan(LibraryScanner.defaultMusicDir()) { batch ->
+                    found += batch
+                    _state.update { it.copy(songs = found.toList(), scanning = true) }
+                }
+                val vlcOk = vlc.init()
+                _state.update {
+                    it.copy(
+                        songs = songs,
+                        scanning = false,
+                        error = when {
+                            !vlcOk && vlc.initError != null ->
+                                "No se pudo iniciar VLC: ${vlc.initError}"
+                            !vlcOk ->
+                                "No se encontraron las librerías de VLC."
+                            else -> null
+                        }
+                    )
+                }
+            } catch (t: Throwable) {
+                t.printStackTrace()
+                _state.update {
+                    it.copy(scanning = false, error = "No se pudo leer tu música: ${t.message}")
+                }
             }
         }
     }
