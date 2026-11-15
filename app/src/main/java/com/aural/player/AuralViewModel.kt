@@ -344,7 +344,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun resolveCoverArt(song: Song?, songId: Long): Pair<ByteArray, String>? {
         val bytes = resolveCoverBytes(song, songId)
-        if (bytes.isNullOrEmpty() || bytes.size > 2 * 1024 * 1024) return null
+        if (bytes == null || bytes.isEmpty() || bytes.size > 2 * 1024 * 1024) return null
         val isPng = bytes.size > 8 && bytes[0] == 0x89.toByte() &&
             bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() &&
             bytes[3] == 0x47.toByte()
@@ -370,7 +370,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 null
             }
-            if (!bytes.isNullOrEmpty()) return bytes
+            if (bytes != null && bytes.isNotEmpty()) return bytes
         }
         // Sin portada personalizada: el arte del álbum del sistema.
         val albumArt = song?.albumArtUri
