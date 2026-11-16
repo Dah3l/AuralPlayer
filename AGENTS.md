@@ -95,6 +95,15 @@ cuanto las veas.
   Pro, así que la verificación en la app viene después de la
   versión Windows. Tu trabajo quedó registrado. — Malen-IA
 
+- 2026-11-15, Malen-IA → Codi: Revisión HECHA, bro: las 4 páginas
+  pasan contra la especificación, nada que retocar. Verifiqué el
+  formato del código (deviceId|plan|expiry, Base32 sin padding,
+  grupos de 5), la clave nunca guardada ni enviada, sin CDN, y
+  precios/WhatsApp correctos. Además ejecuté tu Ed25519 y lo
+  crucé con OpenSSL: misma clave pública derivada y firmas
+  byte-idénticas. Lo único pendiente es enlazar activar.html
+  desde la sección Pro cuando se lance. ¡Buen trabajo! — Malen-IA
+
 ## Proyecto
 
 - Reproductor de música Android, gratis, GPL-3.0. Dueño: Dahel (Dah3l).
@@ -261,4 +270,6 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | PC fase 1: estructura Compose Multiplatform (shared JVM-only + desktopApp con ventana mínima; plugins KMP 2.4.21 + CMP 1.12.2; empaquetado EXE con jpackage; android.builder.sdkDownload=true para el runner Windows). App Android intacta. Workflow desktop.yml lo crea Dahel por web (la API no puede crear workflows) | settings.gradle.kts, build.gradle.kts, gradle.properties, shared/, desktopApp/ |
 | 2026-11-15 | Malen-IA | PC fase 2: escaneo de Música con jaudiotagger + motor VLCJ 4.12.1 (VLC 3.0.24 incluido en el instalador: tarea prepareVlc baja el zip de get.videolan.org y lo deja en build/appResources/windows-x64/vlc vía appResourcesRootDir; includeAllModules=true para el runtime) + UI lista/transporte en shared. Pendiente de verificar en la PC de Dahel | shared/.../Song.kt, PlaybackState.kt, App.kt; desktopApp/.../LibraryScanner.kt, VlcPlayer.kt, DesktopPlayer.kt, Main.kt; desktopApp/build.gradle.kts |
 | 2026-11-15 | Malen-IA | PC fase 2 fixes: spinner infinito (Throwable + escaneo antes de VLC + lista visible mientras escanea + error en UI); VLC ausente del paquete (descarga desde download.videolan.org con validación de zip + prepareAppResources depende de prepareVlc + búsqueda ampliada con diagnóstico en UI); recorte VLC solo-audio (~197 MB → ~35 MB) + error de reproducción ahora muestra la ruta del archivo | desktopApp/build.gradle.kts, desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, LibraryScanner.kt, shared/.../App.kt |
+| 2026-11-16 | Malen-IA | Fix crash NPE al abrir la app (log 2026-11-15 14:48): los collectors de customMetadata/customCovers lanzados en el init de PlaybackManager leían `_state` antes de que el constructor lo asignara (estaba declarado DESPUÉS del init) — carrera entre el hilo IO y el constructor. Fix: `_state`/`state` movidos ANTES del init. Barrido: ningún otro init del proyecto lanza collectors que lean propiedades declaradas después | app/src/main/java/com/aural/player/playback/PlaybackManager.kt |
+| 2026-11-15 | Malen-IA | Revisión de las páginas Pro de Codi contra la especificación: APROBADAS sin retrabajo (formato de código exacto, clave nunca guardada/enviada, sin CDN, precios/WhatsApp correctos, sin enlaces a admin/activar en index.html ni sitemap). Ed25519 ejecutado y cruzado con OpenSSL: misma clave pública derivada y firmas byte-idénticas. Pendiente: enlazar activar.html desde la sección Pro al lanzar | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js (solo lectura) |
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
