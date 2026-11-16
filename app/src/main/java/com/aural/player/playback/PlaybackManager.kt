@@ -84,6 +84,12 @@ class PlaybackManager(private val context: Context) {
     /** Caché de portadas personalizadas: songId -> URL. */
     private var customCoversCache: Map<Long, String> = emptyMap()
 
+    // Declarado ANTES del init: los collectors lanzados en init leen
+    // _state y si la corrutina corre antes de que el constructor termine
+    // de asignarlo, el acceso da NullPointerException (crash 2026-11-15).
+    private val _state = MutableStateFlow(PlayerUiState())
+    val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+
     init {
         // Observar cambios en personalizaciones y refrescar notificación si afecta la canción actual
         CoroutineScope(Dispatchers.IO).launch {
@@ -138,9 +144,6 @@ class PlaybackManager(private val context: Context) {
             }
         }
     }
-
-    private val _state = MutableStateFlow(PlayerUiState())
-    val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     /** Canciones conocidas por id, para reconstruir la cola desde MediaItems. */
     private var libraryById: Map<Long, Song> = emptyMap()
