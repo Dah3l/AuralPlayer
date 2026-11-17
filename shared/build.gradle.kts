@@ -2,27 +2,18 @@
 // Fase 3: JVM (escritorio) + Android. La app Android depende de
 // este módulo; la lógica común vive en commonMain y cada
 // plataforma aporta lo suyo (androidMain / jvmMain).
+// AGP 9: el target Android usa el plugin com.android.kotlin
+// .multiplatform.library con el bloque kotlin.android — el
+// plugin com.android.library + androidTarget() es incompatible
+// con el DSL nuevo de AGP 9 (ambos builds fallaban al aplicar
+// el plugin multiplatform en este archivo).
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.library")
     id("org.jetbrains.kotlin.multiplatform")
+    id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
-}
-
-android {
-    namespace = "com.aural.player.shared"
-    compileSdk = 37
-
-    defaultConfig {
-        minSdk = 26
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 }
 
 kotlin {
@@ -32,8 +23,11 @@ kotlin {
         }
     }
 
-    androidTarget {
-        compilerOptions {
+    android {
+        namespace = "com.aural.player.shared"
+        compileSdk = 37
+        minSdk = 26
+        compilerOptions.configure {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
