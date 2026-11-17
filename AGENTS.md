@@ -107,9 +107,11 @@ cuanto las veas.
 ## Proyecto
 
 - Reproductor de música Android, gratis, GPL-3.0. Dueño: Dahel (Dah3l).
-- Stack: Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21, Compose BOM 2024.09.02
-  (Material3 1.3.0), Media3 1.4.1, Coil 2.7.0, minSdk 26, targetSdk 34,
-  sin maxSdk. Sin BuildConfig (usar `FLAG_DEBUGGABLE` / PackageManager).
+- Stack: Gradle 9.7.0, AGP 9.3.1 (Kotlin integrado, sin plugin
+  kotlin.android), Kotlin 2.4.21, Compose BOM 2026.09.00
+  (Compose 1.12.1, Material3 1.12.x), Media3 1.11.1, Coil 2.7.0,
+  compileSdk 37, minSdk 26, targetSdk 34, sin maxSdk. Sin
+  BuildConfig (usar `FLAG_DEBUGGABLE` / PackageManager).
 - Arquitectura: `MusicService` + `PlaybackManager` + `AuralViewModel` +
   una sola Activity en Compose. `SettingsStore` (DataStore "aural_prefs").
   NowPlayingScreen es un OVERLAY.
@@ -138,6 +140,9 @@ cuanto las veas.
 - Archivos binarios NO se pueden subir por el conector. XML de
   drawables vectoriales SÍ (son texto).
 - El conector NO puede borrar ni mover archivos, ni crear repos.
+- Subir de UN archivo a la vez: varios pushes en paralelo chocan
+  (409, el head de la rama cambia en el medio) y alguno queda sin
+  subir. Verificado 2026-11-17.
 
 ## Trampas verificadas por fallos de build (no reintroducir)
 
@@ -218,9 +223,9 @@ cuanto las veas.
   lo interpreta como ruta RELATIVA contra el directorio del exe:
   ningún archivo abre ("Your input can't be opened", la ruta
   mezclada se ve en el registro). El MRL debe ser file:///
-  (tres barras): "file://" + uri.rawPath (rawPath ya trae la
-  codificación correcta; UNC usa el toString() tal cual).
-  Verificado con el registro de VLC, 2026-11-17.
+  (tres barras); la forma correcta es la del punto siguiente
+  (toASCIIString), que además cubre la ñ. Verificado con el
+  registro de VLC, 2026-11-17.
 - MRL con ñ/tildes: el MRL que se pasa a VLC debe ser 100% ASCII
   (File.toURI().toASCIIString() + file:/ → file:///). Si la ñ
   llega cruda en el String, JNA la codifica en windows-1252
@@ -237,7 +242,8 @@ cuanto las veas.
   Multiplatform (módulo `shared` JVM-only + `desktopApp` con ventana
   mínima; empaquetado EXE con jpackage en Actions) — VERIFICADA
   2026-11-15: el EXE compiló en Actions y abrió en la PC de Dahel.
-  Fase 2 CONSTRUIDA 2026-11-15 (pendiente de verificar en la PC):
+  Fase 2 CONSTRUIDA 2026-11-15 y VERIFICADA en reproducción
+  2026-11-17 (1.2.6 suena; 1.2.7 cubre nombres con ñ):
   escaneo de la carpeta Música con jaudiotagger + motor VLCJ 4.12.1
   (VLC 3.0.24 incluido en el instalador vía appResourcesRootDir;
   tarea prepareVlc baja el zip oficial) + lista y transporte
@@ -297,6 +303,7 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | PC fase 2 fixes: spinner infinito (Throwable + escaneo antes de VLC + lista visible mientras escanea + error en UI); VLC ausente del paquete (descarga desde download.videolan.org con validación de zip + prepareAppResources depende de prepareVlc + búsqueda ampliada con diagnóstico en UI); recorte VLC solo-audio (~197 MB → ~35 MB) + error de reproducción ahora muestra la ruta del archivo | desktopApp/build.gradle.kts, desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, LibraryScanner.kt, shared/.../App.kt |
 | 2026-11-16 | Malen-IA | Fix crash NPE al abrir la app (log 2026-11-15 14:48): los collectors de customMetadata/customCovers lanzados en el init de PlaybackManager leían `_state` antes de que el constructor lo asignara (estaba declarado DESPUÉS del init) — carrera entre el hilo IO y el constructor. Fix: `_state`/`state` movidos ANTES del init. Barrido: ningún otro init del proyecto lanza collectors que lean propiedades declaradas después | app/src/main/java/com/aural/player/playback/PlaybackManager.kt |
 | 2026-11-15 | Malen-IA | Revisión de las páginas Pro de Codi contra la especificación: APROBADAS sin retrabajo (formato de código exacto, clave nunca guardada/enviada, sin CDN, precios/WhatsApp correctos, sin enlaces a admin/activar en index.html ni sitemap). Ed25519 ejecutado y cruzado con OpenSSL: misma clave pública derivada y firmas byte-idénticas. Pendiente: enlazar activar.html desde la sección Pro al lanzar | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js (solo lectura) |
+| 2026-11-17 | Malen-IA | Revisión PC: slider busca solo al soltar (antes buscaba en cada tick y entrecortaba); dispose de VLC al cerrar la ventana (estaba sin llamar); id de canción estable desde la ruta + key por filePath en la lista + packageVersion 1.2.8; AGENTS.md: stack actualizado y trampa del MRL corregida | shared/.../App.kt, desktopApp/.../LibraryScanner.kt, DesktopPlayer.kt, Main.kt, desktopApp/build.gradle.kts, AGENTS.md |
 | 2026-11-17 | Malen-IA | Fix canciones con ñ que no abrían en PC: el MRL llevaba la ñ cruda y JNA la pasaba en windows-1252 (byte 0xF1), VLC no abría el archivo. Fix: MRL 100% ASCII con toASCIIString() + file:/// + packageVersion 1.2.7 | desktopApp/.../VlcPlayer.kt, desktopApp/build.gradle.kts |
 | 2026-11-17 | Malen-IA | Fix reproducción PC (ninguna canción abría): el MRL era file:/ (una barra, de File.toURI()) y VLC lo resolvía como ruta relativa contra el exe (ruta mezclada visible en el registro). Fix: MRL file:/// con uri.rawPath + packageVersion 1.2.6 | desktopApp/.../VlcPlayer.kt, desktopApp/build.gradle.kts |
 | 2026-11-17 | Malen-IA | Fix VLC no inicia en PC ("Failed to get a new native library instance"): libvlc_new devolvía NULL porque el recorte solo-audio excluía el plugin file-logger y sus opciones --file-logging/--logfile quedaban desconocidas (fatal en VLC 3.0, verificado contra el fuente 3.0.24). Fix: plugin logger incluido en prepareVlc + verificación en el build + packageVersion 1.2.5. Verificado además: recorte completo por cierre de imports (objdump) y plugins descubiertos por la carpeta de libvlccore | desktopApp/build.gradle.kts |
