@@ -8,7 +8,9 @@ data class PlaybackState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val scanning: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val volume: Int = 100,
+    val muted: Boolean = false
 ) {
     val currentSong: Song? get() = songs.getOrNull(currentIndex)
 }
