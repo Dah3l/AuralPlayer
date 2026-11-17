@@ -141,4 +141,36 @@ object AuralIcons {
             lineTo(6f, 18f)
         }
     }.build()
+
+    /** Marca de verificación (tema activo). */
+    val Check: ImageVector = ImageVector.Builder("Check", 24.dp, 24.dp, 24f, 24f).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(5f, 12.5f)
+            lineTo(10f, 17.5f)
+            lineTo(19f, 7f)
+        }
+    }.build()
+
+    /** Flecha hacia atrás (cabeceras de pantallas). */
+    val ArrowBack: ImageVector = ImageVector.Builder("ArrowBack", 24.dp, 24.dp, 24f, 24f).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(19f, 12f)
+            lineTo(5f, 12f)
+            moveTo(11f, 6f)
+            lineTo(5f, 12f)
+            lineTo(11f, 18f)
+        }
+    }.build()
 }
