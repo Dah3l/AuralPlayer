@@ -10,7 +10,8 @@ data class PlaybackState(
     val scanning: Boolean = true,
     val error: String? = null,
     val volume: Int = 100,
-    val muted: Boolean = false
+    val muted: Boolean = false,
+    val theme: AppTheme = AppTheme.BOSQUE
 ) {
     val currentSong: Song? get() = songs.getOrNull(currentIndex)
 }
