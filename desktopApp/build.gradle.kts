@@ -180,6 +180,15 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":shared"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                // Directas aunque :shared ya las trae: el empaquetado
+                // de escritorio no arrastró las transitivas de shared
+                // y la app moría en tiempo de ejecución con
+                // NoClassDefFoundError (kotlinx/datetime/Clock$System
+                // al abrir el picker de temas, 1.2.11).
+                implementation("io.ktor:ktor-client-core:3.6.1")
+                implementation("io.ktor:ktor-client-cio:3.6.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.2")
                 implementation("uk.co.caprica:vlcj:4.12.1")
                 implementation("net.jthink:jaudiotagger:3.0.1")
             }
@@ -196,7 +205,7 @@ compose.desktop {
             packageName = "AuralPlayer"
             // Sube en cada build de prueba: con upgradeUuid fijo, una
             // versión mayor reemplaza la instalada sin desinstalar.
-            packageVersion = "1.2.11"
+            packageVersion = "1.2.12"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
             // Recursos extra (las librerías de VLC) dentro del paquete.
