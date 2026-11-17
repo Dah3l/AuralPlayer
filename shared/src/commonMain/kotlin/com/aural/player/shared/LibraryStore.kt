@@ -49,7 +49,7 @@ class LibraryStore(private val directory: String) {
         try {
             LocalFiles.mkdirs(directory)
             val obj = buildJsonObject {
-                put("folders", buildJsonArray { data.folders.forEach { add(it) } })
+                put("folders", buildJsonArray { data.folders.forEach { add(JsonPrimitive(it)) } })
                 put(
                     "playlists",
                     buildJsonArray {
@@ -60,7 +60,7 @@ class LibraryStore(private val directory: String) {
                                     put("name", playlist.name)
                                     put(
                                         "paths",
-                                        buildJsonArray { playlist.songPaths.forEach { add(it) } }
+                                        buildJsonArray { playlist.songPaths.forEach { add(JsonPrimitive(it)) } }
                                     )
                                 }
                             )
