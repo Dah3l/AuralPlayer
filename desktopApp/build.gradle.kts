@@ -69,11 +69,19 @@ tasks.register<Copy>("prepareVlc") {
     // libavcodec_plugin queda como decodificador universal de
     // respaldo; los demuxers/codecs listados cubren mp3, m4a/aac,
     // flac, ogg, opus, wav, wma, aiff y demás formatos de música.
+    // OBLIGATORIO: plugins/logger/libfile_logger_plugin.dll NO se
+    // puede recortar: --file-logging y --logfile (el registro de
+    // diagnóstico de VlcPlayer) solo los registra ese plugin, y
+    // libvlc_new devuelve NULL si recibe una opción desconocida
+    // (config_LoadCmdLine, 2ª pasada, es fatal). Sin el plugin,
+    // VLC no inicia: "Failed to get a new native library instance"
+    // (verificado contra el fuente de VLC 3.0.24, 2026-11-17).
     from(zipTree(vlcZipFile.get().asFile)) {
         val top = "vlc-$vlcVersion"
         include(
             "$top/libvlc.dll",
             "$top/libvlccore.dll",
+            "$top/plugins/logger/libfile_logger_plugin.dll",
             "$top/plugins/audio_output/**",
             "$top/plugins/audio_mixer/**",
             "$top/plugins/audio_filter/**",
@@ -135,7 +143,8 @@ tasks.register<Copy>("prepareVlc") {
             "plugins/codec/libfaad_plugin.dll",
             "plugins/demux/libmp4_plugin.dll",
             "plugins/access/libfilesystem_plugin.dll",
-            "plugins/audio_output/libdirectsound_plugin.dll"
+            "plugins/audio_output/libdirectsound_plugin.dll",
+            "plugins/logger/libfile_logger_plugin.dll"
         )
         val missing = required.filter { !File(vlcDir, it).exists() }
         if (missing.isNotEmpty()) {
@@ -187,7 +196,7 @@ compose.desktop {
             packageName = "AuralPlayer"
             // Sube en cada build de prueba: con upgradeUuid fijo, una
             // versión mayor reemplaza la instalada sin desinstalar.
-            packageVersion = "1.2.4"
+            packageVersion = "1.2.5"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
             // Recursos extra (las librerías de VLC) dentro del paquete.
