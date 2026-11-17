@@ -31,3 +31,20 @@ actual object LocalFiles {
         File(path).mkdirs()
     }
 }
+
+actual object SystemDates {
+    actual fun today(): DateParts {
+        val now = java.time.LocalDate.now()
+        return DateParts(now.year, now.monthValue, now.dayOfMonth)
+    }
+
+    actual fun keyDaysAgo(daysAgo: Int): String {
+        val date = java.time.LocalDate.now().minusDays(daysAgo.toLong())
+        return "${date.year}-${date.monthValue.toString().padStart(2, '0')}-" +
+            date.dayOfMonth.toString().padStart(2, '0')
+    }
+
+    actual fun hour(): Int = java.time.LocalTime.now().hour
+
+    actual fun nowEpochMillis(): Long = System.currentTimeMillis()
+}
