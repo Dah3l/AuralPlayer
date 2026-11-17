@@ -41,6 +41,7 @@ class DesktopPlayer(private val scope: CoroutineScope) {
                     _state.update { it.copy(songs = found.toList(), scanning = true) }
                 }
                 val vlcOk = vlc.init()
+                if (vlcOk) vlc.setVolume(_state.value.volume)
                 _state.update {
                     it.copy(
                         songs = songs,
@@ -67,7 +68,7 @@ class DesktopPlayer(private val scope: CoroutineScope) {
     fun dispose() {
         ticker?.cancel()
         ticker = null
-        vlc.dispose()
+        vlc.release()
     }
 
     fun select(index: Int) {
@@ -109,6 +110,16 @@ class DesktopPlayer(private val scope: CoroutineScope) {
         _state.update {
             it.copy(positionMs = (fraction * it.durationMs).toLong().coerceAtLeast(0L))
         }
+    }
+
+    fun setVolume(value: Int) {
+        val clamped = value.coerceIn(0, 100)
+        vlc.setVolume(clamped)
+        _state.update { it.copy(volume = clamped) }
+    }
+
+    fun toggleMute() {
+        _state.update { it.copy(muted = vlc.toggleMute()) }
     }
 
     private fun playIndex(index: Int) {
