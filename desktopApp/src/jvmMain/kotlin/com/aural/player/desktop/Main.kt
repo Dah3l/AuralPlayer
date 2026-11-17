@@ -30,7 +30,8 @@ fun main() = application {
             onPrevious = player::previous,
             onSeek = player::seek,
             onVolumeChange = player::setVolume,
-            onToggleMute = player::toggleMute
+            onToggleMute = player::toggleMute,
+            onThemeChange = player::setTheme
         )
     }
 }
