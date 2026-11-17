@@ -253,8 +253,12 @@ cuanto las veas.
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
-  `docs/index.html`. Falta que Dahel genere su par de claves en
-  `admin.html` y pase la pública en hex para incrustarla en la app.
+  `docs/index.html`. Dahel ya generó su par de claves y la pública
+  quedó en Estado (2026-11-15). 2026-11-17: `admin.html` con pantalla
+  de contraseña (a petición de Dahel): la página no muestra nada hasta
+  poner la contraseña; en el archivo solo va el hash SHA-256, la
+  contraseña en texto plano nunca va al repo; la sesión se recuerda
+  solo mientras la pestaña siga abierta, y hay botón Bloquear.
 - **Clave pública Pro (Ed25519):** `80aab336a5dd6446fe83cf7925411fdfdbc94a1127bba88a5427692edd5b0a39`
   (Dahel, 2026-11-15, confirmada como la pública; verificada: 32 bytes,
   punto válido de la curva). Incrustarla en la app para verificar los
@@ -312,3 +316,4 @@ cuanto las veas.
 | 2026-11-17 | Malen-IA | Fix reproducción PC (ninguna canción abría): el MRL era file:/ (una barra, de File.toURI()) y VLC lo resolvía como ruta relativa contra el exe (ruta mezclada visible en el registro). Fix: MRL file:/// con uri.rawPath + packageVersion 1.2.6 | desktopApp/.../VlcPlayer.kt, desktopApp/build.gradle.kts |
 | 2026-11-17 | Malen-IA | Fix VLC no inicia en PC ("Failed to get a new native library instance"): libvlc_new devolvía NULL porque el recorte solo-audio excluía el plugin file-logger y sus opciones --file-logging/--logfile quedaban desconocidas (fatal en VLC 3.0, verificado contra el fuente 3.0.24). Fix: plugin logger incluido en prepareVlc + verificación en el build + packageVersion 1.2.5. Verificado además: recorte completo por cierre de imports (objdump) y plugins descubiertos por la carpeta de libvlccore | desktopApp/build.gradle.kts |
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
+| 2026-11-17 | Codi | Puerta con contraseña en admin.html (a petición de Dahel): pantalla de acceso que oculta todo hasta poner la contraseña; verificación SHA-256 en el navegador, solo el hash en el archivo; sesión recordada por pestaña + botón Bloquear; probada (mala/buena/Enter/recarga/bloqueo) y flujos viejos intactos | docs/admin.html |
