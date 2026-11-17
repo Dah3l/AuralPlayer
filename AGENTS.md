@@ -214,6 +214,13 @@ cuanto las veas.
   acepta pero no hace nada. VLC 3.0 busca los plugins en
   <carpeta de libvlccore.dll>/plugins (config_GetLibDir en Win32):
   el layout empaquetado (vlc/plugins/) ya cumple eso.
+- En Windows, File.toURI() produce file:/C:/... (UNA barra) y VLC
+  lo interpreta como ruta RELATIVA contra el directorio del exe:
+  ningún archivo abre ("Your input can't be opened", la ruta
+  mezclada se ve en el registro). El MRL debe ser file:///
+  (tres barras): "file://" + uri.rawPath (rawPath ya trae la
+  codificación correcta; UNC usa el toString() tal cual).
+  Verificado con el registro de VLC, 2026-11-17.
 
 ## Estado actual (2026-11-15)
 
@@ -283,5 +290,6 @@ cuanto las veas.
 | 2026-11-15 | Malen-IA | PC fase 2 fixes: spinner infinito (Throwable + escaneo antes de VLC + lista visible mientras escanea + error en UI); VLC ausente del paquete (descarga desde download.videolan.org con validación de zip + prepareAppResources depende de prepareVlc + búsqueda ampliada con diagnóstico en UI); recorte VLC solo-audio (~197 MB → ~35 MB) + error de reproducción ahora muestra la ruta del archivo | desktopApp/build.gradle.kts, desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, LibraryScanner.kt, shared/.../App.kt |
 | 2026-11-16 | Malen-IA | Fix crash NPE al abrir la app (log 2026-11-15 14:48): los collectors de customMetadata/customCovers lanzados en el init de PlaybackManager leían `_state` antes de que el constructor lo asignara (estaba declarado DESPUÉS del init) — carrera entre el hilo IO y el constructor. Fix: `_state`/`state` movidos ANTES del init. Barrido: ningún otro init del proyecto lanza collectors que lean propiedades declaradas después | app/src/main/java/com/aural/player/playback/PlaybackManager.kt |
 | 2026-11-15 | Malen-IA | Revisión de las páginas Pro de Codi contra la especificación: APROBADAS sin retrabajo (formato de código exacto, clave nunca guardada/enviada, sin CDN, precios/WhatsApp correctos, sin enlaces a admin/activar en index.html ni sitemap). Ed25519 ejecutado y cruzado con OpenSSL: misma clave pública derivada y firmas byte-idénticas. Pendiente: enlazar activar.html desde la sección Pro al lanzar | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js (solo lectura) |
+| 2026-11-17 | Malen-IA | Fix reproducción PC (ninguna canción abría): el MRL era file:/ (una barra, de File.toURI()) y VLC lo resolvía como ruta relativa contra el exe (ruta mezclada visible en el registro). Fix: MRL file:/// con uri.rawPath + packageVersion 1.2.6 | desktopApp/.../VlcPlayer.kt, desktopApp/build.gradle.kts |
 | 2026-11-17 | Malen-IA | Fix VLC no inicia en PC ("Failed to get a new native library instance"): libvlc_new devolvía NULL porque el recorte solo-audio excluía el plugin file-logger y sus opciones --file-logging/--logfile quedaban desconocidas (fatal en VLC 3.0, verificado contra el fuente 3.0.24). Fix: plugin logger incluido en prepareVlc + verificación en el build + packageVersion 1.2.5. Verificado además: recorte completo por cierre de imports (objdump) y plugins descubiertos por la carpeta de libvlccore | desktopApp/build.gradle.kts |
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
