@@ -13,7 +13,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -292,7 +291,7 @@ object LrcLibClient {
         return cacheMutex.withLock {
             val entry = cache[key] ?: return@withLock null
             val ttl = if (entry.result != null) TTL_POSITIVE_MS else TTL_NEGATIVE_MS
-            if (Clock.System.now().toEpochMilliseconds() - entry.timeMs > ttl) {
+            if (SystemDates.nowEpochMillis() - entry.timeMs > ttl) {
                 cache.remove(key)
                 null
             } else {
@@ -307,7 +306,7 @@ object LrcLibClient {
                 val oldest = cache.entries.minByOrNull { it.value.timeMs }?.key
                 if (oldest != null) cache.remove(oldest)
             }
-            cache[key] = CacheEntry(result, Clock.System.now().toEpochMilliseconds())
+            cache[key] = CacheEntry(result, SystemDates.nowEpochMillis())
         }
     }
 
