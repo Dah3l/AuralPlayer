@@ -2,7 +2,6 @@ package com.aural.player.shared
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,13 +14,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,12 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-private val AuralTeal = Color(0xFF2ED3B7)
-private val AuralBg = Color(0xFF121212)
-private val AuralSurface = Color(0xFF1C1C1C)
-private val AuralLine = Color(0xFF2A2A2A)
-private val AuralMuted = Color(0xFF9A9A9A)
-
 @Composable
 fun App(
     state: PlaybackState,
@@ -51,65 +46,93 @@ fun App(
     onPrevious: () -> Unit,
     onSeek: (Float) -> Unit,
     onVolumeChange: (Int) -> Unit,
-    onToggleMute: () -> Unit
+    onToggleMute: () -> Unit,
+    onThemeChange: (AppTheme) -> Unit
 ) {
-    MaterialTheme
-        colorScheme = darkColorScheme(
-            primary = AuralTeal,
-            background = AuralBg,
-            surface = AuralSurface,
-            onBackground = Color.White,
-            onSurface = Color.White
-        )
-    ) {
-        Column(modifier = Modifier.fillMaxSize().background(AuralBg)) {
+    AuralTheme(theme = state.theme) {
+        val scheme = MaterialTheme.colorScheme
+        var themeMenuExpanded by remember { mutableStateOf(false) }
+        Column(modifier = Modifier.fillMaxSize().background(scheme.background)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Aural",
-                    color = Color.White,
+                    color = scheme.onBackground,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Player",
-                    color = AuralTeal,
+                    color = scheme.primary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "El sonido, sin ruido.",
-                    color = AuralMuted,
+                    color = scheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
                 if (state.scanning) {
                     Spacer(modifier = Modifier.width(16.dp))
                     CircularProgressIndicator(
-                        color = AuralTeal,
+                        color = scheme.primary,
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Buscando música…",
-                        color = AuralMuted,
+                        color = scheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Box {
+                    TextButton(onClick = { themeMenuExpanded = true }) {
+                        Text(
+                            text = state.theme.displayName,
+                            color = scheme.primary,
+                            fontSize = 13.sp
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = themeMenuExpanded,
+                        onDismissRequest = { themeMenuExpanded = false }
+                    ) {
+                        AppTheme.entries.forEach { item ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier.size(12.dp)
+                                                .background(item.colorScheme().primary, CircleShape)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(item.displayName)
+                                    }
+                                },
+                                onClick = {
+                                    onThemeChange(item)
+                                    themeMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(AuralLine))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.scanning && state.songs.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = AuralTeal, modifier = Modifier.size(36.dp))
+                                CircularProgressIndicator(color = scheme.primary, modifier = Modifier.size(36.dp))
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Text("Buscando tu música…", color = AuralMuted, fontSize = 14.sp)
+                                Text("Buscando tu música…", color = scheme.onSurfaceVariant, fontSize = 14.sp)
                             }
                         }
                     }
@@ -117,7 +140,7 @@ fun App(
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 "No se encontraron canciones en tu carpeta Música.",
-                                color = AuralMuted,
+                                color = scheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             )
                         }
@@ -140,7 +163,7 @@ fun App(
             state.error?.let { error ->
                 Text(
                     text = error,
-                    color = Color(0xFFFF8A80),
+                    color = scheme.error,
                     fontSize = 13.sp,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
                 )
@@ -173,10 +196,11 @@ private fun SongRow(
     isPlaying: Boolean,
     onClick: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isCurrent) AuralSurface else Color.Transparent)
+            .background(if (isCurrent) scheme.surface else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -184,7 +208,7 @@ private fun SongRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
-                color = if (isCurrent) AuralTeal else Color.White,
+                color = if (isCurrent) scheme.primary else scheme.onSurface,
                 fontSize = 15.sp,
                 fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
@@ -192,7 +216,7 @@ private fun SongRow(
             )
             Text(
                 text = listOf(song.artist, song.album).filter { it.isNotBlank() }.joinToString(" · "),
-                color = AuralMuted,
+                color = scheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -200,10 +224,10 @@ private fun SongRow(
         }
         Spacer(modifier = Modifier.width(16.dp))
         if (isPlaying) {
-            Text(text = "♪", color = AuralTeal, fontSize = 16.sp)
+            Text(text = "♪", color = scheme.primary, fontSize = 16.sp)
             Spacer(modifier = Modifier.width(12.dp))
         }
-        Text(text = formatTime(song.durationMs), color = AuralMuted, fontSize = 13.sp)
+        Text(text = formatTime(song.durationMs), color = scheme.onSurfaceVariant, fontSize = 13.sp)
     }
 }
 
@@ -222,18 +246,19 @@ private fun PlayerBar(
     onVolumeChange: (Int) -> Unit,
     onToggleMute: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     // Mientras se arrastra, la barra sigue el dedo y solo se busca
     // al soltar: buscar en cada tick entrecorta la reproducción.
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
     Column(
-        modifier = Modifier.fillMaxWidth().background(AuralSurface).padding(horizontal = 24.dp, vertical = 12.dp)
+        modifier = Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
-                    color = Color.White,
+                    color = scheme.onSurface,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -241,7 +266,7 @@ private fun PlayerBar(
                 )
                 Text(
                     text = song.artist,
-                    color = AuralMuted,
+                    color = scheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -260,37 +285,38 @@ private fun PlayerBar(
                 onValueChange = { onVolumeChange((it * 100).roundToInt().coerceIn(0, 100)) },
                 modifier = Modifier.width(110.dp),
                 colors = SliderDefaults.colors(
-                    thumbColor = AuralTeal,
-                    activeTrackColor = AuralTeal,
-                    inactiveTrackColor = AuralLine
+                    thumbColor = scheme.primary,
+                    activeTrackColor = scheme.primary,
+                    inactiveTrackColor = scheme.outlineVariant
                 )
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = formatTime(positionMs), color = AuralMuted, fontSize = 12.sp)
+            Text(text = formatTime(positionMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
             Slider(
                 value = if (dragging) dragValue else if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
                 onValueChange = { dragValue = it; dragging = true },
                 onValueChangeFinished = { dragging = false; onSeek(dragValue) },
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
-                    thumbColor = AuralTeal,
-                    activeTrackColor = AuralTeal,
-                    inactiveTrackColor = AuralLine
+                    thumbColor = scheme.primary,
+                    activeTrackColor = scheme.primary,
+                    inactiveTrackColor = scheme.outlineVariant
                 )
             )
-            Text(text = formatTime(durationMs), color = AuralMuted, fontSize = 12.sp)
+            Text(text = formatTime(durationMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
 private fun TransportButton(text: String, onClick: () -> Unit, prominent: Boolean = false) {
+    val scheme = MaterialTheme.colorScheme
     TextButton(onClick = onClick) {
         Text(
             text = text,
-            color = if (prominent) AuralTeal else Color.White,
+            color = if (prominent) scheme.primary else scheme.onSurface,
             fontSize = if (prominent) 26.sp else 20.sp
         )
     }
