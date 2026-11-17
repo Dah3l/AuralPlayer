@@ -5,13 +5,8 @@
 //   · Aparece en el picker de Temas solo durante su ventana.
 // - Navidad: 20 – 26 de diciembre.
 // Los colores de temporada viven en Theme.kt (esquemas Halloween y
-// Christmas); aquí solo va la fecha, con kotlinx-datetime.
+// Christmas); aquí solo va la fecha, del reloj del sistema.
 package com.aural.player.shared
-
-import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 /** Temporada activa (o ninguna). */
 sealed interface SeasonalTheme {
@@ -22,10 +17,10 @@ sealed interface SeasonalTheme {
 
 /** Temporada según la fecha LOCAL del dispositivo. */
 fun currentSeasonalTheme(
-    today: LocalDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    today: DateParts = SystemDates.today()
 ): SeasonalTheme {
-    val month = today.monthNumber
-    val day = today.dayOfMonth
+    val month = today.month
+    val day = today.day
     return when {
         (month == 10 && day >= 27) || (month == 11 && day == 1) -> SeasonalTheme.Halloween
         month == 12 && day in 20..26 -> SeasonalTheme.Christmas
@@ -35,10 +30,10 @@ fun currentSeasonalTheme(
 
 /** ¿Estamos dentro de la ventana de Halloween? (muestra el tema en el picker) */
 fun isHalloweenWindow(
-    today: LocalDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    today: DateParts = SystemDates.today()
 ): Boolean = currentSeasonalTheme(today) == SeasonalTheme.Halloween
 
 /** ¿Estamos dentro de la ventana de Navidad? (muestra el tema en el picker) */
 fun isChristmasWindow(
-    today: LocalDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    today: DateParts = SystemDates.today()
 ): Boolean = currentSeasonalTheme(today) == SeasonalTheme.Christmas
