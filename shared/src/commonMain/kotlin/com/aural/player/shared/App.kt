@@ -1,9 +1,13 @@
 package com.aural.player.shared
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,23 +17,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,17 +46,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
+/** Pestañas de la biblioteca, en el orden de Android (sin Descargas por ahora). */
 private enum class LibraryTab(val label: String) {
     SONGS("Canciones"),
-    ALBUMS("Álbumes"),
     ARTISTS("Artistas"),
+    ALBUMS("Álbumes"),
     PLAYLISTS("Playlists"),
     FOLDERS("Carpetas")
 }
@@ -59,6 +74,9 @@ private sealed interface Drill {
     data class Artist(val name: String) : Drill
     data class PlaylistDetail(val id: String) : Drill
 }
+
+/** Pantalla superpuesta (Temas, Top 10) abierta desde el menú ⋮. */
+private enum class Overlay { THEMES, TOP10 }
 
 private data class AlbumGroup(
     val key: String,
@@ -85,21 +103,39 @@ fun App(
     onRenamePlaylist: (String, String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
     onAddToPlaylist: (String, Song) -> Unit,
-    onRemoveFromPlaylist: (String, Song) -> Unit
+    onRemoveFromPlaylist: (String, Song) -> Unit,
+    onLoadTop10: suspend () -> List<TopSong>
 ) {
     AuralTheme(theme = state.theme) {
         val scheme = MaterialTheme.colorScheme
-        var themeMenuExpanded by remember { mutableStateOf(false) }
         var tab by remember { mutableStateOf(LibraryTab.SONGS) }
         var drill by remember { mutableStateOf<Drill?>(null) }
+        var overlay by remember { mutableStateOf<Overlay?>(null) }
+        var showGeneralMenu by remember { mutableStateOf(false) }
         var menuSong by remember { mutableStateOf<Song?>(null) }
         var showCreatePlaylist by remember { mutableStateOf(false) }
         var renameTarget by remember { mutableStateOf<Playlist?>(null) }
         var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
+        var query by remember { mutableStateOf("") }
+        var searchFocused by remember { mutableStateOf(false) }
+        var top10Songs by remember { mutableStateOf<List<TopSong>?>(null) }
 
-        // Agrupaciones derivadas de la biblioteca (se recalculan al cambiar).
-        val albums = remember(state.songs) {
-            state.songs.groupBy { "${it.album}\u0001${it.artist}" }
+        // La búsqueda filtra canciones, artistas y álbumes.
+        val visibleSongs = remember(state.songs, query) {
+            if (query.isBlank()) {
+                state.songs
+            } else {
+                state.songs.filter { song ->
+                    song.title.contains(query, ignoreCase = true) ||
+                        song.artist.contains(query, ignoreCase = true) ||
+                        song.album.contains(query, ignoreCase = true)
+                }
+            }
+        }
+
+        // Agrupaciones derivadas de la biblioteca visible.
+        val albums = remember(visibleSongs) {
+            visibleSongs.groupBy { "${it.album}\u0001${it.artist}" }
                 .map { (key, list) ->
                     AlbumGroup(
                         key = key,
@@ -110,12 +146,30 @@ fun App(
                 }
                 .sortedBy { it.title.lowercase() }
         }
-        val artists = remember(state.songs) {
-            state.songs.groupBy { it.artist }
+        val artists = remember(visibleSongs) {
+            visibleSongs.groupBy { it.artist }
                 .map { (name, list) -> name to list.sortedBy { it.title.lowercase() } }
                 .sortedBy { it.first.lowercase() }
         }
         val songsByPath = remember(state.songs) { state.songs.associateBy { it.filePath } }
+
+        // El Top 10 se carga al abrir su pantalla.
+        LaunchedEffect(overlay) {
+            if (overlay == Overlay.TOP10) {
+                top10Songs = null
+                top10Songs = onLoadTop10()
+            }
+        }
+
+        // La fila de pills se desplaza sola para mostrar la pestaña activa.
+        val pillsListState = rememberLazyListState()
+        LaunchedEffect(tab) {
+            val layout = pillsListState.layoutInfo
+            val item = layout.visibleItemsInfo.firstOrNull { it.index == tab.ordinal }
+            val fullyVisible = item != null && item.offset >= 0 &&
+                item.offset + item.size <= layout.viewportEndOffset
+            if (!fullyVisible) pillsListState.animateScrollToItem(tab.ordinal)
+        }
 
         fun openTab(next: LibraryTab) {
             tab = next
@@ -123,105 +177,150 @@ fun App(
         }
 
         Column(modifier = Modifier.fillMaxSize().background(scheme.background)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // ---- Cabecera fija: logo + Aural, saludo debajo, menú ⋮ ----
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp, bottom = 4.dp)
             ) {
-                Text(
-                    text = "Aural",
-                    color = scheme.onBackground,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Player",
-                    color = scheme.primary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "El sonido, sin ruido.",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                if (state.scanning) {
-                    Spacer(modifier = Modifier.width(16.dp))
-                    CircularProgressIndicator(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LogoMark(
                         color = scheme.primary,
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp
+                        modifier = Modifier.size(44.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Buscando música…",
-                        color = scheme.onSurfaceVariant,
-                        fontSize = 13.sp
+                        text = "Aural",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = scheme.primary
                     )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                Box {
-                    TextButton(onClick = { themeMenuExpanded = true }) {
-                        Text(
-                            text = state.theme.displayName,
-                            color = scheme.primary,
-                            fontSize = 13.sp
-                        )
+                    if (isHalloweenWindow()) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(text = "🎃", fontSize = 28.sp)
                     }
-                    DropdownMenu(
-                        expanded = themeMenuExpanded,
-                        onDismissRequest = { themeMenuExpanded = false }
-                    ) {
-                        // Halloween y Navidad solo aparecen en su
-                        // temporada (igual que en Android); el tema
-                        // activo siempre se muestra aunque su
-                        // ventana haya terminado.
-                        val visibleThemes = AppTheme.entries.filter { item ->
-                            when (item) {
-                                AppTheme.HALLOWEEN -> item == state.theme || isHalloweenWindow()
-                                AppTheme.CHRISTMAS -> item == state.theme || isChristmasWindow()
-                                else -> true
-                            }
+                    Spacer(Modifier.weight(1f))
+                    Box {
+                        IconButton(onClick = { showGeneralMenu = true }) {
+                            Icon(
+                                imageVector = AuralIcons.MoreVert,
+                                contentDescription = "Menú"
+                            )
                         }
-                        visibleThemes.forEach { item ->
+                        DropdownMenu(
+                            expanded = showGeneralMenu,
+                            onDismissRequest = { showGeneralMenu = false }
+                        ) {
                             DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier.size(12.dp)
-                                                .background(item.colorScheme().primary, CircleShape)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(item.displayName)
-                                    }
-                                },
-                                onClick = {
-                                    onThemeChange(item)
-                                    themeMenuExpanded = false
-                                }
+                                text = { Text("Tema") },
+                                onClick = { showGeneralMenu = false; overlay = Overlay.THEMES }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Tu Top 10") },
+                                onClick = { showGeneralMenu = false; overlay = Overlay.TOP10 }
                             )
                         }
                     }
                 }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = greetingForHour(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = scheme.onSurfaceVariant
+                )
             }
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
 
-            TabRow(
-                selectedTabIndex = tab.ordinal,
-                containerColor = scheme.background,
-                contentColor = scheme.primary
-            ) {
-                LibraryTab.entries.forEach { entry ->
-                    Tab(
-                        selected = tab == entry,
-                        onClick = { openTab(entry) },
-                        text = { Text(entry.label, fontSize = 14.sp) }
+            // ---- Búsqueda siempre visible ----
+            val darkBackground = isDarkBackground(scheme.background)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(
+                        if (darkBackground) scheme.surfaceContainer
+                        else scheme.surfaceVariant
                     )
+                    .border(
+                        width = if (searchFocused) 2.dp else 1.dp,
+                        color = if (searchFocused) scheme.primary else scheme.outline,
+                        shape = MaterialTheme.shapes.large
+                    )
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Canciones, artistas o álbumes…") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.large,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(
+                                    AuralIcons.Close,
+                                    contentDescription = "Borrar búsqueda",
+                                    tint = scheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { searchFocused = it.isFocused }
+                )
+            }
+
+            // ---- Pills de filtros ----
+            LazyRow(
+                state = pillsListState,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                items(LibraryTab.entries.size) { i ->
+                    val entry = LibraryTab.entries[i]
+                    val selected = tab == entry
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(
+                                if (selected) scheme.primary
+                                else scheme.surfaceVariant
+                            )
+                            .clickable { openTab(entry) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = entry.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) scheme.onPrimary
+                            else scheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (val current = drill) {
+                when (overlay) {
+                    Overlay.THEMES -> ThemesScreen(
+                        currentTheme = state.theme,
+                        onSelect = onThemeChange,
+                        onBack = { overlay = null }
+                    )
+                    Overlay.TOP10 -> Top10Screen(
+                        topSongs = top10Songs,
+                        onBack = { overlay = null }
+                    )
+                    null -> when (val current = drill) {
                     is Drill.Album -> {
                         val group = albums.firstOrNull { it.key == current.key }
                         val list = group?.songs ?: emptyList()
@@ -325,13 +424,14 @@ fun App(
                                     }
                                 }
                             }
-                            !state.scanning && state.songs.isEmpty() -> {
+                            !state.scanning && visibleSongs.isEmpty() -> {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "No se encontraron canciones en tus carpetas de música.",
+                                        if (query.isNotBlank()) "Nada coincide con tu búsqueda."
+                                        else "No se encontraron canciones en tus carpetas de música.",
                                         color = scheme.onSurfaceVariant,
                                         fontSize = 14.sp
                                     )
@@ -339,12 +439,27 @@ fun App(
                             }
                             else -> {
                                 SongList(
-                                    songs = state.songs,
+                                    songs = visibleSongs,
                                     currentSong = state.currentSong,
                                     isPlaying = state.isPlaying,
-                                    onPlay = { index -> onPlayFrom(state.songs, index) },
+                                    onPlay = { index -> onPlayFrom(visibleSongs, index) },
                                     onMenu = { song -> menuSong = song }
                                 )
+                            }
+                        }
+                        LibraryTab.ARTISTS -> {
+                            if (artists.isEmpty()) {
+                                EmptyTabMessage("Aún no hay artistas. Añade carpetas con música en la pestaña Carpetas.")
+                            } else {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(artists, key = { it.first }) { (name, list) ->
+                                        GroupRow(
+                                            title = name,
+                                            subtitle = "${list.size} canciones",
+                                            onClick = { drill = Drill.Artist(name) }
+                                        )
+                                    }
+                                }
                             }
                         }
                         LibraryTab.ALBUMS -> {
@@ -363,21 +478,6 @@ fun App(
                                                     "${album.artist} · ${album.songs.size} canciones"
                                                 )
                                             }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        LibraryTab.ARTISTS -> {
-                            if (artists.isEmpty()) {
-                                EmptyTabMessage("Aún no hay artistas. Añade carpetas con música en la pestaña Carpetas.")
-                            } else {
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    items(artists, key = { it.first }) { (name, list) ->
-                                        GroupRow(
-                                            title = name,
-                                            subtitle = "${list.size} canciones",
-                                            onClick = { drill = Drill.Artist(name) }
                                         )
                                     }
                                 }
@@ -481,6 +581,7 @@ fun App(
                             }
                         }
                     }
+                    }
                 }
             }
 
@@ -494,7 +595,7 @@ fun App(
             }
 
             state.currentSong?.let { song ->
-                PlayerBar(
+                MiniPlayer(
                     song = song,
                     isPlaying = state.isPlaying,
                     positionMs = state.positionMs,
@@ -860,8 +961,14 @@ private fun NamePlaylistDialog(
     )
 }
 
+/**
+ * Mini-reproductor flotante como el de Android: tarjeta con degradado,
+ * progreso fino arriba y portada. En PC conserva transporte, búsqueda
+ * y volumen hasta que llegue el Now Playing completo (ahí la tarjeta
+ * queda solo con play/pausa y abre la pantalla al tocarla, como en el teléfono).
+ */
 @Composable
-private fun PlayerBar(
+private fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
     positionMs: Long,
@@ -880,75 +987,124 @@ private fun PlayerBar(
     // al soltar: buscar en cada tick entrecorta la reproducción.
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
-    Column(
-        modifier = Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 24.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song.title,
-                    color = scheme.onSurface,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(scheme.surfaceContainer, scheme.surface)
                 )
-                Text(
-                    text = song.artist,
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            )
+    ) {
+        Column {
+            // Barra de progreso fina e integrada
+            if (durationMs > 0) {
+                LinearProgressIndicator(
+                    progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp),
+                    color = scheme.primary,
+                    trackColor = scheme.surfaceVariant,
+                    strokeCap = StrokeCap.Round
                 )
             }
-            TransportIcon(
-                icon = AuralIcons.SkipPrevious,
-                description = "Anterior",
-                onClick = onPrevious
-            )
-            TransportIcon(
-                icon = if (isPlaying) AuralIcons.Pause else AuralIcons.Play,
-                description = if (isPlaying) "Pausar" else "Reproducir",
-                onClick = onTogglePlay,
-                prominent = true
-            )
-            TransportIcon(
-                icon = AuralIcons.SkipNext,
-                description = "Siguiente",
-                onClick = onNext
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            TransportIcon(
-                icon = if (muted || volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
-                description = if (muted) "Activar sonido" else "Silenciar",
-                onClick = onToggleMute
-            )
-            Slider(
-                value = volume / 100f,
-                onValueChange = { onVolumeChange((it * 100).roundToInt().coerceIn(0, 100)) },
-                modifier = Modifier.width(110.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = scheme.primary,
-                    activeTrackColor = scheme.primary,
-                    inactiveTrackColor = scheme.outlineVariant
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Portada (sin imagen todavía: el degradado del placeholder)
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(scheme.surfaceVariant, scheme.surface)
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = scheme.outline.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(7.dp)
+                        )
                 )
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = formatTime(positionMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
-            Slider(
-                value = if (dragging) dragValue else if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
-                onValueChange = { dragValue = it; dragging = true },
-                onValueChangeFinished = { dragging = false; onSeek(dragValue) },
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = scheme.primary,
-                    activeTrackColor = scheme.primary,
-                    inactiveTrackColor = scheme.outlineVariant
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
+                    )
+                    Text(
+                        text = song.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                TransportIcon(
+                    icon = AuralIcons.SkipPrevious,
+                    description = "Anterior",
+                    onClick = onPrevious
                 )
-            )
-            Text(text = formatTime(durationMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                TransportIcon(
+                    icon = if (isPlaying) AuralIcons.Pause else AuralIcons.Play,
+                    description = if (isPlaying) "Pausar" else "Reproducir",
+                    onClick = onTogglePlay,
+                    prominent = true
+                )
+                TransportIcon(
+                    icon = AuralIcons.SkipNext,
+                    description = "Siguiente",
+                    onClick = onNext
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TransportIcon(
+                    icon = if (muted || volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
+                    description = if (muted) "Activar sonido" else "Silenciar",
+                    onClick = onToggleMute
+                )
+                Slider(
+                    value = volume / 100f,
+                    onValueChange = { onVolumeChange((it * 100).roundToInt().coerceIn(0, 100)) },
+                    modifier = Modifier.width(110.dp),
+                    colors = SliderDefaults.colors(
+                        thumbColor = scheme.primary,
+                        activeTrackColor = scheme.primary,
+                        inactiveTrackColor = scheme.outlineVariant
+                    )
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+            ) {
+                Text(text = formatTime(positionMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                Slider(
+                    value = if (dragging) dragValue else if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
+                    onValueChange = { dragValue = it; dragging = true },
+                    onValueChangeFinished = { dragging = false; onSeek(dragValue) },
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    colors = SliderDefaults.colors(
+                        thumbColor = scheme.primary,
+                        activeTrackColor = scheme.primary,
+                        inactiveTrackColor = scheme.outlineVariant
+                    )
+                )
+                Text(text = formatTime(durationMs), color = scheme.onSurfaceVariant, fontSize = 12.sp)
+            }
         }
     }
 }
@@ -969,6 +1125,21 @@ private fun TransportIcon(
             modifier = Modifier.size(if (prominent) 30.dp else 24.dp)
         )
     }
+}
+
+/** Saludo según la hora, como en Android (sin nombre guardado todavía en PC). */
+private fun greetingForHour(): String = when (SystemDates.hour()) {
+    in 5..11 -> "Buenos días"
+    in 12..17 -> "Buenas tardes"
+    else -> "Buenas noches"
+}
+
+/** ¿El fondo es oscuro? (luminancia relativa sRGB, igual que Color.luminance). */
+private fun isDarkBackground(color: Color): Boolean {
+    fun lin(c: Float) =
+        if (c <= 0.04045f) c / 12.92f else ((c + 0.055f) / 1.055f).pow(2.4f)
+    val luminance = 0.2126f * lin(color.red) + 0.7152f * lin(color.green) + 0.0722f * lin(color.blue)
+    return luminance < 0.5f
 }
 
 /** ¿La ruta pertenece a la carpeta? (con límite: /Music no casa /Music2). */
