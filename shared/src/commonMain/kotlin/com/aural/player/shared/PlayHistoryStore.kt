@@ -9,10 +9,6 @@ package com.aural.player.shared
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -52,13 +48,8 @@ class PlayHistoryStore(private val directory: String) {
 
     private fun filePath(): String = "$directory/play_history.json"
 
-    private fun dayKey(date: LocalDate): String =
-        "${date.year}-${date.monthNumber.toString().padStart(2, '0')}-${date.dayOfMonth.toString().padStart(2, '0')}"
-
-    private fun lastDayKeys(count: Int): List<String> {
-        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        return (0 until count).map { dayKey(LocalDate.fromEpochDays(today.toEpochDays() - it)) }
-    }
+    private fun lastDayKeys(count: Int): List<String> =
+        (0 until count).map { SystemDates.keyDaysAgo(it) }
 
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
     private fun JsonObject.long(key: String): Long =
@@ -117,7 +108,7 @@ class PlayHistoryStore(private val directory: String) {
             mutex.withLock {
                 val root = readRoot()
                 val days = root.obj("days") ?: JsonObject(emptyMap())
-                val today = dayKey(Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date)
+                val today = SystemDates.keyDaysAgo(0)
                 val day = days.obj(today) ?: JsonObject(emptyMap())
                 val songs = day.obj("songs") ?: JsonObject(emptyMap())
                 val key = songId.toString()
