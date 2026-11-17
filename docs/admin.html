@@ -39,6 +39,10 @@
   .btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); flex: none; }
   .btn.ghost:hover { border-color: var(--txt); }
   .btn.block { width: 100%; padding: 14px 26px; font-size: 16px; }
+  #gate { display: none; }
+  body.locked #gate { display: block; }
+  body.locked header, body.locked main, body.locked footer { display: none; }
+  .gate-in { padding-top: 72px; padding-bottom: 72px; }
   .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   @media (max-width: 560px) { .plans { grid-template-columns: 1fr; } }
   .plan { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; cursor: pointer; text-align: left; color: var(--txt); font-family: inherit; transition: transform .2s ease, border-color .2s ease; }
@@ -56,11 +60,27 @@
   footer { border-top: 1px solid var(--line); padding: 24px 0 32px; color: var(--mut); font-size: 14px; text-align: center; }
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate">
+  <div class="wrap gate-in">
+    <h1>Acceso privado</h1>
+    <p class="sub">Esta página es solo para el admin de AuralPlayer. Escribe la contraseña para entrar.</p>
+    <div class="box">
+      <label for="gatePass">Contraseña</label>
+      <div class="row">
+        <input type="password" id="gatePass" placeholder="Contraseña del admin" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="btn primary" id="gateBtn">Entrar</button>
+      </div>
+      <p class="msg bad" id="gateMsg"></p>
+    </div>
+    <p class="hint">Si cierras la pestaña, tendrás que escribirla otra vez.</p>
+  </div>
+</div>
 <header>
   <div class="wrap head-in">
     <a class="brand" href="index.html"><img src="favicon.svg" alt="">AuralPlayer</a>
     <a class="back" href="index.html">Volver a la web</a>
+    <button type="button" class="btn ghost" id="lockBtn" style="padding: 8px 14px; font-size: 14px;">Bloquear</button>
   </div>
 </header>
 <main class="wrap">
@@ -239,6 +259,62 @@
       msg.textContent = err && err.message ? err.message : 'No se pudo generar el código.';
     }
   });
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+  // Solo el hash SHA-256 de la contraseña. La contraseña en texto plano
+  // nunca va en este archivo ni en el repo.
+  var GATE_HASH = 'e19127c00909840f063ea73db7e105f396b96e5099f946a69c2102231143c3cc';
+  var KEY = 'auralAdminUnlocked';
+  function unlock() {
+    document.body.classList.remove('locked');
+    try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+  }
+  function lock() {
+    try { sessionStorage.removeItem(KEY); } catch (e) {}
+    document.body.classList.add('locked');
+    var p = document.getElementById('gatePass');
+    if (p) { p.value = ''; p.focus(); }
+    var m = document.getElementById('gateMsg');
+    if (m) m.textContent = '';
+  }
+  function hex(buf) {
+    var bytes = new Uint8Array(buf), out = '';
+    for (var i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2);
+    return out;
+  }
+  function same(a, b) {
+    if (a.length !== b.length) return false;
+    var d = 0;
+    for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return d === 0;
+  }
+  function tryUnlock() {
+    var passEl = document.getElementById('gatePass');
+    var msg = document.getElementById('gateMsg');
+    if (!window.crypto || !crypto.subtle) {
+      msg.textContent = 'Este navegador no permite comprobar la contraseña (se necesita HTTPS).';
+      return Promise.resolve();
+    }
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(passEl.value)).then(function (digest) {
+      if (same(hex(digest), GATE_HASH)) { msg.textContent = ''; unlock(); }
+      else { msg.textContent = 'Contraseña incorrecta.'; passEl.value = ''; }
+    });
+  }
+  var btn = document.getElementById('gateBtn');
+  if (btn) btn.addEventListener('click', tryUnlock);
+  var passEl = document.getElementById('gatePass');
+  if (passEl) {
+    passEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryUnlock(); });
+    passEl.focus();
+  }
+  var lockBtn = document.getElementById('lockBtn');
+  if (lockBtn) lockBtn.addEventListener('click', lock);
+  try {
+    if (sessionStorage.getItem(KEY) === '1') unlock();
+  } catch (e) {}
 })();
 </script>
 </body>
