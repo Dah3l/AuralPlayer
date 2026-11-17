@@ -23,6 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -117,7 +121,7 @@ fun App(
                     }
                     else -> {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            itemsIndexed(state.songs) { index, song ->
+                            itemsIndexed(state.songs, key = { _, song -> song.filePath }) { index, song ->
                                 SongRow(
                                     song = song,
                                     isCurrent = index == state.currentIndex,
@@ -207,6 +211,10 @@ private fun PlayerBar(
     onPrevious: () -> Unit,
     onSeek: (Float) -> Unit
 ) {
+    // Mientras se arrastra, la barra sigue el dedo y solo se busca
+    // al soltar: buscar en cada tick entrecorta la reproducción.
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(0f) }
     Column(
         modifier = Modifier.fillMaxWidth().background(AuralSurface).padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
@@ -236,8 +244,9 @@ private fun PlayerBar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = formatTime(positionMs), color = AuralMuted, fontSize = 12.sp)
             Slider(
-                value = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
-                onValueChange = onSeek,
+                value = if (dragging) dragValue else if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
+                onValueChange = { dragValue = it; dragging = true },
+                onValueChangeFinished = { dragging = false; onSeek(dragValue) },
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = AuralTeal,
