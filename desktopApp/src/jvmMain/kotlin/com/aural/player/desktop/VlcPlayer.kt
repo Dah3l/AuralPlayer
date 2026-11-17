@@ -97,16 +97,17 @@ class VlcPlayer(
         lastPath = filePath
         val mediaPlayer = player ?: return false
         return try {
-            // VLC exige file:/// (tres barras) en Windows:
-            // File.toURI() produce file:/ (una barra) y VLC lo
-            // interpreta como ruta relativa contra el directorio
-            // del exe, así que ningún archivo abre ("Your input
-            // can't be opened"). rawPath ya trae la codificación
-            // correcta (%20, UTF-8), sin re-codificar. (Ruta UNC:
-            // authority != null y el toString() ya trae la forma
-            // correcta.)
-            val uri = File(filePath).toURI()
-            val mrl = if (uri.authority != null) uri.toString() else "file://" + uri.rawPath
+            // MRL 100% ASCII: toASCIIString() codifica como %XX
+            // cualquier carácter no ASCII (ñ, tildes). Si la ñ
+            // llega cruda en el String, JNA la codifica en
+            // windows-1252 (un byte 0xF1) y VLC no abre el
+            // archivo. vlcj solo codifica MRLs SIN esquema, así
+            // que el MRL con esquema "file" debe ir ya codificado.
+            // Además VLC exige file:/// (tres barras): toURI()
+            // da file:/ (una barra).
+            val ascii = File(filePath).toURI().toASCIIString()
+            val mrl = if (ascii.startsWith("file://")) ascii
+                      else ascii.replaceFirst("file:/", "file:///")
             mediaPlayer.media().play(mrl)
         } catch (_: Throwable) {
             false
