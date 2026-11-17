@@ -106,6 +106,9 @@ kotlin {
 }
 
 dependencies {
+    // ---- Módulo compartido (fase 3): lógica común con la versión PC ----
+    implementation(project(":shared"))
+
     // ---- Jetpack Compose + Material 3 ----
     // BOM 2026.09.00 = Compose 1.12.1, la misma base de CMP 1.12.2.
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
