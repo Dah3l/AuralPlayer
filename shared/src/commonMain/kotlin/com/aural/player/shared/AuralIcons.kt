@@ -108,4 +108,37 @@ object AuralIcons {
             lineTo(15f, 15f)
         }
     }.build()
+
+    /** Tres puntos verticales (menú de la canción). Cada punto son dos semicírculos. */
+    val MoreVert: ImageVector = ImageVector.Builder("MoreVert", 24.dp, 24.dp, 24f, 24f).apply {
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(10f, 5f)
+            arcTo(2f, 2f, 0f, false, true, 14f, 5f)
+            arcTo(2f, 2f, 0f, false, true, 10f, 5f)
+            close()
+            moveTo(10f, 12f)
+            arcTo(2f, 2f, 0f, false, true, 14f, 12f)
+            arcTo(2f, 2f, 0f, false, true, 10f, 12f)
+            close()
+            moveTo(10f, 19f)
+            arcTo(2f, 2f, 0f, false, true, 14f, 19f)
+            arcTo(2f, 2f, 0f, false, true, 10f, 19f)
+            close()
+        }
+    }.build()
+
+    /** X para quitar (de la playlist, del diálogo). */
+    val Close: ImageVector = ImageVector.Builder("Close", 24.dp, 24.dp, 24f, 24f).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round
+        ) {
+            moveTo(6f, 6f)
+            lineTo(18f, 18f)
+            moveTo(18f, 6f)
+            lineTo(6f, 18f)
+        }
+    }.build()
 }
