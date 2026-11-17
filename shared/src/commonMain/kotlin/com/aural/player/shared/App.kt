@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -102,7 +104,18 @@ fun App(
                         expanded = themeMenuExpanded,
                         onDismissRequest = { themeMenuExpanded = false }
                     ) {
-                        AppTheme.entries.forEach { item ->
+                        // Halloween y Navidad solo aparecen en su
+                        // temporada (igual que en Android); el tema
+                        // activo siempre se muestra aunque su
+                        // ventana haya terminado.
+                        val visibleThemes = AppTheme.entries.filter { item ->
+                            when (item) {
+                                AppTheme.HALLOWEEN -> item == state.theme || isHalloweenWindow()
+                                AppTheme.CHRISTMAS -> item == state.theme || isChristmasWindow()
+                                else -> true
+                            }
+                        }
+                        visibleThemes.forEach { item ->
                             DropdownMenuItem(
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -272,12 +285,26 @@ private fun PlayerBar(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            TransportButton(text = "⏮", onClick = onPrevious)
-            TransportButton(text = if (isPlaying) "⏸" else "▶", onClick = onTogglePlay, prominent = true)
-            TransportButton(text = "⏭", onClick = onNext)
+            TransportIcon(
+                icon = AuralIcons.SkipPrevious,
+                description = "Anterior",
+                onClick = onPrevious
+            )
+            TransportIcon(
+                icon = if (isPlaying) AuralIcons.Pause else AuralIcons.Play,
+                description = if (isPlaying) "Pausar" else "Reproducir",
+                onClick = onTogglePlay,
+                prominent = true
+            )
+            TransportIcon(
+                icon = AuralIcons.SkipNext,
+                description = "Siguiente",
+                onClick = onNext
+            )
             Spacer(modifier = Modifier.width(8.dp))
-            TransportButton(
-                text = if (muted || volume == 0) "🔇" else "🔊",
+            TransportIcon(
+                icon = if (muted || volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
+                description = if (muted) "Activar sonido" else "Silenciar",
                 onClick = onToggleMute
             )
             Slider(
@@ -311,13 +338,19 @@ private fun PlayerBar(
 }
 
 @Composable
-private fun TransportButton(text: String, onClick: () -> Unit, prominent: Boolean = false) {
+private fun TransportIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    prominent: Boolean = false
+) {
     val scheme = MaterialTheme.colorScheme
-    TextButton(onClick = onClick) {
-        Text(
-            text = text,
-            color = if (prominent) scheme.primary else scheme.onSurface,
-            fontSize = if (prominent) 26.sp else 20.sp
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (prominent) scheme.primary else scheme.onSurface,
+            modifier = Modifier.size(if (prominent) 30.dp else 24.dp)
         )
     }
 }
