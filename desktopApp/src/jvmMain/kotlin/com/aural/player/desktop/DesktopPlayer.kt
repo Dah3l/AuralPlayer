@@ -63,6 +63,13 @@ class DesktopPlayer(private val scope: CoroutineScope) {
         }
     }
 
+    /** Libera el motor y detiene el ticker. Se llama al cerrar la ventana. */
+    fun dispose() {
+        ticker?.cancel()
+        ticker = null
+        vlc.dispose()
+    }
+
     fun select(index: Int) {
         playIndex(index)
     }
