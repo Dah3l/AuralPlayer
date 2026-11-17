@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 private val AuralTeal = Color(0xFF2ED3B7)
 private val AuralBg = Color(0xFF121212)
@@ -48,9 +49,11 @@ fun App(
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onSeek: (Float) -> Unit
+    onSeek: (Float) -> Unit,
+    onVolumeChange: (Int) -> Unit,
+    onToggleMute: () -> Unit
 ) {
-    MaterialTheme(
+    MaterialTheme
         colorScheme = darkColorScheme(
             primary = AuralTeal,
             background = AuralBg,
@@ -152,7 +155,11 @@ fun App(
                     onTogglePlay = onTogglePlay,
                     onNext = onNext,
                     onPrevious = onPrevious,
-                    onSeek = onSeek
+                    onSeek = onSeek,
+                    volume = state.volume,
+                    muted = state.muted,
+                    onVolumeChange = onVolumeChange,
+                    onToggleMute = onToggleMute
                 )
             }
         }
@@ -209,7 +216,11 @@ private fun PlayerBar(
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onSeek: (Float) -> Unit
+    onSeek: (Float) -> Unit,
+    volume: Int,
+    muted: Boolean,
+    onVolumeChange: (Int) -> Unit,
+    onToggleMute: () -> Unit
 ) {
     // Mientras se arrastra, la barra sigue el dedo y solo se busca
     // al soltar: buscar en cada tick entrecorta la reproducción.
@@ -239,6 +250,21 @@ private fun PlayerBar(
             TransportButton(text = "⏮", onClick = onPrevious)
             TransportButton(text = if (isPlaying) "⏸" else "▶", onClick = onTogglePlay, prominent = true)
             TransportButton(text = "⏭", onClick = onNext)
+            Spacer(modifier = Modifier.width(8.dp))
+            TransportButton(
+                text = if (muted || volume == 0) "🔇" else "🔊",
+                onClick = onToggleMute
+            )
+            Slider(
+                value = volume / 100f,
+                onValueChange = { onVolumeChange((it * 100).roundToInt().coerceIn(0, 100)) },
+                modifier = Modifier.width(110.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = AuralTeal,
+                    activeTrackColor = AuralTeal,
+                    inactiveTrackColor = AuralLine
+                )
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
