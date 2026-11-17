@@ -97,7 +97,17 @@ class VlcPlayer(
         lastPath = filePath
         val mediaPlayer = player ?: return false
         return try {
-            mediaPlayer.media().play(File(filePath).toURI().toString())
+            // VLC exige file:/// (tres barras) en Windows:
+            // File.toURI() produce file:/ (una barra) y VLC lo
+            // interpreta como ruta relativa contra el directorio
+            // del exe, así que ningún archivo abre ("Your input
+            // can't be opened"). rawPath ya trae la codificación
+            // correcta (%20, UTF-8), sin re-codificar. (Ruta UNC:
+            // authority != null y el toString() ya trae la forma
+            // correcta.)
+            val uri = File(filePath).toURI()
+            val mrl = if (uri.authority != null) uri.toString() else "file://" + uri.rawPath
+            mediaPlayer.media().play(mrl)
         } catch (_: Throwable) {
             false
         }
