@@ -1,5 +1,6 @@
 package com.aural.player.desktop
 
+import com.aural.player.shared.AppTheme
 import com.aural.player.shared.PlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +111,10 @@ class DesktopPlayer(private val scope: CoroutineScope) {
         _state.update {
             it.copy(positionMs = (fraction * it.durationMs).toLong().coerceAtLeast(0L))
         }
+    }
+
+    fun setTheme(theme: AppTheme) {
+        _state.update { it.copy(theme = theme) }
     }
 
     fun setVolume(value: Int) {
