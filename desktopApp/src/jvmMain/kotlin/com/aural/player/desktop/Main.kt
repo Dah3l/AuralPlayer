@@ -28,7 +28,9 @@ fun main() = application {
             onTogglePlay = player::toggle,
             onNext = { player.next() },
             onPrevious = player::previous,
-            onSeek = player::seek
+            onSeek = player::seek,
+            onVolumeChange = player::setVolume,
+            onToggleMute = player::toggleMute
         )
     }
 }
