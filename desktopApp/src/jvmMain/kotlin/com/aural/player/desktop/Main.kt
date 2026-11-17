@@ -69,7 +69,8 @@ fun main() = application {
             onRenamePlaylist = player::renamePlaylist,
             onDeletePlaylist = player::deletePlaylist,
             onAddToPlaylist = player::addToPlaylist,
-            onRemoveFromPlaylist = player::removeFromPlaylist
+            onRemoveFromPlaylist = player::removeFromPlaylist,
+            onLoadTop10 = player::topSongs
         )
     }
 }
