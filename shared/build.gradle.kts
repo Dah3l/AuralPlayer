@@ -7,6 +7,9 @@
 // plugin com.android.library + androidTarget() es incompatible
 // con el DSL nuevo de AGP 9 (ambos builds fallaban al aplicar
 // el plugin multiplatform en este archivo).
+// Fase 3c: red (Ktor), JSON (kotlinx-serialization, solo API de
+// árbol: sin plugin de serialización) y fechas (kotlinx-datetime)
+// multiplataforma. Cada plataforma aporta su motor Ktor.
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -39,6 +42,20 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 implementation(compose.ui)
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                implementation("io.ktor:ktor-client-core:3.6.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.2")
+            }
+        }
+        named("androidMain") {
+            dependencies {
+                implementation("io.ktor:ktor-client-okhttp:3.6.1")
+            }
+        }
+        named("jvmMain") {
+            dependencies {
+                implementation("io.ktor:ktor-client-cio:3.6.1")
             }
         }
     }
