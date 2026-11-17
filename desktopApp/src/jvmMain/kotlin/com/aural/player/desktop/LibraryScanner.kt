@@ -36,8 +36,10 @@ object LibraryScanner {
         }
         val songs = mutableListOf<Song>()
         val batch = mutableListOf<Song>()
-        for ((index, file) in files.withIndex()) {
-            batch += readSong(index.toLong(), file)
+        for (file in files) {
+            // El id sale de la ruta: estable entre arranques y tras
+            // ordenar por título (el orden del escaneo no lo es).
+            batch += readSong(file.absolutePath.hashCode().toLong(), file)
             if (batch.size >= 50) {
                 songs += batch
                 onBatch(batch.toList())
