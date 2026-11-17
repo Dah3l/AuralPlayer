@@ -133,6 +133,25 @@ class VlcPlayer(
         }
     }
 
+    /** Volumen 0-100 (100 = nivel nominal de VLC). */
+    fun setVolume(value: Int) {
+        try {
+            player?.audio()?.setVolume(value.coerceIn(0, 100))
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** Silencio on/off; devuelve el estado nuevo. */
+    fun toggleMute(): Boolean {
+        return try {
+            val audio = player?.audio() ?: return false
+            audio.setMute(!audio.isMute())
+            audio.isMute()
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun stop() {
         try {
             player?.controls()?.stop()
