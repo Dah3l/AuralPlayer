@@ -18,7 +18,7 @@ fun main() = application {
     val player = remember { DesktopPlayer(appScope).also { it.start() } }
     val state by player.state.collectAsState()
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = { player.dispose(); exitApplication() },
         state = windowState,
         title = "AuralPlayer"
     ) {
