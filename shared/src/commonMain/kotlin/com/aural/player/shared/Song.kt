@@ -10,5 +10,7 @@ data class Song(
     val artist: String,
     val album: String,
     val durationMs: Long,
-    val filePath: String
+    val filePath: String,
+    /** Última modificación del archivo (ms epoch): alimenta "Agregadas recientemente". */
+    val dateAddedMs: Long = 0L
 )
