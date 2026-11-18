@@ -14,4 +14,7 @@ expect object LocalFiles {
     fun readText(path: String): String?
     fun writeText(path: String, text: String)
     fun mkdirs(path: String)
+    fun readBytes(path: String): ByteArray?
+    fun writeBytes(path: String, bytes: ByteArray)
+    fun deleteFile(path: String): Boolean
 }
