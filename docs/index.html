@@ -92,6 +92,7 @@
   .shot { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 18px; text-align: center; }
   .shot .mini { height: 190px; background: #0a0a0a; border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
   .shot img { width: 100%; height: 190px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; display: block; }
+  .shot picture { display: block; }
   .shot h3 { font-size: 16px; margin-bottom: 4px; }
   .shot p { color: var(--mut); font-size: 14px; }
   .dots { display: flex; gap: 10px; }
@@ -111,6 +112,7 @@
   footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
   footer p { margin-top: 12px; }
   footer p:first-child { margin-top: 0; }
+  footer a { text-decoration: underline; text-underline-offset: 3px; }
   .pro-hero { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; animation: float-y 4s ease-in-out infinite; }
   .pro-hero img { width: 56px; height: 56px; border-radius: 14px; }
   .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
@@ -232,21 +234,22 @@
 </style>
 </head>
 <body>
-<div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><div class="splash-inner"><img class="splash-logo" id="splashLogo" src="favicon.svg" alt=""><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div></div>
+<div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><div class="splash-inner"><img class="splash-logo" id="splashLogo" src="favicon.svg" alt="" fetchpriority="high"><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div></div>
 <noscript><style>.splash { display: none; }</style></noscript>
 <header>
   <div class="wrap head-in">
-    <a class="brand" href="/"><img src="favicon.svg" alt="AuralPlayer"> AuralPlayer</a>
+    <a class="brand" href="/"><img src="favicon.svg" alt=""> AuralPlayer</a>
     <nav id="mainNav"><a href="#funciones">Funciones</a><a href="#se-ve">Cómo se ve</a><a href="#pro">Pro</a><a href="#faq">FAQ</a><a href="#contacto">Contacto</a><a href="novedades.html">Novedades</a></nav>
     <button class="menu-btn" id="menuBtn" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <a class="btn primary head-cta" href="#inicio">Descargar</a>
   </div>
 </header>
 <div class="wrap">
+<main>
 
   <div class="hero" id="inicio">
     <div>
-      <img class="hero-logo" id="heroLogo" src="favicon.svg" alt="AuralPlayer">
+      <img class="hero-logo" id="heroLogo" src="favicon.svg" alt="">
       <h1><span id="heroWordmark">Aural<span>Player</span></span></h1>
       <p class="tagline">El sonido, sin ruido.</p>
       <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
@@ -290,7 +293,7 @@
     <p class="sec-sub">Un vistazo a lo que hace diferente a AuralPlayer.</p>
     <div class="shots">
       <div class="shot">
-        <img src="isla.png" alt="Dynamic Aural flotando sobre otra app" style="object-position: top">
+        <img src="isla.png" alt="Dynamic Aural flotando sobre otra app" style="object-position: top" loading="lazy" decoding="async" width="583" height="318">
         <h3>La isla siempre contigo</h3><p>Dynamic Aural flota sobre todo, con tus controles a un toque.</p>
       </div>
       <div class="shot">
@@ -298,7 +301,7 @@
         <h3>18 temas</h3><p>Bosque, Sakura, Medianoche y más. La app cambia contigo.</p>
       </div>
       <div class="shot">
-        <img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center">
+        <img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center" loading="lazy" decoding="async" width="1220" height="694">
         <h3>Letras en pantalla</h3><p>La letra te acompaña mientras suena la canción.</p>
       </div>
     </div>
@@ -306,7 +309,7 @@
 
   <section class="reveal" id="pro">
     <div class="pro-hero">
-      <img src="favicon.svg" alt="Aural Pro">
+      <img src="favicon.svg" alt="">
       <span class="pro-logo-badge">PRO</span>
     </div>
     <h2>Aural Pro</h2>
@@ -421,6 +424,7 @@
       </a>
     </div>
   </section>
+</main>
 
   <footer>
     <p class="ver">Versión actual v1.1.0 · Actualizada el 13 de noviembre de 2026 · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/CHANGELOG.md">Ver cambios</a></p>
@@ -575,7 +579,31 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 </script>
-<script src="https://cdn.botpress.cloud/webchat/v5.0/inject.js"></script>
-<script src="https://files.bpcontent.cloud/2026/11/08/21/20261108212657-R0MVGWK8.js" defer></script>
+<script>
+// Botpress diferido: el widget de soporte carga despues de que la pagina abre
+// (o al primer toque/tecla), para no frenar la carga inicial. El agente
+// funciona igual; solo aparece unos segundos mas tarde.
+(function () {
+  var loaded = false;
+  function loadBotpress() {
+    if (loaded) return; loaded = true;
+    var s1 = document.createElement('script');
+    s1.src = 'https://cdn.botpress.cloud/webchat/v5.0/inject.js';
+    s1.onload = function () {
+      var s2 = document.createElement('script');
+      s2.src = 'https://files.bpcontent.cloud/2026/11/08/21/20261108212657-R0MVGWK8.js';
+      document.body.appendChild(s2);
+    };
+    document.body.appendChild(s1);
+  }
+  window.addEventListener('load', function () {
+    if ('requestIdleCallback' in window) { requestIdleCallback(loadBotpress, { timeout: 2500 }); }
+    else { setTimeout(loadBotpress, 1500); }
+  });
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (e) {
+    window.addEventListener(e, loadBotpress, { once: true, passive: true });
+  });
+})();
+</script>
 </body>
 </html>
