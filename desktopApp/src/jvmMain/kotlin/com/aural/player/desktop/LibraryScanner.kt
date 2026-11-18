@@ -22,9 +22,15 @@ object LibraryScanner {
     /**
      * Escanea y va entregando canciones en tandas de 50 por [onBatch],
      * para que la UI se llene poco a poco en vez de esperar al final.
-     * Devuelve la lista completa ordenada por título.
+     * Si [artworkDir] no es null, el arte incrustado que se encuentre
+     * se guarda ahí como `<id>.jpg` (caché de portadas). Devuelve la
+     * lista completa ordenada por título.
      */
-    fun scan(root: File, onBatch: (List<Song>) -> Unit = {}): List<Song> {
+    fun scan(
+        root: File,
+        artworkDir: String? = null,
+        onBatch: (List<Song>) -> Unit = {}
+    ): List<Song> {
         if (!root.isDirectory) return emptyList()
         val files = try {
             root.walkTopDown()
@@ -39,7 +45,7 @@ object LibraryScanner {
         for (file in files) {
             // El id sale de la ruta: estable entre arranques y tras
             // ordenar por título (el orden del escaneo no lo es).
-            batch += readSong(file.absolutePath.hashCode().toLong(), file)
+            batch += readSong(file.absolutePath.hashCode().toLong(), file, artworkDir)
             if (batch.size >= 50) {
                 songs += batch
                 onBatch(batch.toList())
@@ -53,7 +59,11 @@ object LibraryScanner {
         return songs.sortedBy { it.title.lowercase() }
     }
 
-    private fun readSong(id: Long, file: File): Song {
+    /** Relee UN archivo (tras editar sus tags) con los tags ya nuevos. */
+    fun readSingle(file: File): Song =
+        readSong(file.absolutePath.hashCode().toLong(), file, artworkDir = null)
+
+    private fun readSong(id: Long, file: File, artworkDir: String?): Song {
         return try {
             val audio = AudioFileIO.read(file)
             val tag = audio.tag
@@ -63,10 +73,33 @@ object LibraryScanner {
                 ?: "Artista desconocido"
             val album = tag?.getFirst(FieldKey.ALBUM)?.takeIf { it.isNotBlank() } ?: ""
             val durationMs = (audio.audioHeader?.trackLength?.toLong() ?: 0L) * 1000L
-            Song(id, title, artist, album, durationMs, file.absolutePath)
+            // Arte incrustado → caché de portadas (si aún no está).
+            // La extensión no importa: el decodificador huele el
+            // contenido (un PNG guardado como .jpg abre igual).
+            try {
+                val data = tag?.firstArtwork?.binaryData
+                if (artworkDir != null && data != null && data.isNotEmpty()) {
+                    val out = File(artworkDir, "$id.jpg")
+                    if (!out.exists()) {
+                        out.parentFile?.mkdirs()
+                        out.writeBytes(data)
+                    }
+                }
+            } catch (_: Throwable) {
+                // Sin caché de arte: la canción se muestra igual
+            }
+            Song(id, title, artist, album, durationMs, file.absolutePath, file.lastModified())
         } catch (_: Throwable) {
             // Archivo ilegible: se muestra igual con el nombre del archivo.
-            Song(id, file.nameWithoutExtension, "Artista desconocido", "", 0L, file.absolutePath)
+            Song(
+                id,
+                file.nameWithoutExtension,
+                "Artista desconocido",
+                "",
+                0L,
+                file.absolutePath,
+                file.lastModified()
+            )
         }
     }
 }
