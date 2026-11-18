@@ -1,18 +1,34 @@
 package com.aural.player.desktop
 
 import com.aural.player.shared.AppTheme
+import com.aural.player.shared.CoverStore
 import com.aural.player.shared.DesktopPrefs
+import com.aural.player.shared.EditResult
 import com.aural.player.shared.LibraryData
 import com.aural.player.shared.LibraryStore
 import com.aural.player.shared.LrcLibClient
+import com.aural.player.shared.LyricsStore
 import com.aural.player.shared.PlayHistoryStore
 import com.aural.player.shared.PlaybackState
+import com.aural.player.shared.PlayerActions
 import com.aural.player.shared.Playlist
 import com.aural.player.shared.PrefsStore
+import com.aural.player.shared.RepeatMode
 import com.aural.player.shared.Song
+import com.aural.player.shared.SongOverride
+import com.aural.player.shared.StopMode
 import com.aural.player.shared.TopSong
+import java.awt.Desktop
+import java.awt.Image
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.io.File
+import javax.imageio.ImageIO
 import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
+import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,30 +40,44 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Estado de la app de escritorio: biblioteca escaneada, cola y
- * transporte. El motor es [VlcPlayer]; la UI solo observa el estado
- * y manda intenciones.
+ * Estado y motor de la app de escritorio: biblioteca escaneada, cola,
+ * transporte, modos de reproducción, temporizador, ecualizador,
+ * favoritas, portadas, letras y edición de tags. El motor es
+ * [VlcPlayer]; la UI solo observa el estado y manda intenciones
+ * por [PlayerActions].
  */
-class DesktopPlayer(private val scope: CoroutineScope) {
+class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private val vlc = VlcPlayer(
-        onFinished = { next(auto = true) },
+        onFinished = { onTrackFinished() },
         onError = { path -> _state.update { it.copy(error = "No se pudo reproducir: $path. Registro VLC: ${VlcPlayer.LOG_PATH}") } }
     )
     private var ticker: Job? = null
+    private var sleepJob: Job? = null
 
     // Datos locales de la PC: historial de escucha (Top 10),
-    // preferencias (tema, volumen, silencio) y biblioteca
-    // (carpetas + playlists). Misma carpeta.
+    // preferencias, biblioteca (carpetas + playlists + favoritas +
+    // metadatos superpuestos), portadas y letras. Misma carpeta.
     private val dataDir = File(System.getProperty("user.home"), ".auralplayer").absolutePath
     private val history = PlayHistoryStore(dataDir)
     private val prefs = PrefsStore(dataDir)
     private val library = LibraryStore(dataDir)
+    private val covers = CoverStore(dataDir)
+    private val lyrics = LyricsStore(dataDir)
+
+    // Metadatos superpuestos (ediciones que no se pudieron escribir
+    // en el archivo): viven en memoria y en library.json.
+    private var overrides: Map<String, SongOverride> = emptyMap()
+
+    // Historial de aleatorio: para que "anterior" vuelva a la
+    // canción que sonó antes y no a otra al azar.
+    private val shuffleHistory = mutableListOf<Int>()
 
     // Segundos escuchados pendientes de registrar: se acumulan en
     // el ticker y se guardan cada 30 s o al cambiar de canción.
@@ -58,32 +88,47 @@ class DesktopPlayer(private val scope: CoroutineScope) {
     fun start() {
         scope.launch(Dispatchers.IO) {
             try {
-                // Primero las preferencias guardadas (tema, volumen,
-                // silencio), para que la ventana abra como quedó.
+                // Primero las preferencias guardadas, para que la
+                // ventana abra como quedó (tema, volumen, modo, EQ).
                 try {
                     prefs.load()?.let { saved ->
                         val theme = AppTheme.entries.firstOrNull { it.name == saved.themeName }
                             ?: AppTheme.BOSQUE
+                        val repeat = runCatching {
+                            RepeatMode.valueOf(saved.repeatModeName)
+                        }.getOrDefault(RepeatMode.OFF)
                         _state.update {
                             it.copy(
                                 theme = theme,
                                 volume = saved.volume.coerceIn(0, 100),
-                                muted = saved.muted
+                                muted = saved.muted,
+                                repeatMode = repeat,
+                                shuffleEnabled = saved.shuffleEnabled,
+                                playbackSpeed = saved.playbackSpeed,
+                                eqEnabled = saved.eqEnabled,
+                                eqPreamp = saved.eqPreamp,
+                                eqAmps = saved.eqAmps
                             )
                         }
                     }
                 } catch (t: Throwable) {
                     // Sin preferencias guardadas: se abre con los valores base
                 }
-                // Carpetas + playlists guardadas (o la carpeta Música
-                // por defecto la primera vez).
+                // Carpetas + playlists + favoritas + superpuestos
+                // guardados (o la carpeta Música por defecto la
+                // primera vez).
                 val savedLibrary = try { library.load() } catch (t: Throwable) { null }
                 val folders = savedLibrary?.folders
                     ?.filter { it.isNotBlank() }
                     ?.takeIf { it.isNotEmpty() }
                     ?: listOf(LibraryScanner.defaultMusicDir().absolutePath)
+                overrides = savedLibrary?.overrides ?: emptyMap()
                 _state.update {
-                    it.copy(folders = folders, playlists = savedLibrary?.playlists ?: emptyList())
+                    it.copy(
+                        folders = folders,
+                        playlists = savedLibrary?.playlists ?: emptyList(),
+                        favorites = savedLibrary?.favorites?.toSet() ?: emptySet()
+                    )
                 }
                 // Después el escaneo (en tandas: la lista se va
                 // llenando) y después VLC, para que un fallo del
@@ -93,12 +138,19 @@ class DesktopPlayer(private val scope: CoroutineScope) {
                 if (vlcOk) {
                     vlc.setVolume(_state.value.volume)
                     if (_state.value.muted) vlc.toggleMute()
+                    vlc.setRate(_state.value.playbackSpeed)
+                    vlc.setEqualizer(
+                        _state.value.eqEnabled,
+                        _state.value.eqPreamp,
+                        _state.value.eqAmps
+                    )
                 }
                 _state.update {
                     it.copy(
                         songs = songs,
                         queue = songs,
                         scanning = false,
+                        eqBandFrequencies = if (vlcOk) vlc.equalizerBands() else emptyList(),
                         error = when {
                             !vlcOk && vlc.initError != null ->
                                 "No se pudo iniciar VLC: ${vlc.initError} (${vlc.diagnostics})"
@@ -120,13 +172,14 @@ class DesktopPlayer(private val scope: CoroutineScope) {
     /** Escanea todas las carpetas, sin duplicar rutas (pueden solaparse). */
     private fun scanFolders(folders: List<String>): List<Song> {
         val found = LinkedHashMap<String, Song>()
+        val artworkDir = covers.embeddedDir()
         for (folder in folders) {
             val dir = File(folder)
             if (!dir.isDirectory) continue
-            LibraryScanner.scan(dir) { batch ->
+            LibraryScanner.scan(dir, artworkDir) { batch ->
                 var changed = false
                 for (song in batch) {
-                    if (found.put(song.filePath, song) == null) changed = true
+                    if (found.put(song.filePath, withOverride(song)) == null) changed = true
                 }
                 if (changed) {
                     _state.update {
@@ -139,6 +192,12 @@ class DesktopPlayer(private val scope: CoroutineScope) {
             }
         }
         return found.values.sortedBy { it.title.lowercase() }
+    }
+
+    /** Aplica el metadato superpuesto si la canción tiene uno. */
+    private fun withOverride(song: Song): Song {
+        val override = overrides[song.filePath] ?: return song
+        return song.copy(title = override.title, artist = override.artist, album = override.album)
     }
 
     /** Re-escanea tras añadir o quitar una carpeta, sin perder la reproducción. */
@@ -174,12 +233,19 @@ class DesktopPlayer(private val scope: CoroutineScope) {
         flushHistory()
         ticker?.cancel()
         ticker = null
+        sleepJob?.cancel()
+        sleepJob = null
         vlc.release()
     }
 
+    // ---------------- Transporte ----------------
+
     /** Reproduce la canción [index] de la lista [list]: esa lista queda como cola. */
-    fun playFrom(list: List<Song>, index: Int) {
+    override fun playFrom(list: List<Song>, index: Int) {
         val song = list.getOrNull(index) ?: return
+        // Una lista distinta a la cola actual reinicia el historial
+        // de aleatorio: lo anterior ya no aplica.
+        if (list !== _state.value.queue) shuffleHistory.clear()
         flushHistory()
         if (!vlc.play(song.filePath)) {
             _state.update { it.copy(error = "No se pudo reproducir ${song.title}") }
@@ -198,143 +264,319 @@ class DesktopPlayer(private val scope: CoroutineScope) {
         startTicker()
     }
 
-    fun toggle() {
+    override fun playShuffled(list: List<Song>) {
+        if (list.isEmpty()) return
+        playFrom(list.shuffled(), 0)
+    }
+
+    override fun togglePlay() {
         val current = _state.value
         if (current.currentIndex < 0) {
-            if (current.songs.isNotEmpty()) playFrom(current.songs, 0)
+            if (current.queue.isNotEmpty()) playFrom(current.queue, 0)
+            else if (current.songs.isNotEmpty()) playFrom(current.songs, 0)
             return
         }
         vlc.toggle()
         _state.update { it.copy(isPlaying = vlc.isPlaying) }
     }
 
-    fun next(auto: Boolean = false) {
+    override fun next() {
         val current = _state.value
+        if (current.queue.isEmpty() || current.currentIndex < 0) return
+        if (current.shuffleEnabled) {
+            if (current.queue.size <= 1) {
+                playFrom(current.queue, 0)
+                return
+            }
+            shuffleHistory.add(current.currentIndex)
+            var nextIndex: Int
+            do {
+                nextIndex = Random.nextInt(current.queue.size)
+            } while (nextIndex == current.currentIndex)
+            playFrom(current.queue, nextIndex)
+            return
+        }
         val nextIndex = current.currentIndex + 1
         if (nextIndex < current.queue.size) {
             playFrom(current.queue, nextIndex)
-        } else if (auto) {
+        } else if (current.repeatMode == RepeatMode.ALL) {
+            playFrom(current.queue, 0)
+        }
+    }
+
+    override fun previous() {
+        val current = _state.value
+        if (current.currentIndex < 0) return
+        // Más de 3 s: vuelve al inicio de la misma canción.
+        if (current.positionMs > 3000L) {
+            playFrom(current.queue, current.currentIndex)
+            return
+        }
+        // En aleatorio, "anterior" vuelve a la que sonó antes.
+        if (current.shuffleEnabled && shuffleHistory.isNotEmpty()) {
+            val prevIndex = shuffleHistory.removeAt(shuffleHistory.lastIndex)
+            if (prevIndex in current.queue.indices) {
+                playFrom(current.queue, prevIndex)
+            }
+            return
+        }
+        if (current.currentIndex > 0) {
+            playFrom(current.queue, current.currentIndex - 1)
+        }
+    }
+
+    /** Fin de pista: parada programada, repetir uno, aleatorio, repetir todo o parar. */
+    private fun onTrackFinished() {
+        val current = _state.value
+        if (current.currentIndex < 0) return
+        // Parada al terminar la canción: se detiene y se apaga el modo.
+        if (current.stopMode == StopMode.SONG) {
+            vlc.stop()
+            _state.update { it.copy(isPlaying = false, positionMs = 0L, stopMode = null) }
+            return
+        }
+        if (current.repeatMode == RepeatMode.ONE) {
+            playFrom(current.queue, current.currentIndex)
+            return
+        }
+        if (current.shuffleEnabled) {
+            if (current.queue.size <= 1) {
+                vlc.stop()
+                _state.update { it.copy(isPlaying = false, positionMs = 0L) }
+                return
+            }
+            shuffleHistory.add(current.currentIndex)
+            var nextIndex: Int
+            do {
+                nextIndex = Random.nextInt(current.queue.size)
+            } while (nextIndex == current.currentIndex)
+            playFrom(current.queue, nextIndex)
+            return
+        }
+        val nextIndex = current.currentIndex + 1
+        if (nextIndex < current.queue.size) {
+            playFrom(current.queue, nextIndex)
+        } else if (current.stopMode == StopMode.QUEUE) {
+            vlc.stop()
+            _state.update { it.copy(isPlaying = false, positionMs = 0L, stopMode = null) }
+        } else if (current.repeatMode == RepeatMode.ALL) {
+            playFrom(current.queue, 0)
+        } else {
             vlc.stop()
             _state.update { it.copy(isPlaying = false, positionMs = 0L) }
         }
     }
 
-    fun previous() {
-        val current = _state.value
-        if (current.positionMs > 3000L) {
-            playFrom(current.queue, current.currentIndex)
-        } else if (current.currentIndex > 0) {
-            playFrom(current.queue, current.currentIndex - 1)
-        }
-    }
-
-    fun seek(fraction: Float) {
+    override fun seek(fraction: Float) {
         vlc.seek(fraction)
         _state.update {
             it.copy(positionMs = (fraction * it.durationMs).toLong().coerceAtLeast(0L))
         }
     }
 
-    fun setTheme(theme: AppTheme) {
-        _state.update { it.copy(theme = theme) }
-        persistPrefs()
-    }
-
-    fun setVolume(value: Int) {
+    override fun setVolume(value: Int) {
         val clamped = value.coerceIn(0, 100)
         vlc.setVolume(clamped)
         _state.update { it.copy(volume = clamped) }
         persistPrefs()
     }
 
-    fun toggleMute() {
+    override fun toggleMute() {
         _state.update { it.copy(muted = vlc.toggleMute()) }
         persistPrefs()
     }
 
-    /** Busca la letra de una canción en línea (LRCLIB + respaldo). */
-    suspend fun fetchLyrics(song: Song): String? {
-        return try {
-            LrcLibClient.searchLyrics(song.artist, song.title, (song.durationMs / 1000).toInt())
-        } catch (t: Throwable) {
-            null
+    override fun setTheme(theme: AppTheme) {
+        _state.update { it.copy(theme = theme) }
+        persistPrefs()
+    }
+
+    // ---------------- Cola ----------------
+
+    override fun enqueue(song: Song) {
+        _state.update { st ->
+            if (st.queue.isEmpty()) st.copy(queue = listOf(song))
+            else st.copy(queue = st.queue + song)
         }
     }
 
-    /** Las canciones más escuchadas (Top 10) según el historial local. */
-    suspend fun topSongs(limit: Int = 10): List<TopSong> {
-        return try {
-            history.getTopSongs(limit)
-        } catch (t: Throwable) {
-            emptyList()
+    override fun enqueueAll(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        _state.update { st -> st.copy(queue = st.queue + songs) }
+    }
+
+    override fun removeFromQueue(index: Int) {
+        val current = _state.value
+        if (index !in current.queue.indices) return
+        val queue = current.queue.toMutableList()
+        queue.removeAt(index)
+        when {
+            queue.isEmpty() -> {
+                flushHistory()
+                vlc.stop()
+                _state.update {
+                    it.copy(queue = emptyList(), currentIndex = -1, isPlaying = false, positionMs = 0L)
+                }
+            }
+            index == current.currentIndex -> {
+                // Suena la que cayó en su lugar, o la anterior si era la última.
+                val newIndex = if (index < queue.size) index else queue.size - 1
+                playFrom(queue, newIndex)
+            }
+            index < current.currentIndex -> {
+                _state.update { it.copy(queue = queue, currentIndex = it.currentIndex - 1) }
+            }
+            else -> {
+                _state.update { it.copy(queue = queue) }
+            }
         }
     }
+
+    override fun moveQueueItem(from: Int, to: Int) {
+        val current = _state.value
+        if (from == to || from !in current.queue.indices || to !in current.queue.indices) return
+        val queue = current.queue.toMutableList()
+        val item = queue.removeAt(from)
+        queue.add(to, item)
+        var index = current.currentIndex
+        if (index == from) {
+            index = to
+        } else if (from < index && to >= index) {
+            index -= 1
+        } else if (from > index && to <= index) {
+            index += 1
+        }
+        _state.update { it.copy(queue = queue, currentIndex = index) }
+    }
+
+    // ---------------- Modo, velocidad, temporizador, EQ ----------------
+
+    /** El botón de modo cicla: sin repetir → todo → uno → aleatorio → sin repetir. */
+    override fun cyclePlaybackMode() {
+        val current = _state.value
+        val (repeat, shuffle) = when {
+            current.shuffleEnabled -> RepeatMode.OFF to false
+            current.repeatMode == RepeatMode.OFF -> RepeatMode.ALL to false
+            current.repeatMode == RepeatMode.ALL -> RepeatMode.ONE to false
+            else -> RepeatMode.OFF to true
+        }
+        _state.update { it.copy(repeatMode = repeat, shuffleEnabled = shuffle) }
+        persistPrefs()
+    }
+
+    override fun setPlaybackSpeed(speed: Float) {
+        vlc.setRate(speed)
+        _state.update { it.copy(playbackSpeed = speed) }
+        persistPrefs()
+    }
+
+    override fun startSleepTimer(minutes: Int) {
+        sleepJob?.cancel()
+        sleepJob = scope.launch {
+            delay(minutes * 60_000L)
+            vlc.pause()
+            _state.update { it.copy(isPlaying = false, sleepMinutes = null) }
+        }
+        _state.update { it.copy(sleepMinutes = minutes, stopMode = null) }
+    }
+
+    override fun setStopMode(mode: StopMode) {
+        sleepJob?.cancel()
+        sleepJob = null
+        _state.update { it.copy(stopMode = mode, sleepMinutes = null) }
+    }
+
+    override fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        _state.update { it.copy(sleepMinutes = null, stopMode = null) }
+    }
+
+    override fun applyEqualizer(enabled: Boolean, preamp: Float, amps: List<Float>) {
+        _state.update { it.copy(eqEnabled = enabled, eqPreamp = preamp, eqAmps = amps) }
+        vlc.setEqualizer(enabled, preamp, amps)
+        persistPrefs()
+    }
+
+    // ---------------- Carpetas ----------------
 
     /** Abre el explorador para añadir una carpeta de música y re-escanea. */
-    fun addFolder() {
+    override fun addFolder() {
         val picked = pickFolder() ?: return
         val normalized = picked.trimEnd('/', '\\')
         val current = _state.value.folders
         if (current.any { it.trimEnd('/', '\\').equals(normalized, ignoreCase = true) }) return
         val updated = current + picked
         _state.update { it.copy(folders = updated) }
-        saveLibrary(updated, _state.value.playlists)
+        saveLibrary()
         rescan(updated)
     }
 
     /** Quita una carpeta del escaneo (las canciones dejan de listarse) y re-escanea. */
-    fun removeFolder(path: String) {
+    override fun removeFolder(path: String) {
         val updated = _state.value.folders - path
         if (updated.size == _state.value.folders.size) return
         _state.update { it.copy(folders = updated) }
-        saveLibrary(updated, _state.value.playlists)
+        saveLibrary()
         rescan(updated)
     }
 
-    fun createPlaylist(name: String) {
+    // ---------------- Playlists ----------------
+
+    override fun createPlaylist(name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        val playlist = Playlist(
-            id = System.currentTimeMillis().toString() + "-" + Random.nextInt(1000),
-            name = trimmed
-        )
+        val playlist = Playlist(id = newPlaylistId(), name = trimmed)
         val updated = _state.value.playlists + playlist
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
     /** Crea la playlist y añade la canción en el mismo gesto. */
-    fun createPlaylistAndAdd(name: String, song: Song) {
+    override fun createPlaylistAndAdd(name: String, song: Song) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val playlist = Playlist(
-            id = System.currentTimeMillis().toString() + "-" + Random.nextInt(1000),
+            id = newPlaylistId(),
             name = trimmed,
             songPaths = listOf(song.filePath)
         )
         val updated = _state.value.playlists + playlist
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
-    fun renamePlaylist(id: String, name: String) {
+    override fun createPlaylistAndAddAll(name: String, songs: List<Song>) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || songs.isEmpty()) return
+        val playlist = Playlist(
+            id = newPlaylistId(),
+            name = trimmed,
+            songPaths = songs.map { it.filePath }.distinct()
+        )
+        val updated = _state.value.playlists + playlist
+        _state.update { it.copy(playlists = updated) }
+        saveLibrary()
+    }
+
+    override fun renamePlaylist(id: String, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val updated = _state.value.playlists.map {
             if (it.id == id) it.copy(name = trimmed) else it
         }
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
-    fun deletePlaylist(id: String) {
+    override fun deletePlaylist(id: String) {
         val updated = _state.value.playlists.filter { it.id != id }
         if (updated.size == _state.value.playlists.size) return
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
-    fun addToPlaylist(id: String, song: Song) {
+    override fun addToPlaylist(id: String, song: Song) {
         val updated = _state.value.playlists.map {
             if (it.id == id && song.filePath !in it.songPaths) {
                 it.copy(songPaths = it.songPaths + song.filePath)
@@ -343,21 +585,320 @@ class DesktopPlayer(private val scope: CoroutineScope) {
             }
         }
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
-    fun removeFromPlaylist(id: String, song: Song) {
+    override fun addAllToPlaylist(id: String, songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val paths = songs.map { it.filePath }.toSet()
+        val updated = _state.value.playlists.map {
+            if (it.id == id) {
+                it.copy(songPaths = it.songPaths + paths.filter { path -> path !in it.songPaths })
+            } else {
+                it
+            }
+        }
+        _state.update { it.copy(playlists = updated) }
+        saveLibrary()
+    }
+
+    override fun removeFromPlaylist(id: String, song: Song) {
         val updated = _state.value.playlists.map {
             if (it.id == id) it.copy(songPaths = it.songPaths - song.filePath) else it
         }
         _state.update { it.copy(playlists = updated) }
-        saveLibrary(_state.value.folders, updated)
+        saveLibrary()
     }
 
-    private fun saveLibrary(folders: List<String>, playlists: List<Playlist>) {
+    private fun newPlaylistId(): String =
+        System.currentTimeMillis().toString() + "-" + Random.nextInt(1000)
+
+    // ---------------- Favoritas y borrado ----------------
+
+    override fun toggleFavorite(song: Song) {
+        _state.update { st ->
+            val favorites = if (song.filePath in st.favorites) {
+                st.favorites - song.filePath
+            } else {
+                st.favorites + song.filePath
+            }
+            st.copy(favorites = favorites)
+        }
+        saveLibrary()
+    }
+
+    override fun addFavorites(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        _state.update { st ->
+            st.copy(favorites = st.favorites + songs.map { it.filePath })
+        }
+        saveLibrary()
+    }
+
+    /**
+     * Borra canciones DE VERDAD (los archivos se eliminan del disco),
+     * las saca de la biblioteca, la cola, las playlists, las
+     * favoritas y los superpuestos. Si sonaba una de ellas, se para.
+     */
+    override fun deleteSongs(songs: List<Song>) {
+        val paths = songs.map { it.filePath }.toSet()
+        if (paths.isEmpty()) return
+        val current = _state.value
+        val currentDeleted = current.currentSong?.filePath in paths
+        if (currentDeleted) {
+            flushHistory()
+            vlc.stop()
+        }
+        scope.launch(Dispatchers.IO) {
+            for (path in paths) {
+                try {
+                    File(path).delete()
+                } catch (_: Throwable) {
+                }
+            }
+            overrides = overrides - paths
+            val playingPath = if (currentDeleted) null else current.currentSong?.filePath
+            _state.update { st ->
+                val newQueue = st.queue.filter { it.filePath !in paths }
+                val newIndex = playingPath?.let { p ->
+                    newQueue.indexOfFirst { it.filePath == p }
+                } ?: -1
+                st.copy(
+                    songs = st.songs.filter { it.filePath !in paths },
+                    queue = newQueue,
+                    currentIndex = if (currentDeleted) -1 else newIndex,
+                    isPlaying = if (currentDeleted) false else st.isPlaying,
+                    positionMs = if (currentDeleted) 0L else st.positionMs,
+                    playlists = st.playlists.map {
+                        it.copy(songPaths = it.songPaths.filter { path -> path !in paths })
+                    },
+                    favorites = st.favorites - paths
+                )
+            }
+            saveLibrary()
+        }
+    }
+
+    // ---------------- Portadas, información y letras ----------------
+
+    override fun loadCoverBytes(song: Song): ByteArray? {
+        return try {
+            covers.load(song.id)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    override fun hasCustomCover(song: Song): Boolean {
+        return try {
+            covers.hasCustom(song.id)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /** Elige una imagen, la baja a 600px como mucho y la guarda como portada. */
+    override fun pickCustomCover(song: Song): Boolean {
+        return try {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Elige una portada"
+                fileSelectionMode = JFileChooser.FILES_ONLY
+                fileFilter = FileNameExtensionFilter(
+                    "Imágenes",
+                    "jpg", "jpeg", "png", "gif", "bmp"
+                )
+                isAcceptAllFileFilterUsed = false
+            }
+            if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return false
+            val file = chooser.selectedFile ?: return false
+            val img = ImageIO.read(file) ?: return false
+            val longest = if (img.width >= img.height) img.width else img.height
+            val scale = if (longest > 600) 600.0 / longest else 1.0
+            val width = (img.width * scale).roundToInt().coerceAtLeast(1)
+            val height = (img.height * scale).roundToInt().coerceAtLeast(1)
+            val scaled = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+            val graphics = scaled.createGraphics()
+            graphics.drawImage(img.getScaledInstance(width, height, Image.SCALE_SMOOTH), 0, 0, null)
+            graphics.dispose()
+            val out = ByteArrayOutputStream()
+            if (!ImageIO.write(scaled, "jpg", out)) return false
+            covers.saveCustom(song.id, out.toByteArray())
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    override fun removeCustomCover(song: Song) {
+        try {
+            covers.removeCustom(song.id)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Edita título/artista/álbum: primero en el ARCHIVO (y se
+     * reincrustra la portada personalizada si la hay); si el
+     * archivo no se deja escribir, los cambios quedan guardados
+     * solo en AuralPlayer (superpuesto), sin perder nada.
+     */
+    override fun editMetadata(
+        song: Song,
+        title: String,
+        artist: String,
+        album: String
+    ): EditResult {
+        val file = File(song.filePath)
+        if (!file.isFile) return EditResult.FAILED
+        val customBytes = try {
+            if (covers.hasCustom(song.id)) covers.load(song.id) else null
+        } catch (_: Throwable) {
+            null
+        }
+        val written = DesktopTagEditor.writeMetadata(file, title, artist, album, customBytes)
+        return if (written) {
+            // El archivo manda: se suelta el superpuesto y se
+            // relee el archivo con los tags ya nuevos.
+            overrides = overrides - song.filePath
+            val fresh = withOverride(LibraryScanner.readSingle(file))
+            if (pendingSong?.filePath == song.filePath) pendingSong = fresh
+            _state.update { st ->
+                st.copy(
+                    songs = st.songs.map { if (it.filePath == song.filePath) fresh else it },
+                    queue = st.queue.map { if (it.filePath == song.filePath) fresh else it }
+                )
+            }
+            saveLibrary()
+            EditResult.SAVED_FILE
+        } else {
+            overrides = overrides + (song.filePath to SongOverride(title, artist, album))
+            val overlaid = withOverride(song)
+            if (pendingSong?.filePath == song.filePath) pendingSong = overlaid
+            _state.update { st ->
+                st.copy(
+                    songs = st.songs.map { if (it.filePath == song.filePath) overlaid else it },
+                    queue = st.queue.map { if (it.filePath == song.filePath) overlaid else it }
+                )
+            }
+            saveLibrary()
+            EditResult.SAVED_OVERLAY
+        }
+    }
+
+    /** Letra guardada, o buscada en línea y guardada para la próxima. */
+    override suspend fun loadLyrics(song: Song): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                lyrics.load(song.id)
+            } catch (_: Throwable) {
+                null
+            } ?: try {
+                val found = LrcLibClient.searchLyrics(
+                    song.artist,
+                    song.title,
+                    (song.durationMs / 1000).toInt()
+                )
+                if (!found.isNullOrBlank()) {
+                    try {
+                        lyrics.save(song.id, found)
+                    } catch (_: Throwable) {
+                    }
+                }
+                found
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    /** Busca la letra con el nombre que escribió el usuario y la guarda. */
+    override suspend fun searchAndSaveLyrics(song: Song, track: String, artist: String): Boolean {
+        return try {
+            val found = LrcLibClient.searchLyrics(
+                artist,
+                track,
+                (song.durationMs / 1000).toInt()
+            )
+            if (found.isNullOrBlank()) return false
+            withContext(Dispatchers.IO) {
+                try {
+                    lyrics.save(song.id, found)
+                } catch (_: Throwable) {
+                }
+            }
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /** Elige un archivo .lrc del disco y lo guarda como letra de la canción. */
+    override fun pickLrcFile(song: Song): Boolean {
+        return try {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Elige un archivo de letra (.lrc)"
+                fileSelectionMode = JFileChooser.FILES_ONLY
+                fileFilter = FileNameExtensionFilter("Archivos de letra", "lrc")
+                isAcceptAllFileFilterUsed = false
+            }
+            if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return false
+            val file = chooser.selectedFile ?: return false
+            val content = file.readText()
+            if (content.isBlank()) return false
+            lyrics.save(song.id, content)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    // ---------------- Historial ----------------
+
+    /** Las canciones más escuchadas según el historial local. */
+    override suspend fun loadTopSongs(limit: Int): List<TopSong> {
+        return try {
+            history.getTopSongs(limit)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    // ---------------- Sistema ----------------
+
+    override fun copyText(text: String) {
+        try {
+            Toolkit.getDefaultToolkit().systemClipboard
+                .setContents(StringSelection(text), null)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** Abre la carpeta del archivo en el Explorador de Windows. */
+    override fun revealInExplorer(path: String) {
+        try {
+            val desktop = Desktop.getDesktop()
+            val parent = File(path).parentFile
+            if (parent != null && parent.isDirectory) {
+                desktop.open(parent)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    // ---------------- Persistencia ----------------
+
+    private fun saveLibrary() {
         scope.launch(Dispatchers.IO) {
             try {
-                library.save(LibraryData(folders, playlists))
+                val st = _state.value
+                library.save(
+                    LibraryData(
+                        folders = st.folders,
+                        playlists = st.playlists,
+                        favorites = st.favorites.toList(),
+                        overrides = overrides
+                    )
+                )
             } catch (t: Throwable) {
                 // Guardar la biblioteca nunca debe romper la app
             }
@@ -385,7 +926,19 @@ class DesktopPlayer(private val scope: CoroutineScope) {
     private fun persistPrefs() {
         val s = _state.value
         scope.launch(Dispatchers.IO) {
-            prefs.save(DesktopPrefs(s.theme.name, s.volume, s.muted))
+            prefs.save(
+                DesktopPrefs(
+                    themeName = s.theme.name,
+                    volume = s.volume,
+                    muted = s.muted,
+                    repeatModeName = s.repeatMode.name,
+                    shuffleEnabled = s.shuffleEnabled,
+                    playbackSpeed = s.playbackSpeed,
+                    eqEnabled = s.eqEnabled,
+                    eqPreamp = s.eqPreamp,
+                    eqAmps = s.eqAmps
+                )
+            )
         }
     }
 
