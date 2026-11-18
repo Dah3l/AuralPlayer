@@ -42,6 +42,7 @@ kotlin {
             dependencies {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
+                implementation(compose.animation)
                 implementation(compose.material3)
                 implementation(compose.ui)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
