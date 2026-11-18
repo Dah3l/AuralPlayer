@@ -30,6 +30,16 @@ actual object LocalFiles {
     actual fun mkdirs(path: String) {
         File(path).mkdirs()
     }
+
+    actual fun readBytes(path: String): ByteArray? =
+        try { File(path).readBytes() } catch (e: Exception) { null }
+
+    actual fun writeBytes(path: String, bytes: ByteArray) {
+        File(path).writeBytes(bytes)
+    }
+
+    actual fun deleteFile(path: String): Boolean =
+        try { File(path).delete() } catch (e: Exception) { false }
 }
 
 actual object SystemDates {
