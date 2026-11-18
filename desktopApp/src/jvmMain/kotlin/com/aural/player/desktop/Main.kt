@@ -54,23 +54,7 @@ fun main() = application {
     ) {
         App(
             state = state,
-            onPlayFrom = player::playFrom,
-            onTogglePlay = player::toggle,
-            onNext = { player.next() },
-            onPrevious = player::previous,
-            onSeek = player::seek,
-            onVolumeChange = player::setVolume,
-            onToggleMute = player::toggleMute,
-            onThemeChange = player::setTheme,
-            onAddFolder = player::addFolder,
-            onRemoveFolder = player::removeFolder,
-            onCreatePlaylist = player::createPlaylist,
-            onCreatePlaylistAndAdd = player::createPlaylistAndAdd,
-            onRenamePlaylist = player::renamePlaylist,
-            onDeletePlaylist = player::deletePlaylist,
-            onAddToPlaylist = player::addToPlaylist,
-            onRemoveFromPlaylist = player::removeFromPlaylist,
-            onLoadTop10 = player::topSongs
+            actions = player
         )
     }
 }
