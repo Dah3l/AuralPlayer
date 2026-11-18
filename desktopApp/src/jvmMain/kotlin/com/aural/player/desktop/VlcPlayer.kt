@@ -3,6 +3,7 @@ package com.aural.player.desktop
 import com.sun.jna.NativeLibrary
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
+import uk.co.caprica.vlcj.player.base.Equalizer
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import java.io.File
@@ -27,6 +28,12 @@ class VlcPlayer(
 
     private var factory: MediaPlayerFactory? = null
     private var player: MediaPlayer? = null
+
+    /** Velocidad elegida: VLC la pierde al cambiar de pista, se reaplica al sonar. */
+    private var currentRate: Float = 1f
+
+    /** Ecualizador reutilizado entre aplicaciones (VLC lo toma por referencia). */
+    private var equalizer: Equalizer? = null
 
     /** Mensaje del último fallo de inicialización, para mostrarlo en la UI. */
     var initError: String? = null
@@ -71,6 +78,17 @@ class VlcPlayer(
                 events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
                     override fun finished(mediaPlayer: MediaPlayer) {
                         onFinished()
+                    }
+
+                    override fun playing(mediaPlayer: MediaPlayer) {
+                        // La velocidad se pierde al cambiar de pista:
+                        // se reaplica cada vez que una empieza a sonar.
+                        if (currentRate != 1f) {
+                            try {
+                                mediaPlayer.controls().setRate(currentRate)
+                            } catch (_: Throwable) {
+                            }
+                        }
                     }
 
                     override fun error(mediaPlayer: MediaPlayer) {
@@ -133,6 +151,56 @@ class VlcPlayer(
         }
     }
 
+    /** Velocidad de reproducción (0.5–2x). Se reaplica sola en cada pista. */
+    fun setRate(rate: Float) {
+        currentRate = rate
+        try {
+            player?.controls()?.setRate(rate)
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun pause() {
+        try {
+            player?.controls()?.pause()
+        } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Ecualizador de 10 bandas de VLC. Apagado = plano (ceros): nunca
+     * se pasa null a VLC. El estado lo guarda quien llama; aquí solo
+     * se aplica (Equalizer no expone lectura de bandas).
+     */
+    fun setEqualizer(enabled: Boolean, preamp: Float, amps: List<Float>) {
+        try {
+            val mediaPlayer = player ?: return
+            val factoryRef = factory ?: return
+            val eq = equalizer ?: factoryRef.equalizer().newEqualizer().also { equalizer = it }
+            val bandCount = try {
+                factoryRef.equalizer().bands().size
+            } catch (_: Throwable) {
+                amps.size
+            }
+            eq.setPreamp(if (enabled) preamp else 0f)
+            val values = FloatArray(bandCount.coerceAtLeast(1)) { i ->
+                if (enabled) amps.getOrElse(i) { 0f } else 0f
+            }
+            eq.setAmps(values)
+            mediaPlayer.audio().setEqualizer(eq)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** Frecuencias centrales de las bandas del ecualizador (Hz), según VLC. */
+    fun equalizerBands(): List<Float> {
+        return try {
+            factory?.equalizer()?.bands() ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
     /** Volumen 0-100 (100 = nivel nominal de VLC). */
     fun setVolume(value: Int) {
         try {
@@ -170,6 +238,7 @@ class VlcPlayer(
         }
         player = null
         factory = null
+        equalizer = null
     }
 
     /**
