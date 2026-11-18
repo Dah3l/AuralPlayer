@@ -219,6 +219,13 @@ cuanto las veas.
   acepta pero no hace nada. VLC 3.0 busca los plugins en
   <carpeta de libvlccore.dll>/plugins (config_GetLibDir en Win32):
   el layout empaquetado (vlc/plugins/) ya cumple eso.
+- vlcj 4.12.1 (verificado contra el jar 2026-11-18): velocidad por
+  ControlsApi.setRate (se pierde al cambiar de pista: reaplicar en el
+  evento `playing`); EQ por factory.equalizer().newEqualizer() +
+  setPreamp/setAmps(float[]) + AudioApi.setEqualizer;
+  EqualizerApi.bands() da las frecuencias centrales; Equalizer NO
+  expone lectura de bandas (el estado lo guarda quien llama); EQ
+  apagado = plano (ceros), nunca setEqualizer(null).
 - En Windows, File.toURI() produce file:/C:/... (UNA barra) y VLC
   lo interpreta como ruta RELATIVA contra el directorio del exe:
   ningún archivo abre ("Your input can't be opened", la ruta
@@ -234,7 +241,7 @@ cuanto las veas.
   esquema "file" lo pasa tal cual. Verificado con el registro
   de VLC (byte 0xF1 en el MRL), 2026-11-17.
 
-## Estado actual (2026-11-15)
+## Estado actual (2026-11-18)
 
 - **v1.1.0 (versionCode 11): RELEASEADA.** Dahel confirmó el 2026-11-15
   que disparó `release.yml` hace días. Subida a Apklis sin confirmar.
@@ -250,6 +257,20 @@ cuanto las veas.
   mínimos. La app Android queda intacta. El Pro va DESPUÉS de la PC
   (decisión de Dahel 2026-11-15, cambió el orden).
 - **En curso (Malen-IA):** PC fase 3a (cimiento, 2026-11-17): androidTarget en `shared` + app depende de `:shared`; migración limpia (LrcParser + temas) VERIFICADA 2026-11-17: ambos builds verdes + 1.2.10 funciona en Windows; fase 3c CONSTRUIDA 2026-11-17 (LrcLibClient/SongKey/PlayHistoryStore/Seasonal a shared con Ktor 3.6.1 + serialization-json 1.13.0 + datetime 0.6.2; iconos vectoriales + icono de ventana + persistencia tema/volumen en PC, 1.2.11); fix 1.2.12 (deps directas en desktopApp: el empaquetado no arrastró las transitivas de shared y el picker de temas moría con NoClassDefFoundError kotlinx/datetime/Clock$System); UIs de biblioteca 1.2.13 (pestañas Canciones/Álbumes/Artistas/Playlists/Carpetas, cola por vista, carpetas añadibles, playlists persistentes); pendiente verificar ambos builds en verde antes del re-cableado de Android.
+- **1.2.14 VERIFICADA por Dahel 2026-11-18:** ambos builds verdes,
+  temas abren sin error en Windows. Persistencia del tema tras
+  cerrar/reabrir sin confirmar.
+- **En curso (Malen-IA):** PC 1.2.15, paridad con Android
+  (CONSTRUIDA 2026-11-18, pendiente verificar ambos builds en verde
+  + prueba en Windows): Now Playing completo (fondo ambiental con
+  paleta de la portada, letra sincronizada, menú ⋮ con los 10
+  ítems, temporizador, velocidad, EQ VLC de 10 bandas, cambio de
+  portada, edición de tags reales, compartir), barra A-Z en
+  canciones/artistas/álbumes, multiselección con las mismas
+  funciones del teléfono, sección "Para ti", vistas de detalle,
+  favoritas, cola reordenable, contraste según fondo oscuro/claro.
+  Contrato UI↔motor: `PlayerActions` en shared; la app Android
+  sigue intacta (re-cableado pendiente).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -324,3 +345,4 @@ cuanto las veas.
 | 2026-11-15 | Codi | Páginas web de activación Pro (Opción A, sin backend): activar.html (planes 100/500/1000 CUP, descuento contra promos.json, botón WhatsApp a +53 59648522), admin.html (generador de par de claves + genera código con verificación interna; la semilla nunca se guarda ni se sube), promos.json (lista vacía), ed25519.js (Ed25519 puro sin CDN + Base32 RFC 4648; claves y firmas verificadas contra OpenSSL) | docs/activar.html, docs/admin.html, docs/promos.json, docs/ed25519.js |
 | 2026-11-17 | Codi | Puerta con contraseña en admin.html (a petición de Dahel): pantalla de acceso que oculta todo hasta poner la contraseña; verificación SHA-256 en el navegador, solo el hash en el archivo; sesión recordada por pestaña + botón Bloquear; probada (mala/buena/Enter/recarga/bloqueo) y flujos viejos intactos | docs/admin.html |
 | 2026-11-18 | Malen-IA | Web PageSpeed: Botpress diferido (carga tras load/idle o primer toque; el agente sigue igual), fetchpriority high en el logo del splash, lazy+dimensiones en isla/letras, landmark main, alts decorativos vacíos, subrayado en enlaces del footer; WebP de isla/letras preparados (los sube Dahel por web; el swap a picture va después) | docs/index.html |
+| 2026-11-18 | Malen-IA | PC 1.2.15 paridad con Android: Now Playing completo (fondo ambiental, letra sincronizada, menú ⋮ 10 ítems, temporizador, velocidad, EQ VLC 10 bandas, portadas, edición de tags, compartir), barra A-Z, multiselección, "Para ti", vistas de detalle, favoritas, cola reordenable, contraste por tema; contrato PlayerActions; packageVersion 1.2.15 | shared/.../App.kt, NowPlayingScreen.kt, LibraryViews.kt, SongMenuSheet.kt, PlaylistDialogs.kt, NowPlayingDialogs.kt, SelectionBars.kt, AlphabetBar.kt, CoverArt.kt, MeshBackground.kt, PlayerActions.kt, AuralLink.kt, CoverStore.kt, LyricsStore.kt, ImageDecoding*.kt, PlaybackState.kt, LibraryStore.kt, PrefsStore.kt, AuralIcons.kt, build.gradle.kts; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, LibraryScanner.kt, DesktopTagEditor.kt, Main.kt, build.gradle.kts |
