@@ -240,6 +240,20 @@ cuanto las veas.
   vlcj solo codifica MRLs SIN esquema (NativeUri.encodeUri): con
   esquema "file" lo pasa tal cual. Verificado con el registro
   de VLC (byte 0xF1 en el MRL), 2026-11-17.
+- `Modifier.focusable()` está en `androidx.compose.foundation`
+  (NO en `androidx.compose.ui.focus`): el import mal puesto da
+  "Unresolved reference 'focusable'" en commonMain. Verificado
+  2026-11-18 (App.kt:64).
+- El `Slider` de Material3 con slots `thumb`/`track` y las APIs de
+  `SliderState` (`value`, `valueRange`) son @ExperimentalMaterial3Api:
+  sin `@OptIn(ExperimentalMaterial3Api::class)` en el composable que
+  los usa, el build falla. El `Slider` simple (sin slots) NO lo
+  necesita. Verificado 2026-11-18 (NowPlayingScreen.kt).
+- Una clave `String?` no se puede pasar a un `get`/`put` que pide
+  `String` aunque otra variable ya se haya chequeado nula: el
+  smart-cast no cruza de una variable a otra. Capturar primero un
+  val no-nulo (`val songKey = key ?: return`). Verificado 2026-11-18
+  (CoverArt.kt).
 
 ## Estado actual (2026-11-18)
 
@@ -261,7 +275,10 @@ cuanto las veas.
   temas abren sin error en Windows. Persistencia del tema tras
   cerrar/reabrir sin confirmar.
 - **En curso (Malen-IA):** PC 1.2.15, paridad con Android
-  (CONSTRUIDA 2026-11-18, pendiente verificar ambos builds en verde
+  (CONSTRUIDA 2026-11-18; android.yml falló esa noche con 3 errores
+  de compilación en shared — import focusable mal puesto, clave nula
+  en CoverArt, Slider experimental sin @OptIn — fix pusheado
+  2026-11-18, pendiente re-correr ambos builds en verde
   + prueba en Windows): Now Playing completo (fondo ambiental con
   paleta de la portada, letra sincronizada, menú ⋮ con los 10
   ítems, temporizador, velocidad, EQ VLC de 10 bandas, cambio de
@@ -346,3 +363,4 @@ cuanto las veas.
 | 2026-11-17 | Codi | Puerta con contraseña en admin.html (a petición de Dahel): pantalla de acceso que oculta todo hasta poner la contraseña; verificación SHA-256 en el navegador, solo el hash en el archivo; sesión recordada por pestaña + botón Bloquear; probada (mala/buena/Enter/recarga/bloqueo) y flujos viejos intactos | docs/admin.html |
 | 2026-11-18 | Malen-IA | Web PageSpeed: Botpress diferido (carga tras load/idle o primer toque; el agente sigue igual), fetchpriority high en el logo del splash, lazy+dimensiones en isla/letras, landmark main, alts decorativos vacíos, subrayado en enlaces del footer; WebP de isla/letras preparados (los sube Dahel por web; el swap a picture va después) | docs/index.html |
 | 2026-11-18 | Malen-IA | PC 1.2.15 paridad con Android: Now Playing completo (fondo ambiental, letra sincronizada, menú ⋮ 10 ítems, temporizador, velocidad, EQ VLC 10 bandas, portadas, edición de tags, compartir), barra A-Z, multiselección, "Para ti", vistas de detalle, favoritas, cola reordenable, contraste por tema; contrato PlayerActions; packageVersion 1.2.15 | shared/.../App.kt, NowPlayingScreen.kt, LibraryViews.kt, SongMenuSheet.kt, PlaylistDialogs.kt, NowPlayingDialogs.kt, SelectionBars.kt, AlphabetBar.kt, CoverArt.kt, MeshBackground.kt, PlayerActions.kt, AuralLink.kt, CoverStore.kt, LyricsStore.kt, ImageDecoding*.kt, PlaybackState.kt, LibraryStore.kt, PrefsStore.kt, AuralIcons.kt, build.gradle.kts; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, LibraryScanner.kt, DesktopTagEditor.kt, Main.kt, build.gradle.kts |
+| 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
