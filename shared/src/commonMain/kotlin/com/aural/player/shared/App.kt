@@ -690,7 +690,7 @@ fun App(
                                             LazyVerticalGrid(
                                                 columns = GridCells.Adaptive(160.dp),
                                                 state = artistsGridState,
-                                                contentPadding = PaddingValues(12.dp),
+                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 24.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 modifier = Modifier.fillMaxSize()
@@ -734,7 +734,7 @@ fun App(
                                             LazyVerticalGrid(
                                                 columns = GridCells.Adaptive(160.dp),
                                                 state = albumsGridState,
-                                                contentPadding = PaddingValues(12.dp),
+                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 24.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 modifier = Modifier.fillMaxSize()
@@ -952,7 +952,10 @@ fun App(
                         durationMs = state.durationMs,
                         loadCoverBytes = actions::loadCoverBytes,
                         onOpen = { showNowPlaying = true },
-                        onTogglePlay = { actions.togglePlay() }
+                        onTogglePlay = { actions.togglePlay() },
+                        muted = state.muted,
+                        volume = state.volume,
+                        onToggleMute = { actions.toggleMute() }
                     )
                 }
             }
@@ -1229,7 +1232,10 @@ private fun MiniPlayer(
     durationMs: Long,
     loadCoverBytes: (Song) -> ByteArray?,
     onOpen: () -> Unit,
-    onTogglePlay: () -> Unit
+    onTogglePlay: () -> Unit,
+    muted: Boolean,
+    volume: Int,
+    onToggleMute: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -1286,6 +1292,16 @@ private fun MiniPlayer(
                         color = scheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+                // Bocina: suena o silenciada según el estado real
+                // (misma regla que en el Now Playing).
+                IconButton(onClick = onToggleMute) {
+                    Icon(
+                        imageVector = if (muted || volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
+                        contentDescription = if (muted) "Activar sonido" else "Silenciar",
+                        tint = scheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
                 IconButton(onClick = onTogglePlay) {
