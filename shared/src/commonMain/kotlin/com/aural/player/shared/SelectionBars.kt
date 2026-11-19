@@ -114,7 +114,7 @@ fun SelectionBottomBar(
             SelectionActionButton(
                 icon = AuralIcons.Heart,
                 label = "Favorita",
-                tint = Color(0xFFE5484D),
+                tint = scheme.error,
                 onClick = onFavorite
             )
             SelectionActionButton(
