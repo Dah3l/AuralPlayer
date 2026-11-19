@@ -1,5 +1,6 @@
 package com.aural.player.desktop
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -18,6 +19,10 @@ import com.aural.player.shared.App
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.awt.Dimension
+
+/** Versión de la app de escritorio (se muestra en Buscar actualizaciones). */
+private const val VERSION_NAME = "1.2.16"
 
 /**
  * Icono de la ventana dibujado en código: fondo oscuro redondeado
@@ -42,7 +47,7 @@ private fun auralWindowIcon(): Painter {
 }
 
 fun main() = application {
-    val windowState = rememberWindowState(width = 1000.dp, height = 650.dp)
+    val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
     val appScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     val player = remember { DesktopPlayer(appScope).also { it.start() } }
     val state by player.state.collectAsState()
@@ -52,9 +57,12 @@ fun main() = application {
         title = "AuralPlayer",
         icon = remember { auralWindowIcon() }
     ) {
+        // Tamaño mínimo: con menos la biblioteca de dos columnas no cabe.
+        LaunchedEffect(Unit) { window.minimumSize = Dimension(960, 620) }
         App(
             state = state,
-            actions = player
+            actions = player,
+            versionName = VERSION_NAME
         )
     }
 }
