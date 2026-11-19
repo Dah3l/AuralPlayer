@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.height
@@ -38,10 +39,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -201,8 +204,14 @@ fun SongList(
 ) {
     // La barra de desplazamiento de escritorio va a la derecha; la
     // barra A-Z (que vive fuera) deja 14 dp libres para no taparla.
+    // El contenido deja 16 dp libres a la derecha para que la barra
+    // no tape los botones de acción de las filas.
     Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(end = 16.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
             if (header != null) {
                 item { header() }
             }
@@ -302,8 +311,26 @@ fun DrillView(
 ) {
     val scheme = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
+    // Colapso del encabezado: al subir, la barra superior fija muestra
+    // retroceder + portada + info de la sección (igual que en el móvil).
+    // La altura del encabezado se lee del primer ítem visible.
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else {
+                val headerPx = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == 0 }?.size ?: 1
+                (listState.firstVisibleItemScrollOffset / headerPx.toFloat())
+                    .coerceIn(0f, 1f)
+            }
+        }
+    }
     Box(modifier = modifier.fillMaxSize()) {
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(end = 16.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
         item {
             // ---- Cabecera como en el móvil: portada cuadrada y visible ----
             Row(
@@ -424,6 +451,55 @@ fun DrillView(
             }
         }
     }
+        // Barra superior fija: aparece con fundido cuando el encabezado
+        // se pierde al scrollear (igual que en el móvil).
+        if (collapseFraction > 0.01f) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .background(scheme.surface.copy(alpha = collapseFraction))
+                    .alpha(collapseFraction)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = AuralIcons.ArrowBack,
+                        contentDescription = "Volver",
+                        tint = scheme.onBackground,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                CoverArt(
+                    bitmap = rememberCoverImage(coverSong, loadCoverBytes),
+                    modifier = Modifier.size(40.dp),
+                    cornerRadius = 8.dp,
+                    showBorder = false
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
         LazyListScrollbar(
             state = listState,
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
