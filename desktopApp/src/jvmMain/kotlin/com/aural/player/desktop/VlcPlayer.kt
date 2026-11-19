@@ -32,6 +32,10 @@ class VlcPlayer(
     /** Velocidad elegida: VLC la pierde al cambiar de pista, se reaplica al sonar. */
     private var currentRate: Float = 1f
 
+    /** Volumen y silencio actuales: se reaplican en cada pista, como la velocidad. */
+    private var currentVolume: Int = 100
+    private var currentMuted: Boolean = false
+
     /** Ecualizador reutilizado entre aplicaciones (VLC lo toma por referencia). */
     private var equalizer: Equalizer? = null
 
@@ -88,6 +92,14 @@ class VlcPlayer(
                                 mediaPlayer.controls().setRate(currentRate)
                             } catch (_: Throwable) {
                             }
+                        }
+                        // Volumen y silencio también se reaplican en cada
+                        // pista: si VLC los pierde al cambiar, la app no
+                        // se queda en mute sin que nadie lo pidiera.
+                        try {
+                            mediaPlayer.audio().setVolume(currentVolume)
+                            mediaPlayer.audio().setMute(currentMuted)
+                        } catch (_: Throwable) {
                         }
                     }
 
@@ -203,20 +215,23 @@ class VlcPlayer(
 
     /** Volumen 0-100 (100 = nivel nominal de VLC). */
     fun setVolume(value: Int) {
+        currentVolume = value.coerceIn(0, 100)
         try {
-            player?.audio()?.setVolume(value.coerceIn(0, 100))
+            player?.audio()?.setVolume(currentVolume)
         } catch (_: Throwable) {
         }
     }
 
-    /** Silencio on/off; devuelve el estado nuevo. */
-    fun toggleMute(): Boolean {
-        return try {
-            val audio = player?.audio() ?: return false
-            audio.setMute(!audio.isMute())
-            audio.isMute()
+    /**
+     * Silencio absoluto: true = sin sonido, false = sonido. No depende
+     * del estado previo de VLC (el toggle relativo se desincronizaba
+     * con la UI y dejaba la app en mute sin que nadie lo pidiera).
+     */
+    fun setMute(muted: Boolean) {
+        currentMuted = muted
+        try {
+            player?.audio()?.setMute(muted)
         } catch (_: Throwable) {
-            false
         }
     }
 
