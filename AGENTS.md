@@ -254,6 +254,28 @@ cuanto las veas.
   smart-cast no cruza de una variable a otra. Capturar primero un
   val no-nulo (`val songKey = key ?: return`). Verificado 2026-11-18
   (CoverArt.kt).
+- El callback `finished` de VLC corre en el hilo de eventos de VLC:
+  llamar ahí a `play()`/`onTrackFinished()` es deadlock y la app se
+  queda pegada al terminar la canción. Despachar a la corrutina de la
+  app (`scope.launch { onTrackFinished() }`). `dispose()` tampoco puede
+  liberar VLC sonando en el hilo de la ventana: stop primero y liberar
+  en hilo daemon, no bloqueante, o la ventana no cierra. Verificado
+  2026-11-19 (1.2.16).
+- Volumen y mute desincronizados: volumen y mute eran banderas
+  independientes — volumen 0 persistido en prefs.json se veía como
+  mute, pero el botón de mute hacía toggle RELATIVO
+  (`setMute(!isMute())`) y no sonaba nada: silencio pegado para
+  siempre. Mute ABSOLUTO (`setMute(Boolean)`), volumen/mute unificados
+  (volumen>0 = desmutear, volumen 0 = mutear), memoria del último
+  volumen (`lastVolume`) para restaurar al desmutear, reaplicar
+  volumen+mute en cada pista (evento `playing`) y autocuración al abrir
+  (volumen guardado <=0 → 100, sin mute). Verificado 2026-11-19 (1.2.16).
+- Scrollbar de escritorio en KMP: `VerticalScrollbar` solo existe en
+  JVM — expect/actual (`DesktopScrollbar.kt` + `DesktopScrollbarJvm.kt`
+  real + `DesktopScrollbarAndroid.kt` no-op). La barra A-Z necesita
+  14 dp de padding final para no tapar la scrollbar; la scrollbar va
+  dentro del mismo Box que la lista, alineada a la derecha. Verificado
+  2026-11-19 (1.2.16).
 
 ## Estado actual (2026-11-18)
 
@@ -288,6 +310,21 @@ cuanto las veas.
   favoritas, cola reordenable, contraste según fondo oscuro/claro.
   Contrato UI↔motor: `PlayerActions` en shared; la app Android
   sigue intacta (re-cableado pendiente).
+- **En curso (Malen-IA):** PC 1.2.16, adaptación a Windows según la
+  lista de Dahel (CONSTRUIDA y PUSHEADA 2026-11-19, 12 archivos + este
+  AGENTS.md, todos SHA MATCH): fix de cierre (dispose no bloqueante +
+  stop antes de liberar VLC) y de fin de canción (onFinished fuera del
+  hilo de eventos de VLC, era deadlock); volumen rehecho (mute absoluto,
+  memoria del volumen anterior, reaplicación por pista, autocuración
+  volumen<=0→100 al abrir); menú ⋮ completo (Buscar actualizaciones,
+  Apoyar, Contacto, Ajustes — pantallas nuevas Donate/Contact/Settings
+  en shared); Now Playing en dos columnas en ventana ancha (≥900 dp,
+  portada con tope 240–400 dp); "Para ti" dentro de la lista + tarjetas
+  con tope 340 dp; barras de desplazamiento de escritorio (expect/actual
+  VerticalScrollbar); detalle/Top10/Temas sin pestañas; cabecera de
+  detalle cuadrada 200 dp; ventana 1280×800, mínimo 960×620;
+  packageVersion 1.2.16. Pendiente: re-correr android.yml y desktop.yml
+  en verde + prueba en Windows.
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -364,3 +401,4 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | Web PageSpeed: Botpress diferido (carga tras load/idle o primer toque; el agente sigue igual), fetchpriority high en el logo del splash, lazy+dimensiones en isla/letras, landmark main, alts decorativos vacíos, subrayado en enlaces del footer; WebP de isla/letras preparados (los sube Dahel por web; el swap a picture va después) | docs/index.html |
 | 2026-11-18 | Malen-IA | PC 1.2.15 paridad con Android: Now Playing completo (fondo ambiental, letra sincronizada, menú ⋮ 10 ítems, temporizador, velocidad, EQ VLC 10 bandas, portadas, edición de tags, compartir), barra A-Z, multiselección, "Para ti", vistas de detalle, favoritas, cola reordenable, contraste por tema; contrato PlayerActions; packageVersion 1.2.15 | shared/.../App.kt, NowPlayingScreen.kt, LibraryViews.kt, SongMenuSheet.kt, PlaylistDialogs.kt, NowPlayingDialogs.kt, SelectionBars.kt, AlphabetBar.kt, CoverArt.kt, MeshBackground.kt, PlayerActions.kt, AuralLink.kt, CoverStore.kt, LyricsStore.kt, ImageDecoding*.kt, PlaybackState.kt, LibraryStore.kt, PrefsStore.kt, AuralIcons.kt, build.gradle.kts; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, LibraryScanner.kt, DesktopTagEditor.kt, Main.kt, build.gradle.kts |
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
+| 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
