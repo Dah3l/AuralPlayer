@@ -204,12 +204,12 @@ fun SongList(
 ) {
     // La barra de desplazamiento de escritorio va a la derecha; la
     // barra A-Z (que vive fuera) deja 14 dp libres para no taparla.
-    // El contenido deja 16 dp libres a la derecha para que la barra
-    // no tape los botones de acción de las filas.
+    // El contenido deja 24 dp libres a la derecha para que la barra
+    // respire y no tape los botones de acción de las filas.
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(end = 16.dp),
+            contentPadding = PaddingValues(end = 24.dp),
             modifier = Modifier.fillMaxSize()
         ) {
             if (header != null) {
@@ -328,7 +328,7 @@ fun DrillView(
     Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(end = 16.dp),
+        contentPadding = PaddingValues(end = 24.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
@@ -460,7 +460,7 @@ fun DrillView(
                     .fillMaxWidth()
                     .background(scheme.surface.copy(alpha = collapseFraction))
                     .alpha(collapseFraction)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(start = 8.dp, end = 24.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
