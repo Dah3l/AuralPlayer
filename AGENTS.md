@@ -298,8 +298,15 @@ cuanto las veas.
 - Portadas a resolución completa = RAM por las nubes: decodeImageBitmap
   decodificaba el JPEG/PNG tal cual (1500 px ≈ 9 MB) y el caché
   guardaba 120 → 1 GB+. Bajar a 512 px en el decode (Skia Surface +
-  drawImageRect src→dst) y caché a 60; tope de heap -Xmx768m en
-  applicationDefaultJvmArgs. Verificado 2026-11-19 (1.2.17).
+  drawImageRect src→dst) y caché a 60; tope de heap -Xmx768m con
+  jvmArgs("-Xmx768m"). Verificado 2026-11-19 (1.2.17).
+- `applicationDefaultJvmArgs` NO existe en el DSL de Compose Desktop
+  (`compose.desktop.application` = JvmApplication): el build falla en
+  configuración con 'Unresolved reference'. El tope de heap va con
+  `jvmArgs("-Xmx768m")` (método vararg de JvmApplication, verificado
+  contra el jar del plugin 1.12.2 — la clase tiene getJvmArgs/jvmArgs,
+  no setter). Verificado 2026-11-19 (1.2.17, rompió assembleDebug y se
+  arregló el mismo día).
 
 ## Estado actual (2026-11-18)
 
@@ -365,7 +372,7 @@ cuanto las veas.
   lectura real de VLC al abrir (VlcPlayer.volume()/isMute() + sync en
   start()). RAM: portadas decodificadas a 512 px máx
   (ImageDecodingJvm, Surface.makeRasterN32Premul + drawImageRect),
-  caché de portadas 120→60, -Xmx768m (applicationDefaultJvmArgs), mesh
+  caché de portadas 120→60, -Xmx768m (jvmArgs), mesh
   más lento (56 s/68 s). packageVersion 1.2.17. Pendiente: correr
   android.yml y desktop.yml en verde + prueba en Windows (incl. RAM
   en el Administrador de tareas).
