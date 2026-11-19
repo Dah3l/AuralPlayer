@@ -276,6 +276,12 @@ cuanto las veas.
   14 dp de padding final para no tapar la scrollbar; la scrollbar va
   dentro del mismo Box que la lista, alineada a la derecha. Verificado
   2026-11-19 (1.2.16).
+- Al añadir un import, NO reemplazar la línea del import vecino: al
+  poner `BoxWithConstraints` en lugar de `Box` se perdió el import de
+  `Box` y `compileAndroidMain` falló con 18 errores (Unresolved
+  reference 'Box' + cascadas de @Composable). Añadir la línea nueva,
+  nunca reutilizar la de otro símbolo. Verificado 2026-11-19 (1.2.16,
+  NowPlayingScreen.kt).
 
 ## Estado actual (2026-11-18)
 
@@ -324,7 +330,9 @@ cuanto las veas.
   VerticalScrollbar); detalle/Top10/Temas sin pestañas; cabecera de
   detalle cuadrada 200 dp; ventana 1280×800, mínimo 960×620;
   packageVersion 1.2.16. Pendiente: re-correr android.yml y desktop.yml
-  en verde + prueba en Windows.
+  en verde + prueba en Windows. Fix 2026-11-19: android.yml falló por el
+  import `Box` perdido al añadir `BoxWithConstraints` (18 errores, todos
+  cascada); import restaurado y pusheado (SHA MATCH), pendiente re-correr.
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -402,3 +410,4 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | PC 1.2.15 paridad con Android: Now Playing completo (fondo ambiental, letra sincronizada, menú ⋮ 10 ítems, temporizador, velocidad, EQ VLC 10 bandas, portadas, edición de tags, compartir), barra A-Z, multiselección, "Para ti", vistas de detalle, favoritas, cola reordenable, contraste por tema; contrato PlayerActions; packageVersion 1.2.15 | shared/.../App.kt, NowPlayingScreen.kt, LibraryViews.kt, SongMenuSheet.kt, PlaylistDialogs.kt, NowPlayingDialogs.kt, SelectionBars.kt, AlphabetBar.kt, CoverArt.kt, MeshBackground.kt, PlayerActions.kt, AuralLink.kt, CoverStore.kt, LyricsStore.kt, ImageDecoding*.kt, PlaybackState.kt, LibraryStore.kt, PrefsStore.kt, AuralIcons.kt, build.gradle.kts; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, LibraryScanner.kt, DesktopTagEditor.kt, Main.kt, build.gradle.kts |
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
+| 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
