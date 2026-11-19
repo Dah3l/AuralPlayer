@@ -69,7 +69,8 @@ fun rememberCoverImage(song: Song?, loadBytes: (Song) -> ByteArray?): ImageBitma
             bitmap = null
             return@LaunchedEffect
         }
-        CoverImageCache.get(key)?.let {
+        val songKey = key ?: return@LaunchedEffect
+        CoverImageCache.get(songKey)?.let {
             bitmap = it
             return@LaunchedEffect
         }
@@ -77,7 +78,7 @@ fun rememberCoverImage(song: Song?, loadBytes: (Song) -> ByteArray?): ImageBitma
             runCatching { loadBytes(song) }.getOrNull()
         } ?: return@LaunchedEffect
         val decoded = runCatching { decodeImageBitmap(bytes) }.getOrNull() ?: return@LaunchedEffect
-        CoverImageCache.put(key, decoded)
+        CoverImageCache.put(songKey, decoded)
         bitmap = decoded
     }
     return bitmap
