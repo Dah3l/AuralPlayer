@@ -13,6 +13,32 @@ enum class EditResult {
     FAILED
 }
 
+/** Un resultado de búsqueda de YouTube (solo audio). */
+data class YoutubeResult(
+    val videoId: String,
+    val title: String,
+    val uploader: String,
+    val durationSec: Long,
+    val thumbnailUrl: String?
+)
+
+/** Estado de una descarga de YouTube. */
+enum class DownloadStatus {
+    QUEUED,
+    DOWNLOADING,
+    DONE,
+    FAILED
+}
+
+/** Una descarga de YouTube en curso o terminada. */
+data class YoutubeDownload(
+    val videoId: String,
+    val title: String,
+    val status: DownloadStatus,
+    val progress: Float,
+    val error: String? = null
+)
+
 interface PlayerActions {
     // ---- Transporte ----
     fun playFrom(list: List<Song>, index: Int)
@@ -73,6 +99,12 @@ interface PlayerActions {
 
     // ---- Historial ----
     suspend fun loadTopSongs(limit: Int): List<TopSong>
+
+    // ---- Descargas de YouTube ----
+    suspend fun searchYouTube(query: String): List<YoutubeResult>
+    fun downloadYouTube(result: YoutubeResult)
+    fun cancelDownload(videoId: String)
+    fun clearYouTubeError()
 
     // ---- Sistema ----
     fun copyText(text: String)
