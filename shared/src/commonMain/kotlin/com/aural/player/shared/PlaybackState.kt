@@ -35,7 +35,15 @@ data class PlaybackState(
     val eqPreamp: Float = 0f,
     val eqAmps: List<Float> = emptyList(),
     /** Frecuencias centrales de las bandas (Hz), las reporta VLC. */
-    val eqBandFrequencies: List<Float> = emptyList()
+    val eqBandFrequencies: List<Float> = emptyList(),
+    /** Descargas de YouTube: resultados de la última búsqueda. */
+    val youTubeResults: List<YoutubeResult> = emptyList(),
+    /** Búsqueda de YouTube en curso. */
+    val youTubeSearching: Boolean = false,
+    /** Error de búsqueda o descarga de YouTube. */
+    val youTubeError: String? = null,
+    /** Descargas de YouTube en curso o terminadas. */
+    val downloads: List<YoutubeDownload> = emptyList()
 ) {
     val currentSong: Song? get() = queue.getOrNull(currentIndex)
 }
