@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,7 +86,8 @@ private enum class LibraryTab(val label: String) {
     ARTISTS("Artistas"),
     ALBUMS("Álbumes"),
     PLAYLISTS("Playlists"),
-    FOLDERS("Carpetas")
+    FOLDERS("Carpetas"),
+    DOWNLOADS("Descargas")
 }
 
 /** Vista detallada dentro de una pestaña. */
@@ -131,6 +133,8 @@ fun App(
         var searchFocused by remember { mutableStateOf(false) }
         var top10Songs by remember { mutableStateOf<List<TopSong>?>(null) }
         var showNowPlaying by remember { mutableStateOf(false) }
+        // Tapón de clics del Now Playing (ver el Box de abajo).
+        val npClickSource = remember { MutableInteractionSource() }
         var showUpdateDialog by remember { mutableStateOf(false) }
         var notice by remember { mutableStateOf<String?>(null) }
         var selectedSongs by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -460,7 +464,9 @@ fun App(
                     )
                 }
 
-                // ---- Búsqueda siempre visible ----
+                // ---- Búsqueda de la biblioteca (oculta en Descargas,
+                // que tiene su propio buscador) ----
+                if (tab != LibraryTab.DOWNLOADS) {
                 val darkBackground = isDarkBackground(scheme.background)
                 Box(
                     Modifier
@@ -504,6 +510,7 @@ fun App(
                             .fillMaxWidth()
                             .onFocusChanged { searchFocused = it.isFocused }
                     )
+                }
                 }
 
                 // ---- Pills de filtros ----
@@ -690,7 +697,7 @@ fun App(
                                             LazyVerticalGrid(
                                                 columns = GridCells.Adaptive(160.dp),
                                                 state = artistsGridState,
-                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 24.dp),
+                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 32.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 modifier = Modifier.fillMaxSize()
@@ -734,7 +741,7 @@ fun App(
                                             LazyVerticalGrid(
                                                 columns = GridCells.Adaptive(160.dp),
                                                 state = albumsGridState,
-                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 24.dp),
+                                                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 32.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 modifier = Modifier.fillMaxSize()
@@ -907,6 +914,9 @@ fun App(
                                         }
                                     }
                                 }
+                                LibraryTab.DOWNLOADS -> {
+                                    DownloadsScreen(state = state, actions = actions)
+                                }
                             }
                         }
                     }
@@ -998,9 +1008,15 @@ fun App(
             }
 
             // ---- Now Playing completo ----
+            // El Box se traga los clics en zonas vacías: sin esto caen
+            // en la biblioteca de atrás (igual que pasaba en el móvil).
             if (showNowPlaying && state.currentSong != null) {
                 Box(
                     modifier = Modifier.fillMaxSize().background(scheme.background)
+                        .clickable(
+                            indication = null,
+                            interactionSource = npClickSource
+                        ) {}
                 ) {
                     NowPlayingScreen(
                         state = state,
