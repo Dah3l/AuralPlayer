@@ -282,6 +282,24 @@ cuanto las veas.
   reference 'Box' + cascadas de @Composable). Añadir la línea nueva,
   nunca reutilizar la de otro símbolo. Verificado 2026-11-19 (1.2.16,
   NowPlayingScreen.kt).
+- Borrar un composable y su estado: al quitar el bloque `if
+  (showLyrics)` se llevó también la llave de cierre de
+  BoxWithConstraints (diff de llaves 1). Verificar el balance de
+  llaves tras cada borrado que toque una llave de cierre, y hacer grep
+  del nombre del estado borrado (quedaban 2 `showLyrics = true` en el
+  picker de letras). Verificado 2026-11-19 (1.2.17).
+- `Modifier.weight` no existe dentro de un lambda `@Composable () ->
+  Unit` (necesita ColumnScope/RowScope): el bloque de la letra recibe
+  el Modifier por parámetro (`lyricsBlock(Modifier.weight(1f))`).
+  Verificado 2026-11-19 (1.2.17).
+- Scrollbar de escritorio: la barra por defecto se come el contenido
+  con solo 12 dp de padding — reservar carril con contentPadding end
+  (16 dp en listas, 24 dp en grids). Verificado 2026-11-19 (1.2.17).
+- Portadas a resolución completa = RAM por las nubes: decodeImageBitmap
+  decodificaba el JPEG/PNG tal cual (1500 px ≈ 9 MB) y el caché
+  guardaba 120 → 1 GB+. Bajar a 512 px en el decode (Skia Surface +
+  drawImageRect src→dst) y caché a 60; tope de heap -Xmx768m en
+  applicationDefaultJvmArgs. Verificado 2026-11-19 (1.2.17).
 
 ## Estado actual (2026-11-18)
 
@@ -333,6 +351,24 @@ cuanto las veas.
   en verde + prueba en Windows. Fix 2026-11-19: android.yml falló por el
   import `Box` perdido al añadir `BoxWithConstraints` (18 errores, todos
   cascada); import restaurado y pusheado (SHA MATCH), pendiente re-correr.
+  1.2.17 (2026-11-19): Now Playing siempre en dos columnas (portada +
+  título + controles a la izquierda, letra completa sincronizada a la
+  derecha; la pantalla de letras aparte ELIMINADA — LyricsOverlay
+  borrado); portada con tope por alto y ancho
+  (minOf(maxHeight*0.40, maxWidth*0.38), 200–400 dp). Header sticky con
+  fundido en DrillView (barra fija con retroceder + portada 40 dp +
+  título/subtítulo, collapseFraction por derivedStateOf sobre
+  layoutInfo.visibleItemsInfo — mismo patrón que DetailScreen en el
+  móvil). Scrollbar con carril propio: contentPadding end 16 dp en
+  listas de canciones, 24 dp en grids de álbumes/artistas. Volumen:
+  botón de mute en el MiniPlayer (misma regla de icono que el NP) y
+  lectura real de VLC al abrir (VlcPlayer.volume()/isMute() + sync en
+  start()). RAM: portadas decodificadas a 512 px máx
+  (ImageDecodingJvm, Surface.makeRasterN32Premul + drawImageRect),
+  caché de portadas 120→60, -Xmx768m (applicationDefaultJvmArgs), mesh
+  más lento (56 s/68 s). packageVersion 1.2.17. Pendiente: correr
+  android.yml y desktop.yml en verde + prueba en Windows (incl. RAM
+  en el Administrador de tareas).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -411,3 +447,4 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
+| 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
