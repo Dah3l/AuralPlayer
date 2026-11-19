@@ -3,6 +3,7 @@ package com.aural.player.desktop
 import com.aural.player.shared.AppTheme
 import com.aural.player.shared.CoverStore
 import com.aural.player.shared.DesktopPrefs
+import com.aural.player.shared.DownloadStatus
 import com.aural.player.shared.EditResult
 import com.aural.player.shared.LibraryData
 import com.aural.player.shared.LibraryStore
@@ -19,6 +20,8 @@ import com.aural.player.shared.Song
 import com.aural.player.shared.SongOverride
 import com.aural.player.shared.StopMode
 import com.aural.player.shared.TopSong
+import com.aural.player.shared.YoutubeDownload
+import com.aural.player.shared.YoutubeResult
 import java.awt.Desktop
 import java.awt.Image
 import java.awt.Toolkit
@@ -83,6 +86,14 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
     private val library = LibraryStore(dataDir)
     private val covers = CoverStore(dataDir)
     private val lyrics = LyricsStore(dataDir)
+
+    // Motor de YouTube (NewPipeExtractor): se inicializa perezoso,
+    // en el primer uso, para no tocar la red al abrir la app.
+    private val youtube by lazy { YoutubeEngine() }
+
+    // Descargas canceladas por el usuario: el bucle de descarga lo
+    // consulta en cada bloque y aborta (borra el parcial).
+    private val cancelledDownloads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     // Metadatos superpuestos (ediciones que no se pudieron escribir
     // en el archivo): viven en memoria y en library.json.
@@ -933,6 +944,112 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
         } catch (_: Throwable) {
             emptyList()
         }
+    }
+
+    // ---------------- Descargas de YouTube ----------------
+
+    override suspend fun searchYouTube(query: String): List<YoutubeResult> {
+        if (query.isBlank()) return emptyList()
+        _state.update { it.copy(youTubeSearching = true, youTubeError = null) }
+        return try {
+            val results = youtube.search(query)
+            _state.update { it.copy(youTubeResults = results, youTubeSearching = false) }
+            results
+        } catch (t: Throwable) {
+            _state.update {
+                it.copy(
+                    youTubeSearching = false,
+                    youTubeError = "No se pudo buscar en YouTube: ${t.message?.take(100)}"
+                )
+            }
+            emptyList()
+        }
+    }
+
+    override fun downloadYouTube(result: YoutubeResult) {
+        val current = _state.value.downloads
+        if (current.any {
+                it.videoId == result.videoId &&
+                    (it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING)
+            }
+        ) return
+        _state.update {
+            it.copy(
+                downloads = it.downloads.filter { d -> d.videoId != result.videoId } +
+                    YoutubeDownload(result.videoId, result.title, DownloadStatus.QUEUED, 0f),
+                youTubeError = null
+            )
+        }
+        scope.launch(Dispatchers.IO) {
+            _state.update {
+                it.copy(
+                    downloads = it.downloads.map { d ->
+                        if (d.videoId == result.videoId) d.copy(status = DownloadStatus.DOWNLOADING) else d
+                    }
+                )
+            }
+            // Primera carpeta de la biblioteca (por defecto, Música).
+            val folders = _state.value.folders
+            val destDir = File(
+                folders.firstOrNull() ?: LibraryScanner.defaultMusicDir().absolutePath
+            )
+            val file = youtube.download(
+                videoId = result.videoId,
+                title = result.title,
+                uploader = result.uploader,
+                destDir = destDir,
+                onProgress = { pct ->
+                    _state.update {
+                        it.copy(
+                            downloads = it.downloads.map { d ->
+                                if (d.videoId == result.videoId) d.copy(progress = pct) else d
+                            }
+                        )
+                    }
+                },
+                isCancelled = { result.videoId in cancelledDownloads }
+            )
+            val wasCancelled = result.videoId in cancelledDownloads
+            cancelledDownloads.remove(result.videoId)
+            if (file != null) {
+                _state.update {
+                    it.copy(
+                        downloads = it.downloads.map { d ->
+                            if (d.videoId == result.videoId) {
+                                d.copy(status = DownloadStatus.DONE, progress = 1f)
+                            } else d
+                        }
+                    )
+                }
+                // La canción nueva aparece en la biblioteca sin perder
+                // la reproducción en curso.
+                rescan(_state.value.folders)
+            } else if (wasCancelled) {
+                // Cancelada por el usuario: vuelve el botón de descarga.
+                _state.update {
+                    it.copy(downloads = it.downloads.filter { d -> d.videoId != result.videoId })
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        downloads = it.downloads.map { d ->
+                            if (d.videoId == result.videoId) {
+                                d.copy(status = DownloadStatus.FAILED, error = "No se pudo descargar el audio")
+                            } else d
+                        },
+                        youTubeError = "No se pudo descargar el audio de \"${result.title}\"."
+                    )
+                }
+            }
+        }
+    }
+
+    override fun cancelDownload(videoId: String) {
+        cancelledDownloads.add(videoId)
+    }
+
+    override fun clearYouTubeError() {
+        _state.update { it.copy(youTubeError = null) }
     }
 
     // ---------------- Sistema ----------------
