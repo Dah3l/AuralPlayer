@@ -34,7 +34,7 @@ import kotlin.math.min
 
 /** Caché de portadas decodificadas (las filas visibles vuelven a pedirlas al desplazar). */
 private object CoverImageCache {
-    private const val MAX_ENTRIES = 120
+    private const val MAX_ENTRIES = 60
     private val cache = LinkedHashMap<String, ImageBitmap>()
 
     @Synchronized
