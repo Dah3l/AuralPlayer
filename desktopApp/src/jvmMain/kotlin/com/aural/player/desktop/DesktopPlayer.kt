@@ -170,6 +170,16 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                         _state.value.eqPreamp,
                         _state.value.eqAmps
                     )
+                    // El icono de la bocina muestra el estado REAL de VLC
+                    // al abrir: si el motor quedó distinto de lo guardado,
+                    // manda VLC y se guarda la corrección.
+                    val realVolume = vlc.volume()
+                    val realMuted = vlc.isMute()
+                    if (realVolume != _state.value.volume || realMuted != _state.value.muted) {
+                        _state.update { it.copy(volume = realVolume, muted = realMuted) }
+                        if (realVolume > 0) lastVolume = realVolume
+                        persistPrefs()
+                    }
                 }
                 _state.update {
                     it.copy(
