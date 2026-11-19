@@ -158,6 +158,42 @@ object AuralIcons {
         }
     }.build()
 
+    /** Lupa de búsqueda (pestaña Descargas). */
+    val Search: ImageVector = ImageVector.Builder("Search", 24.dp, 24.dp, 24f, 24f).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round
+        ) {
+            moveTo(17f, 10.5f)
+            arcTo(6.5f, 6.5f, 0f, false, true, 4f, 10.5f)
+            arcTo(6.5f, 6.5f, 0f, false, true, 17f, 10.5f)
+            close()
+            moveTo(15.5f, 15.5f)
+            lineTo(20.5f, 20.5f)
+        }
+    }.build()
+
+    /** Flecha de descarga (pestaña Descargas). */
+    val Download: ImageVector = ImageVector.Builder("Download", 24.dp, 24.dp, 24f, 24f).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(12f, 3f)
+            lineTo(12f, 15f)
+            moveTo(7.5f, 10.5f)
+            lineTo(12f, 15f)
+            lineTo(16.5f, 10.5f)
+            moveTo(5f, 20f)
+            lineTo(19f, 20f)
+        }
+    }.build()
+
     /** Flecha hacia atrás (cabeceras de pantallas). */
     val ArrowBack: ImageVector = ImageVector.Builder("ArrowBack", 24.dp, 24.dp, 24f, 24f).apply {
         path(
