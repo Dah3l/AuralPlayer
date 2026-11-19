@@ -1,5 +1,5 @@
 // Now Playing de escritorio: dos columnas siempre — portada + título
-// y controles a la izquierda, letra completa sincronizada a la derecha.
+// + controles a la izquierda, letra completa sincronizada a la derecha.
 // Fondo ambiental con los colores de la portada, carátula grande con
 // brillo, barra de progreso, transporte con modo de repetición/
 // aleatorio y el menú ⋮ con los 10 ítems.
@@ -84,6 +84,8 @@ private fun NowPlayingContent(
 ) {
     val scheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
+    // Contraste de la letra: fondo oscuro → letra clara y viceversa.
+    val lyricsDark = isDarkBackground(scheme.background)
     var showMenu by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
@@ -185,7 +187,12 @@ private fun NowPlayingContent(
                         style = if (isCurrent) MaterialTheme.typography.titleLarge
                         else MaterialTheme.typography.bodyLarge,
                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isCurrent) scheme.primary else scheme.onSurfaceVariant,
+                        color = when {
+                            isCurrent && lyricsDark -> scheme.primary
+                            isCurrent -> scheme.onBackground
+                            lyricsDark -> Color.White.copy(alpha = 0.75f)
+                            else -> Color.Black.copy(alpha = 0.75f)
+                        },
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                             .padding(vertical = 8.dp, horizontal = 16.dp)
@@ -385,13 +392,13 @@ private fun NowPlayingContent(
     }
 
     // Dos columnas siempre (el ancho mínimo de la ventana, 960 dp,
-    // alcanza para ambas): portada + título a la izquierda, letra
-    // completa + controles a la derecha. La portada se ajusta al
-    // espacio disponible (alto y ancho) con tope de 400 dp.
+    // alcanza para ambas): portada + controles a la izquierda, letra
+    // completa a la derecha. La portada se ajusta al espacio
+    // disponible (alto y ancho) con tope de 380 dp.
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         NowPlayingAmbientBackground(palette = palette)
-        val coverSize = minOf(maxHeight * 0.40f, maxWidth * 0.38f)
-            .coerceIn(200.dp, 400.dp)
+        val coverSize = minOf(maxHeight * 0.36f, maxWidth * 0.38f)
+            .coerceIn(180.dp, 380.dp)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -501,8 +508,8 @@ private fun NowPlayingContent(
                 }
             }
 
-            // Dos columnas: portada + título a la izquierda, letra
-            // completa + controles a la derecha.
+            // Dos columnas: portada + controles a la izquierda, letra
+            // completa a la derecha.
             Row(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 verticalAlignment = Alignment.CenterVertically
@@ -515,6 +522,12 @@ private fun NowPlayingContent(
                     coverBlock(coverSize)
                     Spacer(Modifier.height(16.dp))
                     titleBlock()
+                    Spacer(Modifier.height(8.dp))
+                    seekBlock()
+                    Spacer(Modifier.height(8.dp))
+                    transportBlock()
+                    Spacer(Modifier.height(16.dp))
+                    volumeBlock()
                 }
                 Spacer(Modifier.width(32.dp))
                 Column(
@@ -522,12 +535,6 @@ private fun NowPlayingContent(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     lyricsBlock(Modifier.weight(1f))
-                    Spacer(Modifier.height(8.dp))
-                    seekBlock()
-                    Spacer(Modifier.height(8.dp))
-                    transportBlock()
-                    Spacer(Modifier.height(16.dp))
-                    volumeBlock()
                 }
             }
         }
