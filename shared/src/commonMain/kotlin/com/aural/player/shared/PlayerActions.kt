@@ -77,5 +77,9 @@ interface PlayerActions {
     // ---- Sistema ----
     fun copyText(text: String)
     fun revealInExplorer(path: String)
+    fun openUrl(url: String)
+    fun exportBackupToFile(): Boolean
+    fun importBackupFromFile(): Boolean
+    fun clearAllData(): Boolean
     fun playShuffled(list: List<Song>)
 }
