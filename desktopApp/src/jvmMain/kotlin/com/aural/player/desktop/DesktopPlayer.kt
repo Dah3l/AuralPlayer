@@ -6,6 +6,7 @@ import com.aural.player.shared.DesktopPrefs
 import com.aural.player.shared.EditResult
 import com.aural.player.shared.LibraryData
 import com.aural.player.shared.LibraryStore
+import com.aural.player.shared.LocalFiles
 import com.aural.player.shared.LrcLibClient
 import com.aural.player.shared.LyricsStore
 import com.aural.player.shared.PlayHistoryStore
@@ -25,6 +26,7 @@ import java.awt.datatransfer.StringSelection
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
 import javax.imageio.ImageIO
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
@@ -41,6 +43,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 /**
  * Estado y motor de la app de escritorio: biblioteca escaneada, cola,
@@ -55,7 +63,12 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private val vlc = VlcPlayer(
-        onFinished = { onTrackFinished() },
+        // El callback `finished` llega en el hilo de eventos de VLC:
+        // NUNCA se llama a VLC desde ahí (avanzar a la siguiente
+        // canción dentro del callback bloquea el hilo y la app se
+        // queda pegada al terminar una canción). Solo se encola el
+        // trabajo en la corrutina del reproductor y se vuelve al momento.
+        onFinished = { scope.launch { onTrackFinished() } },
         onError = { path -> _state.update { it.copy(error = "No se pudo reproducir: $path. Registro VLC: ${VlcPlayer.LOG_PATH}") } }
     )
     private var ticker: Job? = null
@@ -79,6 +92,10 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
     // canción que sonó antes y no a otra al azar.
     private val shuffleHistory = mutableListOf<Int>()
 
+    // Último volumen distinto de cero: al quitar el silencio se
+    // restaura este nivel en vez de quedarse en 0.
+    private var lastVolume: Int = 100
+
     // Segundos escuchados pendientes de registrar: se acumulan en
     // el ticker y se guardan cada 30 s o al cambiar de canción.
     private var pendingSong: Song? = null
@@ -97,11 +114,18 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                         val repeat = runCatching {
                             RepeatMode.valueOf(saved.repeatModeName)
                         }.getOrDefault(RepeatMode.OFF)
+                        // Volumen guardado en 0 = estado trampa (el botón
+                        // de mute no lo sacaba de ahí): se abre en 100 y
+                        // sin silencio; quien quiera silencio usa el mute.
+                        val healedVolume = if (saved.volume <= 0) 100
+                        else saved.volume.coerceIn(0, 100)
+                        val healedMuted = if (saved.volume <= 0) false else saved.muted
+                        lastVolume = healedVolume
                         _state.update {
                             it.copy(
                                 theme = theme,
-                                volume = saved.volume.coerceIn(0, 100),
-                                muted = saved.muted,
+                                volume = healedVolume,
+                                muted = healedMuted,
                                 repeatMode = repeat,
                                 shuffleEnabled = saved.shuffleEnabled,
                                 playbackSpeed = saved.playbackSpeed,
@@ -110,6 +134,8 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                                 eqAmps = saved.eqAmps
                             )
                         }
+                        // Si se curó un volumen en 0, se guarda la corrección.
+                        if (saved.volume <= 0) persistPrefs()
                     }
                 } catch (t: Throwable) {
                     // Sin preferencias guardadas: se abre con los valores base
@@ -137,7 +163,7 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                 val vlcOk = vlc.init()
                 if (vlcOk) {
                     vlc.setVolume(_state.value.volume)
-                    if (_state.value.muted) vlc.toggleMute()
+                    vlc.setMute(_state.value.muted)
                     vlc.setRate(_state.value.playbackSpeed)
                     vlc.setEqualizer(
                         _state.value.eqEnabled,
@@ -235,7 +261,20 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
         ticker = null
         sleepJob?.cancel()
         sleepJob = null
-        vlc.release()
+        // Parar y liberar VLC va en un hilo aparte (daemon): dentro de
+        // libvlc puede quedarse esperando, y el cierre de la ventana
+        // no puede depender de eso (antes, dispose() corría en el hilo
+        // de la ventana y la app no cerraba).
+        Thread({
+            try {
+                vlc.stop()
+            } catch (_: Throwable) {
+            }
+            try {
+                vlc.release()
+            } catch (_: Throwable) {
+            }
+        }, "aural-vlc-release").apply { isDaemon = true; start() }
     }
 
     // ---------------- Transporte ----------------
@@ -377,12 +416,35 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
     override fun setVolume(value: Int) {
         val clamped = value.coerceIn(0, 100)
         vlc.setVolume(clamped)
-        _state.update { it.copy(volume = clamped) }
+        if (clamped > 0) {
+            // Subir el volumen quita el silencio: el deslizador y el
+            // botón de mute ya no pelean entre ellos.
+            lastVolume = clamped
+            vlc.setMute(false)
+            _state.update { it.copy(volume = clamped, muted = false) }
+        } else {
+            // Volumen a 0 = silencio: el icono de mute queda coherente.
+            vlc.setMute(true)
+            _state.update { it.copy(volume = 0, muted = true) }
+        }
         persistPrefs()
     }
 
     override fun toggleMute() {
-        _state.update { it.copy(muted = vlc.toggleMute()) }
+        val current = _state.value
+        val newMuted = !current.muted
+        if (newMuted) {
+            vlc.setMute(true)
+            _state.update { it.copy(muted = true) }
+        } else {
+            // Al reactivar, si el volumen estaba en 0 se restaura el
+            // último nivel: antes el botón no hacía nada audible.
+            val restored = if (current.volume <= 0) lastVolume.coerceAtLeast(1)
+            else current.volume
+            vlc.setVolume(restored)
+            vlc.setMute(false)
+            _state.update { it.copy(muted = false, volume = restored) }
+        }
         persistPrefs()
     }
 
@@ -885,6 +947,89 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
         }
     }
 
+    override fun openUrl(url: String) {
+        try {
+            Desktop.getDesktop().browse(URI(url))
+        } catch (_: Throwable) {
+        }
+    }
+
+    // ---------------- Respaldo ----------------
+
+    /**
+     * Exporta preferencias, biblioteca (carpetas, playlists,
+     * favoritas) e historial Top 10 a un solo JSON. El usuario
+     * elige dónde guardarlo con el diálogo de Windows.
+     */
+    override fun exportBackupToFile(): Boolean {
+        return try {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Exportar respaldo de AuralPlayer"
+                fileFilter = FileNameExtensionFilter("Respaldo de AuralPlayer (*.json)", "json")
+                selectedFile = File("aural-respaldo.json")
+            }
+            if (chooser.showSaveDialog(null) != JFileChooser.APPROVE_OPTION) return false
+            var target = chooser.selectedFile ?: return false
+            if (target.extension.lowercase() != "json") {
+                target = File(target.absolutePath + ".json")
+            }
+            val bundle = buildJsonObject {
+                put("format", "aural-backup")
+                put("version", 1)
+                put("prefs", LocalFiles.readText("$dataDir/prefs.json") ?: "")
+                put("library", LocalFiles.readText("$dataDir/library.json") ?: "")
+                put("history", LocalFiles.readText("$dataDir/play_history.json") ?: "")
+            }
+            target.writeText(Json { }.encodeToString(JsonObject.serializer(), bundle))
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * Importa un respaldo exportado antes: restaura los tres JSON y
+     * vuelve a cargar todo sin reiniciar la app.
+     */
+    override fun importBackupFromFile(): Boolean {
+        return try {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Importar respaldo de AuralPlayer"
+                fileFilter = FileNameExtensionFilter("Respaldo de AuralPlayer (*.json)", "json")
+            }
+            if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return false
+            val file = chooser.selectedFile ?: return false
+            val obj = Json { }.parseToJsonElement(file.readText()) as? JsonObject
+                ?: return false
+            if ((obj["format"] as? JsonPrimitive)?.contentOrNull != "aural-backup") return false
+            val prefsText = (obj["prefs"] as? JsonPrimitive)?.contentOrNull ?: return false
+            val libraryText = (obj["library"] as? JsonPrimitive)?.contentOrNull ?: return false
+            val historyText = (obj["history"] as? JsonPrimitive)?.contentOrNull ?: return false
+            LocalFiles.writeText("$dataDir/prefs.json", prefsText)
+            LocalFiles.writeText("$dataDir/library.json", libraryText)
+            LocalFiles.writeText("$dataDir/play_history.json", historyText)
+            reloadData()
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * Borra todos los datos guardados de la app (preferencias,
+     * biblioteca, historial, portadas y letras). La UI avisa que
+     * hay que cerrar y volver a abrir.
+     */
+    override fun clearAllData(): Boolean {
+        return try {
+            File(dataDir).deleteRecursively()
+            File(dataDir).mkdirs()
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     // ---------------- Persistencia ----------------
 
     private fun saveLibrary() {
@@ -939,6 +1084,67 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                     eqAmps = s.eqAmps
                 )
             )
+        }
+    }
+
+    /**
+     * Vuelve a leer preferencias + biblioteca del disco y re-escanea
+     * (tras importar un respaldo). No re-inicia VLC: solo el estado.
+     */
+    private fun reloadData() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                prefs.load()?.let { saved ->
+                    val healedVolume = if (saved.volume <= 0) 100
+                    else saved.volume.coerceIn(0, 100)
+                    val healedMuted = if (saved.volume <= 0) false else saved.muted
+                    lastVolume = healedVolume
+                    val theme = AppTheme.entries.firstOrNull { it.name == saved.themeName }
+                        ?: AppTheme.BOSQUE
+                    val repeat = runCatching {
+                        RepeatMode.valueOf(saved.repeatModeName)
+                    }.getOrDefault(RepeatMode.OFF)
+                    _state.update {
+                        it.copy(
+                            theme = theme,
+                            volume = healedVolume,
+                            muted = healedMuted,
+                            repeatMode = repeat,
+                            shuffleEnabled = saved.shuffleEnabled,
+                            playbackSpeed = saved.playbackSpeed,
+                            eqEnabled = saved.eqEnabled,
+                            eqPreamp = saved.eqPreamp,
+                            eqAmps = saved.eqAmps
+                        )
+                    }
+                    vlc.setVolume(healedVolume)
+                    vlc.setMute(healedMuted)
+                    vlc.setRate(_state.value.playbackSpeed)
+                    vlc.setEqualizer(
+                        _state.value.eqEnabled,
+                        _state.value.eqPreamp,
+                        _state.value.eqAmps
+                    )
+                }
+            } catch (_: Throwable) {
+            }
+            try {
+                val savedLibrary = library.load()
+                overrides = savedLibrary?.overrides ?: emptyMap()
+                val folders = savedLibrary?.folders
+                    ?.filter { it.isNotBlank() }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: listOf(LibraryScanner.defaultMusicDir().absolutePath)
+                _state.update {
+                    it.copy(
+                        folders = folders,
+                        playlists = savedLibrary?.playlists ?: emptyList(),
+                        favorites = savedLibrary?.favorites?.toSet() ?: emptySet()
+                    )
+                }
+                rescan(folders)
+            } catch (_: Throwable) {
+            }
         }
     }
 
