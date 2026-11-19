@@ -42,13 +42,13 @@ fun NowPlayingAmbientBackground(
     val phase1 by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(28000, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(56000, easing = LinearEasing), RepeatMode.Restart),
         label = "drift1"
     )
     val phase2 by transition.animateFloat(
         initialValue = (2f * PI).toFloat(),
         targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(34000, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(68000, easing = LinearEasing), RepeatMode.Restart),
         label = "drift2"
     )
     val colors = listOf(
