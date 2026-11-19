@@ -22,7 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import java.awt.Dimension
 
 /** Versión de la app de escritorio (se muestra en Buscar actualizaciones). */
-private const val VERSION_NAME = "1.2.17"
+private const val VERSION_NAME = "1.2.18"
 
 /**
  * Icono de la ventana dibujado en código: fondo oscuro redondeado
