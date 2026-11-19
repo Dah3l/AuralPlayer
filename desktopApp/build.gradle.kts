@@ -200,8 +200,10 @@ compose.desktop {
         mainClass = "com.aural.player.desktop.MainKt"
         // Tope de memoria de la JVM: sin esto el heap crece libre
         // (en un PC de 12 GB el tope por defecto es ~3 GB) y la app
-        // se iba a 1 GB+ solo con las portadas.
-        applicationDefaultJvmArgs = listOf("-Xmx768m")
+        // se iba a 1 GB+ solo con las portadas. OJO: en este DSL es
+        // jvmArgs(...) — applicationDefaultJvmArgs es del plugin
+        // application de Gradle y aquí NO existe.
+        jvmArgs("-Xmx768m")
         dependsOn("prepareVlc")
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
