@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -97,8 +98,8 @@ private sealed interface Drill {
     data object Daily : Drill
 }
 
-/** Pantalla superpuesta (Temas, Top 10) abierta desde el menú ⋮. */
-private enum class Overlay { THEMES, TOP10 }
+/** Pantalla superpuesta abierta desde el menú ⋮. */
+private enum class Overlay { THEMES, TOP10, DONATE, CONTACT, SETTINGS }
 
 private data class AlbumGroup(
     val key: String,
@@ -110,7 +111,8 @@ private data class AlbumGroup(
 @Composable
 fun App(
     state: PlaybackState,
-    actions: PlayerActions
+    actions: PlayerActions,
+    versionName: String = "1.2.16"
 ) {
     AuralTheme(theme = state.theme) {
         val scheme = MaterialTheme.colorScheme
@@ -129,6 +131,7 @@ fun App(
         var searchFocused by remember { mutableStateOf(false) }
         var top10Songs by remember { mutableStateOf<List<TopSong>?>(null) }
         var showNowPlaying by remember { mutableStateOf(false) }
+        var showUpdateDialog by remember { mutableStateOf(false) }
         var notice by remember { mutableStateOf<String?>(null) }
         var selectedSongs by remember { mutableStateOf<Set<String>>(emptySet()) }
         var showSelectionPlaylists by remember { mutableStateOf(false) }
@@ -382,6 +385,11 @@ fun App(
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize().background(scheme.background)) {
+                // En páginas de detalle (Top 10, playlist, álbum, artista,
+                // Temas, Apoyar, Contacto, Ajustes) la biblioteca se esconde:
+                // la página ocupa todo, como en el móvil.
+                val inDetailPage = drill != null || overlay != null
+                if (!inDetailPage) {
                 // ---- Cabecera fija: logo + Aural, saludo debajo, menú ⋮ ----
                 Column(
                     Modifier
@@ -422,8 +430,24 @@ fun App(
                                     onClick = { showGeneralMenu = false; overlay = Overlay.THEMES }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Buscar actualizaciones") },
+                                    onClick = { showGeneralMenu = false; showUpdateDialog = true }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Apoyar a Aural ❤") },
+                                    onClick = { showGeneralMenu = false; overlay = Overlay.DONATE }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Contacto") },
+                                    onClick = { showGeneralMenu = false; overlay = Overlay.CONTACT }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Tu Top 10") },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.TOP10 }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Ajustes") },
+                                    onClick = { showGeneralMenu = false; overlay = Overlay.SETTINGS }
                                 )
                             }
                         }
@@ -513,6 +537,7 @@ fun App(
                         }
                     }
                 }
+                }
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (overlay) {
@@ -524,6 +549,22 @@ fun App(
                         Overlay.TOP10 -> Top10Screen(
                             topSongs = top10Songs,
                             onBack = { overlay = null }
+                        )
+                        Overlay.DONATE -> DonateScreen(
+                            onBack = { overlay = null },
+                            onCopy = { actions.copyText(it) }
+                        )
+                        Overlay.CONTACT -> ContactScreen(
+                            onBack = { overlay = null },
+                            onOpenUrl = { actions.openUrl(it) }
+                        )
+                        Overlay.SETTINGS -> SettingsScreen(
+                            onBack = { overlay = null },
+                            versionName = versionName,
+                            onExportBackup = { actions.exportBackupToFile() },
+                            onImportBackup = { actions.importBackupFromFile() },
+                            onClearData = { actions.clearAllData() },
+                            onNotice = { showNotice(it) }
                         )
                         null -> {
                             val data = drillData
@@ -601,35 +642,38 @@ fun App(
                                         }
                                     }
                                     else -> {
-                                        Column(modifier = Modifier.fillMaxSize()) {
-                                            if (query.isBlank()) {
-                                                MostPlayedSection(
-                                                    cards = paraTiCards,
-                                                    loadCoverBytes = actions::loadCoverBytes
-                                                )
-                                            }
-                                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                                SongList(
-                                                    songs = visibleSongs,
-                                                    listState = songsListState,
-                                                    playingSongId = state.currentSong?.filePath,
-                                                    selectionMode = selectionMode,
-                                                    selectedSongs = selectedSongs,
-                                                    onSongClick = { song ->
-                                                        playOrToggle(visibleSongs, song)
-                                                    },
-                                                    onSongLongPress = { song -> toggleSelect(song) },
-                                                    onSongMenu = { song -> openSongMenu(song) },
-                                                    loadCoverBytes = actions::loadCoverBytes
-                                                )
-                                                AlphabetFastScroller(
-                                                    keys = visibleSongs.map { it.title },
-                                                    onJumpToIndex = { index ->
-                                                        scope.launch { songsListState.scrollToItem(index) }
-                                                    },
-                                                    modifier = Modifier.align(Alignment.CenterEnd)
-                                                )
-                                            }
+                                        // "Para ti" va DENTRO de la lista de canciones
+                                        // (como en el móvil): se desplaza con ella.
+                                        Box(modifier = Modifier.fillMaxSize()) {
+                                            SongList(
+                                                songs = visibleSongs,
+                                                listState = songsListState,
+                                                playingSongId = state.currentSong?.filePath,
+                                                selectionMode = selectionMode,
+                                                selectedSongs = selectedSongs,
+                                                onSongClick = { song ->
+                                                    playOrToggle(visibleSongs, song)
+                                                },
+                                                onSongLongPress = { song -> toggleSelect(song) },
+                                                onSongMenu = { song -> openSongMenu(song) },
+                                                loadCoverBytes = actions::loadCoverBytes,
+                                                header = if (query.isBlank()) {
+                                                    {
+                                                        MostPlayedSection(
+                                                            cards = paraTiCards,
+                                                            loadCoverBytes = actions::loadCoverBytes
+                                                        )
+                                                    }
+                                                } else null
+                                            )
+                                            AlphabetFastScroller(
+                                                keys = visibleSongs.map { it.title },
+                                                onJumpToIndex = { index ->
+                                                    scope.launch { songsListState.scrollToItem(index) }
+                                                },
+                                                modifier = Modifier.align(Alignment.CenterEnd)
+                                                    .padding(end = 14.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -667,6 +711,12 @@ fun App(
                                                     scope.launch { artistsGridState.scrollToItem(index) }
                                                 },
                                                 modifier = Modifier.align(Alignment.CenterEnd)
+                                                    .padding(end = 14.dp)
+                                            )
+                                            LazyGridScrollbar(
+                                                state = artistsGridState,
+                                                modifier = Modifier.align(Alignment.CenterEnd)
+                                                    .fillMaxHeight()
                                             )
                                         }
                                     }
@@ -713,6 +763,12 @@ fun App(
                                                     scope.launch { albumsGridState.scrollToItem(index) }
                                                 },
                                                 modifier = Modifier.align(Alignment.CenterEnd)
+                                                    .padding(end = 14.dp)
+                                            )
+                                            LazyGridScrollbar(
+                                                state = albumsGridState,
+                                                modifier = Modifier.align(Alignment.CenterEnd)
+                                                    .fillMaxHeight()
                                             )
                                         }
                                     }
@@ -1081,6 +1137,28 @@ fun App(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteSelection = false }) { Text("Cancelar") }
+                }
+            )
+        }
+        if (showUpdateDialog) {
+            AlertDialog(
+                onDismissRequest = { showUpdateDialog = false },
+                title = { Text("Buscar actualizaciones") },
+                text = {
+                    Text(
+                        "Versión instalada: $versionName\n\n" +
+                            "Las actualizaciones de la versión Windows se publican " +
+                            "en GitHub. Desde ahí descargas el instalador nuevo."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showUpdateDialog = false
+                        actions.openUrl(AURAL_GITHUB_RELEASES_URL)
+                    }) { Text("Abrir GitHub") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showUpdateDialog = false }) { Text("Cerrar") }
                 }
             )
         }
