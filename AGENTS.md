@@ -331,6 +331,22 @@ cuanto las veas.
   (`rescan`, que no pierde la reproducción) lo recoge. Las
   miniaturas se cargan bajo demanda por Ktor en la UI compartida
   (`createHttpClient()` + `decodeImageBitmap`, caché 40).
+- Mesh dentro de un ítem de LazyColumn (1.2.19): el fondo
+  `NowPlayingAmbientBackground` va con `Modifier.matchParentSize()`,
+  NO con fillMaxSize — dentro de un ítem la altura no está acotada
+  y fillMaxSize mide infinito. La paleta sale de la portada de la
+  cabecera (`extractPalette(coverBitmap, scheme.primary)`); el velo
+  del mesh (fondo del tema al 72 %) es lo que mantiene el contraste
+  del título y los botones sobre las manchas.
+- Contraste en toda la app (auditoría 2026-11-19, 1.2.19): el texto
+  y los iconos resuelven por el tema (onSurface/primary/…) o por
+  `isDarkBackground` cuando van sobre un fondo que no es del tema
+  (mesh, degradado, foto). Los blancos fijos que quedan son
+  correctos: blanco sobre degradado negro en las tarjetas "Para
+  ti", blanco sobre círculo negro en la burbuja de la barra A-Z,
+  blanco sobre rojo en Descargas. El rojo fijo del corazón de
+  favorita en la barra de multiselección pasó a `scheme.error`
+  (rojo del tema) para que se ajuste con el fondo oscuro/claro.
 
 ## Estado actual (2026-11-18)
 
@@ -418,6 +434,21 @@ cuanto las veas.
   reproducción. packageVersion 1.2.18. Pendiente: correr android.yml
   y desktop.yml en verde + prueba en Windows (incl. una descarga
   real y que la canción aparezca en la biblioteca).
+- **En curso (Malen-IA):** PC 1.2.19, mesh en la cabecera de detalle
+  (CONSTRUIDA 2026-11-19): la cabecera de artista/álbum/playlist
+  lleva detrás el fondo mesh con los colores de su portada
+  (`extractPalette` + `NowPlayingAmbientBackground` con
+  `matchParentSize()` — fillMaxSize mide infinito dentro de un ítem
+  de LazyColumn); solo esa zona, la lista queda plana. Contraste
+  general (auditoría 2026-11-19 a petición de Dahel: no solo la
+  letra del NP): todo el texto y los iconos resuelven por el tema o
+  por `isDarkBackground` sobre fondos que no son del tema; los
+  blancos fijos que quedan son correctos (degradado negro, burbuja
+  A-Z, botones rojos); el corazón de favorita de la barra de
+  multiselección pasó de rojo fijo a `scheme.error`. packageVersion
+  1.2.19. Pendiente: correr android.yml y desktop.yml en verde +
+  prueba en Windows (cabecera con mesh en artista/álbum/playlist,
+  contraste en tema claro y oscuro).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -496,5 +527,6 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
+| 2026-11-19 | Malen-IA | PC 1.2.19: mesh en la cabecera de detalle (fondo ambiental con los colores de la portada, solo la zona de foto+título+botones) + auditoría de contraste en toda la app (corazón de favorita de rojo fijo a scheme.error; resto ya resolvía por el tema); packageVersion 1.2.19 | shared/.../LibraryViews.kt, SelectionBars.kt; desktopApp/.../Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
