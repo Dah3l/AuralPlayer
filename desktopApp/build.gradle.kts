@@ -198,13 +198,17 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.aural.player.desktop.MainKt"
+        // Tope de memoria de la JVM: sin esto el heap crece libre
+        // (en un PC de 12 GB el tope por defecto es ~3 GB) y la app
+        // se iba a 1 GB+ solo con las portadas.
+        applicationDefaultJvmArgs = listOf("-Xmx768m")
         dependsOn("prepareVlc")
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
             packageName = "AuralPlayer"
             // Sube en cada build de prueba: con upgradeUuid fijo, una
             // versión mayor reemplaza la instalada sin desinstalar.
-            packageVersion = "1.2.16"
+            packageVersion = "1.2.17"
             description = "AuralPlayer — El sonido, sin ruido."
             copyright = "© 2026 Dah3l"
             // Recursos extra (las librerías de VLC) dentro del paquete.
