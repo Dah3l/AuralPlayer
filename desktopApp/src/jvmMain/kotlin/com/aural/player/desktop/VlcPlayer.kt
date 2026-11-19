@@ -235,6 +235,24 @@ class VlcPlayer(
         }
     }
 
+    /** Volumen real de VLC (0-100), leído del motor, no del caché. */
+    fun volume(): Int {
+        return try {
+            player?.audio()?.volume() ?: currentVolume
+        } catch (_: Throwable) {
+            currentVolume
+        }
+    }
+
+    /** Silencio real de VLC, leído del motor, no del caché. */
+    fun isMute(): Boolean {
+        return try {
+            player?.audio()?.isMute() ?: currentMuted
+        } catch (_: Throwable) {
+            currentMuted
+        }
+    }
+
     fun stop() {
         try {
             player?.controls()?.stop()
