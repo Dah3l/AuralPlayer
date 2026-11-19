@@ -1,7 +1,8 @@
-// Now Playing de escritorio: la misma pantalla del teléfono — fondo
-// ambiental con los colores de la portada, carátula grande con brillo,
-// línea de la letra, título + corazón, barra de progreso, transporte
-// con modo de repetición/aleatorio y el menú ⋮ con los 10 ítems.
+// Now Playing de escritorio: dos columnas siempre — portada + título
+// y controles a la izquierda, letra completa sincronizada a la derecha.
+// Fondo ambiental con los colores de la portada, carátula grande con
+// brillo, barra de progreso, transporte con modo de repetición/
+// aleatorio y el menú ⋮ con los 10 ítems.
 package com.aural.player.shared
 
 import androidx.compose.foundation.background
@@ -85,7 +86,6 @@ private fun NowPlayingContent(
     val scope = rememberCoroutineScope()
     var showMenu by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
-    var showLyrics by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
@@ -115,7 +115,16 @@ private fun NowPlayingContent(
     }
     val currentLineIndex = if (lrcLines.isEmpty()) -1
     else LrcParser.currentIndex(lrcLines, state.positionMs)
-    val currentLine = lrcLines.getOrNull(currentLineIndex)?.text.orEmpty()
+    // La letra vive en la columna derecha del Now Playing: se desplaza
+    // sola a la línea actual, sin pelearle el scroll al usuario.
+    val lyricsListState = rememberLazyListState()
+    LaunchedEffect(currentLineIndex) {
+        if (currentLineIndex < 0) return@LaunchedEffect
+        val visible = lyricsListState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (currentLineIndex !in visible) {
+            lyricsListState.animateScrollToItem(currentLineIndex.coerceAtLeast(0))
+        }
+    }
 
     val isFavorite = song.filePath in state.favorites
 
@@ -140,24 +149,48 @@ private fun NowPlayingContent(
             showBorder = false
         )
     }
-    val lyricBlock: @Composable () -> Unit = {
-        // Línea actual de la letra (tocar abre la letra completa)
-        Box(
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (currentLine.isNotBlank()) {
-                Text(
-                    text = currentLine,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = scheme.onBackground,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { showLyrics = true }
-                )
+    val lyricsBlock: @Composable (Modifier) -> Unit = { modifier ->
+        // Letra completa en la columna derecha (la línea actual resalta).
+        if (lrcLines.isEmpty()) {
+            Box(
+                modifier = modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Esta canción no tiene letra guardada.",
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Agregar letra",
+                        color = scheme.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { lyricsError = null; showLyricsPicker = true }
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                state = lyricsListState,
+                modifier = modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                itemsIndexed(lrcLines, key = { index, line -> "$index-${line.timeMs}" }) { index, line ->
+                    val isCurrent = index == currentLineIndex
+                    Text(
+                        text = line.text,
+                        style = if (isCurrent) MaterialTheme.typography.titleLarge
+                        else MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCurrent) scheme.primary else scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(vertical = 8.dp, horizontal = 16.dp)
+                    )
+                }
             }
         }
     }
@@ -351,14 +384,14 @@ private fun NowPlayingContent(
         }
     }
 
-    // En ventana ancha (PC maximizada) el Now Playing se divide en
-    // dos columnas: portada + título a la izquierda, letra + controles
-    // a la derecha. En ventana angosta queda como en el móvil.
+    // Dos columnas siempre (el ancho mínimo de la ventana, 960 dp,
+    // alcanza para ambas): portada + título a la izquierda, letra
+    // completa + controles a la derecha. La portada se ajusta al
+    // espacio disponible (alto y ancho) con tope de 400 dp.
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         NowPlayingAmbientBackground(palette = palette)
-        val wide = maxWidth >= 900.dp
-        val coverSize = if (wide) (maxHeight * 0.40f).coerceIn(240.dp, 400.dp)
-        else 240.dp
+        val coverSize = minOf(maxHeight * 0.40f, maxWidth * 0.38f)
+            .coerceIn(200.dp, 400.dp)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -468,57 +501,34 @@ private fun NowPlayingContent(
                 }
             }
 
-            // En ventana ancha los bloques se reparten en dos columnas;
-            // en ventana angosta quedan apilados como en el móvil.
-            if (wide) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
+            // Dos columnas: portada + título a la izquierda, letra
+            // completa + controles a la derecha.
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(0.42f).fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Column(
-                        modifier = Modifier.weight(0.42f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        coverBlock(coverSize)
-                        Spacer(Modifier.height(16.dp))
-                        titleBlock()
-                    }
-                    Spacer(Modifier.width(32.dp))
-                    Column(
-                        modifier = Modifier.weight(0.58f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        lyricBlock()
-                        Spacer(Modifier.height(8.dp))
-                        seekBlock()
-                        Spacer(Modifier.height(8.dp))
-                        transportBlock()
-                        Spacer(Modifier.height(16.dp))
-                        volumeBlock()
-                    }
+                    coverBlock(coverSize)
+                    Spacer(Modifier.height(16.dp))
+                    titleBlock()
                 }
-            } else {
-                Spacer(Modifier.weight(0.4f))
-
-                // ---- Carátula grande con brillo del color dominante ----
-                coverBlock(240.dp)
-
-                // ---- Línea actual de la letra (tocar abre la letra completa) ----
-                lyricBlock()
-
-                // ---- Título + artista + corazón ----
-                titleBlock()
-                Spacer(Modifier.height(8.dp))
-
-                // ---- Barra de progreso (busca solo al soltar) ----
-                seekBlock()
-
-                // ---- Controles ----
-                transportBlock()
-
-                // ---- Volumen ----
-                volumeBlock()
-                Spacer(Modifier.weight(0.6f))
+                Spacer(Modifier.width(32.dp))
+                Column(
+                    modifier = Modifier.weight(0.58f).fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    lyricsBlock(Modifier.weight(1f))
+                    Spacer(Modifier.height(8.dp))
+                    seekBlock()
+                    Spacer(Modifier.height(8.dp))
+                    transportBlock()
+                    Spacer(Modifier.height(16.dp))
+                    volumeBlock()
+                }
             }
         }
 
@@ -532,19 +542,6 @@ private fun NowPlayingContent(
                 onRemove = { index -> actions.removeFromQueue(index) },
                 onMove = { from, to -> actions.moveQueueItem(from, to) },
                 onDismiss = { showQueue = false }
-            )
-        }
-
-        // ---- Letra completa ----
-        if (showLyrics) {
-            LyricsOverlay(
-                song = song,
-                lines = lrcLines,
-                positionMs = state.positionMs,
-                palette = palette,
-                loadCoverBytes = actions::loadCoverBytes,
-                onDismiss = { showLyrics = false },
-                onAddLyrics = { showLyrics = false; lyricsError = null; showLyricsPicker = true }
             )
         }
     }
@@ -635,7 +632,6 @@ private fun NowPlayingContent(
                     if (ok) {
                         showLyricsPicker = false
                         lyricsReload++
-                        showLyrics = true
                     } else {
                         lyricsError = "No se encontró la letra. Prueba con otro nombre."
                     }
@@ -645,7 +641,6 @@ private fun NowPlayingContent(
                 if (actions.pickLrcFile(song)) {
                     showLyricsPicker = false
                     lyricsReload++
-                    showLyrics = true
                 }
             },
             onDismiss = { showLyricsPicker = false }
@@ -668,130 +663,5 @@ private fun NowPlayingContent(
             onConfirm = { actions.deleteSongs(listOf(song)) },
             onDismiss = { showDeleteConfirm = false }
         )
-    }
-}
-
-/** Letra completa sincronizada, sobre el mismo fondo ambiental. */
-@Composable
-private fun LyricsOverlay(
-    song: Song,
-    lines: List<LrcLine>,
-    positionMs: Long,
-    palette: List<Color>,
-    loadCoverBytes: (Song) -> ByteArray?,
-    onDismiss: () -> Unit,
-    onAddLyrics: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val listState = rememberLazyListState()
-    val currentIdx = if (lines.isEmpty()) -1 else LrcParser.currentIndex(lines, positionMs)
-    // Solo se desplaza si la línea actual no está visible: si el usuario
-    // está leyendo otra parte, no se le pelea el scroll.
-    LaunchedEffect(currentIdx) {
-        if (currentIdx < 0) return@LaunchedEffect
-        val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
-        if (currentIdx !in visible) {
-            listState.animateScrollToItem(currentIdx.coerceAtLeast(0))
-        }
-    }
-    Box(modifier = Modifier.fillMaxSize()) {
-        NowPlayingAmbientBackground(palette = palette)
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = AuralIcons.ChevronDown,
-                        contentDescription = "Cerrar",
-                        tint = scheme.onSurface
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "LETRA",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant
-                )
-                Spacer(Modifier.weight(1f))
-                Spacer(Modifier.size(48.dp))
-            }
-            // Encabezado como en el móvil: portada + título + artista.
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CoverArt(
-                    bitmap = rememberCoverImage(song, loadCoverBytes),
-                    modifier = Modifier.size(56.dp),
-                    cornerRadius = 8.dp,
-                    showBorder = false
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = scheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = song.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            if (lines.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "Esta canción no tiene letra guardada.",
-                            color = scheme.onSurfaceVariant,
-                            fontSize = 14.sp
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "Agregar letra",
-                            color = scheme.primary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onAddLyrics() }
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    itemsIndexed(lines, key = { index, line -> "$index-${line.timeMs}" }) { index, line ->
-                        val isCurrent = index == currentIdx
-                        Text(
-                            text = line.text,
-                            style = if (isCurrent) MaterialTheme.typography.titleLarge
-                            else MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isCurrent) scheme.primary else scheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(vertical = 8.dp, horizontal = 16.dp)
-                        )
-                    }
-                }
-            }
-        }
     }
 }
