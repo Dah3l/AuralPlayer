@@ -8,7 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -118,14 +118,249 @@ private fun NowPlayingContent(
 
     val isFavorite = song.filePath in state.favorites
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // ---- Progreso (declarado arriba porque lo usa el bloque de búsqueda) ----
+    val duration = state.durationMs.coerceAtLeast(1L)
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(0f) }
+    val sliderValue = if (dragging) dragValue * duration.toFloat()
+    else state.positionMs.toFloat().coerceIn(0f, duration.toFloat())
+
+    // ---- Bloques reutilizables: en ventana ancha se reordenan en 2 columnas ----
+    val coverBlock: @Composable (Dp) -> Unit = { size ->
+        // Carátula grande con brillo del color dominante
+        CoverArt(
+            bitmap = coverBitmap,
+            modifier = Modifier.size(size).shadow(
+                elevation = 24.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = palette.firstOrNull()?.copy(alpha = 0.6f) ?: scheme.primary
+            ),
+            cornerRadius = 16.dp,
+            showBorder = false
+        )
+    }
+    val lyricBlock: @Composable () -> Unit = {
+        // Línea actual de la letra (tocar abre la letra completa)
+        Box(
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (currentLine.isNotBlank()) {
+                Text(
+                    text = currentLine,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = scheme.onBackground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { showLyrics = true }
+                )
+            }
+        }
+    }
+    val titleBlock: @Composable () -> Unit = {
+        // Título + artista + corazón
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee()
+                )
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee()
+                )
+            }
+            IconButton(onClick = { actions.toggleFavorite(song) }) {
+                Icon(
+                    imageVector = if (isFavorite) AuralIcons.Heart else AuralIcons.HeartOutline,
+                    contentDescription = "Favorito",
+                    tint = if (isFavorite) scheme.primary else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+        }
+    }
+    val seekBlock: @Composable () -> Unit = {
+        // Barra de progreso (busca solo al soltar)
+        Slider(
+            value = sliderValue,
+            onValueChange = {
+                dragValue = (it / duration).coerceIn(0f, 1f)
+                dragging = true
+            },
+            onValueChangeFinished = { dragging = false; actions.seek(dragValue) },
+            valueRange = 0f..duration.toFloat(),
+            colors = SliderDefaults.colors(
+                thumbColor = scheme.primary,
+                activeTrackColor = scheme.primary,
+                inactiveTrackColor = scheme.surfaceVariant
+            ),
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = CircleShape,
+                            spotColor = scheme.primary.copy(alpha = 0.5f)
+                        )
+                        .background(scheme.primary, shape = CircleShape)
+                )
+            },
+            track = { sliderState ->
+                val fraction = if (sliderState.valueRange.endInclusive > 0) {
+                    (sliderState.value - sliderState.valueRange.start) /
+                        (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
+                } else 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .background(scheme.surfaceVariant, shape = RoundedCornerShape(4.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction)
+                            .background(scheme.primary, shape = RoundedCornerShape(4.dp))
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                formatTime(sliderValue.toLong()),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+            Text(
+                formatTime(duration),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    val transportBlock: @Composable () -> Unit = {
+        // Controles
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Modo: sin repetir → repetir todo → repetir uno → aleatorio
+            IconButton(onClick = { actions.cyclePlaybackMode() }) {
+                val (icon, tint) = when {
+                    state.shuffleEnabled -> AuralIcons.Shuffle to scheme.primary
+                    state.repeatMode == RepeatMode.ONE -> AuralIcons.RepeatOne to scheme.primary
+                    state.repeatMode == RepeatMode.ALL -> AuralIcons.Repeat to scheme.primary
+                    else -> AuralIcons.Repeat to scheme.onSurfaceVariant
+                }
+                Icon(icon, contentDescription = "Modo de reproducción", tint = tint, modifier = Modifier.size(28.dp))
+            }
+            IconButton(onClick = { actions.previous() }) {
+                Icon(
+                    imageVector = AuralIcons.SkipPrevious,
+                    contentDescription = "Anterior",
+                    tint = scheme.onSurface,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .shadow(8.dp, CircleShape, spotColor = scheme.primary.copy(alpha = 0.5f))
+                    .clip(CircleShape)
+                    .background(scheme.primary)
+                    .clickable { actions.togglePlay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (state.isPlaying) AuralIcons.Pause else AuralIcons.Play,
+                    contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
+                    tint = scheme.onPrimary,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            IconButton(onClick = { actions.next() }) {
+                Icon(
+                    imageVector = AuralIcons.SkipNext,
+                    contentDescription = "Siguiente",
+                    tint = scheme.onSurface,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            IconButton(onClick = { showQueue = true }) {
+                Icon(
+                    imageVector = AuralIcons.QueueMusic,
+                    contentDescription = "Cola",
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+    val volumeBlock: @Composable () -> Unit = {
+        // Volumen
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(onClick = { actions.toggleMute() }) {
+                Icon(
+                    imageVector = if (state.muted || state.volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
+                    contentDescription = if (state.muted) "Activar sonido" else "Silenciar",
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Slider(
+                value = state.volume / 100f,
+                onValueChange = { actions.setVolume((it * 100).roundToInt().coerceIn(0, 100)) },
+                modifier = Modifier.width(180.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = scheme.primary,
+                    activeTrackColor = scheme.primary,
+                    inactiveTrackColor = scheme.outlineVariant
+                )
+            )
+            Text(
+                text = "${state.volume}%",
+                color = scheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                modifier = Modifier.width(44.dp)
+            )
+        }
+    }
+
+    // En ventana ancha (PC maximizada) el Now Playing se divide en
+    // dos columnas: portada + título a la izquierda, letra + controles
+    // a la derecha. En ventana angosta queda como en el móvil.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         NowPlayingAmbientBackground(palette = palette)
+        val wide = maxWidth >= 900.dp
+        val coverSize = if (wide) (maxHeight * 0.40f).coerceIn(240.dp, 400.dp)
+        else 240.dp
         Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .widthIn(max = 560.dp)
-                .fillMaxWidth()
-                .fillMaxHeight()
+                .fillMaxSize()
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -232,231 +467,58 @@ private fun NowPlayingContent(
                 }
             }
 
-            Spacer(Modifier.weight(0.4f))
-
-            // ---- Carátula grande con brillo del color dominante ----
-            CoverArt(
-                bitmap = coverBitmap,
-                modifier = Modifier.size(240.dp).shadow(
-                    elevation = 24.dp,
-                    shape = RoundedCornerShape(16.dp),
-                    spotColor = palette.firstOrNull()?.copy(alpha = 0.6f) ?: scheme.primary
-                ),
-                cornerRadius = 16.dp,
-                showBorder = false
-            )
-
-            // ---- Línea actual de la letra (tocar abre la letra completa) ----
-            Box(
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (currentLine.isNotBlank()) {
-                    Text(
-                        text = currentLine,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = scheme.onBackground,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                            .clickable { showLyrics = true }
-                    )
-                }
-            }
-
-            // ---- Título + artista + corazón ----
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = scheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee()
-                    )
-                    Text(
-                        text = song.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee()
-                    )
-                }
-                IconButton(onClick = { actions.toggleFavorite(song) }) {
-                    Icon(
-                        imageVector = if (isFavorite) AuralIcons.Heart else AuralIcons.HeartOutline,
-                        contentDescription = "Favorito",
-                        tint = if (isFavorite) scheme.primary else scheme.onSurfaceVariant,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // ---- Barra de progreso (busca solo al soltar) ----
-            val duration = state.durationMs.coerceAtLeast(1L)
-            var dragging by remember { mutableStateOf(false) }
-            var dragValue by remember { mutableStateOf(0f) }
-            val sliderValue = if (dragging) dragValue * duration.toFloat()
-            else state.positionMs.toFloat().coerceIn(0f, duration.toFloat())
-            Slider(
-                value = sliderValue,
-                onValueChange = {
-                    dragValue = (it / duration).coerceIn(0f, 1f)
-                    dragging = true
-                },
-                onValueChangeFinished = { dragging = false; actions.seek(dragValue) },
-                valueRange = 0f..duration.toFloat(),
-                colors = SliderDefaults.colors(
-                    thumbColor = scheme.primary,
-                    activeTrackColor = scheme.primary,
-                    inactiveTrackColor = scheme.surfaceVariant
-                ),
-                thumb = {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .shadow(
-                                elevation = 6.dp,
-                                shape = CircleShape,
-                                spotColor = scheme.primary.copy(alpha = 0.5f)
-                            )
-                            .background(scheme.primary, shape = CircleShape)
-                    )
-                },
-                track = { sliderState ->
-                    val fraction = if (sliderState.valueRange.endInclusive > 0) {
-                        (sliderState.value - sliderState.valueRange.start) /
-                            (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
-                    } else 0f
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .background(scheme.surfaceVariant, shape = RoundedCornerShape(4.dp))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(fraction)
-                                .background(scheme.primary, shape = RoundedCornerShape(4.dp))
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    formatTime(sliderValue.toLong()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant
-                )
-                Text(
-                    formatTime(duration),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // ---- Controles ----
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Modo: sin repetir → repetir todo → repetir uno → aleatorio
-                IconButton(onClick = { actions.cyclePlaybackMode() }) {
-                    val (icon, tint) = when {
-                        state.shuffleEnabled -> AuralIcons.Shuffle to scheme.primary
-                        state.repeatMode == RepeatMode.ONE -> AuralIcons.RepeatOne to scheme.primary
-                        state.repeatMode == RepeatMode.ALL -> AuralIcons.Repeat to scheme.primary
-                        else -> AuralIcons.Repeat to scheme.onSurfaceVariant
-                    }
-                    Icon(icon, contentDescription = "Modo de reproducción", tint = tint, modifier = Modifier.size(28.dp))
-                }
-                IconButton(onClick = { actions.previous() }) {
-                    Icon(
-                        imageVector = AuralIcons.SkipPrevious,
-                        contentDescription = "Anterior",
-                        tint = scheme.onSurface,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .shadow(8.dp, CircleShape, spotColor = scheme.primary.copy(alpha = 0.5f))
-                        .clip(CircleShape)
-                        .background(scheme.primary)
-                        .clickable { actions.togglePlay() },
-                    contentAlignment = Alignment.Center
+            // En ventana ancha los bloques se reparten en dos columnas;
+            // en ventana angosta quedan apilados como en el móvil.
+            if (wide) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (state.isPlaying) AuralIcons.Pause else AuralIcons.Play,
-                        contentDescription = if (state.isPlaying) "Pausar" else "Reproducir",
-                        tint = scheme.onPrimary,
-                        modifier = Modifier.size(36.dp)
-                    )
+                    Column(
+                        modifier = Modifier.weight(0.42f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        coverBlock(coverSize)
+                        Spacer(Modifier.height(16.dp))
+                        titleBlock()
+                    }
+                    Spacer(Modifier.width(32.dp))
+                    Column(
+                        modifier = Modifier.weight(0.58f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        lyricBlock()
+                        Spacer(Modifier.height(8.dp))
+                        seekBlock()
+                        Spacer(Modifier.height(8.dp))
+                        transportBlock()
+                        Spacer(Modifier.height(16.dp))
+                        volumeBlock()
+                    }
                 }
-                IconButton(onClick = { actions.next() }) {
-                    Icon(
-                        imageVector = AuralIcons.SkipNext,
-                        contentDescription = "Siguiente",
-                        tint = scheme.onSurface,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-                IconButton(onClick = { showQueue = true }) {
-                    Icon(
-                        imageVector = AuralIcons.QueueMusic,
-                        contentDescription = "Cola",
-                        tint = scheme.onSurfaceVariant,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
+            } else {
+                Spacer(Modifier.weight(0.4f))
 
-            // ---- Volumen ----
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                IconButton(onClick = { actions.toggleMute() }) {
-                    Icon(
-                        imageVector = if (state.muted || state.volume == 0) AuralIcons.VolumeOff else AuralIcons.VolumeUp,
-                        contentDescription = if (state.muted) "Activar sonido" else "Silenciar",
-                        tint = scheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Slider(
-                    value = state.volume / 100f,
-                    onValueChange = { actions.setVolume((it * 100).roundToInt().coerceIn(0, 100)) },
-                    modifier = Modifier.width(180.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = scheme.primary,
-                        activeTrackColor = scheme.primary,
-                        inactiveTrackColor = scheme.outlineVariant
-                    )
-                )
-                Text(
-                    text = "${state.volume}%",
-                    color = scheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    modifier = Modifier.width(44.dp)
-                )
+                // ---- Carátula grande con brillo del color dominante ----
+                coverBlock(240.dp)
+
+                // ---- Línea actual de la letra (tocar abre la letra completa) ----
+                lyricBlock()
+
+                // ---- Título + artista + corazón ----
+                titleBlock()
+                Spacer(Modifier.height(8.dp))
+
+                // ---- Barra de progreso (busca solo al soltar) ----
+                seekBlock()
+
+                // ---- Controles ----
+                transportBlock()
+
+                // ---- Volumen ----
+                volumeBlock()
+                Spacer(Modifier.weight(0.6f))
             }
-            Spacer(Modifier.weight(0.6f))
         }
 
         // ---- Cola ----
@@ -475,9 +537,11 @@ private fun NowPlayingContent(
         // ---- Letra completa ----
         if (showLyrics) {
             LyricsOverlay(
+                song = song,
                 lines = lrcLines,
                 positionMs = state.positionMs,
                 palette = palette,
+                loadCoverBytes = actions::loadCoverBytes,
                 onDismiss = { showLyrics = false },
                 onAddLyrics = { showLyrics = false; lyricsError = null; showLyricsPicker = true }
             )
@@ -609,9 +673,11 @@ private fun NowPlayingContent(
 /** Letra completa sincronizada, sobre el mismo fondo ambiental. */
 @Composable
 private fun LyricsOverlay(
+    song: Song,
     lines: List<LrcLine>,
     positionMs: Long,
     palette: List<Color>,
+    loadCoverBytes: (Song) -> ByteArray?,
     onDismiss: () -> Unit,
     onAddLyrics: () -> Unit
 ) {
@@ -652,6 +718,36 @@ private fun LyricsOverlay(
                 )
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.size(48.dp))
+            }
+            // Encabezado como en el móvil: portada + título + artista.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(
+                    bitmap = rememberCoverImage(song, loadCoverBytes),
+                    modifier = Modifier.size(56.dp),
+                    cornerRadius = 8.dp,
+                    showBorder = false
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = song.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             if (lines.isEmpty()) {
                 Box(
