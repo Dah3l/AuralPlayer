@@ -311,6 +311,9 @@ fun DrillView(
 ) {
     val scheme = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
+    // Paleta de la portada de la cabecera para el fondo mesh.
+    val coverBitmap = rememberCoverImage(coverSong, loadCoverBytes)
+    val palette = remember(coverBitmap) { extractPalette(coverBitmap, scheme.primary) }
     // Colapso del encabezado: al subir, la barra superior fija muestra
     // retroceder + portada + info de la sección (igual que en el móvil).
     // La altura del encabezado se lee del primer ítem visible.
@@ -332,7 +335,16 @@ fun DrillView(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            // ---- Cabecera como en el móvil: portada cuadrada y visible ----
+            // ---- Cabecera con mesh: el fondo ambiental con los colores
+            // de la portada (igual que el Now Playing), solo en esta
+            // zona; el velo del mesh mantiene el contraste del título
+            // y los botones sobre las manchas. ----
+            Box(modifier = Modifier.fillMaxWidth()) {
+                NowPlayingAmbientBackground(
+                    palette = palette,
+                    modifier = Modifier.matchParentSize()
+                )
+                Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .padding(start = 8.dp, end = 20.dp, top = 8.dp),
@@ -356,7 +368,7 @@ fun DrillView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CoverArt(
-                    bitmap = rememberCoverImage(coverSong, loadCoverBytes),
+                    bitmap = coverBitmap,
                     modifier = Modifier.size(200.dp),
                     cornerRadius = 16.dp,
                     showBorder = false
@@ -427,6 +439,8 @@ fun DrillView(
                     }
                 }
                 extraActions()
+            }
+                }
             }
         }
         if (songs.isEmpty()) {
