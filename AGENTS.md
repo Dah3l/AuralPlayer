@@ -294,7 +294,8 @@ cuanto las veas.
   Verificado 2026-11-19 (1.2.17).
 - Scrollbar de escritorio: la barra por defecto se come el contenido
   con solo 12 dp de padding — reservar carril con contentPadding end
-  (16 dp en listas, 24 dp en grids). Verificado 2026-11-19 (1.2.17).
+  (24 dp en listas, 32 dp en grids, 2026-11-19, 1.2.18; antes 16/24).
+  Verificado 2026-11-19 (1.2.17).
 - Portadas a resolución completa = RAM por las nubes: decodeImageBitmap
   decodificaba el JPEG/PNG tal cual (1500 px ≈ 9 MB) y el caché
   guardaba 120 → 1 GB+. Bajar a 512 px en el decode (Skia Surface +
@@ -307,6 +308,29 @@ cuanto las veas.
   contra el jar del plugin 1.12.2 — la clase tiene getJvmArgs/jvmArgs,
   no setter). Verificado 2026-11-19 (1.2.17, rompió assembleDebug y se
   arregló el mismo día).
+- Los clics en zonas vacías de una pantalla de overlay caen en la
+  pantalla de atrás (la biblioteca): el Box del Now Playing necesita
+  un `.clickable(indication = null, ...)` que se trague los clics.
+  Las hojas (QueueSheet, SongMenuSheet) ya lo tienen en su scrim y
+  los AlertDialog/DropdownMenu lo traen de fábrica; las pantallas
+  que REEMPLAZAN el contenido (Temas, Top 10, Donate, Contacto,
+  Ajustes, DrillView) no tienen nada detrás y no lo necesitan.
+  Verificado 2026-11-19 (1.2.18).
+- Contraste de la letra en el Now Playing: no usar el gris del tema
+  (onSurfaceVariant) a ciegas — la letra se lee según la luminosidad
+  del fondo (`isDarkBackground(scheme.background)`: fondo oscuro →
+  letra clara, fondo claro → letra oscura; la línea actual usa
+  primary solo en fondo oscuro). Verificado 2026-11-19 (1.2.18).
+- Descargas de YouTube en PC (1.2.18): NewPipeExtractor v0.26.5
+  declarado DIRECTO en desktopApp (el empaquetado no arrastra
+  transitivas de shared) + motor `YoutubeEngine` en desktopApp +
+  contrato en shared (`PlayerActions.searchYouTube/downloadYouTube/
+  cancelDownload` + `YoutubeResult/YoutubeDownload` en
+  `PlaybackState`). El audio baja crudo (DASH m4a/webm, igual que
+  el móvil) a la primera carpeta de la biblioteca y el re-escaneo
+  (`rescan`, que no pierde la reproducción) lo recoge. Las
+  miniaturas se cargan bajo demanda por Ktor en la UI compartida
+  (`createHttpClient()` + `decodeImageBitmap`, caché 40).
 
 ## Estado actual (2026-11-18)
 
@@ -376,6 +400,24 @@ cuanto las veas.
   más lento (56 s/68 s). packageVersion 1.2.17. Pendiente: correr
   android.yml y desktop.yml en verde + prueba en Windows (incl. RAM
   en el Administrador de tareas).
+- **En curso (Malen-IA):** PC 1.2.18, corrección del NP según Dahel
+  (CONSTRUIDA 2026-11-19): los controles van DEBAJO de la portada en
+  la columna izquierda (la 1.2.17 los había puesto debajo de la
+  letra) y la derecha es solo letra a lo alto; portada con tope
+  (minOf(maxHeight*0.36, maxWidth*0.38), 180–380 dp); contraste de
+  la letra por luminosidad del fondo (fondo oscuro → letra clara y
+  viceversa); scrollbar con más margen (24 dp listas, 32 dp grids,
+  barra sticky con 24 dp); tapón de clics en el Now Playing (los
+  clics en zonas vacías caían en la biblioteca de atrás) + barrido:
+  las hojas y diálogos ya se tragan los clics, las pantallas que
+  reemplazan el contenido no lo necesitan. **Descargas de YouTube**
+  (prioridad de Dahel): pestaña "Descargas" con buscador, resultados
+  en tarjetas con miniatura, progreso + cancelar y check de éxito;
+  motor NewPipeExtractor en PC (mismo que el móvil), audio crudo a
+  la primera carpeta de la biblioteca + re-escaneo sin perder la
+  reproducción. packageVersion 1.2.18. Pendiente: correr android.yml
+  y desktop.yml en verde + prueba en Windows (incl. una descarga
+  real y que la canción aparezca en la biblioteca).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -454,4 +496,5 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
+| 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
