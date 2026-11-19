@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -192,21 +195,34 @@ fun SongList(
     onSongLongPress: (Song) -> Unit,
     onSongMenu: (Song) -> Unit,
     loadCoverBytes: (Song) -> ByteArray?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Encabezado que se desplaza con la lista (en PC: la sección "Para ti"). */
+    header: (@Composable () -> Unit)? = null
 ) {
-    LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
-        items(songs, key = { it.filePath }) { song ->
-            SongRow(
-                song = song,
-                isPlaying = song.filePath == playingSongId,
-                selectionMode = selectionMode,
-                selected = song.filePath in selectedSongs,
-                onClick = { onSongClick(song) },
-                onLongPress = { onSongLongPress(song) },
-                onMenu = { onSongMenu(song) },
-                loadCoverBytes = loadCoverBytes
-            )
+    // La barra de desplazamiento de escritorio va a la derecha; la
+    // barra A-Z (que vive fuera) deja 14 dp libres para no taparla.
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            if (header != null) {
+                item { header() }
+            }
+            items(songs, key = { it.filePath }) { song ->
+                SongRow(
+                    song = song,
+                    isPlaying = song.filePath == playingSongId,
+                    selectionMode = selectionMode,
+                    selected = song.filePath in selectedSongs,
+                    onClick = { onSongClick(song) },
+                    onLongPress = { onSongLongPress(song) },
+                    onMenu = { onSongMenu(song) },
+                    loadCoverBytes = loadCoverBytes
+                )
+            }
         }
+        LazyListScrollbar(
+            state = listState,
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+        )
     }
 }
 
@@ -285,63 +301,54 @@ fun DrillView(
     extraActions: @Composable RowScope.() -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    val listState = rememberLazyListState()
+    Box(modifier = modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
-            // ---- Cabecera: portada + título sobre degradado ----
-            Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
-                CoverArt(
-                    bitmap = rememberCoverImage(coverSong, loadCoverBytes),
-                    modifier = Modifier.fillMaxSize(),
-                    cornerRadius = 0.dp,
-                    showBorder = false
-                )
-                // Degradado superior para que la flecha se lea
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(72.dp)
-                        .align(Alignment.TopStart)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)
-                            )
-                        )
-                )
+            // ---- Cabecera como en el móvil: portada cuadrada y visible ----
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = 8.dp, end = 20.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = AuralIcons.ArrowBack,
                         contentDescription = "Volver",
-                        tint = Color.White,
+                        tint = scheme.onBackground,
                         modifier = Modifier.size(26.dp)
                     )
                 }
-                // Degradado inferior + título
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(110.dp)
-                        .align(Alignment.BottomStart)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
-                            )
-                        )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(
+                    bitmap = rememberCoverImage(coverSong, loadCoverBytes),
+                    modifier = Modifier.size(200.dp),
+                    cornerRadius = 16.dp,
+                    showBorder = false
                 )
-                Column(
-                    modifier = Modifier.align(Alignment.BottomStart)
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                ) {
+                Spacer(Modifier.width(20.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
+                        color = scheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = scheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -417,6 +424,11 @@ fun DrillView(
             }
         }
     }
+        LazyListScrollbar(
+            state = listState,
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+        )
+    }
 }
 
 /** Una tarjeta de la sección "Para ti". */
@@ -439,7 +451,11 @@ fun MostPlayedSection(
     modifier: Modifier = Modifier
 ) {
     if (cards.isEmpty()) return
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    // La tarjeta no crece sin tope: en ventana maximizada dos
+    // tarjetas a peso 1f medían media pantalla cada una.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        val cardSize = ((maxWidth - 12.dp) / 2).coerceAtMost(340.dp)
+        Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Para ti",
             style = MaterialTheme.typography.titleLarge,
@@ -449,11 +465,11 @@ fun MostPlayedSection(
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
         ) {
             cards.take(2).forEach { card ->
                 Box(
-                    modifier = Modifier.weight(1f).aspectRatio(1f)
+                    modifier = Modifier.size(cardSize)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { card.onOpen() }
                 ) {
@@ -514,6 +530,7 @@ fun MostPlayedSection(
                 }
             }
         }
+    }
     }
 }
 
