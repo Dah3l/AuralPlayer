@@ -49,7 +49,11 @@ data class PlaybackState(
     /** Cometa de Aural Light en la isla. */
     val cometEnabled: Boolean = true,
     /** Apariencia de la isla: "auto" (tema) o "classic" (negra). */
-    val islandAppearance: String = "auto"
+    val islandAppearance: String = "auto",
+    /** Color de los botones de la isla ("#RRGGBB") o null = primario del tema. */
+    val islandButtonColorHex: String? = null,
+    /** Color del cometa Aural Light ("#RRGGBB") o null = primario del tema. */
+    val islandCometColorHex: String? = null
 ) {
     val currentSong: Song? get() = queue.getOrNull(currentIndex)
 }
