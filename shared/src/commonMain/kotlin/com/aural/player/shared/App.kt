@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /** Pestañas de la biblioteca, en el orden de Android (sin Descargas en PC). */
@@ -114,7 +115,9 @@ private data class AlbumGroup(
 fun App(
     state: PlaybackState,
     actions: PlayerActions,
-    versionName: String = "1.2.16"
+    versionName: String = "1.2.16",
+    // Señal de la isla flotante: cada incremento abre la pestaña Descargas.
+    openDownloadsSignal: StateFlow<Int>? = null
 ) {
     AuralTheme(theme = state.theme) {
         val scheme = MaterialTheme.colorScheme
@@ -175,6 +178,14 @@ fun App(
             tab = next
             drill = null
             clearSelection()
+        }
+
+        // La isla flotante puede pedir que se abra la pestaña Descargas
+        // (botón de YouTube): cada incremento de la señal abre la pestaña.
+        LaunchedEffect(openDownloadsSignal) {
+            openDownloadsSignal?.collect { count ->
+                if (count > 0) openTab(LibraryTab.DOWNLOADS)
+            }
         }
 
         fun openDrill(next: Drill) {
@@ -579,7 +590,13 @@ fun App(
                             onExportBackup = { actions.exportBackupToFile() },
                             onImportBackup = { actions.importBackupFromFile() },
                             onClearData = { actions.clearAllData() },
-                            onNotice = { showNotice(it) }
+                            onNotice = { showNotice(it) },
+                            islandEnabled = state.islandEnabled,
+                            cometEnabled = state.cometEnabled,
+                            islandAppearance = state.islandAppearance,
+                            onSetIslandEnabled = { actions.setIslandEnabled(it) },
+                            onSetCometEnabled = { actions.setCometEnabled(it) },
+                            onSetIslandAppearance = { actions.setIslandAppearance(it) }
                         )
                         null -> {
                             val data = drillData
