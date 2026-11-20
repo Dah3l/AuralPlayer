@@ -415,6 +415,38 @@ cuanto las veas.
 - `PathMeasure` (`androidx.compose.ui.graphics`) es commonMain:
   está en ui-graphics-desktop 1.12.2 (Skia) y en el artefacto
   Android (la isla de Android lo usa en su propio módulo).
+- `awaitPointerEventScope` es MIEMBRO de `PointerInputScope` (no
+  función top-level): dentro de `pointerInput { }` se llama
+  directo, SIN import; importar
+  `androidx.compose.ui.input.pointer.awaitPointerEventScope` da
+  Unresolved reference (1.2.21, android.yml).
+- Choque de nombres `RepeatMode` (1.2.21, android.yml): el
+  `import androidx.compose.animation.core.RepeatMode` sombrea el
+  enum propio `com.aural.player.shared.RepeatMode` (OFF/ALL/ONE)
+  en TODO el archivo — los `when` del modo fallan con Unresolved
+  reference 'ONE'/'OFF' y el parámetro `repeatMode: RepeatMode`
+  cambia de tipo. No importar el de animación: calificar
+  `androidx.compose.animation.core.RepeatMode.Restart` en el uso.
+- `OutlinedButton` faltaba en MenuScreens.kt (el import no llegó)
+  — el error en cascada "@Composable invocations can only happen
+  from the context of a @Composable function" es solo el síntoma
+  del import ausente (1.2.21, android.yml).
+- Imports duplicados (TextOverflow ×2, sp ×2 en
+  NowPlayingDialogs.kt) → "Conflicting import: imported name is
+  ambiguous" — revisar duplicados al añadir imports a un archivo
+  existente (1.2.21, android.yml).
+- Portadas en tiempo real (1.2.21): `rememberCoverImage` solo
+  recargaba al cambiar el filePath — cambiar la portada no cambia
+  el filePath, así que las pantallas ya compuestas se quedaban
+  con la vieja (solo las que recomponían de cero, p. ej. al
+  desplazar la lista, la veían nueva). Arreglo: `coverVersion`
+  global en CoverArt.kt, `forgetCoverImage` la sube,
+  `rememberCoverImage` lee la versión y `LaunchedEffect(key,
+  version)` recarga en TODAS las pantallas; al quitar la portada
+  se pone bitmap = null (si no, la vieja quedaba pegada). El aviso
+  "Unable to strip ... libandroidx.graphics.path.so ..." en el
+  build de Android es solo eso, un aviso: las librerías se
+  empaquetan sin despojar, no es error.
 
 ## Estado actual (2026-11-18)
 
@@ -616,6 +648,7 @@ cuanto las veas.
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.20: motor (stop antes de play + vigilante de atasco en el ticker), contraste causa raíz (LocalContentColor = onSurface en AuralTheme + explícitos en MiniPlayer/⋮/menú), mesh solo en portada+título con clipToBounds, Agregadas recientemente con dropdown de periodo (como Android v1.0.9); packageVersion 1.2.20 | shared/.../LibraryViews.kt, App.kt, Theme.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.21: portadas de internet (diálogo "Cambiar portada" igual que Android: iTunes gratis, campos editables, Galería, rejilla de resultados; descarga y guarda en local) + isla flotante (DialogWindow sin bordes ni botón en la barra de tareas, morph píldora 135×44 → 340×320, onda, transporte, favorito, modo, YouTube→Descargas, "Abrir Aural", cometa Aural Light; arrastrable, doble clic, clic derecho; Ajustes con mostrar isla/cometa/apariencia); packageVersion 1.2.21 | shared/.../CoverArtClient.kt, UrlImage.kt, Island.kt, NowPlayingDialogs.kt, DownloadsScreen.kt, NowPlayingScreen.kt, PlayerActions.kt, PlaybackState.kt, PrefsStore.kt, AuralIcons.kt, App.kt, MenuScreens.kt; desktopApp/.../DesktopPlayer.kt, IslandWindow.kt, Main.kt, build.gradle.kts |
+| 2026-11-19 | Malen-IA | Fix 1.2.21 (android.yml): 4 errores de compilación — Island.kt (awaitPointerEventScope es miembro de PointerInputScope, sin import; RepeatMode de animación sombreaba el enum propio → calificado), MenuScreens.kt (faltaba el import OutlinedButton), NowPlayingDialogs.kt (imports duplicados TextOverflow y sp); + bug de portadas en tiempo real (coverVersion global en CoverArt.kt: forgetCoverImage la sube y rememberCoverImage recarga en todas las pantallas) | shared/.../Island.kt, MenuScreens.kt, NowPlayingDialogs.kt, CoverArt.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.19: mesh en la cabecera de detalle (fondo ambiental con los colores de la portada, solo la zona de foto+título+botones) + auditoría de contraste en toda la app (corazón de favorita de rojo fijo a scheme.error; resto ya resolvía por el tema); packageVersion 1.2.19 | shared/.../LibraryViews.kt, SelectionBars.kt; desktopApp/.../Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
