@@ -28,7 +28,9 @@ data class DesktopPrefs(
     val eqAmps: List<Float> = emptyList(),
     val islandEnabled: Boolean = true,
     val cometEnabled: Boolean = true,
-    val islandAppearance: String = "auto"
+    val islandAppearance: String = "auto",
+    val islandButtonColorHex: String? = null,
+    val islandCometColorHex: String? = null
 )
 
 class PrefsStore(private val directory: String) {
@@ -55,7 +57,9 @@ class PrefsStore(private val directory: String) {
                 islandEnabled = (obj["islandEnabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
                 cometEnabled = (obj["cometEnabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
                 islandAppearance = (obj["islandAppearance"] as? JsonPrimitive)?.contentOrNull
-                    ?: "auto"
+                    ?: "auto",
+                islandButtonColorHex = (obj["islandButtonColor"] as? JsonPrimitive)?.contentOrNull,
+                islandCometColorHex = (obj["islandCometColor"] as? JsonPrimitive)?.contentOrNull
             )
         } catch (e: Exception) {
             null
@@ -78,6 +82,8 @@ class PrefsStore(private val directory: String) {
                 put("islandEnabled", prefs.islandEnabled)
                 put("cometEnabled", prefs.cometEnabled)
                 put("islandAppearance", prefs.islandAppearance)
+                prefs.islandButtonColorHex?.let { put("islandButtonColor", it) }
+                prefs.islandCometColorHex?.let { put("islandCometColor", it) }
             }
             LocalFiles.writeText(
                 "$directory/prefs.json",
