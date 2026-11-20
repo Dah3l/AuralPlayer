@@ -80,6 +80,23 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.sin
 
+/** Colores predefinidos para los botones y el cometa de la isla. */
+val ISLAND_COLOR_CHOICES = listOf(
+    "#2ED3B7", "#FF4D8D", "#F59E0B", "#3B82F6", "#8B5CF6", "#E5484D", "#FFFFFF"
+)
+
+/** "#RRGGBB" (con o sin #) a Color, o null si no es válido. */
+fun parseHexColor(hex: String): Color? {
+    val clean = hex.removePrefix("#")
+    if (clean.length != 6) return null
+    val value = clean.toLongOrNull(16) ?: return null
+    return Color(
+        red = ((value shr 16) and 0xFF) / 255f,
+        green = ((value shr 8) and 0xFF) / 255f,
+        blue = (value and 0xFF) / 255f
+    )
+}
+
 /**
  * Contenido de la isla: contenedor ÚNICO cuyos bordes se animan con
  * morph y cuyo contenido hace crossfade al alternar entre píldora
@@ -163,19 +180,23 @@ fun IslandContent(
     }
 
     // Aspecto: "auto" sigue al tema, "classic" es negro con los
-    // acentos en el color primario del tema.
+    // acentos en el color primario del tema (o el elegido por el usuario).
     val scheme = MaterialTheme.colorScheme
     val classic = state.islandAppearance == "classic"
     val islandBg = if (classic) Color(0xFF101014) else scheme.surface
-    val islandAccent = scheme.primary
+    val buttonColor = state.islandButtonColorHex?.let(::parseHexColor)
+    val islandAccent = buttonColor ?: scheme.primary
     val islandAccent2 = if (classic) Color(0xFF8B5CF6) else scheme.secondary
     val islandOnBg = if (classic) Color.White else scheme.onSurface
-    val islandOnAccent = scheme.onPrimary
-    // Cometa de Aural Light: color del tema (sin selector de color en PC).
-    val lightColor = scheme.primary
+    // Texto sobre el color elegido: claro sobre oscuro y viceversa.
+    val islandOnAccent = if (buttonColor != null) {
+        if (isDarkBackground(buttonColor)) Color.White else Color.Black
+    } else scheme.onPrimary
+    // Cometa de Aural Light: color elegido o primario del tema.
+    val lightColor = state.islandCometColorHex?.let(::parseHexColor) ?: scheme.primary
 
     val islandShape = RoundedCornerShape(cornerA.value.dp)
-    // El padding exterior le da aire a la sombra (16dp): sin este
+    // El padding exterior le da aire a la sombra (20dp): sin este
     // aire la sombra se recorta en recto.
     Box(
         modifier = modifier.fillMaxSize(),
@@ -183,7 +204,7 @@ fun IslandContent(
     ) {
         Box(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(20.dp)
                 .size(widthA.value.dp, heightA.value.dp)
                 // Cometa: ANTES de shadow/clip/fondo para que nada lo
                 // recorte ni lo tape. Se funde con la píldora durante
@@ -195,7 +216,15 @@ fun IslandContent(
                         fade = pillAlpha.value
                     ) else Modifier
                 )
-                .shadow(14.dp, islandShape)
+                // Sombra suave y controlada: la de 14dp con los
+                // colores por defecto se veía demasiado dura sobre
+                // la ventana transparente.
+                .shadow(
+                    elevation = 10.dp,
+                    shape = islandShape,
+                    spotColor = Color.Black.copy(alpha = 0.28f),
+                    ambientColor = Color.Black.copy(alpha = 0.15f)
+                )
                 .clip(islandShape)
                 .background(islandBg.copy(alpha = 0.97f))
                 .border(1.dp, islandOnBg.copy(alpha = 0.12f), islandShape),
