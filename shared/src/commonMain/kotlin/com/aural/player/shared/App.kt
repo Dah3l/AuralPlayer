@@ -255,7 +255,7 @@ fun App(
 
         // Tarjetas de "Para ti": la playlist del día primero y luego la
         // playlist más escuchada (o la más grande, o Favoritas).
-        val paraTiCards = remember(state.songs, state.playlists, state.favorites, top50, daily) {
+        val paraTiCards = remember(state.songs, state.playlists, state.favorites, top50, daily, recentSongs) {
             val cards = mutableListOf<MostPlayedCard>()
             if (daily.isNotEmpty()) {
                 cards += MostPlayedCard(
@@ -287,13 +287,38 @@ fun App(
                     onOpen = { openDrill(Drill.PlaylistDetail(best.id)) },
                     onPlay = { if (list.isNotEmpty()) actions.playFrom(list, 0) }
                 )
-            } else if (favoriteSongs.isNotEmpty()) {
+            }
+            // Tu Top 10 (de lo más escuchado).
+            val top10List = top50.orEmpty().take(10)
+                .mapNotNull { top -> state.songs.firstOrNull { it.id == top.songId } }
+            if (top10List.isNotEmpty()) {
+                cards += MostPlayedCard(
+                    title = "Tu Top 10",
+                    subtitle = "Lo más escuchado",
+                    coverSong = top10List.firstOrNull(),
+                    onOpen = { overlay = Overlay.TOP10 },
+                    onPlay = { actions.playFrom(top10List, 0) }
+                )
+            }
+            // Favoritas (si hay).
+            if (favoriteSongs.isNotEmpty()) {
                 cards += MostPlayedCard(
                     title = "Favoritas",
                     subtitle = "Tu selección",
                     coverSong = favoriteSongs.firstOrNull(),
                     onOpen = { openDrill(Drill.Favorites) },
                     onPlay = { actions.playFrom(favoriteSongs, 0) }
+                )
+            }
+            // Agregadas recientemente.
+            if (recentSongs.isNotEmpty()) {
+                val recentList = recentSongs.take(20)
+                cards += MostPlayedCard(
+                    title = "Agregadas recientemente",
+                    subtitle = "${recentList.size} canciones",
+                    coverSong = recentList.firstOrNull(),
+                    onOpen = { openDrill(Drill.Recent) },
+                    onPlay = { actions.playFrom(recentList, 0) }
                 )
             }
             cards
@@ -594,9 +619,13 @@ fun App(
                             islandEnabled = state.islandEnabled,
                             cometEnabled = state.cometEnabled,
                             islandAppearance = state.islandAppearance,
+                            islandButtonColorHex = state.islandButtonColorHex,
+                            islandCometColorHex = state.islandCometColorHex,
                             onSetIslandEnabled = { actions.setIslandEnabled(it) },
                             onSetCometEnabled = { actions.setCometEnabled(it) },
-                            onSetIslandAppearance = { actions.setIslandAppearance(it) }
+                            onSetIslandAppearance = { actions.setIslandAppearance(it) },
+                            onSetIslandButtonColor = { actions.setIslandButtonColor(it) },
+                            onSetIslandCometColor = { actions.setIslandCometColor(it) }
                         )
                         null -> {
                             val data = drillData
