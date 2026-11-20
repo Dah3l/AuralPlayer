@@ -30,6 +30,10 @@ class YoutubeDownloaderImpl : Downloader() {
         var connection: HttpURLConnection? = null
         try {
             connection = url.openConnection() as HttpURLConnection
+            // Sin timeouts un corte de red dejaba la petición colgada
+            // para siempre (descarga que nunca termina ni falla).
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
             connection.requestMethod = request.httpMethod()
             connection.instanceFollowRedirects = true
             // Headers de navegador real para evitar detección
@@ -74,6 +78,10 @@ class YoutubeDownloaderImpl : Downloader() {
 /** Motor de búsqueda y descarga de YouTube (NewPipeExtractor). */
 class YoutubeEngine {
 
+    /** Motivo del último fallo de descarga, para enseñarlo en la UI. */
+    var lastError: String? = null
+        private set
+
     init {
         try {
             NewPipe.init(YoutubeDownloaderImpl())
@@ -111,6 +119,8 @@ class YoutubeEngine {
      * Descarga el audio de un video a [destDir]. Devuelve el archivo
      * guardado o null si falló o se canceló. `isCancelled` se consulta
      * en cada bloque: si devuelve true, se aborta y se borra el parcial.
+     * Reintenta una vez con una URL fresca: los enlaces de YouTube
+     * caducan y la red en Cuba se corta a mitad de descarga.
      */
     suspend fun download(
         videoId: String,
@@ -120,41 +130,55 @@ class YoutubeEngine {
         onProgress: (Float) -> Unit,
         isCancelled: () -> Boolean
     ): File? = withContext(Dispatchers.IO) {
-        var dest: File? = null
-        try {
-            val service = NewPipe.getService("YouTube")
-            val streamInfo = StreamInfo.getInfo(
-                service,
-                "https://www.youtube.com/watch?v=$videoId"
-            )
-            // SOLO audio puro — sin fallback a video (igual que el móvil)
-            val audioStream = streamInfo.audioStreams
-                .sortedWith(
-                    compareBy(
-                        { !it.content.contains("mime=audio/mp4") },
-                        { it.averageBitrate }
-                    )
+        lastError = null
+        repeat(2) { attempt ->
+            var dest: File? = null
+            var stage = "info"
+            try {
+                val service = NewPipe.getService("YouTube")
+                val streamInfo = StreamInfo.getInfo(
+                    service,
+                    "https://www.youtube.com/watch?v=$videoId"
                 )
-                .firstOrNull { it.averageBitrate >= 48000 }
-                ?: streamInfo.audioStreams.minByOrNull { it.averageBitrate }
-                ?: return@withContext null
-            val ext = when {
-                audioStream.content.contains("mime=audio/mp4") -> "m4a"
-                audioStream.content.contains("mime=audio/webm") -> "webm"
-                else -> "m4a"
+                stage = "media"
+                // SOLO audio puro — sin fallback a video (igual que el móvil)
+                val audioStream = streamInfo.audioStreams
+                    .sortedWith(
+                        compareBy(
+                            { !it.content.contains("mime=audio/mp4") },
+                            { it.averageBitrate }
+                        )
+                    )
+                    .firstOrNull { it.averageBitrate >= 48000 }
+                    // Si ninguno llega a 48 kbps, el MEJOR disponible
+                    // (antes era el peor: minByOrNull).
+                    ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
+                    ?: run {
+                        lastError = "El video no tiene audio descargable"
+                        return@withContext null
+                    }
+                val ext = when {
+                    audioStream.content.contains("mime=audio/mp4") -> "m4a"
+                    audioStream.content.contains("mime=audio/webm") -> "webm"
+                    else -> "m4a"
+                }
+                val fileName = sanitize("$uploader - $title.$ext")
+                destDir.mkdirs()
+                dest = File(destDir, fileName)
+                dest.outputStream().use { out ->
+                    downloadWithProgress(audioStream.content, out, onProgress, isCancelled)
+                }
+                return@withContext dest
+            } catch (_: Exception) {
+                // Sin parcial a medias en la biblioteca.
+                dest?.let { if (it.exists()) it.delete() }
+                if (isCancelled()) return@withContext null
+                lastError = if (stage == "info") "YouTube no respondió, reintenta"
+                else "Se cortó la descarga, reintenta"
+                if (attempt == 0) kotlinx.coroutines.delay(1_000)
             }
-            val fileName = sanitize("$uploader - $title.$ext")
-            destDir.mkdirs()
-            dest = File(destDir, fileName)
-            dest.outputStream().use { out ->
-                downloadWithProgress(audioStream.content, out, onProgress, isCancelled)
-            }
-            dest
-        } catch (_: Exception) {
-            // Sin parcial a medias en la biblioteca.
-            dest?.let { if (it.exists()) it.delete() }
-            null
         }
+        null
     }
 
     private fun sanitize(name: String): String {
@@ -178,6 +202,8 @@ class YoutubeEngine {
         isCancelled: () -> Boolean
     ) {
         val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 30_000
         // Headers de navegador
         connection.setRequestProperty(
             "User-Agent",
