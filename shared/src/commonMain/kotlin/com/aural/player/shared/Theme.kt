@@ -5,11 +5,13 @@
 // Temas de Aural (Material 3)
 package com.aural.player.shared
 
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -216,11 +218,18 @@ fun AuralTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = theme.colorScheme()
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AuralTypography,
-        content = content
-    )
+    // Color de contenido por defecto: Material 3 NO lo pone (queda
+    // en negro), así que todo texto o icono sin color explícito se
+    // veía negro sobre fondos oscuros (título del MiniPlayer, botón
+    // ⋮, textos de Ajustes y Contacto). El color del tema es
+    // dinámico: claro con fondo oscuro y oscuro con fondo claro.
+    CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = AuralTypography,
+            content = content
+        )
+    }
 }
 
 // ---- Tema Halloween: temporada 27-oct..1-nov (oscuro + naranja calabaza) ----
