@@ -37,12 +37,16 @@ fun IslandWindow(
     onOpenYouTube: () -> Unit
 ) {
     val song = state.currentSong
-    // Ocultar temporal: vuelve sola con la siguiente canción.
+    // Ocultar temporal: vuelve sola al cambiar de canción o al
+    // pausar/reanudar (igual que en el móvil).
     var hiddenForSongPath by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(song?.filePath, state.isPlaying) {
+        hiddenForSongPath = null
+    }
     val visible = state.islandEnabled && song != null && hiddenForSongPath != song?.filePath
     val dialogState = rememberDialogState(
         position = WindowPosition(Alignment.TopCenter),
-        size = DpSize(135.dp + 32.dp, 44.dp + 32.dp)
+        size = DpSize(135.dp + 40.dp, 44.dp + 40.dp)
     )
     DialogWindow(
         onCloseRequest = {
@@ -86,10 +90,11 @@ fun IslandWindow(
                 onHide = { song?.let { hiddenForSongPath = it.filePath } },
                 onWindowSync = { wDp, hDp ->
                     // La ventana sigue al morph: tamaño + centrado.
-                    dialogState.size = DpSize((wDp + 32f).dp, (hDp + 32f).dp)
+                    // El +40 es el aire de la sombra (20dp por lado).
+                    dialogState.size = DpSize((wDp + 40f).dp, (hDp + 40f).dp)
                     val screenW = Toolkit.getDefaultToolkit().screenSize.width
                     val screenWDp = screenW / density.density
-                    val x = ((screenWDp - (wDp + 32f)) / 2).dp
+                    val x = ((screenWDp - (wDp + 40f)) / 2).dp
                     dialogState.position = WindowPosition(x, dialogState.position.y)
                 }
             )
