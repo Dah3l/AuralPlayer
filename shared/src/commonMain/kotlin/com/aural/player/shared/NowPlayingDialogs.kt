@@ -8,9 +8,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,10 +28,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -37,19 +43,28 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 
 @Composable
@@ -262,26 +277,84 @@ fun EditMetadataDialog(
     )
 }
 
+/**
+ * Diálogo "Cambiar portada", igual que en Android: campos de canción
+ * y artista editables, búsqueda en iTunes (gratis), galería local y
+ * quitar la personalizada. Al elegir un resultado se descarga la
+ * portada en 600 px y se guarda en local.
+ */
 @Composable
 fun CoverPickerDialog(
+    artist: String,
+    title: String,
     hasCustom: Boolean,
-    onPick: () -> Unit,
+    onSelect: (String) -> Unit,
+    onPickFromGallery: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    var searchTitle by remember { mutableStateOf(title) }
+    var searchArtist by remember {
+        mutableStateOf(
+            artist.takeUnless {
+                it == "Artista desconocido" || it == "Artista misterioso"
+            } ?: ""
+        )
+    }
+    var results by remember { mutableStateOf<List<CoverArtResult>?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun doSearch() {
+        scope.launch {
+            isLoading = true
+            error = false
+            val found = CoverArtClient.search(searchArtist, searchTitle)
+            results = found
+            isLoading = false
+            error = found.isEmpty()
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Cambiar portada") },
         text = {
-            Column {
-                TextButton(
-                    onClick = { onPick(); onDismiss() },
+            Column(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
+                OutlinedTextField(
+                    value = searchTitle,
+                    onValueChange = { searchTitle = it },
+                    label = { Text("Canción") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = searchArtist,
+                    onValueChange = { searchArtist = it },
+                    label = { Text("Artista") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Elegir imagen…", modifier = Modifier.fillMaxWidth())
+                    Button(
+                        onClick = { doSearch() },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading
+                    ) { Text("Buscar") }
+                    OutlinedButton(
+                        onClick = { onPickFromGallery(); onDismiss() },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Galería") }
                 }
                 if (hasCustom) {
+                    Spacer(Modifier.height(8.dp))
                     TextButton(
                         onClick = { onRemove(); onDismiss() },
                         modifier = Modifier.fillMaxWidth()
@@ -291,6 +364,78 @@ fun CoverPickerDialog(
                             color = scheme.error,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 240.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        isLoading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(8.dp))
+                            Text("Buscando portadas...")
+                        }
+                        error -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🌐", style = MaterialTheme.typography.displayMedium)
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "No se encontraron portadas.\nPrueba usar VPN y reintenta.",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        results != null -> {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                contentPadding = PaddingValues(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(results!!) { result ->
+                                    Column(
+                                        modifier = Modifier.clickable {
+                                            onSelect(result.artworkUrl)
+                                            onDismiss()
+                                        },
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        val thumb = rememberUrlImage(result.thumbnailUrl)
+                                        if (thumb != null) {
+                                            Image(
+                                                bitmap = thumb,
+                                                contentDescription = result.collectionName,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.size(100.dp)
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(100.dp)
+                                                    .background(scheme.surfaceVariant),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    AuralIcons.MusicNote,
+                                                    contentDescription = null,
+                                                    tint = scheme.primary.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = result.collectionName.ifBlank { result.trackName },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
