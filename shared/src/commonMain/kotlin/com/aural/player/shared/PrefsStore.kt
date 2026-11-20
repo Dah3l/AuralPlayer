@@ -25,7 +25,10 @@ data class DesktopPrefs(
     val playbackSpeed: Float = 1f,
     val eqEnabled: Boolean = false,
     val eqPreamp: Float = 0f,
-    val eqAmps: List<Float> = emptyList()
+    val eqAmps: List<Float> = emptyList(),
+    val islandEnabled: Boolean = true,
+    val cometEnabled: Boolean = true,
+    val islandAppearance: String = "auto"
 )
 
 class PrefsStore(private val directory: String) {
@@ -48,7 +51,11 @@ class PrefsStore(private val directory: String) {
                 eqPreamp = (obj["eqPreamp"] as? JsonPrimitive)?.floatOrNull ?: 0f,
                 eqAmps = (obj["eqAmps"] as? JsonArray)
                     ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
-                    ?: emptyList()
+                    ?: emptyList(),
+                islandEnabled = (obj["islandEnabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                cometEnabled = (obj["cometEnabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                islandAppearance = (obj["islandAppearance"] as? JsonPrimitive)?.contentOrNull
+                    ?: "auto"
             )
         } catch (e: Exception) {
             null
@@ -68,6 +75,9 @@ class PrefsStore(private val directory: String) {
                 put("eqEnabled", prefs.eqEnabled)
                 put("eqPreamp", prefs.eqPreamp)
                 put("eqAmps", buildJsonArray { prefs.eqAmps.forEach { add(JsonPrimitive(it)) } })
+                put("islandEnabled", prefs.islandEnabled)
+                put("cometEnabled", prefs.cometEnabled)
+                put("islandAppearance", prefs.islandAppearance)
             }
             LocalFiles.writeText(
                 "$directory/prefs.json",
