@@ -50,6 +50,14 @@ interface PlayerActions {
     fun toggleMute()
     fun setTheme(theme: AppTheme)
 
+    // ---- Isla flotante ----
+    /** Isla flotante: visible o no. */
+    fun setIslandEnabled(enabled: Boolean)
+    /** Cometa de Aural Light en la isla: encendido o no. */
+    fun setCometEnabled(enabled: Boolean)
+    /** Apariencia de la isla: "auto" (tema) o "classic" (negra). */
+    fun setIslandAppearance(appearance: String)
+
     // ---- Cola ----
     fun enqueue(song: Song)
     fun enqueueAll(songs: List<Song>)
@@ -92,6 +100,8 @@ interface PlayerActions {
     fun hasCustomCover(song: Song): Boolean
     fun pickCustomCover(song: Song): Boolean
     fun removeCustomCover(song: Song)
+    /** Descarga la portada de una URL y la guarda como personalizada. */
+    suspend fun saveCoverFromUrl(song: Song, url: String): Boolean
     fun editMetadata(song: Song, title: String, artist: String, album: String): EditResult
     suspend fun loadLyrics(song: Song): String?
     suspend fun searchAndSaveLyrics(song: Song, track: String, artist: String): Boolean
