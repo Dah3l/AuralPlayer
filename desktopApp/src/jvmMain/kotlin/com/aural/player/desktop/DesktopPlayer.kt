@@ -1,6 +1,7 @@
 package com.aural.player.desktop
 
 import com.aural.player.shared.AppTheme
+import com.aural.player.shared.CoverArtClient
 import com.aural.player.shared.CoverStore
 import com.aural.player.shared.DesktopPrefs
 import com.aural.player.shared.DownloadStatus
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -151,7 +153,10 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                                 playbackSpeed = saved.playbackSpeed,
                                 eqEnabled = saved.eqEnabled,
                                 eqPreamp = saved.eqPreamp,
-                                eqAmps = saved.eqAmps
+                                eqAmps = saved.eqAmps,
+                                islandEnabled = saved.islandEnabled,
+                                cometEnabled = saved.cometEnabled,
+                                islandAppearance = saved.islandAppearance
                             )
                         }
                         // Si se curó un volumen en 0, se guarda la corrección.
@@ -480,6 +485,23 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
 
     override fun setTheme(theme: AppTheme) {
         _state.update { it.copy(theme = theme) }
+        persistPrefs()
+    }
+
+    // ---------------- Isla flotante ----------------
+
+    override fun setIslandEnabled(enabled: Boolean) {
+        _state.update { it.copy(islandEnabled = enabled) }
+        persistPrefs()
+    }
+
+    override fun setCometEnabled(enabled: Boolean) {
+        _state.update { it.copy(cometEnabled = enabled) }
+        persistPrefs()
+    }
+
+    override fun setIslandAppearance(appearance: String) {
+        _state.update { it.copy(islandAppearance = appearance) }
         persistPrefs()
     }
 
@@ -825,6 +847,19 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
         try {
             covers.removeCustom(song.id)
         } catch (_: Throwable) {
+        }
+    }
+
+    /** Descarga la portada de una URL (iTunes, 600 px) y la guarda. */
+    override suspend fun saveCoverFromUrl(song: Song, url: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val bytes = CoverArtClient.download(url) ?: return@withContext false
+                covers.saveCustom(song.id, bytes)
+                true
+            } catch (_: Throwable) {
+                false
+            }
         }
     }
 
@@ -1217,7 +1252,10 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                     playbackSpeed = s.playbackSpeed,
                     eqEnabled = s.eqEnabled,
                     eqPreamp = s.eqPreamp,
-                    eqAmps = s.eqAmps
+                    eqAmps = s.eqAmps,
+                    islandEnabled = s.islandEnabled,
+                    cometEnabled = s.cometEnabled,
+                    islandAppearance = s.islandAppearance
                 )
             )
         }
@@ -1250,7 +1288,10 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                             playbackSpeed = saved.playbackSpeed,
                             eqEnabled = saved.eqEnabled,
                             eqPreamp = saved.eqPreamp,
-                            eqAmps = saved.eqAmps
+                            eqAmps = saved.eqAmps,
+                            islandEnabled = saved.islandEnabled,
+                            cometEnabled = saved.cometEnabled,
+                            islandAppearance = saved.islandAppearance
                         )
                     }
                     vlc.setVolume(healedVolume)
