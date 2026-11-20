@@ -54,17 +54,31 @@ private object CoverImageCache {
     }
 }
 
+/**
+ * Versión global de portadas: cada cambio de portada la sube y
+ * todas las pantallas que ya están compuestas recargan la suya.
+ * Sin esto, cambiar una portada solo se veía al recomponer de
+ * cero (p. ej. al desplazar la lista), porque rememberCoverImage
+ * solo recargaba cuando cambiaba el filePath — y el filePath no
+ * cambia nunca al cambiar la portada.
+ */
+private val coverVersion = mutableStateOf(0)
+
 /** Olvida la portada cacheada de una canción (tras cambiarla o quitarla). */
 fun forgetCoverImage(song: Song) {
     CoverImageCache.remove(song.filePath)
+    coverVersion.value++
 }
 
 /** Portada decodificada de una canción, o null mientras carga / si no hay. */
 @Composable
 fun rememberCoverImage(song: Song?, loadBytes: (Song) -> ByteArray?): ImageBitmap? {
     val key = song?.filePath
+    // La versión se lee aquí para que el cambio de portada
+    // recomponga TODAS las pantallas, no solo la que la cambió.
+    val version = coverVersion.value
     var bitmap by remember(key) { mutableStateOf(CoverImageCache.get(key ?: "")) }
-    LaunchedEffect(key) {
+    LaunchedEffect(key, version) {
         if (song == null) {
             bitmap = null
             return@LaunchedEffect
@@ -76,8 +90,17 @@ fun rememberCoverImage(song: Song?, loadBytes: (Song) -> ByteArray?): ImageBitma
         }
         val bytes = withContext(Dispatchers.IO) {
             runCatching { loadBytes(song) }.getOrNull()
-        } ?: return@LaunchedEffect
-        val decoded = runCatching { decodeImageBitmap(bytes) }.getOrNull() ?: return@LaunchedEffect
+        }
+        if (bytes == null) {
+            // Sin portada (la quitaron): no dejar la vieja pegada.
+            bitmap = null
+            return@LaunchedEffect
+        }
+        val decoded = runCatching { decodeImageBitmap(bytes) }.getOrNull()
+        if (decoded == null) {
+            bitmap = null
+            return@LaunchedEffect
+        }
         CoverImageCache.put(songKey, decoded)
         bitmap = decoded
     }
