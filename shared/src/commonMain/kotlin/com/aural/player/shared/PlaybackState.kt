@@ -43,7 +43,13 @@ data class PlaybackState(
     /** Error de búsqueda o descarga de YouTube. */
     val youTubeError: String? = null,
     /** Descargas de YouTube en curso o terminadas. */
-    val downloads: List<YoutubeDownload> = emptyList()
+    val downloads: List<YoutubeDownload> = emptyList(),
+    /** Isla flotante: visible. */
+    val islandEnabled: Boolean = true,
+    /** Cometa de Aural Light en la isla. */
+    val cometEnabled: Boolean = true,
+    /** Apariencia de la isla: "auto" (tema) o "classic" (negra). */
+    val islandAppearance: String = "auto"
 ) {
     val currentSong: Song? get() = queue.getOrNull(currentIndex)
 }
