@@ -347,6 +347,40 @@ cuanto las veas.
   blanco sobre rojo en Descargas. El rojo fijo del corazón de
   favorita en la barra de multiselección pasó a `scheme.error`
   (rojo del tema) para que se ajuste con el fondo oscuro/claro.
+- Contraste, causa raíz (1.2.20, 2026-11-19): Material 3 NO pone
+  `LocalContentColor` (queda en negro por defecto), así que todo
+  texto o icono SIN color explícito se veía negro sobre fondos
+  oscuros: título del MiniPlayer, botón ⋮, textos de Ajustes y
+  Contacto y del menú ⋮. La auditoría de la 1.2.19 NO lo vio
+  porque solo buscó colores fijos y asumió que el color por
+  defecto era el del tema. El arreglo: `AuralTheme` compartido
+  provee `LocalContentColor = scheme.onSurface` (dinámico: claro
+  con fondo oscuro y viceversa) + color/tint explícito en los
+  puntos nombrados (MiniPlayer, ⋮, menú). Android NO se ve
+  afectado: usa su propia copia de `AuralTheme`
+  (`ui/theme/Theme.kt`), no la compartida.
+- Mesh, sangrado detrás de la lista (1.2.20, 2026-11-19): el mesh
+  de la cabecera de detalle cubría toda la cabecera y sus manchas
+  se veían detrás de las primeras canciones. El arreglo: el mesh
+  va SOLO en la zona de portada + título, dentro de un Box con
+  `clipToBounds()` (la fila de retroceso, los botones y la lista
+  quedan planos). Sin el clip, los círculos se salen de su zona.
+- Motor: cambio natural de pista sin sonido (1.2.20, 2026-11-19):
+  al terminar una canción, `play()` de la siguiente corría
+  mientras VLC todavía desmontaba la anterior y la entrada nueva
+  quedaba en "abriendo" sin sonar hasta buscar con el slider.
+  El arreglo: `VlcPlayer.play()` para primero (`controls().stop()`)
+  y un vigilante en el ticker de `DesktopPlayer`: si una pista
+  suena pero su posición no avanza 2 s seguidos (y no está en los
+  últimos 2 s), se vuelve a lanzar la reproducción una sola vez
+  por pista.
+- Agregadas recientemente (1.2.20, 2026-11-19): puerto del filtro
+  de Android (v1.0.9, DetailScreen.kt): `RecentPeriod` (Esta
+  semana 7 / Este mes 30 / Este año 365 / Todas) + dropdown junto
+  a los botones en la cabecera de `Drill.Recent`. En PC la fecha
+  es `Song.dateAddedMs` (el escáner la pone con
+  `file.lastModified()`); por defecto, Este mes (igual que el
+  corte fijo de 30 días anterior).
 
 ## Estado actual (2026-11-18)
 
@@ -434,21 +468,23 @@ cuanto las veas.
   reproducción. packageVersion 1.2.18. Pendiente: correr android.yml
   y desktop.yml en verde + prueba en Windows (incl. una descarga
   real y que la canción aparezca en la biblioteca).
-- **En curso (Malen-IA):** PC 1.2.19, mesh en la cabecera de detalle
-  (CONSTRUIDA 2026-11-19): la cabecera de artista/álbum/playlist
-  lleva detrás el fondo mesh con los colores de su portada
-  (`extractPalette` + `NowPlayingAmbientBackground` con
-  `matchParentSize()` — fillMaxSize mide infinito dentro de un ítem
-  de LazyColumn); solo esa zona, la lista queda plana. Contraste
-  general (auditoría 2026-11-19 a petición de Dahel: no solo la
-  letra del NP): todo el texto y los iconos resuelven por el tema o
-  por `isDarkBackground` sobre fondos que no son del tema; los
-  blancos fijos que quedan son correctos (degradado negro, burbuja
-  A-Z, botones rojos); el corazón de favorita de la barra de
-  multiselección pasó de rojo fijo a `scheme.error`. packageVersion
-  1.2.19. Pendiente: correr android.yml y desktop.yml en verde +
-  prueba en Windows (cabecera con mesh en artista/álbum/playlist,
-  contraste en tema claro y oscuro).
+- **En curso (Malen-IA):** PC 1.2.20, cuatro arreglos de Dahel
+  (CONSTRUIDA 2026-11-19, noche): (1) motor: la pista que cambia
+  sola a veces no suena — `VlcPlayer.play()` para primero y un
+  vigilante en el ticker relanza la reproducción si la posición
+  no avanza 2 s; (2) contraste, causa raíz: M3 no pone
+  `LocalContentColor` (negro por defecto) — `AuralTheme`
+  compartido ahora lo provee (`scheme.onSurface`) + color/tint
+  explícito en MiniPlayer, ⋮ y menú (Android no se ve afectado:
+  usa su propia copia de `AuralTheme`); (3) mesh SOLO en la zona
+  de portada + título, con `clipToBounds()` (antes se veía detrás
+  de la lista); (4) Agregadas recientemente con dropdown de
+  periodo (Esta semana / Este mes / Este año / Todas, como en
+  Android v1.0.9). packageVersion 1.2.20. Pendiente: correr
+  android.yml y desktop.yml en verde + prueba en Windows (cambio
+  natural de pista con sonido, textos legibles en tema oscuro,
+  mesh solo en portada+título, dropdown de fechas en Agregadas
+  recientemente).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -527,6 +563,7 @@ cuanto las veas.
 | 2026-11-18 | Malen-IA | Fix build 1.2.15 (android.yml falló: Unresolved reference 'focusable' por import en ui.focus, String? en CoverArt, Slider experimental sin @OptIn): import a foundation.focusable, val songKey no-nulo, @OptIn en NowPlayingContent; barrido: único import mal puesto en el proyecto | shared/.../App.kt, CoverArt.kt, NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
+| 2026-11-19 | Malen-IA | PC 1.2.20: motor (stop antes de play + vigilante de atasco en el ticker), contraste causa raíz (LocalContentColor = onSurface en AuralTheme + explícitos en MiniPlayer/⋮/menú), mesh solo en portada+título con clipToBounds, Agregadas recientemente con dropdown de periodo (como Android v1.0.9); packageVersion 1.2.20 | shared/.../LibraryViews.kt, App.kt, Theme.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.19: mesh en la cabecera de detalle (fondo ambiental con los colores de la portada, solo la zona de foto+título+botones) + auditoría de contraste en toda la app (corazón de favorita de rojo fijo a scheme.error; resto ya resolvía por el tema); packageVersion 1.2.19 | shared/.../LibraryViews.kt, SelectionBars.kt; desktopApp/.../Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
