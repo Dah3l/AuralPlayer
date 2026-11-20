@@ -138,6 +138,15 @@ class VlcPlayer(
             val ascii = File(filePath).toURI().toASCIIString()
             val mrl = if (ascii.startsWith("file://")) ascii
                       else ascii.replaceFirst("file:/", "file:///")
+            // Parar antes de poner la pista nueva: si la anterior
+            // acaba de terminar, VLC a veces deja la entrada nueva
+            // en "abriendo" y no suena hasta que se busca con el
+            // slider. Parar primero deja el motor en un estado
+            // limpio antes de arrancar la siguiente.
+            try {
+                mediaPlayer.controls().stop()
+            } catch (_: Throwable) {
+            }
             mediaPlayer.media().play(mrl)
         } catch (_: Throwable) {
             false
