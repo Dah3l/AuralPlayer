@@ -4,8 +4,11 @@
 // se abren en el navegador.
 package com.aural.player.shared
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,8 +16,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -37,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -379,9 +385,13 @@ fun SettingsScreen(
     islandEnabled: Boolean,
     cometEnabled: Boolean,
     islandAppearance: String,
+    islandButtonColorHex: String?,
+    islandCometColorHex: String?,
     onSetIslandEnabled: (Boolean) -> Unit,
     onSetCometEnabled: (Boolean) -> Unit,
-    onSetIslandAppearance: (String) -> Unit
+    onSetIslandAppearance: (String) -> Unit,
+    onSetIslandButtonColor: (String?) -> Unit,
+    onSetIslandCometColor: (String?) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     var showLicense by remember { mutableStateOf(false) }
@@ -466,6 +476,17 @@ fun SettingsScreen(
                     Button(onClick = { onSetIslandAppearance("classic") }) { Text("Clásica") }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            IslandColorRow(
+                title = "Color de los botones",
+                selectedHex = islandButtonColorHex,
+                onSelect = onSetIslandButtonColor
+            )
+            IslandColorRow(
+                title = "Color de Aural Light (cometa)",
+                selectedHex = islandCometColorHex,
+                onSelect = onSetIslandCometColor
+            )
 
             Spacer(Modifier.height(24.dp))
             Text(
@@ -570,5 +591,61 @@ private fun IslandSettingRow(
             modifier = Modifier.weight(1f)
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** Fila para elegir un color de la isla: Auto (primario del tema) o una muestra. */
+@Composable
+private fun IslandColorRow(
+    title: String,
+    selectedHex: String?,
+    onSelect: (String?) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            // Auto: círculo con una "A".
+            Box(
+                modifier = Modifier.size(28.dp)
+                    .clip(CircleShape)
+                    .border(
+                        width = if (selectedHex == null) 2.dp else 1.dp,
+                        color = if (selectedHex == null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        shape = CircleShape
+                    )
+                    .clickable { onSelect(null) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "A",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            ISLAND_COLOR_CHOICES.forEach { hex ->
+                val color = parseHexColor(hex) ?: return@forEach
+                val selected = selectedHex == hex
+                Box(
+                    modifier = Modifier.size(28.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(
+                            width = if (selected) 2.dp else 1.dp,
+                            color = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            shape = CircleShape
+                        )
+                        .clickable { onSelect(hex) }
+                )
+            }
+        }
     }
 }
