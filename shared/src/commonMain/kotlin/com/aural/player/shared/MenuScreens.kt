@@ -25,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -373,7 +374,13 @@ fun SettingsScreen(
     onExportBackup: () -> Boolean,
     onImportBackup: () -> Boolean,
     onClearData: () -> Boolean,
-    onNotice: (String) -> Unit
+    onNotice: (String) -> Unit,
+    islandEnabled: Boolean,
+    cometEnabled: Boolean,
+    islandAppearance: String,
+    onSetIslandEnabled: (Boolean) -> Unit,
+    onSetCometEnabled: (Boolean) -> Unit,
+    onSetIslandAppearance: (String) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     var showLicense by remember { mutableStateOf(false) }
@@ -414,6 +421,48 @@ fun SettingsScreen(
                     )
                 }) {
                     Text("Importar")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "Isla flotante",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = "La píldora flotante con la canción que suena, siempre visible sobre las demás ventanas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            IslandSettingRow(
+                title = "Mostrar isla",
+                checked = islandEnabled,
+                onCheckedChange = onSetIslandEnabled
+            )
+            IslandSettingRow(
+                title = "Aural Light (cometa)",
+                checked = cometEnabled,
+                onCheckedChange = onSetCometEnabled
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Apariencia",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                if (islandAppearance == "auto") {
+                    Button(onClick = { onSetIslandAppearance("auto") }) { Text("Auto") }
+                    OutlinedButton(onClick = { onSetIslandAppearance("classic") }) { Text("Clásica") }
+                } else {
+                    OutlinedButton(onClick = { onSetIslandAppearance("auto") }) { Text("Auto") }
+                    Button(onClick = { onSetIslandAppearance("classic") }) { Text("Clásica") }
                 }
             }
 
@@ -500,5 +549,25 @@ fun SettingsScreen(
                 TextButton(onClick = { showClearConfirm = false }) { Text("Cancelar") }
             }
         )
+    }
+}
+
+/** Fila con interruptor para un ajuste de la isla. */
+@Composable
+private fun IslandSettingRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
