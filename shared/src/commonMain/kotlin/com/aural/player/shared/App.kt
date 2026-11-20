@@ -133,6 +133,9 @@ fun App(
         var searchFocused by remember { mutableStateOf(false) }
         var top10Songs by remember { mutableStateOf<List<TopSong>?>(null) }
         var showNowPlaying by remember { mutableStateOf(false) }
+        // Periodo del filtro de Agregadas recientemente (como en
+        // Android: semana / mes / año / todas; por defecto, mes).
+        var recentPeriod by remember { mutableStateOf(RecentPeriod.MONTH) }
         // Tapón de clics del Now Playing (ver el Box de abajo).
         val npClickSource = remember { MutableInteractionSource() }
         var showUpdateDialog by remember { mutableStateOf(false) }
@@ -215,10 +218,14 @@ fun App(
             state.songs.filter { it.filePath in state.favorites }
                 .sortedBy { it.title.lowercase() }
         }
-        val recentSongs = remember(state.songs) {
-            val cutoff = SystemDates.nowEpochMillis() - 30L * 24 * 60 * 60 * 1000
-            state.songs.filter { it.dateAddedMs > cutoff }
-                .sortedByDescending { it.dateAddedMs }
+        val recentSongs = remember(state.songs, recentPeriod) {
+            val cutoff = recentPeriod.cutoffMs()
+            if (cutoff == null) {
+                state.songs.sortedByDescending { it.dateAddedMs }
+            } else {
+                state.songs.filter { it.dateAddedMs > cutoff }
+                    .sortedByDescending { it.dateAddedMs }
+            }
         }
         val daily = remember(state.songs) { dailyPlaylist(state.songs) }
 
@@ -422,7 +429,8 @@ fun App(
                             IconButton(onClick = { showGeneralMenu = true }) {
                                 Icon(
                                     imageVector = AuralIcons.MoreVert,
-                                    contentDescription = "Menú"
+                                    contentDescription = "Menú",
+                                    tint = scheme.onSurface
                                 )
                             }
                             DropdownMenu(
@@ -430,27 +438,27 @@ fun App(
                                 onDismissRequest = { showGeneralMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Tema") },
+                                    text = { Text("Tema", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.THEMES }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Buscar actualizaciones") },
+                                    text = { Text("Buscar actualizaciones", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; showUpdateDialog = true }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Apoyar a Aural ❤") },
+                                    text = { Text("Apoyar a Aural ❤", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.DONATE }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Contacto") },
+                                    text = { Text("Contacto", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.CONTACT }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Tu Top 10") },
+                                    text = { Text("Tu Top 10", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.TOP10 }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Ajustes") },
+                                    text = { Text("Ajustes", color = scheme.onSurface) },
                                     onClick = { showGeneralMenu = false; overlay = Overlay.SETTINGS }
                                 )
                             }
@@ -603,6 +611,8 @@ fun App(
                                     onAddClick = if (playlist != null) {
                                         { addSongsTarget = playlist }
                                     } else null,
+                                    recentPeriod = if (drill == Drill.Recent) recentPeriod else null,
+                                    onRecentPeriodChange = { recentPeriod = it },
                                     extraActions = {
                                         if (playlist != null) {
                                             TextButton(onClick = { renameTarget = playlist }) {
@@ -1298,6 +1308,7 @@ private fun MiniPlayer(
                     Text(
                         text = song.title,
                         style = MaterialTheme.typography.titleMedium,
+                        color = scheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.basicMarquee()
