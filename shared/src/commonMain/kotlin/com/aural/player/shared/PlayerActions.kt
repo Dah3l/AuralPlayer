@@ -57,6 +57,10 @@ interface PlayerActions {
     fun setCometEnabled(enabled: Boolean)
     /** Apariencia de la isla: "auto" (tema) o "classic" (negra). */
     fun setIslandAppearance(appearance: String)
+    /** Color de los botones de la isla ("#RRGGBB") o null = primario del tema. */
+    fun setIslandButtonColor(hex: String?)
+    /** Color del cometa Aural Light ("#RRGGBB") o null = primario del tema. */
+    fun setIslandCometColor(hex: String?)
 
     // ---- Cola ----
     fun enqueue(song: Song)
