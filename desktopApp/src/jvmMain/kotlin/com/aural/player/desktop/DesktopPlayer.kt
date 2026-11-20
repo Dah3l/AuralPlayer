@@ -156,7 +156,9 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                                 eqAmps = saved.eqAmps,
                                 islandEnabled = saved.islandEnabled,
                                 cometEnabled = saved.cometEnabled,
-                                islandAppearance = saved.islandAppearance
+                                islandAppearance = saved.islandAppearance,
+                                islandButtonColorHex = saved.islandButtonColorHex,
+                                islandCometColorHex = saved.islandCometColorHex
                             )
                         }
                         // Si se curó un volumen en 0, se guarda la corrección.
@@ -502,6 +504,16 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
 
     override fun setIslandAppearance(appearance: String) {
         _state.update { it.copy(islandAppearance = appearance) }
+        persistPrefs()
+    }
+
+    override fun setIslandButtonColor(hex: String?) {
+        _state.update { it.copy(islandButtonColorHex = hex) }
+        persistPrefs()
+    }
+
+    override fun setIslandCometColor(hex: String?) {
+        _state.update { it.copy(islandCometColorHex = hex) }
         persistPrefs()
     }
 
@@ -1074,14 +1086,15 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                     it.copy(downloads = it.downloads.filter { d -> d.videoId != result.videoId })
                 }
             } else {
+                val reason = youtube.lastError ?: "No se pudo descargar el audio"
                 _state.update {
                     it.copy(
                         downloads = it.downloads.map { d ->
                             if (d.videoId == result.videoId) {
-                                d.copy(status = DownloadStatus.FAILED, error = "No se pudo descargar el audio")
+                                d.copy(status = DownloadStatus.FAILED, error = reason)
                             } else d
                         },
-                        youTubeError = "No se pudo descargar el audio de \"${result.title}\"."
+                        youTubeError = "No se pudo descargar \"${result.title}\": $reason."
                     )
                 }
             }
@@ -1255,7 +1268,9 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                     eqAmps = s.eqAmps,
                     islandEnabled = s.islandEnabled,
                     cometEnabled = s.cometEnabled,
-                    islandAppearance = s.islandAppearance
+                    islandAppearance = s.islandAppearance,
+                    islandButtonColorHex = s.islandButtonColorHex,
+                    islandCometColorHex = s.islandCometColorHex
                 )
             )
         }
@@ -1291,7 +1306,9 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                             eqAmps = saved.eqAmps,
                             islandEnabled = saved.islandEnabled,
                             cometEnabled = saved.cometEnabled,
-                            islandAppearance = saved.islandAppearance
+                            islandAppearance = saved.islandAppearance,
+                            islandButtonColorHex = saved.islandButtonColorHex,
+                            islandCometColorHex = saved.islandCometColorHex
                         )
                     }
                     vlc.setVolume(healedVolume)
