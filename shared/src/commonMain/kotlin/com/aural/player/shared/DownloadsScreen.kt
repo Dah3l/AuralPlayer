@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,46 +47,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsBytes
 import kotlinx.coroutines.launch
 
 private val YouTubeRed = Color(0xFFE5484D)
 private val YouTubeRedDark = Color(0xFFC93A3E)
 
-/** Miniaturas de YouTube en memoria (máx 40): se cargan bajo demanda. */
-private object UrlImageCache {
-    private val client by lazy { createHttpClient() }
-    private val cache = LinkedHashMap<String, ImageBitmap>()
-
-    suspend fun load(url: String): ImageBitmap? {
-        cache[url]?.let { return it }
-        return try {
-            val bytes = client.get(url).bodyAsBytes()
-            decodeImageBitmap(bytes)?.also {
-                if (cache.size >= 40) cache.remove(cache.keys.first())
-                cache[url] = it
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-}
-
-@Composable
-private fun rememberUrlImage(url: String?): ImageBitmap? {
-    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(url) {
-        bitmap = if (url == null) null else UrlImageCache.load(url)
-    }
-    return bitmap
-}
 
 @Composable
 fun DownloadsScreen(
