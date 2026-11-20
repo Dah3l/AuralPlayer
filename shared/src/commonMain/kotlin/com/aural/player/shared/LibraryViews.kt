@@ -591,8 +591,8 @@ data class MostPlayedCard(
 )
 
 /**
- * Sección "Para ti": dos tarjetas cuadradas con la portada, el título
- * sobre degradado negro y el botón ▶. Igual que en Android.
+ * Sección "Para ti": tarjetas pequeñas, tipo Spotify — caben las
+ * que entren en una fila; si hay menos, solo las disponibles.
  */
 @Composable
 fun MostPlayedSection(
@@ -601,10 +601,12 @@ fun MostPlayedSection(
     modifier: Modifier = Modifier
 ) {
     if (cards.isEmpty()) return
-    // La tarjeta no crece sin tope: en ventana maximizada dos
-    // tarjetas a peso 1f medían media pantalla cada una.
     BoxWithConstraints(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        val cardSize = ((maxWidth - 12.dp) / 2).coerceAtMost(340.dp)
+        val cardSize = 148.dp
+        val spacing = 12.dp
+        // Cuántas caben en una fila (al menos 1).
+        val count = ((maxWidth + spacing) / (cardSize + spacing)).toInt().coerceAtLeast(1)
+        val shown = cards.take(count)
         Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Para ti",
@@ -615,9 +617,9 @@ fun MostPlayedSection(
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+            horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.CenterHorizontally)
         ) {
-            cards.take(2).forEach { card ->
+            shown.forEach { card ->
                 Box(
                     modifier = Modifier.size(cardSize)
                         .clip(RoundedCornerShape(12.dp))
@@ -642,12 +644,12 @@ fun MostPlayedSection(
                     )
                     Column(
                         modifier = Modifier.align(Alignment.BottomStart)
-                            .padding(12.dp)
-                            .padding(end = 44.dp)
+                            .padding(8.dp)
+                            .padding(end = 40.dp)
                     ) {
                         Text(
                             text = card.title,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             maxLines = 1,
@@ -663,8 +665,8 @@ fun MostPlayedSection(
                     }
                     Box(
                         modifier = Modifier.align(Alignment.BottomEnd)
-                            .padding(10.dp)
-                            .size(40.dp)
+                            .padding(8.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable { card.onPlay() },
@@ -674,7 +676,7 @@ fun MostPlayedSection(
                             imageVector = AuralIcons.Play,
                             contentDescription = "Reproducir ${card.title}",
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
