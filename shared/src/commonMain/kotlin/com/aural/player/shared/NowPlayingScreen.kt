@@ -592,8 +592,20 @@ private fun NowPlayingContent(
     }
     if (showCoverPicker) {
         CoverPickerDialog(
+            artist = song.artist,
+            title = song.title,
             hasCustom = actions.hasCustomCover(song),
-            onPick = {
+            onSelect = { url ->
+                scope.launch {
+                    if (actions.saveCoverFromUrl(song, url)) {
+                        forgetCoverImage(song)
+                        onNotice("Portada actualizada")
+                    } else {
+                        onNotice("No se pudo descargar la portada")
+                    }
+                }
+            },
+            onPickFromGallery = {
                 if (actions.pickCustomCover(song)) {
                     forgetCoverImage(song)
                     onNotice("Portada actualizada")
