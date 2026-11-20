@@ -381,6 +381,40 @@ cuanto las veas.
   es `Song.dateAddedMs` (el escáner la pone con
   `file.lastModified()`); por defecto, Este mes (igual que el
   corte fijo de 30 días anterior).
+- Portadas de internet en PC (1.2.21, 2026-11-19): iTunes Search
+  API, gratis y sin clave, mismo cliente que Android
+  (`CoverArtClient` en shared con Ktor + árbol JSON, límite 20,
+  600 px). El diálogo "Cambiar portada" compartido reemplazó al
+  simple de solo-archivo: campos canción/artista editables +
+  Buscar + Galería + rejilla de 3 columnas + "Prueba usar VPN y
+  reintenta". La descarga se guarda con `covers.saveCustom` y la
+  miniatura va por `UrlImageCache` (movido de DownloadsScreen a
+  `UrlImage.kt` compartido). El menú de la canción NO tiene
+  "Cambiar portada" ni en Android ni en PC: solo en el Now Playing.
+- Isla flotante en PC (1.2.21, 2026-11-19): `DialogWindow`
+  (JDialog: SIN botón en la barra de tareas, verificado contra el
+  jar ui-desktop 1.12.2 — la sobrecarga con `alwaysOnTop` es la de
+  6 booleanos), undecorated + transparent + alwaysOnTop +
+  focusable=false (no roba el foco; los clics y arrastres llegan
+  igual). La ventana sigue al morph vía `onWindowSync` (tamaño +
+  centrado) y se arrastra con `detectDragGestures` sobre el Box
+  exterior (los gestos del contenido — slider, swipe arriba — se
+  tragan los suyos). Ocultar temporal = clic derecho, vuelve con
+  la siguiente canción. "Abrir Aural" trae la ventana principal al
+  frente (toFront + requestFocus, desminimiza si hace falta).
+  YouTube abre la pestaña Descargas vía señal
+  `MutableStateFlow(0)` en Main.kt. Sin botón de micrófono (la PC
+  no reconoce audio). Ajustes en Ajustes (mostrar isla, cometa,
+  apariencia auto/clásica), persistidos en prefs.json.
+- `DialogState`: `position` y `size` son mutables; `WindowPosition
+  (Alignment)` y `WindowPosition(x, y)` son funciones fábrica
+  (`WindowPosition_desktopKt`), no constructores de la clase. La
+  posición inicial se centra en un `LaunchedEffect` con Toolkit +
+  LocalDensity (la densidad se lee DENTRO del contenido del
+  diálogo, no en el `application {}`).
+- `PathMeasure` (`androidx.compose.ui.graphics`) es commonMain:
+  está en ui-graphics-desktop 1.12.2 (Skia) y en el artefacto
+  Android (la isla de Android lo usa en su propio módulo).
 
 ## Estado actual (2026-11-18)
 
@@ -485,6 +519,23 @@ cuanto las veas.
   natural de pista con sonido, textos legibles en tema oscuro,
   mesh solo en portada+título, dropdown de fechas en Agregadas
   recientemente).
+- **En curso (Malen-IA):** PC 1.2.21, portadas de internet + isla
+  flotante, ambas iguales que en Android (decisión de Dahel
+  2026-11-19, noche; CONSTRUIDA 2026-11-19, noche): (1) portadas:
+  diálogo "Cambiar portada" como en el móvil (campos
+  canción/artista, Buscar por iTunes gratis, Galería, quitar
+  personalizada; descarga y guarda en local; solo manual, desde
+  el Now Playing); (2) isla: ventanita flotante sin bordes
+  siempre visible (píldora 135×44 + expandida con morph hasta
+  340×320: portada, onda, slider, transporte, favorito, modo,
+  YouTube→Descargas, "Abrir Aural", cometa Aural Light);
+  adaptaciones Windows: arrastrable (Android es fija), doble
+  clic = pausa/play, clic derecho = ocultar, sin botón de
+  micrófono; Ajustes: mostrar isla, cometa, apariencia
+  auto/clásica. packageVersion 1.2.21. Pendiente: correr
+  android.yml y desktop.yml en verde + prueba en Windows
+  (buscar portada y que quede guardada; isla visible, morph,
+  arrastre, doble clic, clic derecho, "Abrir Aural" y YouTube).
 - **Hecho (Codi, 2026-11-15):** páginas web de activación Pro
   (`docs/activar.html`, `docs/admin.html`, `docs/promos.json`,
   `docs/ed25519.js`), Opción A sin backend. Sin tocar `app/` ni
@@ -564,6 +615,7 @@ cuanto las veas.
 | 2026-11-19 | Malen-IA | PC 1.2.16 adaptación a Windows: fix cierre + fin de canción (deadlock del callback finished de VLC), volumen rehecho (mute absoluto + lastVolume + autocuración), menú ⋮ completo (Buscar actualizaciones, Apoyar, Contacto, Ajustes), Now Playing dos columnas, "Para ti" dentro de la lista con tope 340 dp, scrollbars de escritorio expect/actual, detalle sin pestañas, cabecera cuadrada 200 dp, ventana 1280×800; packageVersion 1.2.16 | shared/.../App.kt, LibraryViews.kt, NowPlayingScreen.kt, MenuScreens.kt, DesktopScrollbar.kt, DesktopScrollbarJvm.kt, DesktopScrollbarAndroid.kt, PlayerActions.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | Fix build 1.2.16 (android.yml falló: Unresolved reference 'Box' en NowPlayingScreen.kt — el import de Box se perdió al añadir BoxWithConstraints en su lugar): import de Box restaurado; los 18 errores eran ese + cascadas | shared/.../NowPlayingScreen.kt |
 | 2026-11-19 | Malen-IA | PC 1.2.20: motor (stop antes de play + vigilante de atasco en el ticker), contraste causa raíz (LocalContentColor = onSurface en AuralTheme + explícitos en MiniPlayer/⋮/menú), mesh solo en portada+título con clipToBounds, Agregadas recientemente con dropdown de periodo (como Android v1.0.9); packageVersion 1.2.20 | shared/.../LibraryViews.kt, App.kt, Theme.kt; desktopApp/.../DesktopPlayer.kt, VlcPlayer.kt, Main.kt, build.gradle.kts |
+| 2026-11-19 | Malen-IA | PC 1.2.21: portadas de internet (diálogo "Cambiar portada" igual que Android: iTunes gratis, campos editables, Galería, rejilla de resultados; descarga y guarda en local) + isla flotante (DialogWindow sin bordes ni botón en la barra de tareas, morph píldora 135×44 → 340×320, onda, transporte, favorito, modo, YouTube→Descargas, "Abrir Aural", cometa Aural Light; arrastrable, doble clic, clic derecho; Ajustes con mostrar isla/cometa/apariencia); packageVersion 1.2.21 | shared/.../CoverArtClient.kt, UrlImage.kt, Island.kt, NowPlayingDialogs.kt, DownloadsScreen.kt, NowPlayingScreen.kt, PlayerActions.kt, PlaybackState.kt, PrefsStore.kt, AuralIcons.kt, App.kt, MenuScreens.kt; desktopApp/.../DesktopPlayer.kt, IslandWindow.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.19: mesh en la cabecera de detalle (fondo ambiental con los colores de la portada, solo la zona de foto+título+botones) + auditoría de contraste en toda la app (corazón de favorita de rojo fijo a scheme.error; resto ya resolvía por el tema); packageVersion 1.2.19 | shared/.../LibraryViews.kt, SelectionBars.kt; desktopApp/.../Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
