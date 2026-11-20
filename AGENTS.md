@@ -447,6 +447,38 @@ cuanto las veas.
   "Unable to strip ... libandroidx.graphics.path.so ..." en el
   build de Android es solo eso, un aviso: las librerías se
   empaquetan sin despojar, no es error.
+- Motor de descargas de YouTube en PC (1.2.22): fallaba "a veces"
+  por tres causas juntas — (1) `HttpURLConnection` SIN timeouts:
+  un corte de red dejaba la petición colgada para siempre, sin
+  terminar ni fallar (la barra se quedaba congelada); (2) los
+  enlaces de googlevideo caducan, así que un solo intento con la
+  URL de `StreamInfo` bastaba para fallar; (3) el fallback de
+  stream era `minByOrNull { averageBitrate }` = el PEOR audio
+  disponible cuando ninguno llegaba a 48 kbps. Arreglo: timeouts
+  15 s conectar / 30 s leer en el downloader de NewPipe y en la
+  descarga del medio, reintento 1 vez con `StreamInfo` fresco
+  (pausa 1 s), fallback a `maxByOrNull`, y `lastError` con el
+  motivo ("YouTube no respondió" / "Se cortó la descarga" / "El
+  video no tiene audio descargable") que la UI enseña en vez del
+  genérico "No se pudo descargar el audio". Cancelar no reintenta.
+- Isla oculta en PC (1.2.22): en el móvil vuelve al cambiar de
+  canción O al pausar/reanudar; en PC solo volvía con la canción
+  siguiente. Arreglo: `LaunchedEffect(song?.filePath,
+  state.isPlaying)` en IslandWindow.kt limpia el oculto cuando
+  cambia cualquiera de los dos.
+- Sombra de la isla (1.2.22): `shadow(14.dp)` con los colores por
+  defecto se veía demasiado dura sobre la ventana transparente.
+  Ahora 10 dp con spotColor negro 0.28 y ambientColor 0.15, y el
+  aire de la sombra subió de 16 a 20 dp por lado (padding en
+  IslandContent + math +32 → +40 en IslandWindow: tamaño inicial
+  y onWindowSync; el centrado usa dialogState.size, sin constante).
+- "Para ti" (1.2.22): solo se construían 2 tarjetas (diaria +
+  mejor playlist o Favoritas) y medían media pantalla cada una.
+  Ahora tarjetas de 148 dp, caben las que entren en una fila
+  (cálculo con BoxWithConstraints) y solo las disponibles:
+  diaria, Tu Top 10 (de top50 por Song.id), mejor playlist,
+  Favoritas y Agregadas recientemente (recentSongs ya existía en
+  App.kt). La fila va centrada; el botón ▶ es de 32 dp.
 
 ## Estado actual (2026-11-18)
 
@@ -652,3 +684,4 @@ cuanto las veas.
 | 2026-11-19 | Malen-IA | PC 1.2.19: mesh en la cabecera de detalle (fondo ambiental con los colores de la portada, solo la zona de foto+título+botones) + auditoría de contraste en toda la app (corazón de favorita de rojo fijo a scheme.error; resto ya resolvía por el tema); packageVersion 1.2.19 | shared/.../LibraryViews.kt, SelectionBars.kt; desktopApp/.../Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.18: NP corregido (controles debajo de la portada, letra sola a la derecha; contraste por luminosidad del fondo), scrollbar con más margen (24 listas, 32 grids), tapón de clics en el NP + barrido de pantallas; descargas de YouTube (pestaña Descargas + motor NewPipeExtractor en PC); packageVersion 1.2.18 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, PlayerActions.kt, PlaybackState.kt, AuralIcons.kt, DownloadsScreen.kt; desktopApp/.../DesktopPlayer.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
 | 2026-11-19 | Malen-IA | PC 1.2.17: NP siempre dos columnas (letra dentro, overlay borrado), header sticky con fundido en DrillView, carril para la scrollbar, mute en MiniPlayer + lectura real de VLC, RAM (portadas 512 px, caché 60, -Xmx768m, mesh lento); packageVersion 1.2.17 | shared/.../NowPlayingScreen.kt, LibraryViews.kt, App.kt, MeshBackground.kt, CoverArt.kt, ImageDecodingJvm.kt; desktopApp/.../VlcPlayer.kt, DesktopPlayer.kt, Main.kt, build.gradle.kts |
+| 2026-11-20 | Malen-IA | PC 1.2.22: ajustes de Dahel a la isla y las descargas — (1) color de los botones y del cometa Aural Light elegible en Ajustes (Auto = primario del tema + 7 muestras; texto sobre el color según luminosidad; persistido en prefs.json); (2) la isla oculta vuelve al cambiar de canción o al pausar/reanudar, igual que en el móvil; (3) sombra suave (10 dp, spot 0.28 / ambient 0.15) con 20 dp de aire; (4) motor de descargas rehecho (timeouts 15/30 s, reintento con URL fresca, mejor stream disponible, motivo del fallo en la UI); (5) "Para ti" con tarjetas de 148 dp en fila (diaria, Tu Top 10, mejor playlist, Favoritas, Recientes — solo las disponibles); packageVersion 1.2.22 | shared/.../PlaybackState.kt, PlayerActions.kt, PrefsStore.kt, Island.kt, App.kt, MenuScreens.kt, LibraryViews.kt; desktopApp/.../DesktopPlayer.kt, IslandWindow.kt, YoutubeDownloads.kt, Main.kt, build.gradle.kts |
