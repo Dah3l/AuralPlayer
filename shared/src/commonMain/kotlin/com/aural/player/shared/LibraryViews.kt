@@ -34,18 +34,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -289,6 +295,53 @@ fun MediaGridCard(
  * grande con degradados, título, botones Reproducir/Aleatorio y la
  * lista de canciones debajo.
  */
+
+/** Periodo del filtro de Agregadas recientemente (igual que en Android, v1.0.9). */
+enum class RecentPeriod(val label: String, val days: Long?) {
+    WEEK("Esta semana", 7),
+    MONTH("Este mes", 30),
+    YEAR("Este año", 365),
+    ALL("Todas", null);
+
+    /** Milisegundos epoch a partir de los cuales cuenta una canción (null = sin límite). */
+    fun cutoffMs(): Long? = days?.let {
+        SystemDates.nowEpochMillis() - it * 86_400_000L
+    }
+}
+
+/** Selector de periodo (dropdown) para Agregadas recientemente. */
+@Composable
+private fun PeriodFilterDropdown(
+    period: RecentPeriod,
+    onChange: (RecentPeriod) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        TextButton(
+            onClick = { expanded = true },
+            shape = CircleShape,
+            modifier = Modifier.background(scheme.surfaceVariant, CircleShape)
+        ) {
+            Text(period.label, fontWeight = FontWeight.SemiBold, color = scheme.onSurface)
+            Icon(
+                imageVector = AuralIcons.ChevronDown,
+                contentDescription = "Periodo",
+                tint = scheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            RecentPeriod.entries.forEach { p ->
+                DropdownMenuItem(
+                    text = { Text(p.label, color = scheme.onSurface) },
+                    onClick = { onChange(p); expanded = false }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun DrillView(
     title: String,
@@ -307,6 +360,8 @@ fun DrillView(
     selectedSongs: Set<String>,
     modifier: Modifier = Modifier,
     onAddClick: (() -> Unit)? = null,
+    recentPeriod: RecentPeriod? = null,
+    onRecentPeriodChange: (RecentPeriod) -> Unit = {},
     extraActions: @Composable RowScope.() -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -335,16 +390,7 @@ fun DrillView(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            // ---- Cabecera con mesh: el fondo ambiental con los colores
-            // de la portada (igual que el Now Playing), solo en esta
-            // zona; el velo del mesh mantiene el contraste del título
-            // y los botones sobre las manchas. ----
-            Box(modifier = Modifier.fillMaxWidth()) {
-                NowPlayingAmbientBackground(
-                    palette = palette,
-                    modifier = Modifier.matchParentSize()
-                )
-                Column(modifier = Modifier.fillMaxWidth()) {
+            // La fila de retroceso va plana, sin mesh.
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .padding(start = 8.dp, end = 20.dp, top = 8.dp),
@@ -362,6 +408,15 @@ fun DrillView(
                     )
                 }
             }
+            // ---- Mesh SOLO en la zona de portada + título: la lista,
+            // la fila de retroceso y los botones quedan planos como
+            // antes. El clipToBounds recorta las manchas a esta zona
+            // (sin él, los círculos se veían detrás de la lista). ----
+            Box(modifier = Modifier.fillMaxWidth().clipToBounds()) {
+                NowPlayingAmbientBackground(
+                    palette = palette,
+                    modifier = Modifier.matchParentSize()
+                )
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -392,6 +447,7 @@ fun DrillView(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
             }
             // ---- Botones: reproducir, aleatorio, extras ----
             Row(
@@ -438,9 +494,13 @@ fun DrillView(
                         )
                     }
                 }
-                extraActions()
-            }
+                if (recentPeriod != null) {
+                    PeriodFilterDropdown(
+                        period = recentPeriod,
+                        onChange = onRecentPeriodChange
+                    )
                 }
+                extraActions()
             }
         }
         if (songs.isEmpty()) {
