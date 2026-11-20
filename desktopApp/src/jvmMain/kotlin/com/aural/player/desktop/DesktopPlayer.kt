@@ -107,6 +107,15 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
     // restaura este nivel en vez de quedarse en 0.
     private var lastVolume: Int = 100
 
+    // Vigilancia de atasco: si una pista suena pero su posición no
+    // avanza 2 s seguidos, se vuelve a lanzar la reproducción una
+    // vez (a veces VLC deja la entrada nueva en "abriendo" al
+    // cambiar de canción sola y no suena hasta que se busca con el
+    // slider; el reintento hace lo mismo sin tocar nada).
+    private var stallTicks = 0
+    private var lastWatchPositionMs = -1L
+    private var stallRecoveredFor: String? = null
+
     // Segundos escuchados pendientes de registrar: se acumulan en
     // el ticker y se guardan cada 30 s o al cambiar de canción.
     private var pendingSong: Song? = null
@@ -1316,6 +1325,28 @@ class DesktopPlayer(private val scope: CoroutineScope) : PlayerActions {
                     if (pendingSeconds >= 30.0) flushHistory()
                 } else if (pendingSong != null) {
                     flushHistory()
+                }
+                // Vigilancia de atasco: sonando pero sin avanzar.
+                // No vale el final de la pista (los últimos 2 s la
+                // posición apenas se mueve antes del evento `finished`).
+                if (song != null && st.durationMs > 0 &&
+                    vlc.positionMs < st.durationMs - 2000
+                ) {
+                    val pos = vlc.positionMs
+                    if (pos == lastWatchPositionMs) {
+                        stallTicks++
+                        if (stallTicks >= 4 && stallRecoveredFor != song.filePath) {
+                            stallRecoveredFor = song.filePath
+                            stallTicks = 0
+                            vlc.play(song.filePath)
+                        }
+                    } else {
+                        stallTicks = 0
+                        lastWatchPositionMs = pos
+                    }
+                } else {
+                    stallTicks = 0
+                    lastWatchPositionMs = -1L
                 }
             }
         }
