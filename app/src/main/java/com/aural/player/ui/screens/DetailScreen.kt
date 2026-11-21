@@ -587,7 +587,7 @@ fun DetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest),
-            contentPadding = PaddingValues(bottom = 90.dp)
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             item {
                 DetailHeader(
