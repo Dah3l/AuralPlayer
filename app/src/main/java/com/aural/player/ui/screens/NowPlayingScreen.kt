@@ -2,6 +2,7 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
@@ -458,244 +459,287 @@ fun NowPlayingScreen(
                 }
             }
 
-            CoverCarousel(
-                coverPagerState = coverPagerState,
-                coverItems = coverItems,
-                glowColor = glassPalette.firstOrNull() ?: MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth()
-            )
-            // ---- Línea actual de la letra (debajo de la carátula) ----
-            var lrcLines by remember(song?.id) {
-                mutableStateOf<List<com.aural.player.data.LrcLine>>(emptyList())
-            }
-            val lrcPath = song?.let { lrcMapState[it.id] }
-            LaunchedEffect(song?.id, lrcPath) {
-                lrcLines = if (lrcPath != null) {
-                    withContext(Dispatchers.IO) {
-                        try {
-                            val content = java.io.File(lrcPath).readText()
-                            com.aural.player.data.LrcParser.parse(content)
-                        } catch (e: Exception) { emptyList() }
-                    }
-                } else emptyList()
-            }
-            // La letra ocupa el espacio flexible y se centra verticalmente
-            Box(
+            // ---- Escenario: portada + letra + título + progreso +
+            // controles dentro de una tarjeta definida (surfaceContainerLow
+            // + tinte de la paleta): el contenido que va junto vive en
+            // una tarjeta, no flotando sobre el fondo. La letra lleva su
+            // propio panel dentro (surfaceContainerLowest).
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                if (lrcLines.isNotEmpty()) {
-                    val currentIdx = com.aural.player.data.LrcParser.currentIndex(
-                        lrcLines, state.positionMs
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .background(
+                        (glassPalette.firstOrNull()
+                            ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.10f)
                     )
-                    val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
-                    if (currentLine.isNotBlank()) {
-                        Text(
-                            currentLine,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 3,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp)
-                                .clickable { showLyrics = true }
-                        )
-                    }
-                }
-            }
-
-            // ---- Título + artista + estrella ----
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                CarouselTitleText(
+                CoverCarousel(
                     coverPagerState = coverPagerState,
                     coverItems = coverItems,
-                    coverCenterPage = coverCenterPage,
-                    customMetadata = customMetadata,
-                    fallbackTitle = song.title,
-                    fallbackArtist = song.artist.ifBlank { "Artista desconocido" },
-                    modifier = Modifier.weight(1f)
+                    glowColor = glassPalette.firstOrNull() ?: MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                IconButton(onClick = onToggleFavorite) {
-                    AnimatedContent(
-                        targetState = isFavorite,
-                        transitionSpec = {
-                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.6f, animationSpec = tween(160))) togetherWith
-                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.6f, animationSpec = tween(120)))
-                        },
-                        label = "favorito"
-                    ) { fav ->
-                        Icon(
-                            imageVector = if (fav) Icons.Rounded.Favorite
-                            else Icons.Rounded.FavoriteBorder,
-                            contentDescription = "Favorito",
-                            tint = if (fav) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
+                // ---- Línea actual de la letra (debajo de la carátula) ----
+                var lrcLines by remember(song?.id) {
+                    mutableStateOf<List<com.aural.player.data.LrcLine>>(emptyList())
                 }
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // ---- Barra de progreso ----
-            val duration = state.durationMs.coerceAtLeast(1L)
-            Slider(
-                value = state.positionMs.toFloat().coerceIn(0f, duration.toFloat()),
-                onValueChange = { onSeek(it.toLong()) },
-                valueRange = 0f..duration.toFloat(),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                thumb = {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .shadow(
-                                elevation = 6.dp,
-                                shape = androidx.compose.foundation.shape.CircleShape,
-                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            )
-                            .background(
-                                MaterialTheme.colorScheme.primary,
-                                shape = androidx.compose.foundation.shape.CircleShape
-                            )
-                    )
-                },
-                track = { sliderState ->
-                    val fraction = if (sliderState.valueRange.endInclusive > 0) {
-                        (sliderState.value - sliderState.valueRange.start) /
-                        (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
-                    } else 0f
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(fraction)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(4.dp)
-                                )
+                val lrcPath = song?.let { lrcMapState[it.id] }
+                LaunchedEffect(song?.id, lrcPath) {
+                    lrcLines = if (lrcPath != null) {
+                        withContext(Dispatchers.IO) {
+                            try {
+                                val content = java.io.File(lrcPath).readText()
+                                com.aural.player.data.LrcParser.parse(content)
+                            } catch (e: Exception) { emptyList() }
+                        }
+                    } else emptyList()
+                }
+                // La letra ocupa el espacio flexible y se centra verticalmente
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (lrcLines.isNotEmpty()) {
+                        val currentIdx = com.aural.player.data.LrcParser.currentIndex(
+                            lrcLines, state.positionMs
                         )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(formatDuration(state.positionMs),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(formatDuration(duration),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // ---- Controles ----
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Modo: sin repetir → repetir todo → repetir uno → aleatorio
-                IconButton(onClick = onCycleRepeat) {
-                    val modeKey = when {
-                        state.shuffleEnabled -> 3
-                        state.repeatMode == RepeatMode.ONE -> 2
-                        state.repeatMode == RepeatMode.ALL -> 1
-                        else -> 0
-                    }
-                    AnimatedContent(
-                        targetState = modeKey,
-                        transitionSpec = {
-                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
-                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
-                        },
-                        label = "modo"
-                    ) { mode ->
-                        when (mode) {
-                            3 -> Icon(Icons.Rounded.Shuffle, "Aleatorio",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp))
-                            2 -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp))
-                            1 -> Icon(Icons.Rounded.Repeat, "Repetir todas",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp))
-                            else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(28.dp))
+                        val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
+                        if (currentLine.isNotBlank()) {
+                            // Panel propio de la letra (surfaceContainerLowest):
+                            // la línea actual vive en su tarjeta, separada del
+                            // escenario, y sigue resaltando igual.
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                            ) {
+                                Text(
+                                    currentLine,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 3,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.clickable { showLyrics = true }
+                                )
+                            }
                         }
                     }
                 }
-                // Anterior
-                IconButton(onClick = onPrevious) {
-                    Icon(Icons.Rounded.SkipPrevious, "Anterior",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(38.dp))
-                }
-                // Play/Pausa (botón principal grande)
-                IconButton(
-                    onClick = onTogglePlay,
-                    modifier = Modifier
-                        .size(76.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            CircleShape
-                        )
+
+                // ---- Título + artista + estrella ----
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AnimatedContent(
-                        targetState = state.isPlaying,
-                        transitionSpec = {
-                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
-                                (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
-                        },
-                        label = "play_pause"
-                    ) { playing ->
-                        Icon(
-                            imageVector = if (playing) Icons.Rounded.Pause
-                            else Icons.Rounded.PlayArrow,
-                            contentDescription = if (playing) "Pausar" else "Reproducir",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(40.dp)
-                        )
+                    CarouselTitleText(
+                        coverPagerState = coverPagerState,
+                        coverItems = coverItems,
+                        coverCenterPage = coverCenterPage,
+                        customMetadata = customMetadata,
+                        fallbackTitle = song.title,
+                        fallbackArtist = song.artist.ifBlank { "Artista desconocido" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onToggleFavorite) {
+                        AnimatedContent(
+                            targetState = isFavorite,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.6f, animationSpec = tween(160))) togetherWith
+                                    (fadeOut(tween(120)) + scaleOut(targetScale = 0.6f, animationSpec = tween(120)))
+                            },
+                            label = "favorito"
+                        ) { fav ->
+                            Icon(
+                                imageVector = if (fav) Icons.Rounded.Favorite
+                                else Icons.Rounded.FavoriteBorder,
+                                contentDescription = "Favorito",
+                                tint = if (fav) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
                     }
                 }
-                // Siguiente
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Rounded.SkipNext, "Siguiente",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(38.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // ---- Barra de progreso ----
+                val duration = state.durationMs.coerceAtLeast(1L)
+                Slider(
+                    value = state.positionMs.toFloat().coerceIn(0f, duration.toFloat()),
+                    onValueChange = { onSeek(it.toLong()) },
+                    valueRange = 0f..duration.toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    thumb = {
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .shadow(
+                                    elevation = 6.dp,
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                )
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    shape = androidx.compose.foundation.shape.CircleShape
+                                )
+                        )
+                    },
+                    track = { sliderState ->
+                        val fraction = if (sliderState.valueRange.endInclusive > 0) {
+                            (sliderState.value - sliderState.valueRange.start) /
+                            (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
+                        } else 0f
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(fraction)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(formatDuration(state.positionMs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(formatDuration(duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                // Cola
-                IconButton(onClick = { showQueue = true }) {
-                    Icon(Icons.Rounded.QueueMusic, "Cola",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(28.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // ---- Controles: una píldora definida (surfaceContainerHigh),
+                // la barra de controles como un solo objeto ----
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            RoundedCornerShape(percent = 50)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Modo: sin repetir → repetir todo → repetir uno → aleatorio
+                    IconButton(onClick = onCycleRepeat) {
+                        val modeKey = when {
+                            state.shuffleEnabled -> 3
+                            state.repeatMode == RepeatMode.ONE -> 2
+                            state.repeatMode == RepeatMode.ALL -> 1
+                            else -> 0
+                        }
+                        AnimatedContent(
+                            targetState = modeKey,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
+                                    (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
+                            },
+                            label = "modo"
+                        ) { mode ->
+                            when (mode) {
+                                3 -> Icon(Icons.Rounded.Shuffle, "Aleatorio",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp))
+                                2 -> Icon(Icons.Rounded.RepeatOne, "Repetir una",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp))
+                                1 -> Icon(Icons.Rounded.Repeat, "Repetir todas",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp))
+                                else -> Icon(Icons.Rounded.Repeat, "Sin repetir",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(28.dp))
+                            }
+                        }
+                    }
+                    // Anterior
+                    IconButton(onClick = onPrevious) {
+                        Icon(Icons.Rounded.SkipPrevious, "Anterior",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(38.dp))
+                    }
+                    // Play/Pausa (botón principal grande)
+                    IconButton(
+                        onClick = onTogglePlay,
+                        modifier = Modifier
+                            .size(76.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                CircleShape
+                            )
+                    ) {
+                        AnimatedContent(
+                            targetState = state.isPlaying,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.7f, animationSpec = tween(160))) togetherWith
+                                    (fadeOut(tween(120)) + scaleOut(targetScale = 0.7f, animationSpec = tween(120)))
+                            },
+                            label = "play_pause"
+                        ) { playing ->
+                            Icon(
+                                imageVector = if (playing) Icons.Rounded.Pause
+                                else Icons.Rounded.PlayArrow,
+                                contentDescription = if (playing) "Pausar" else "Reproducir",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+                    // Siguiente
+                    IconButton(onClick = onNext) {
+                        Icon(Icons.Rounded.SkipNext, "Siguiente",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(38.dp))
+                    }
+                    // Cola
+                    IconButton(onClick = { showQueue = true }) {
+                        Icon(Icons.Rounded.QueueMusic, "Cola",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(28.dp))
+                    }
                 }
-            }
+            } // fin escenario
 
             Spacer(
                 Modifier
