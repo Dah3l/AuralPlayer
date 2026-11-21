@@ -5,6 +5,7 @@ package com.aural.player.ui.screens
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -92,6 +93,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 
 /**
  * Cabecera de detalle con imagen GRANDE: portada cuadrada a lo ancho
@@ -123,7 +125,7 @@ private fun PeriodFilterDropdown(
         TextButton(
             onClick = { expanded = true },
             shape = CircleShape,
-            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
         ) {
             Text(period.label, fontWeight = FontWeight.SemiBold)
             Icon(Icons.Rounded.ArrowDropDown, "Periodo")
@@ -155,7 +157,14 @@ private fun DetailHeader(
     onPeriodFilterChange: (RecentPeriod) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(modifier) {
+    // Cabecera como un bloque: fondo propio detrás de la fila de botones
+    // y esquinas inferiores redondeadas; la foto cubre la parte superior
+    // y el fondo solo se ve detrás de los botones.
+    Column(
+        modifier
+            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         // Imagen cuadrada a lo ancho (la portada se cambia desde el menú ⋮)
         Box(
             Modifier
@@ -256,7 +265,13 @@ private fun DetailHeader(
                 onClick = onShuffle,
                 modifier = Modifier
                     .size(52.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(16.dp)
+                    )
             ) {
                 Icon(Icons.Rounded.Shuffle, "Aleatorio",
                     tint = MaterialTheme.colorScheme.onSurface,
@@ -268,7 +283,13 @@ private fun DetailHeader(
                     onClick = onAddSongs,
                     modifier = Modifier
                         .size(52.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
                 ) {
                     Icon(Icons.Rounded.PlaylistAdd, "Agregar canciones",
                         tint = MaterialTheme.colorScheme.onSurface,
@@ -558,7 +579,14 @@ fun DetailScreen(
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            // Lámina de la lista: la cabecera (bloque opaco con esquinas
+            // inferiores redondeadas) queda encima; debajo, las canciones
+            // viven sobre surfaceContainerLowest. Sin clip en la lista:
+            // recortarla redondearía también las esquinas superiores de
+            // la foto de portada.
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest),
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
             item {
@@ -636,13 +664,14 @@ fun DetailScreen(
             // Barra superior superpuesta: fondo y título aparecen solo
             // cuando el header se colapsa al subir. La columna sube hasta
             // el borde de la pantalla para que la franja del notch tenga
-            // el mismo color que la barra (surface, como el Now Playing)
+            // el mismo color que la barra (surfaceContainer, como el Now Playing)
             Column(
                 Modifier
                     .fillMaxWidth()
                     .offset(y = -statusBarTop)
+                    .shadow(elevation = 8.dp * collapseFraction)
                     .background(
-                        MaterialTheme.colorScheme.surface.copy(alpha = collapseFraction)
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = collapseFraction)
                     )
                     // La barra consume sus toques: sin esto, un toque en
                     // la barra cae en la lista que queda detrás
