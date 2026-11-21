@@ -2,6 +2,7 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -109,6 +110,10 @@ fun DownloadsScreen(
             value = query,
             onValueChange = { query = it },
             placeholder = { Text("¿Qué quieres escuchar hoy?") },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ),
             leadingIcon = {
                 Icon(Icons.Default.Search, contentDescription = null)
             },
@@ -195,7 +200,7 @@ fun DownloadsScreen(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(results, key = { it.videoId }) { result ->
                 val isDl = result.videoId in downloading
@@ -204,7 +209,11 @@ fun DownloadsScreen(
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
