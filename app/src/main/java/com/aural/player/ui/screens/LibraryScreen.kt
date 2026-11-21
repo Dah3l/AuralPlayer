@@ -47,7 +47,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,7 +96,6 @@ import com.aural.player.ui.components.MediaGridCard
 import com.aural.player.ui.components.NewsModal
 import com.aural.player.ui.components.ProfileFormDialog
 import com.aural.player.ui.theme.HalloweenFontFamily
-import com.aural.player.ui.components.SectionHeader
 import com.aural.player.ui.components.SongRow
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.components.AlphabetFastScroller
@@ -420,20 +418,13 @@ fun LibraryScreen(
             )
         }
 
-        // ---- Búsqueda siempre visible: color sólido (sin degradado) ----
-        // Más oscuro en temas claros; en los oscuros queda el tono de antes.
-        val darkBackground =
-            MaterialTheme.colorScheme.background.luminance() < 0.5f
+        // ---- Búsqueda siempre visible: superficie propia (surfaceContainerHigh) ----
         Box(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
                 .clip(MaterialTheme.shapes.large)
-                // Color sólido: más oscuro en temas claros, igual que antes en los oscuros
-                .background(
-                    if (darkBackground) MaterialTheme.colorScheme.surfaceContainer
-                    else MaterialTheme.colorScheme.surfaceVariant
-                )
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .border(
                     width = if (searchFocused) 2.dp else 1.dp,
                     color = if (searchFocused) MaterialTheme.colorScheme.primary
@@ -470,12 +461,19 @@ fun LibraryScreen(
             )
         }
 
-        // ---- Pills de filtros ----
+        // ---- Pills de filtros: tira agrupada sobre surfaceContainerHigh ----
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
         LazyRow(
             state = pillsListState,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
         ) {
             items(tabs.size) { i ->
                 val selected = selectedTab == i
@@ -484,7 +482,7 @@ fun LibraryScreen(
                         .clip(CircleShape)
                         .background(
                             if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else Color.Transparent
                         )
                         .clickable { onTabSelected(i) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -504,7 +502,7 @@ fun LibraryScreen(
                 Box(
                     Modifier
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(Color.Transparent)
                         .clickable { showTabCustomizer = true }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
@@ -517,11 +515,16 @@ fun LibraryScreen(
                 }
             }
         }
+        } // Cierra la tira de pestañas agrupada
 
         // ---- Contenido por pestaña (con pull-to-refresh) ----
+        // Lámina surfaceContainerLowest con esquinas superiores redondeadas:
+        // cada lista vive sobre su propia superficie, separada de la cabecera.
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .pullRefresh(pullState)
         ) {
         when {
@@ -1293,22 +1296,24 @@ private fun MostPlayedSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Para ti",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
             TextButton(onClick = onSeeAll) { Text("Ver todas") }
         }
+        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             topPlaylists.forEach { tp ->
-                // Tarjeta = solo la portada, con título y ▶ dentro (como la referencia)
+                // Tarjeta definida: fondo propio + borde 1dp + radio 16dp,
+                // título y ▶ dentro de la portada (como la referencia)
                 Box(
                     Modifier
                         .weight(1f)
                         .aspectRatio(1f)
-                        .shadow(4.dp, RoundedCornerShape(14.dp))
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .shadow(4.dp, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
                         .clickable { onOpenPlaylist(tp.id) },
                     contentAlignment = Alignment.Center
                 ) {
@@ -1384,6 +1389,19 @@ private fun MostPlayedSection(
                             }
                         }
                     }
+                    // Borde 1dp por encima de la portada: la tarjeta no se
+                    // confunde con el fondo ni cuando la foto la llena entera
+                    // (un borde en la cadena de modifiers quedaría tapado
+                    // por la imagen, que se dibuja encima).
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp)
+                            )
+                    )
                 }
             }
         }
@@ -1432,7 +1450,7 @@ private fun SongsTab(
                         onOpenPlaylist = onOpenPlaylist,
                         onPlayPlaylist = onPlayPlaylist,
                         onSeeAll = onSeeAllPlaylists,
-                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                     )
                 }
             }
@@ -1580,7 +1598,12 @@ private fun PlaylistsTab(
             contentPadding = PaddingValues(bottom = 90.dp)
         ) {
         item {
-            SectionHeader("Tuyas")
+            Text(
+                text = "Tuyas",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
         }
         // Entrada fija de Favoritos
         item {
