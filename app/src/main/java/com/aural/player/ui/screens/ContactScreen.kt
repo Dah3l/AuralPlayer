@@ -97,7 +97,7 @@ fun ContactScreen(onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 100.dp)) {
                     Text(
                         text = "¿Dudas, ideas o problemas con Aural? Escríbeme por donde prefieras.",
                         style = MaterialTheme.typography.bodyMedium,
