@@ -69,7 +69,7 @@ fun ThemesScreen(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -81,6 +81,7 @@ fun ThemesScreen(
             Text(
                 text = "Temas",
                 style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
@@ -127,7 +128,7 @@ private fun ThemeCard(
         targetValue = if (isPressed) 0.96f else 1f,
         label = "theme_card_press"
     )
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     Box(
         modifier = Modifier
             .scale(scale)
