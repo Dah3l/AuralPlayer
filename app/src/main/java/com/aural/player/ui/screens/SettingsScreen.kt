@@ -227,7 +227,7 @@ fun SettingsScreen(
                 fontWeight = FontWeight.Bold
             )
         }
-        Column(Modifier.verticalScroll(rememberScrollState())) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 100.dp)) {
             SettingsSection("Tu perfil")
             SettingsRow(
                 icon = Icons.Rounded.Person,
