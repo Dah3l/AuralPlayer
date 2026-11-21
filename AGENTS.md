@@ -292,6 +292,11 @@ cuanto las veas.
   Unit` (necesita ColumnScope/RowScope): el bloque de la letra recibe
   el Modifier por parámetro (`lyricsBlock(Modifier.weight(1f))`).
   Verificado 2026-11-19 (1.2.17).
+- `Modifier.padding` NO tiene sobrecarga que mezcle `horizontal`/`vertical`
+  con `start`/`top`/`end`/`bottom`: `.padding(horizontal = 20.dp, bottom = 100.dp)`
+  no compila (NONE_APPLICABLE) — encadenar dos llamadas
+  (`.padding(horizontal = 20.dp).padding(bottom = 100.dp)`) o usar la de
+  4 lados (`start`/`end`/`bottom`). Verificado 2026-11-21 (1.2.0, WeekScreen).
 - Scrollbar de escritorio: la barra por defecto se come el contenido
   con solo 12 dp de padding — reservar carril con contentPadding end
   (24 dp en listas, 32 dp en grids, 2026-11-19, 1.2.18; antes 16/24).
