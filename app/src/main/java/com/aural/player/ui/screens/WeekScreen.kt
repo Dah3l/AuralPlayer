@@ -130,7 +130,8 @@ fun Top10Screen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, bottom = 100.dp)
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 100.dp)
             ) {
                 if (topSongs.isEmpty()) {
                     Spacer(Modifier.height(48.dp))
