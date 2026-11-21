@@ -1441,7 +1441,7 @@ private fun SongsTab(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp, end = 32.dp)
+            contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
         ) {
             if (topPlaylists.isNotEmpty()) {
                 item {
@@ -1595,7 +1595,7 @@ private fun PlaylistsTab(
     LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp)
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
         item {
             Text(
