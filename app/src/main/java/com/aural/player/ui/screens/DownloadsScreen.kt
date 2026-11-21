@@ -199,7 +199,7 @@ fun DownloadsScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp),
+            contentPadding = PaddingValues(bottom = 100.dp, top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(results, key = { it.videoId }) { result ->
