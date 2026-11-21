@@ -17,7 +17,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -364,24 +363,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        // Mini-reproductor persistente sobre la barra de navegación
-        bottomBar = {
-            AnimatedVisibility(
-                visible = playerState.currentSong != null && !showNowPlaying,
-                enter = slideInVertically { it },
-                exit = slideOutVertically { it }
-            ) {
-                MiniPlayer(
-                    state = playerState,
-                    modifier = Modifier.navigationBarsPadding(),
-                    onOpen = { showNowPlaying = true },
-                    onTogglePlay = viewModel.playback::togglePlayPause,
-                    customCoverUri = playerState.currentSong?.let { customCovers[it.id] },
-                    customMetadata = playerState.currentSong?.let { customMetadata[it.id] }
-                )
-            }
-        }
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(
             Modifier
@@ -583,6 +565,23 @@ private fun AuralApp(viewModel: AuralViewModel,
                         onBack = { screen = Screen.Library }
                     )
                 }
+            }
+
+            // Mini-reproductor flotante sobre la lista: sin barra debajo,
+            // la lista se ve por detrás y por los lados, solo él flota.
+            AnimatedVisibility(
+                visible = playerState.currentSong != null && !showNowPlaying,
+                enter = slideInVertically { it },
+                exit = slideOutVertically { it },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                MiniPlayer(
+                    state = playerState,
+                    onOpen = { showNowPlaying = true },
+                    onTogglePlay = viewModel.playback::togglePlayPause,
+                    customCoverUri = playerState.currentSong?.let { customCovers[it.id] },
+                    customMetadata = playerState.currentSong?.let { customMetadata[it.id] }
+                )
             }
         }
     }
