@@ -102,7 +102,7 @@ fun DonateScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 100.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(12.dp))
