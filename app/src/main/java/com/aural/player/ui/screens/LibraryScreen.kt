@@ -716,8 +716,9 @@ fun LibraryScreen(
     }
 
         // ---- Botón flotante de reconocimiento (opción A) ----
-        // Alineado a 16dp del borde derecho y del mini-reproductor, con
-        // un anillo que pulsa suavemente para llamar la atención.
+        // Alineado a 16dp del borde derecho y 100dp del fondo para quedar
+        // por encima del mini-reproductor flotante, con un anillo que pulsa
+        // suavemente para llamar la atención.
         val fabPulse = rememberInfiniteTransition(label = "fab_pulse")
         val fabPulseScale by fabPulse.animateFloat(
             initialValue = 1f,
@@ -740,7 +741,7 @@ fun LibraryScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(start = 16.dp, top = 16.dp, end = 24.dp, bottom = 16.dp),
+                .padding(start = 16.dp, top = 16.dp, end = 24.dp, bottom = 100.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -893,8 +894,10 @@ fun LibraryScreen(
     } // v1.0.7: cierra Box de la barra de selección
 
     // ---- v1.0.7: barra de acciones inferior (zona del pulgar) ----
+    // 100dp de aire abajo: con el mini-reproductor flotante, sin esto la
+    // barra quedaba tapada por él como el botón de reconocimiento.
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(bottom = 100.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
     androidx.compose.animation.AnimatedVisibility(
