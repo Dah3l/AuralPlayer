@@ -63,6 +63,10 @@ class MusicService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /** Listener que (re)inicializa el ecualizador cuando ExoPlayer crea su sesión de audio. */
+    private var eqSessionListener: androidx.media3.common.Player.Listener? = null
+    private var lastEqSessionId: Int = 0
+
     companion object {
         const val CMD_TOGGLE_FAVORITE = "aural_toggle_favorite"
         const val CMD_CYCLE_REPEAT = "aural_cycle_repeat"
@@ -91,6 +95,19 @@ class MusicService : MediaSessionService() {
 
         // Ecualizador y normalización atados a la sesión de audio
         EqualizerManager.init(this, player.audioSessionId)
+        // v1.2.0: player.audioSessionId es 0 hasta que suena el primer audio,
+        // así que el init de arriba no crea nada en ese caso. Re-inicializar
+        // cuando la sesión se crea de verdad (o cambia).
+        val eqListener = object : androidx.media3.common.Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (audioSessionId != 0 && audioSessionId != lastEqSessionId) {
+                    lastEqSessionId = audioSessionId
+                    EqualizerManager.init(this@MusicService, audioSessionId)
+                }
+            }
+        }
+        eqSessionListener = eqListener
+        player.addListener(eqListener)
         // Nota: ExoPlayer realiza transiciones gapless (sin silencio entre pistas)
         // de forma automática cuando las pistas consecutivas son compatibles.
 
@@ -456,6 +473,8 @@ class MusicService : MediaSessionService() {
     /** Liberar recursos cuando el servicio se destruye. */
     override fun onDestroy() {
         serviceScope.cancel()
+        eqSessionListener?.let { mediaSession?.player?.removeListener(it) }
+        eqSessionListener = null
         EqualizerManager.release()
         mediaSession?.run {
             player.release()
