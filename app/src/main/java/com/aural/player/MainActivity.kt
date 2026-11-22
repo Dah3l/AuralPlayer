@@ -88,11 +88,37 @@ class MainActivity : ComponentActivity() {
     private val viewModel: AuralViewModel by viewModels()
     private lateinit var youTubeManager: com.aural.player.youtube.YouTubeManager
 
+    /** El permiso de audio ya se pidió al menos una vez (para detectar el "no volver a preguntar"). */
+    private var audioPermissionRequestedBefore = false
+
     /** Launcher de permisos: audio + notificaciones según la versión. */
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        viewModel.onPermissionResult(results.values.any { it })
+        // Solo manda el permiso de AUDIO: el de notificaciones no debe
+        // enmascarar una negativa de audio (antes se miraba con `any` y
+        // la app creía tener permiso cuando no lo tenía).
+        val audio = audioPermission()
+        val granted = results[audio] == true
+        // "No volver a preguntar": ya se pidió antes y el sistema ya no
+        // muestra el diálogo (shouldShowRequestPermissionRationale = false).
+        val permanentlyDenied = !granted && audioPermissionRequestedBefore &&
+            !shouldShowRequestPermissionRationale(audio)
+        viewModel.onPermissionResult(granted, permanentlyDenied)
+    }
+
+    /**
+     * Al volver a la app (p. ej. de Ajustes tras conceder el permiso a
+     * mano), re-comprueba el permiso de audio y escanea si hacía falta.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (!viewModel.library.value.permissionGranted &&
+            isGranted(audioPermission()) &&
+            viewModel.library.value.songs.isEmpty()
+        ) {
+            viewModel.onPermissionResult(true)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,6 +161,8 @@ class MainActivity : ComponentActivity() {
                 } else {
                     AuralApp(viewModel, youTubeManager = youTubeManager, settingsStore = settingsStore,
                         onToggleIsland = { toggleDynamicIsland(viewModel, settingsStore) },
+                        onRequestAudioPermission = { requestAudioPermission() },
+                        onOpenAppSettings = { openAppSettings() },
                         pendingIslandTab = pendingIslandTab,
                         onConsumeIslandTab = { pendingIslandTab = null },
                         pendingIslandHome = pendingIslandHome,
@@ -240,11 +268,7 @@ class MainActivity : ComponentActivity() {
      */
     private fun requestNeededPermissions() {
         val needed = mutableListOf<String>()
-        val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_AUDIO
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
+        val audioPermission = audioPermission()
         if (!isGranted(audioPermission)) needed += audioPermission
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -257,8 +281,32 @@ class MainActivity : ComponentActivity() {
             // Ya concedidos previamente: escanear directamente
             viewModel.onPermissionResult(true)
         } else {
+            audioPermissionRequestedBefore = true
             permissionLauncher.launch(needed.toTypedArray())
         }
+    }
+
+    /** Permiso de audio según la versión: READ_MEDIA_AUDIO (13+) o READ_EXTERNAL_STORAGE. */
+    private fun audioPermission(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+    /** Vuelve a pedir solo el permiso de audio (botón "Dar permiso" de la pantalla de permisos). */
+    private fun requestAudioPermission() {
+        audioPermissionRequestedBefore = true
+        permissionLauncher.launch(arrayOf(audioPermission()))
+    }
+
+    /** Abre los Ajustes de la app para conceder el permiso a mano (botón "Abrir Ajustes"). */
+    private fun openAppSettings() {
+        val intent = Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(intent)
     }
 
     private fun isGranted(permission: String): Boolean =
@@ -274,6 +322,9 @@ private fun AuralApp(viewModel: AuralViewModel,
     youTubeManager: com.aural.player.youtube.YouTubeManager?,
     settingsStore: SettingsStore,
     onToggleIsland: () -> Unit = {},
+    // Pantalla de permisos: re-pedir el diálogo o abrir Ajustes.
+    onRequestAudioPermission: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
     pendingIslandTab: Int? = null,
     onConsumeIslandTab: () -> Unit = {},
     pendingIslandHome: Boolean = false,
@@ -416,6 +467,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenContact = { screen = Screen.Contact },
                     onOpenSettings = { showSettingsScreen = true },
                     onOpenTop10 = { showTop10Screen = true },
+                    onRequestAudioPermission = onRequestAudioPermission,
+                    onOpenAppSettings = onOpenAppSettings,
                     onSongMenu = { song ->
                         songMenuTarget = song
                         songMenuPlaylistId = null
