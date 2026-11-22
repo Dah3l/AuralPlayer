@@ -49,6 +49,9 @@ data class LibraryUiState(
     val songs: List<Song> = emptyList(),
     val isLoading: Boolean = true,
     val permissionGranted: Boolean = false,
+    // El usuario negó el permiso y marcó "no volver a preguntar": el
+    // diálogo del sistema ya no sale y hay que ir a Ajustes a mano.
+    val permissionPermanentlyDenied: Boolean = false,
     val query: String = ""
 ) {
     /** Canciones que coinciden con la búsqueda actual. */
@@ -426,9 +429,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     // --------------------------- Permisos y escaneo ---------------------------
 
     /** Indica al ViewModel que el permiso fue concedido; lanza el escaneo. */
-    fun onPermissionResult(granted: Boolean) {
-        _library.value = _library.value.copy(permissionGranted = granted)
+    fun onPermissionResult(granted: Boolean, permanentlyDenied: Boolean = false) {
+        _library.value = _library.value.copy(
+            permissionGranted = granted,
+            permissionPermanentlyDenied = permanentlyDenied
+        )
         if (granted && _library.value.songs.isEmpty()) rescan()
+        // Sin permiso el escaneo no corre: apagar el loader para que la
+        // pantalla de permiso se vea (antes quedaba girando para siempre).
+        else if (!granted) _library.value = _library.value.copy(isLoading = false)
     }
 
     /** Vuelve a escanear MediaStore (se llama al iniciar y al pedirlo el usuario). */
@@ -439,11 +448,16 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             // sin tumbar la UI (evita flashes al descargar de YouTube).
             val firstLoad = _library.value.songs.isEmpty()
             if (firstLoad) _library.value = _library.value.copy(isLoading = true)
-            val songs = repository.scanSongs()
-            playback.setLibrary(songs)
-            _library.value = _library.value.copy(songs = songs, isLoading = false)
-            tryRestoreLastPlayback(songs)
-            onDone?.invoke()
+            try {
+                val songs = repository.scanSongs()
+                playback.setLibrary(songs)
+                _library.value = _library.value.copy(songs = songs, isLoading = false)
+                tryRestoreLastPlayback(songs)
+                onDone?.invoke()
+            } finally {
+                // Si el escaneo falla, el loader no se queda pegado.
+                _library.value = _library.value.copy(isLoading = false)
+            }
         }
     }
 
