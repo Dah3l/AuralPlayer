@@ -1,6 +1,7 @@
 // Biblioteca principal con pestañas: Canciones, Artistas, Álbumes y Playlists
 package com.aural.player.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.aspectRatio
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -73,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
@@ -167,6 +170,9 @@ fun LibraryScreen(
     onOpenContact: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenTop10: () -> Unit = {},
+    // Pantalla de permisos: re-pedir el diálogo o abrir Ajustes.
+    onRequestAudioPermission: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
     songsListState: androidx.compose.foundation.lazy.LazyListState,
     albumsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -532,8 +538,10 @@ fun LibraryScreen(
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
 
-            !library.permissionGranted && library.songs.isEmpty() -> EmptyState(
-                "Concede permiso de audio para ver tu biblioteca"
+            !library.permissionGranted && library.songs.isEmpty() -> PermissionRequiredState(
+                permanentlyDenied = library.permissionPermanentlyDenied,
+                onRequestPermission = onRequestAudioPermission,
+                onOpenSettings = onOpenAppSettings
             )
 
             library.songs.isEmpty() -> EmptyState("No se encontraron canciones en el dispositivo")
@@ -2182,4 +2190,75 @@ private fun TabCustomizerDialog(
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
+}
+
+/**
+ * Pantalla de permiso de audio: explica por qué hace falta y da el
+ * camino para concederlo — el diálogo del sistema, o los Ajustes si el
+ * usuario marcó "no volver a preguntar" (ahí el diálogo ya no sale).
+ * Al volver de Ajustes con el permiso concedido, MainActivity.onResume
+ * escanea la biblioteca sola.
+ */
+@Composable
+private fun PermissionRequiredState(
+    permanentlyDenied: Boolean,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Permiso necesario",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "AuralPlayer necesita acceso a tus archivos de audio para mostrar tus canciones. Sin ese permiso la biblioteca queda vacía.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = if (permanentlyDenied) onOpenSettings else onRequestPermission,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (permanentlyDenied) "Abrir Ajustes" else "Dar permiso")
+            }
+            if (permanentlyDenied) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        "En Ajustes toca Permisos → Música y audio → Permitir, y vuelve a la app."
+                    else
+                        "En Ajustes toca Permisos → Archivos → Permitir, y vuelve a la app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
 }
