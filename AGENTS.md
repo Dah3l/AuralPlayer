@@ -646,6 +646,65 @@ cuanto las veas.
   diaria, Tu Top 10 (de top50 por Song.id), mejor playlist,
   Favoritas y Agregadas recientemente (recentSongs ya existía en
   App.kt). La fila va centrada; el botón ▶ es de 32 dp.
+- Fundido entre canciones (crossfade, 2026-11-23, 1.2.0): el
+  reproductor NO puede fundir solo — un ExoPlayer toca un solo item a
+  la vez. Dos reproductores en MusicService + intercambio de papeles
+  con `MediaSession.setPlayer` (verificado contra el fuente 1.11.1:
+  existe, exige MISMO application looper en ambos — los dos se crean
+  en el hilo principal — y `canAdvertiseSession()` true). El
+  controlador (PlaybackManager), la notificación y la isla siguen al
+  reproductor de la sesión solos: publishState se actualiza con los
+  eventos del nuevo reproductor.
+- `setShuffleOrder` NO está en `Player` (el MediaController no lo
+  tiene): es de `ExoPlayer` (verificado: Player.class no lo tiene,
+  ExoPlayer.java sí, con `getShuffleOrder`). El servicio lo llama
+  sobre el `ExoPlayer` del fundido, nunca sobre el controlador.
+- `setMediaItems` con aleatorio VUELVE A BARAJAR (cloneAndSet en
+  ExoPlayerImpl): trasplantar la cola al segundo reproductor cambia
+  el orden de las que vienen. Fix: cargar los items en el orden del
+  timeline del principal + `ShuffleOrder.UnshuffledShuffleOrder(n)`
+  (orden identidad sobre la lista ya barajada) — el interruptor sigue
+  leyendo true y la cola no se mueve. `setShuffleModeEnabled` solo
+  cambia el flag, no toca el orden (por eso hoy apagar y encender el
+  aleatorio devuelve el mismo orden).
+- `EqualizerManager.init` libera TODOS los efectos: llamar init para
+  la sesión del segundo reproductor DESCONECTA el EQ del primero.
+  Segundo juego aparte (`initSecondSession`, nunca libera el
+  primero); los setters (bandas, preset, bajos, virtualizer,
+  normalización, on/off) aplican a los dos juegos.
+- `audioSessionId` es 0 hasta el primer audio EN CADA reproductor:
+  el segundo también necesita su listener
+  `onAudioSessionIdChanged` → `initSecondSession` (mismo patrón que
+  el principal, verificado 2026-11-22).
+- Dos reproductores con `handleAudioFocus=true`: el segundo le roba
+  el foco al primero al arrancar y lo pausa. El del fundido va con
+  `handleAudioFocus=false` (y sin `setHandleAudioBecomingNoisy`); el
+  principal manda el foco y el espejo de play/pausa
+  (`onIsPlayingChanged`) hace que la segunda voz lo siga.
+- El fundido se cancela con seek, cola nueva o parada total:
+  listener de control en AMBOS reproductores, filtrado por
+  `owner === mediaSession.player` (dinámico: no hay que mover
+  listeners al intercambiar los papeles). Si la canción termina
+  antes de que la rampa acabe (AUTO_TRANSITION en pleno fundido),
+  se cierra el fundido ya en vez de dejar sonar la canción dos
+  veces.
+- Parada programada (temporizador) armada = sin fundido: el
+  servicio mira `app.playback.stopMode` antes de arrancar; si no,
+  el AUTO_TRANSITION que pausa al final nunca dispararía.
+- La rampa avanza por la POSICIÓN REAL de la segunda voz (no por
+  reloj): si se pausa en pleno fundido, se congela y sigue al
+  reanudar sin saltos. Curva de potencia igual: salida
+  `cos(t·π/2)`, entrada `sin(t·π/2)` (el oído percibe el volumen
+  constante). Rampa a 50 ms; vigilancia del final a 250 ms.
+- Fundido efectivo = ajuste limitado a la mitad de cada canción
+  (las cortas también funden); menos de 1 s = sin fundido.
+  Repetir-una no funde en natural (la "siguiente" es la misma
+  canción); al saltar a mano SÍ funde a la siguiente (decisión de
+  Dahel 2026-11-23: mejor que Spotify, que no funde al saltar).
+- Saltos con fundido van por comando de sesión
+  (`CMD_CROSSFADE_NEXT`/`CMD_CROSSFADE_PREV`): PlaybackManager lo
+  pide y si el servicio dice que no, cae al salto normal. La cola
+  (playAt) y el play directo no funden: salto inmediato.
 
 ## Estado actual (2026-11-18)
 
@@ -791,10 +850,11 @@ cuanto las veas.
   usuario no necesita VLC instalado). v1 PC: biblioteca + reproducción
   + playlists + temas + letras (sin traducción ni isla).
 - Decisiones cerradas: NO importación de Spotify (nunca re-proponer),
-  karaoke revertido (no re-proponer), crossfade/mezcla infinita/tema
+  karaoke revertido (no re-proponer), mezcla infinita/tema
   sigue-a-la-música aparcados, historial descartado, widget aparcado,
   glass card aparcada, significado de letras (letras.com) aparcado con
-  código comentado en LyricsScreen.
+  código comentado en LyricsScreen. El crossfade estaba aparcado y
+  Dahel le dio luz verde el 2026-11-23 (Android primero, PC después).
 - La sección #pro de la web es un TEASER; la sección completa está en
   un comentario HTML dentro de `docs/index.html`, se restaura borrando
   la línea de apertura y la de cierre del comentario.
@@ -862,3 +922,4 @@ cuanto las veas.
 | 2026-11-22 | Malen-IA | Descarga visible al instante en la biblioteca | AuralViewModel.kt (insertDownloadedSong: la canción entra en _library + playback al terminar la descarga, con título/artista/duración de YouTube y portada de la miniatura; pendientes fusionados en rescan — la descarga pendiente manda sobre la fila escaneada hasta que coincidan título y artista, caducan a los 15 min; la edición manual saca la canción de pendientes; bucle de reintentos con rescan() borrado — rescan es fire-and-forget y el escáner reescribe TITLE/ARTIST desde el archivo crudo sin tags), ui/screens/LibraryScreen.kt (addDownloadToPlaylist con result y tagsEmbedded), AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 1 (solo rendimiento, cero cambios de funcionamiento): la biblioteca deja de recomponer cada 500 ms (remember en "Para ti" y detalles, derivedStateOf en la selección, remember en los títulos del scroller A-Z, ViewModel expone currentSongId/isPlaying); flujos derivados con flowOn(Dispatchers.Default); notificación con distinctUntilChanged; ticker de letras con ámbito propio; YouTube con timeouts 15/30 s en Android (mismo bug que PC 1.2.22) + fallback al mejor stream | AuralViewModel.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, playback/MusicService.kt, ui/screens/LyricsScreen.kt, youtube/YouTubeManager.kt, youtube/NewPipeDownloaderImpl.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 2 (solo rendimiento, SIN tocar R8 ni build.gradle, cero cambios de funcionamiento): splash que se va al cargar la biblioteca (mín 600 ms, tope 1,8 s); PlaybackManager con scopes reutilizados + cola cacheada por firma de timeline + portada por defecto en IO; NP: claves de cola O(n) con pool por aparición + mesh a 10 fps por pasos de 100 ms; portadas de internet a 300 px (caché ~57 MB → ~2 MB); Regex de LRCLIB compilado una vez; FAB sin pulso tapado; borrar en lote con un solo edit de ajustes; guardar letra y Top 10 en IO; portadas de galería/URL por stream en dos pasadas; wake lock local en vez de Wi-Fi | shared/.../ImageDecoding.kt, ImageDecodingAndroid.kt, ImageDecodingJvm.kt, UrlImage.kt, LrcLibClient.kt; app/.../playback/PlaybackManager.kt, ui/screens/NowPlayingScreen.kt, MainActivity.kt, ui/screens/LibraryScreen.kt, data/SettingsStore.kt, AuralViewModel.kt, data/PlayHistoryStore.kt, data/SongCoverStore.kt, playback/MusicService.kt, AGENTS.md |
+| 2026-11-23 | Malen-IA | Android 1.2.0, fundido entre canciones (crossfade, SOLO Android; PC después): segundo reproductor en MusicService + intercambio de papeles con MediaSession.setPlayer + rampa de potencia igual (sen/cos) a 50 ms; funde al terminar la canción Y al saltar a mano (decisión de Dahel: mejor que Spotify); no funde con repetir-una ni con parada programada; EQ con segundo juego de efectos (initSecondSession); aleatorio conservado con UnshuffledShuffleOrder; ajustes en Sonido (interruptor + duración 1-12 s, 5 s por defecto, apagado por defecto) | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, playback/EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, MainActivity.kt, AGENTS.md |
