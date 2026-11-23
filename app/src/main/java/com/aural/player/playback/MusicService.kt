@@ -89,7 +89,7 @@ class MusicService : MediaSessionService() {
                     .build(),
                 /* handleAudioFocus = */ true // gestiona automáticamente el foco de audio
             )
-            .setWakeMode(C.WAKE_MODE_NETWORK) // permite seguir reproduciendo con pantalla apagada
+            .setWakeMode(C.WAKE_MODE_LOCAL) // parcial: la CPU sigue despierta con pantalla apagada; el lock de Wi-Fi no hace falta (todo es local hasta que llegue el streaming Pro)
             // v1.0.9: al desconectar los audífonos (cable o Bluetooth) la música
             // se pausa sola (Android avisa con AUDIO_BECOMING_NOISY).
             .setHandleAudioBecomingNoisy(true)
