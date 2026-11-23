@@ -9,12 +9,19 @@ data class LrcLine(
 object LrcParser {
     // [mm:ss.xx] o [mm:ss.xxx]
     private val TIME_REGEX = """\[(\d{1,3}):(\d{2})(?:\.(\d{2,3}))?]""".toRegex()
+    // [offset:+123] o [offset:-500]: desplaza todos los tiempos.
+    private val OFFSET_REGEX = """\[offset:\s*([+-]?\d+)\]""".toRegex()
 
     /**
      * Parsea el contenido de un .lrc y devuelve las líneas ordenadas por tiempo.
      * Solo extrae el texto — los tiempos se usan internamente para sincronizar.
      */
     fun parse(content: String): List<LrcLine> {
+        // Etiqueta [offset:±ms] del formato .lrc: desplaza todos los
+        // tiempos (algunas letras vienen temporizadas para otra
+        // versión de la canción y sin esto el desfase es fijo).
+        val offsetMs = OFFSET_REGEX.find(content)
+            ?.groupValues?.get(1)?.toLongOrNull() ?: 0L
         val lines = mutableListOf<LrcLine>()
         for (rawLine in content.lines()) {
             val line = rawLine.trim()
@@ -40,7 +47,7 @@ object LrcParser {
                     3 -> fracStr.toLongOrNull() ?: 0
                     else -> 0
                 }
-                val timeMs = min * 60_000 + sec * 1_000 + ms
+                val timeMs = (min * 60_000 + sec * 1_000 + ms + offsetMs).coerceAtLeast(0)
                 lines.add(LrcLine(timeMs, text))
             }
         }
@@ -58,4 +65,12 @@ object LrcParser {
         }
         return idx.coerceAtLeast(0)
     }
+
+    /**
+     * ¿La letra está sincronizada de verdad? Una letra plana (respaldo
+     * de lyrics.ovh) trae todas las líneas en [00:00.00]: sin tiempos
+     * distintos no hay línea activa que seguir.
+     */
+    fun isSynced(lines: List<LrcLine>): Boolean =
+        lines.map { it.timeMs }.toSet().size >= 2
 }
