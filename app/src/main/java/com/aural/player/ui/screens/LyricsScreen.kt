@@ -191,22 +191,14 @@ fun LyricsScreen(
     }
 
     // Actualizar la línea activa según la posición (tiempo real).
-    // Ticker de 100 ms leyendo la posición en vivo del reproductor:
-    // con el de 500 ms la línea iba hasta medio segundo por detrás
-    // del audio.
-    var tick by remember { mutableStateOf(0L) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(100)
-            tick++
-        }
-    }
-    // Letra plana (sin tiempos): no hay línea activa que seguir ni
-    // auto-scroll; se muestra el texto tal cual.
-    val synced = remember(lines) { LrcParser.isSynced(lines) }
-    val activeIndex = remember(lines, tick) {
-        if (lines.isNotEmpty() && synced) LrcParser.currentIndex(lines, currentPositionMs())
-        else -1
+    // El ticker de 100 ms y el cálculo viven en LyricsActiveLineTracker
+    // (abajo): el contador ya no es estado de toda la pantalla, así que
+    // la pantalla no recompone 10 veces por segundo — solo se actualiza
+    // la línea activa cuando cambia de verdad. Con el ticker de 500 ms
+    // la línea iba hasta medio segundo por detrás del audio.
+    var activeIndex by remember { mutableStateOf(-1) }
+    LyricsActiveLineTracker(lines = lines, currentPositionMs = currentPositionMs) { index ->
+        if (index != activeIndex) activeIndex = index
     }
     // Líneas que se muestran: traducidas si el usuario activó la traducción
     val displayLines = remember(lines, translatedLines, showTranslation) {
@@ -534,4 +526,31 @@ fun LyricsScreen(
             }
         )
     }
+}
+
+/** Ticker de 100 ms que calcula la línea activa de la letra y la reporta
+ *  solo cuando cambia: el contador vive aquí dentro, así que la pantalla
+ *  que lo usa no recompone 10 veces por segundo (mismo patrón que el
+ *  ticker de 200 ms del Now Playing, que vive dentro del Box de la
+ *  línea). La letra plana (sin tiempos) no tiene línea activa: se
+ *  devuelve -1 y no hay auto-scroll. */
+@Composable
+private fun LyricsActiveLineTracker(
+    lines: List<LrcLine>,
+    currentPositionMs: () -> Long,
+    onActiveIndex: (Int) -> Unit
+) {
+    var tick by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(100)
+            tick++
+        }
+    }
+    val synced = remember(lines) { LrcParser.isSynced(lines) }
+    val index = remember(lines, tick) {
+        if (lines.isNotEmpty() && synced) LrcParser.currentIndex(lines, currentPositionMs())
+        else -1
+    }
+    LaunchedEffect(index) { onActiveIndex(index) }
 }
