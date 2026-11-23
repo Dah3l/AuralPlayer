@@ -716,9 +716,15 @@ private fun AuralApp(viewModel: AuralViewModel,
         val islandLook by viewModel.islandAppearance.collectAsStateWithLifecycle()
         val cometOn by viewModel.cometEnabled.collectAsStateWithLifecycle()
         val lightColor by viewModel.auralLightColor.collectAsStateWithLifecycle()
+        val crossfadeOn by viewModel.crossfadeEnabled.collectAsStateWithLifecycle()
+        val crossfadeSecs by viewModel.crossfadeSeconds.collectAsStateWithLifecycle()
         com.aural.player.ui.screens.SettingsScreen(
             onBack = { showSettingsScreen = false },
             onOpenEqualizer = { showEqualizerScreen = true },
+            crossfadeEnabled = crossfadeOn,
+            onToggleCrossfade = { viewModel.setCrossfadeEnabled(!crossfadeOn) },
+            crossfadeSeconds = crossfadeSecs,
+            onCrossfadeSeconds = { viewModel.setCrossfadeSeconds(it) },
             islandEnabled = islandOn,
             onToggleIsland = onToggleIsland,
             islandAppearance = islandLook,
