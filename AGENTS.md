@@ -710,6 +710,12 @@ cuanto las veas.
   — seguro porque los dos reproductores los crea el servicio
   (el principal en onCreate y el del fundido en el motor).
   (Error de compilación 2026-11-23, MusicService.kt:569.)
+- `as? ExoPlayer` con el nombre corto SIN import no compila
+  (Unresolved reference, 2026-11-23, MusicService.kt:561): en
+  MusicService el import es `androidx.media3.exoplayer.ExoPlayer`
+  (la firma de startCrossfadeEngine lo usaba cualificado, por eso
+  pasó desapercibido). Los errores de `volume`/`pause` en las
+  líneas siguientes eran cascada del mismo fallo.
 
 ## Estado actual (2026-11-18)
 
