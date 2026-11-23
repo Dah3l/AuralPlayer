@@ -21,7 +21,9 @@ object UrlImageCache {
         cache[url]?.let { return it }
         return try {
             val bytes = client.get(url).bodyAsBytes()
-            decodeImageBitmap(bytes)?.also {
+            // Tope 300 px: solo se ven como miniaturas; sin tope, 40
+            // entradas a 600 px retenían hasta ~57 MB.
+            decodeImageBitmap(bytes, 300)?.also {
                 if (cache.size >= 40) cache.remove(cache.keys.first())
                 cache[url] = it
             }
