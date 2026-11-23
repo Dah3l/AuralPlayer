@@ -148,10 +148,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.launch
@@ -240,13 +236,18 @@ fun NowPlayingScreen(
             var seed: Long = 1L
         }
     }
+    // O(n): un mapa id -> cola de claves disponibles, en vez de
+    // indexOfFirst por elemento (O(n²) con colas grandes). Con
+    // duplicados (la misma canción dos veces en la cola) cada
+    // aparición consume una clave del pool, igual que antes.
     val queueKeys: List<Long> = remember(queueDisplay) {
-        val pool = queueKeyMemory.songs.mapIndexed { i, s ->
-            s.id to queueKeyMemory.keys.getOrElse(i) { 0L }
-        }.toMutableList()
+        val poolById = mutableMapOf<Long, ArrayDeque<Long>>()
+        queueKeyMemory.songs.forEachIndexed { i, s ->
+            poolById.getOrPut(s.id) { ArrayDeque() }
+                .addLast(queueKeyMemory.keys.getOrElse(i) { 0L })
+        }
         val newKeys = queueDisplay.map { s ->
-            val match = pool.indexOfFirst { it.first == s.id }
-            if (match >= 0) pool.removeAt(match).second else queueKeyMemory.seed++
+            poolById[s.id]?.removeFirstOrNull() ?: queueKeyMemory.seed++
         }
         queueKeyMemory.songs = queueDisplay
         queueKeyMemory.keys = newKeys
@@ -1920,10 +1921,16 @@ private fun NowPlayingAmbientBackground(
     // luminance() de Compose no existe en esta versión: se usa el de Android.
     val isDark = android.graphics.Color.luminance(scheme.background.toArgb()) < 0.5f
     val blobAlpha = if (isDark) 0.85f else 0.65f
-    val phase by rememberInfiniteTransition(label = "mesh").animateFloat(
-        0f, (2 * Math.PI).toFloat(),
-        infiniteRepeatable(tween(28_000, easing = LinearEasing)), label = "phase",
-    )
+    // La fase avanza en pasos de 100 ms en vez de cada frame: el mesh
+    // se mueve tan lento (ciclo de 28 s) que el paso no se nota, y el
+    // redibujado pasa de 60 a 10 veces por segundo (batería/GPU).
+    var phase by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(100)
+            phase = (phase + (2 * Math.PI / 280).toFloat()) % (2 * Math.PI).toFloat()
+        }
+    }
     // Grano aleatorio 128x128 (semilla fija), en mosaico al 3%: más
     // suave que antes, suficiente para romper las bandas del degradado.
     val noiseBitmap = remember {
