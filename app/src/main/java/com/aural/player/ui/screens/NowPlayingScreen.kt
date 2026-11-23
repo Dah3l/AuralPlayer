@@ -2,6 +2,7 @@
 package com.aural.player.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
@@ -127,6 +128,7 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Edit
@@ -188,15 +190,18 @@ fun NowPlayingScreen(
     onOpenEqualizer: () -> Unit = {},
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showSongInfo by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     val lrcMapState by viewModel.lrcMap.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
     // Decoración Halloween: solo si el tema activo es Halloween (tema real del menú).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
     val isHalloweenTheme = themeName == AppTheme.HALLOWEEN.name
     val song = state.currentSong
+    val songBpm = song?.let { bpmMap[it.id] }
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val queueHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -334,8 +339,16 @@ fun NowPlayingScreen(
                         state = state,
                         onRemoveFromQueue = onRemoveFromQueue,
                         onShowLyrics = { showLyrics = true },
-                        onOpenEqualizer = onOpenEqualizer
+                        onOpenEqualizer = onOpenEqualizer,
+                        onShowSongInfo = { showSongInfo = true }
                     )
+                    if (showSongInfo && song != null) {
+                        SongInfoDialog(
+                            song = song,
+                            viewModel = viewModel,
+                            onDismiss = { showSongInfo = false }
+                        )
+                    }
                 }
             }
 
@@ -567,6 +580,31 @@ fun NowPlayingScreen(
                             tint = if (fav) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(30.dp)
+                        )
+                    }
+                }
+            }
+            // Tag de tempo: aparece cuando la canción ya tiene BPM
+            // analizado (el feedback visual de la Mezcla DJ). Toca para
+            // ver la información de la canción.
+            if (songBpm != null) {
+                Row(Modifier.fillMaxWidth()) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable { showSongInfo = true }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "${songBpm.toInt()} BPM",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -908,7 +946,8 @@ private fun NowPlayingMenu(
     state: com.aural.player.playback.PlayerUiState,
     onRemoveFromQueue: (Int) -> Unit,
     onShowLyrics: () -> Unit,
-    onOpenEqualizer: () -> Unit = {}
+    onOpenEqualizer: () -> Unit = {},
+    onShowSongInfo: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -1113,6 +1152,11 @@ private fun NowPlayingMenu(
             text = { Text("Cambiar portada") },
             leadingIcon = { Icon(Icons.Rounded.Image, null) },
             onClick = { onDismiss(); showCoverPicker = true }
+        )
+        DropdownMenuItem(
+            text = { Text("Información de la canción") },
+            leadingIcon = { Icon(Icons.Rounded.Info, null) },
+            onClick = { onDismiss(); onShowSongInfo() }
         )
         DropdownMenuItem(
             text = { Text("Editar información") },
@@ -1459,6 +1503,94 @@ private fun NowPlayingMenu(
  * tarjeta lleva su propio interruptor para añadir el link.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+/** "Información de la canción": BPM + datos de archivo (formato,
+ *  calidad, tamaño...). El BPM es el feedback visual de que la canción
+ *  ya está analizada para la Mezcla DJ. */
+@Composable
+private fun SongInfoDialog(
+    song: com.aural.player.data.Song,
+    viewModel: com.aural.player.AuralViewModel,
+    onDismiss: () -> Unit
+) {
+    val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
+    val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val meta = customMetadata[song.id]
+    val title = meta?.first?.ifBlank { song.title } ?: song.title
+    val artist = meta?.second?.ifBlank { song.artist } ?: song.artist
+    val album = meta?.third?.ifBlank { song.album } ?: song.album
+    val bpm = bpmMap[song.id]
+    var fileInfo by remember {
+        mutableStateOf<com.aural.player.playback.AudioFileInfo?>(null)
+    }
+    var fileInfoLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(song.id) {
+        fileInfo = viewModel.loadSongFileInfo(song)
+        fileInfoLoaded = true
+    }
+    val formatText = fileInfo?.format ?: if (fileInfoLoaded) "—" else "…"
+    val qualityText = fileInfo?.let { info ->
+        val parts = ArrayList<String>()
+        if (info.bitrateKbps > 0) parts += "${info.bitrateKbps} kbps"
+        if (info.sampleRateHz > 0) parts += "${info.sampleRateHz} Hz"
+        when (info.channels) {
+            1 -> parts += "Mono"
+            2 -> parts += "Estéreo"
+            in 3..Int.MAX_VALUE -> parts += "${info.channels} canales"
+        }
+        parts.joinToString(" · ").ifBlank { "—" }
+    } ?: if (fileInfoLoaded) "—" else "…"
+    val sizeText = fileInfo?.let { formatFileSize(it.sizeBytes) }
+        ?: if (fileInfoLoaded) "—" else "…"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Información de la canción") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SongInfoRow("Título", title)
+                SongInfoRow("Artista", artist.ifBlank { "Artista desconocido" })
+                SongInfoRow("Álbum", album.ifBlank { "—" })
+                SongInfoRow("Duración", formatDuration(song.durationMs))
+                SongInfoRow(
+                    "Tempo",
+                    if (bpm != null) "${bpm.toInt()} BPM" else "Sin analizar todavía"
+                )
+                SongInfoRow("Formato", formatText)
+                SongInfoRow("Calidad", qualityText)
+                SongInfoRow("Tamaño", sizeText)
+                SongInfoRow("Carpeta", song.folderPath.ifBlank { "—" })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
+}
+
+@Composable
+private fun SongInfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1.4f)
+        )
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes < 0) return "—"
+    if (bytes < 1024) return "$bytes B"
+    if (bytes < 1024 * 1024) return "${bytes / 1024} KB"
+    return "%.1f MB".format(bytes / 1_048_576.0)
+}
+
 @Composable
 private fun ShareSheet(
     title: String,
