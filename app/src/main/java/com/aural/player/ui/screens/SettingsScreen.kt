@@ -796,7 +796,6 @@ fun SettingsScreen(
 }
 
 @Composable
-@Composable
 private fun DownloadQualityOption(
     title: String,
     subtitle: String,
@@ -826,6 +825,7 @@ private fun DownloadQualityOption(
     }
 }
 
+@Composable
 private fun SettingsSection(title: String) {    Text(
         text = title,
         style = MaterialTheme.typography.titleLarge,
