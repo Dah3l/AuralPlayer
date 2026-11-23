@@ -544,6 +544,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
 
                 is Screen.Playlist -> {
+                    // Suscrito al flujo de canciones (como Álbum y Artista):
+                    // al editar la metadata, la lista se actualiza sola
+                    // sin salir y volver a entrar.
+                    val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
                     val isFavorites = s.id == FAVORITES_ID
                     val isDaily = s.id == DAILY_PLAYLIST_ID
                     val isRecent = s.id == RECENTLY_ADDED_ID
@@ -552,7 +556,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                     val songs = if (isFavorites) viewModel.favoriteSongs()
                     else if (isDaily) viewModel.dailyPlaylistSongs()
                     else if (isRecent) viewModel.recentlyAddedSongs()
-                    else playlist?.let { viewModel.songsOfPlaylist(it) } ?: emptyList()
+                    else playlist?.let { pl ->
+                        val byId = allSongs.associateBy { it.id }
+                        pl.songIds.mapNotNull { byId[it] }
+                    } ?: emptyList()
 
                     DetailScreen(
                         viewModel = viewModel,
