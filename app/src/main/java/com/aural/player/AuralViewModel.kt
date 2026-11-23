@@ -18,6 +18,7 @@ import com.aural.player.data.TopSong
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
 import android.app.PendingIntent
+import android.content.ContentUris
 import android.content.ContentValues
 import android.net.Uri
 import android.os.Build
@@ -28,6 +29,7 @@ import com.aural.player.alarm.AlarmConfig
 import com.aural.player.alarm.AlarmScheduler
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.StopMode
+import com.aural.player.youtube.YTResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -441,6 +443,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Vuelve a escanear MediaStore (se llama al iniciar y al pedirlo el usuario). */
+    // Descargas recientes aún sin indexar por MediaStore: se mantienen en
+    // la biblioteca hasta que un escaneo las recoja (ver insertDownloadedSong).
+    private val pendingDownloadSongs = mutableMapOf<Long, Pair<Song, Long>>()
+
     fun rescan(onDone: (() -> Unit)? = null) {
         viewModelScope.launch {
             // Actualización silenciosa: el loader de pantalla completa solo en
@@ -449,7 +455,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             val firstLoad = _library.value.songs.isEmpty()
             if (firstLoad) _library.value = _library.value.copy(isLoading = true)
             try {
-                val songs = repository.scanSongs()
+                val songs = mergePendingDownloads(repository.scanSongs())
                 playback.setLibrary(songs)
                 _library.value = _library.value.copy(songs = songs, isLoading = false)
                 tryRestoreLastPlayback(songs)
@@ -459,6 +465,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 _library.value = _library.value.copy(isLoading = false)
             }
         }
+    }
+
+    /**
+     * Mezcla las descargas pendientes con el escaneo: las que MediaStore
+     * ya indexó salen de pendientes (manda la fila escaneada); las que
+     * aún no aparecen se conservan para que un rescan temprano no las
+     * haga desaparecer de la biblioteca. Caducan a los 15 minutos.
+     */
+    private fun mergePendingDownloads(scanned: List<Song>): List<Song> {
+        val now = System.currentTimeMillis()
+        pendingDownloadSongs.entries.removeAll { now - it.value.second > 15 * 60 * 1000 }
+        val scannedIds = scanned.map { it.id }.toSet()
+        pendingDownloadSongs.entries.removeAll { it.key in scannedIds }
+        if (pendingDownloadSongs.isEmpty()) return scanned
+        return (scanned + pendingDownloadSongs.values.map { it.first })
+            .sortedBy { it.title }
     }
 
     /** La restauración al abrir solo se intenta una vez por proceso. */
@@ -904,12 +926,17 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Agrega una canción recién descargada a la playlist "Descargas", por su
-     * ID exacto de MediaStore (antes se buscaba por título tras esperas fijas
-     * y a veces no se encontraba, o se añadía otra canción). Crea la playlist
-     * si no existe. Si el MediaStore aún no la indexó, la playlist guarda el
-     * ID igualmente y la fila aparece en cuanto un rescan la recoja.
+     * ID exacto de MediaStore. Crea la playlist si no existe. La canción se
+     * inserta en la biblioteca al instante (insertDownloadedSong): no se
+     * espera a que MediaStore la indexe, porque el escaneo la descarta
+     * mientras no tenga duración.
      */
-    fun addDownloadToPlaylist(fileName: String?, mediaId: Long) {
+    fun addDownloadToPlaylist(
+        fileName: String?,
+        mediaId: Long,
+        result: YTResult,
+        tagsEmbedded: Boolean
+    ) {
         if (mediaId <= 0L) return
         viewModelScope.launch {
             var playlistId = playlists.value.firstOrNull { it.name == "Descargas" }?.id
@@ -924,16 +951,53 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             val destino = playlistId ?: return@launch
-            // Reescanear con reintentos acotados hasta que la biblioteca la incluya
-            var intentos = 0
-            while (intentos < 8 && _library.value.songs.none { it.id == mediaId }) {
-                rescan()
-                intentos++
-                if (_library.value.songs.none { it.id == mediaId }) {
-                    kotlinx.coroutines.delay(400)
+            // La canción entra en la biblioteca AL INSTANTE (ver
+            // insertDownloadedSong): no se espera al escaneo.
+            insertDownloadedSong(mediaId, result, tagsEmbedded)
+            addToPlaylist(destino, mediaId)
+        }
+    }
+
+    /**
+     * Inserta una descarga recién terminada en la biblioteca en memoria
+     * con su metadata correcta, sin esperar a MediaStore. El escaneo la
+     * descarta al principio: la fila recién insertada aún no tiene
+     * duración (MediaStore la calcula en segundo plano) y scanSongs
+     * salta todo lo que dure menos de 5 s. Por eso antes la canción no
+     * aparecía hasta reiniciar o descargar otra. La duración sale del
+     * resultado de YouTube; la portada, de la miniatura cuando los tags
+     * quedaron incrustados (la miniatura solo cubre el hueco hasta que
+     * MediaStore indexe el archivo y su portada). Queda en pendientes
+     * para que un rescan temprano no la borre.
+     */
+    private fun insertDownloadedSong(mediaId: Long, result: YTResult, tagsEmbedded: Boolean) {
+        val song = Song(
+            id = mediaId,
+            title = result.title,
+            artist = result.artist,
+            album = "",
+            albumId = 0L,
+            durationMs = result.durationSec.coerceAtLeast(0L) * 1000L,
+            uri = ContentUris.withAppendedId(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, mediaId
+            ).toString(),
+            albumArtUri = null,
+            folderPath = "Music/Aural/",
+            dateAddedSec = System.currentTimeMillis() / 1000L
+        )
+        val songs = (_library.value.songs.filter { it.id != mediaId } + song)
+            .sortedBy { it.title }
+        _library.value = _library.value.copy(songs = songs)
+        playback.refreshSongMetadata(song)
+        pendingDownloadSongs[mediaId] = song to System.currentTimeMillis()
+        if (tagsEmbedded && !result.thumbnailUrl.isNullOrBlank()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                SongCoverStore.saveFromUrl(
+                    getApplication<Application>(), mediaId, result.thumbnailUrl
+                )?.let { local ->
+                    settings.setCustomCover(mediaId, local)
                 }
             }
-            addToPlaylist(destino, mediaId)
         }
     }
 
