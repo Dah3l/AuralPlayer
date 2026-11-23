@@ -8,6 +8,7 @@
 package com.aural.player.desktop
 
 import com.aural.player.shared.YoutubeResult
+import com.aural.player.shared.YoutubeTitleParser
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
@@ -102,10 +103,16 @@ class YoutubeEngine {
             .take(20)
             .mapNotNull { item ->
                 try {
+                    // Título y artista reales: el título del video trae
+                    // canal + artista + canción mezclados.
+                    val parsed = YoutubeTitleParser.parse(
+                        item.name ?: "Sin título",
+                        item.uploaderName ?: "Artista misterioso"
+                    )
                     YoutubeResult(
                         videoId = extractVideoId(item.url),
-                        title = item.name ?: "Sin título",
-                        uploader = item.uploaderName ?: "Artista misterioso",
+                        title = parsed.title,
+                        uploader = parsed.artist,
                         durationSec = item.duration,
                         thumbnailUrl = item.thumbnails.firstOrNull()?.url
                     )
