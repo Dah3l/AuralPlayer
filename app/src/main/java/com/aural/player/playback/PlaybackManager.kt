@@ -380,6 +380,15 @@ class PlaybackManager(private val context: Context) {
         _state.value = _state.value.copy(positionMs = positionMs)
     }
 
+    /**
+     * Posición en vivo del reproductor, sin esperar al ticker de 500 ms.
+     * La usa la pantalla de letras para que la línea activa no vaya por
+     * detrás del audio. Sin controlador, cae a la última posición
+     * conocida del estado.
+     */
+    fun currentPositionMs(): Long =
+        controller?.currentPosition?.coerceAtLeast(0) ?: _state.value.positionMs
+
     /** Salta directamente a un elemento de la cola. */
     fun playAt(index: Int) {
         val c = controller ?: return
