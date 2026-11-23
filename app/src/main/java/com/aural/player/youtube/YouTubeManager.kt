@@ -170,7 +170,9 @@ class YouTubeManager(private val context: Context) {
                         )
                     )
                     .firstOrNull { it.averageBitrate >= 48000 }
-                    ?: streamInfo.audioStreams.minByOrNull { it.averageBitrate }
+                    // Fallback: el MEJOR disponible (antes era minByOrNull
+                    // = el peor; en PC 1.2.22 ya se cambió a maxByOrNull).
+                    ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
 
                 if (audioStream != null) {
                     val ext = when {
@@ -310,6 +312,10 @@ class YouTubeManager(private val context: Context) {
     ) {
         currentDownloadId = videoId
         val connection = URL(url).openConnection() as java.net.HttpURLConnection
+        // Timeouts como en PC (1.2.22): sin ellos, un corte de red deja
+        // la descarga colgada para siempre con la barra congelada.
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 30_000
         // Headers de navegador
         connection.setRequestProperty("User-Agent",
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
