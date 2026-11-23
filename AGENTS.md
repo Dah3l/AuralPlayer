@@ -741,6 +741,16 @@ cuanto las veas.
   pleno stream y 200 reajustes en 20 s se oyen como tirones.
   Pasos de 500 ms (40 en total, ~0,2% de tono por paso, inaudible
   como salto). Verificado 2026-11-23 (1.2.0, reporte de Dahel).
+- Mezcla DJ: el análisis de BPM NO puede correr a la vez que el
+  glide — decodificar 75 s + autocorrelación por canción mientras
+  Sonic estira el tiempo satura la CPU y se oye el tirón al volver
+  al tempo (el tirón no dura los 20 s del glide, solo los primeros
+  segundos: lo que dura el análisis). El análisis espera a que el
+  glide termine (`while (tempoRecoveryJob?.isActive == true)
+  delay(500)` ANTES de marcar el id como analizando, para que una
+  cancelación esperando no deje la canción marcada para siempre);
+  el campo del glide es @Volatile porque se lee desde IO.
+  Verificado 2026-11-23 (1.2.0, reporte de Dahel).
 
 ## Estado actual (2026-11-18)
 
