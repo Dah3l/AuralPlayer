@@ -517,6 +517,18 @@ class MusicService : MediaSessionService() {
         return idx
     }
 
+    /** Como el de arriba, pero sobre una foto del timeline ya tomada
+     *  (el análisis de BPM no puede releer el timeline vivo: al abrir,
+     *  la cola se está aplicando y cambia entre dos lecturas). */
+    private fun nextWindowIndexFrom(timeline: Timeline, player: Player, fromIndex: Int): Int? {
+        if (timeline.windowCount == 0) return null
+        val idx = timeline.getNextWindowIndex(
+            fromIndex, player.repeatMode, player.shuffleModeEnabled
+        )
+        if (idx == C.INDEX_UNSET || idx == fromIndex) return null
+        return idx
+    }
+
     /** Canción anterior del timeline (null si no hay). */
     private fun prevWindowIndex(player: Player): Int? {
         val timeline = player.currentTimeline
@@ -817,16 +829,30 @@ class MusicService : MediaSessionService() {
     private fun triggerBpmAnalysis(currentSongId: Long) {
         val player = mediaSession?.player ?: return
         val app = application as? AuralApp ?: return
+        // Al abrir, la cola restaurada se está aplicando (setMediaItems)
+        // mientras el estado ya se publicó: currentMediaItemIndex puede
+        // ser >= 0 con el timeline todavía vacío, y getMediaItemAt
+        // revienta con IndexOutOfBoundsException (crash al abrir).
+        // Se lee el timeline UNA vez y se camina solo sobre esa foto,
+        // con los índices acotados a ella; si la foto no cuadra con la
+        // canción que disparó el análisis, se sale y el próximo cambio
+        // lo reintenta. El análisis nunca debe tumbar la app.
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
         val currentIndex = player.currentMediaItemIndex
-        if (currentIndex < 0) return
+        if (currentIndex < 0 || currentIndex >= timeline.windowCount) return
+        val window = Timeline.Window()
+        val currentItem = timeline.getWindow(currentIndex, window).mediaItem
+        if (currentItem.mediaId.toLongOrNull() != currentSongId) return
         val wanted = ArrayList<Pair<Long, android.net.Uri>>()
-        val currentUri = player.getMediaItemAt(currentIndex).localConfiguration?.uri
+        val currentUri = currentItem.localConfiguration?.uri
         if (currentUri != null) wanted += currentSongId to currentUri
         var idx = currentIndex
         var steps = 0
         while (steps < 3) {
-            val next = nextWindowIndexFrom(player, idx) ?: break
-            val item = player.getMediaItemAt(next)
+            val next = nextWindowIndexFrom(timeline, player, idx) ?: break
+            if (next < 0 || next >= timeline.windowCount) break
+            val item = timeline.getWindow(next, window).mediaItem
             val id = item.mediaId.toLongOrNull()
             val uri = item.localConfiguration?.uri
             if (id != null && uri != null) wanted += id to uri
