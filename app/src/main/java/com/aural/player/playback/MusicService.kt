@@ -43,6 +43,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -221,16 +223,25 @@ class MusicService : MediaSessionService() {
                 app.playback.state,
                 app.settings.favorites
             ) { playerState, favorites ->
-                playerState to favorites
-            }.collect { (playerState, favorites) ->
-                val song = playerState.currentSong ?: return@collect
-                val isFav = favorites.contains(song.id)
-                val repeatIcon = when (playerState.repeatMode) {
+                // El layout solo depende de la canción, si es favorita y
+                // el modo de repetición: la posición (que cambia cada
+                // 500 ms) no lo mueve, así que se mapea a esos tres
+                // valores y se deduplica.
+                Triple(
+                    playerState.currentSong?.id,
+                    playerState.currentSong?.id?.let { favorites.contains(it) } ?: false,
+                    playerState.repeatMode
+                )
+            }
+                .distinctUntilChanged()
+                .collect { (songId, isFav, repeatMode) ->
+                    if (songId == null) return@collect
+                    val repeatIcon = when (repeatMode) {
                     RepeatMode.OFF -> R.drawable.ic_notif_repeat_off
                     RepeatMode.ONE -> R.drawable.ic_notif_repeat_one
                     RepeatMode.ALL -> R.drawable.ic_notif_repeat
                 }
-                val repeatName = when (playerState.repeatMode) {
+                val repeatName = when (repeatMode) {
                     RepeatMode.OFF -> "Repetir: desactivado"
                     RepeatMode.ONE -> "Repetir: una"
                     RepeatMode.ALL -> "Repetir: todas"
