@@ -69,6 +69,10 @@ class SettingsStore(private val context: Context) {
         // Fundido entre canciones (crossfade): apagado por defecto, 5 s.
         val KEY_CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val KEY_CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
+        // Mezcla DJ: tempo + bajos. Apagada por defecto.
+        val KEY_DJ_MIX_ENABLED = booleanPreferencesKey("dj_mix_enabled")
+        // BPM por canción (songId -> BPM real): análisis en segundo plano.
+        val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
         val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
         // v1.1.0: despertador (JSON de AlarmConfig).
@@ -711,7 +715,58 @@ class SettingsStore(private val context: Context) {
     suspend fun setCrossfadeEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_CROSSFADE_ENABLED] = enabled
+            // Sin fundido no hay mezcla: apagar el fundido apaga el DJ.
+            if (!enabled) prefs[KEY_DJ_MIX_ENABLED] = false
         }
+    }
+
+    /** Mezcla DJ: iguala el tempo y cambia los bajos al pasar de
+     *  canción. Apagada por defecto; al activarla enciende el fundido
+     *  (sin solape no hay mezcla). El fundido sigue siendo la opción
+     *  sencilla para quien no quiera mezclar. */
+    val djMixEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DJ_MIX_ENABLED] ?: false
+    }
+
+    suspend fun setDjMixEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DJ_MIX_ENABLED] = enabled
+            if (enabled) prefs[KEY_CROSSFADE_ENABLED] = true
+        }
+    }
+
+    /** BPM por canción (songId -> BPM real, sin plegar): lo analiza la
+     *  app una sola vez en segundo plano. Solo entran las analizadas. */
+    val bpmMap: Flow<Map<Long, Float>> = context.dataStore.data.map { prefs ->
+        decodeBpmMap(prefs[KEY_BPM_MAP])
+    }
+
+    /** Guarda el BPM de una canción (tras analizarla). */
+    suspend fun setBpm(songId: Long, bpm: Float) {
+        if (!bpm.isFinite() || bpm <= 0f) return
+        context.dataStore.edit { prefs ->
+            val current = decodeBpmMap(prefs[KEY_BPM_MAP]).toMutableMap()
+            current[songId] = bpm
+            prefs[KEY_BPM_MAP] = encodeBpmMap(current)
+        }
+    }
+
+    private fun decodeBpmMap(json: String?): Map<Long, Float> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                obj.keys().forEach { k ->
+                    k.toLongOrNull()?.let { put(it, obj.optDouble(k).toFloat()) }
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun encodeBpmMap(map: Map<Long, Float>): String {
+        val obj = JSONObject()
+        for ((k, v) in map) obj.put(k.toString(), v.toDouble())
+        return obj.toString()
     }
 
     /** Duración del fundido en segundos (1..12, 5 por defecto). */
@@ -809,6 +864,9 @@ class SettingsStore(private val context: Context) {
             val lrc = decodeLrcMap(prefs[KEY_LRC_MAP]).toMutableMap()
             songIds.forEach { lrc.remove(it) }
             prefs[KEY_LRC_MAP] = JSONObject(lrc.mapKeys { it.key.toString() } as Map<String, String>).toString()
+            val bpm = decodeBpmMap(prefs[KEY_BPM_MAP]).toMutableMap()
+            songIds.forEach { bpm.remove(it) }
+            prefs[KEY_BPM_MAP] = encodeBpmMap(bpm)
         }
         // Al quitar las portadas, borrar también sus archivos locales
         // (igual que setCustomCover con "" lo hacía por canción).
@@ -942,6 +1000,7 @@ class SettingsStore(private val context: Context) {
         "playlist_covers_json" to KEY_PLAYLIST_COVERS,
         "playlist_play_counts_json" to KEY_PLAYLIST_PLAY_COUNTS,
         "custom_metadata_json" to KEY_CUSTOM_METADATA,
+        "bpm_map_json" to KEY_BPM_MAP,
         "hidden_folders_json" to KEY_HIDDEN_FOLDERS,
         "library_tab_order" to KEY_TAB_ORDER,
         "island_appearance" to KEY_ISLAND_APPEARANCE,
@@ -1105,6 +1164,8 @@ class SettingsStore(private val context: Context) {
                                     encodeCovers(remapKeyedMap(decodeCovers(raw), remap))
                                 "custom_metadata_json" ->
                                     encodeMetadata(remapKeyedMap(decodeMetadata(raw), remap))
+                                "bpm_map_json" ->
+                                    encodeBpmMap(remapKeyedMap(decodeBpmMap(raw), remap))
                                 // El mapa de letras se reescribe abajo con rutas nuevas.
                                 "lrc_map_json" -> raw
                                 "alarm_json" -> remapAlarm(raw, remap)
