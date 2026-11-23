@@ -691,7 +691,9 @@ fun LibraryScreen(
                                     listState = downloadsListState,
                                     onDownloadComplete = { fileName, mediaId, result, tagsEmbedded ->
                                         if (fileName != null) {
-                                            viewModel.addDownloadToPlaylist(fileName, mediaId)
+                                            viewModel.addDownloadToPlaylist(
+                                                fileName, mediaId, result, tagsEmbedded
+                                            )
                                             // Si los tags no quedaron en el
                                             // archivo (p. ej. .webm), la
                                             // metadata queda en los datos
