@@ -190,18 +190,23 @@ fun LyricsScreen(
         }
     }
 
-    // Actualizar la línea activa según la posición (tiempo real)
-    // Usamos un ticker que fuerza recomposición cada 500ms
+    // Actualizar la línea activa según la posición (tiempo real).
+    // Ticker de 100 ms leyendo la posición en vivo del reproductor:
+    // con el de 500 ms la línea iba hasta medio segundo por detrás
+    // del audio.
     var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.delay(100)
             tick++
         }
     }
+    // Letra plana (sin tiempos): no hay línea activa que seguir ni
+    // auto-scroll; se muestra el texto tal cual.
+    val synced = remember(lines) { LrcParser.isSynced(lines) }
     val activeIndex = remember(lines, tick) {
-        if (lines.isNotEmpty()) LrcParser.currentIndex(lines, currentPositionMs())
-        else 0
+        if (lines.isNotEmpty() && synced) LrcParser.currentIndex(lines, currentPositionMs())
+        else -1
     }
     // Líneas que se muestran: traducidas si el usuario activó la traducción
     val displayLines = remember(lines, translatedLines, showTranslation) {
@@ -215,6 +220,7 @@ fun LyricsScreen(
             skipFirstAutoScroll = false
             return@LaunchedEffect
         }
+        if (activeIndex < 0) return@LaunchedEffect
         if (lines.isNotEmpty()) {
             try {
                 listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
