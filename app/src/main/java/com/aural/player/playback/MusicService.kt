@@ -21,7 +21,9 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -40,13 +42,18 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * MediaSessionService que mantiene la reproducción activa cuando la app
@@ -69,9 +76,30 @@ class MusicService : MediaSessionService() {
     private var eqSessionListener: androidx.media3.common.Player.Listener? = null
     private var lastEqSessionId: Int = 0
 
+    // ------------------------- Fundido entre canciones -------------------------
+    // Segundo reproductor para el crossfade: mientras el principal apaga la
+    // canción que termina, este enciende la siguiente y se cruzan los
+    // volúmenes. Al terminar el fundido intercambian los papeles
+    // (MediaSession.setPlayer) y el que era principal queda de reserva.
+    private var fadePlayer: androidx.media3.exoplayer.ExoPlayer? = null
+    private var fadeEqListener: androidx.media3.common.Player.Listener? = null
+    private var lastFadeEqSessionId: Int = 0
+    private var fadeWatchJob: Job? = null
+    private var rampJob: Job? = null
+    private var crossfadeActive = false
+    /** Índice del timeline para el que está preparado el segundo
+     *  reproductor (-1 = sin preparar). */
+    private var fadePreparedForIndex = -1
+    private var fadeEffectiveMs = 0L
+    private var crossfadeEnabledCache = false
+    private var crossfadeSecondsCache = 5
+
     companion object {
         const val CMD_TOGGLE_FAVORITE = "aural_toggle_favorite"
         const val CMD_CYCLE_REPEAT = "aural_cycle_repeat"
+        /** Fundido al saltar a la siguiente/anterior (lo pide PlaybackManager). */
+        const val CMD_CROSSFADE_NEXT = "aural_crossfade_next"
+        const val CMD_CROSSFADE_PREV = "aural_crossfade_prev"
         /** Acción del despertador: sonar la canción o playlist elegida. */
         const val ACTION_ALARM_PLAY = "com.aural.player.ALARM_PLAY"
         const val EXTRA_ALARM_SONG_IDS = "alarm_song_ids"
@@ -135,6 +163,109 @@ class MusicService : MediaSessionService() {
         // v1.0.7: isla dinámica (overlay) cuando está activada y hay música
         // cargada fuera de la app.
         startIslandOverlay()
+        // Fundido entre canciones: segundo reproductor + vigilancia.
+        startCrossfadeEngine(player)
+    }
+
+    /** Crea el segundo reproductor del fundido y arranca su vigilancia. */
+    private fun startCrossfadeEngine(mainPlayer: androidx.media3.exoplayer.ExoPlayer) {
+        val app = application as? AuralApp ?: return
+        // El segundo reproductor NO gestiona el foco de audio (eso lo hace
+        // el principal: si lo pidiera también, al arrancar el fundido le
+        // quitaría el foco al principal y lo pausaría) ni el ruido al
+        // desconectar audífonos (el espejo de play/pausa lo cubre).
+        val fade = androidx.media3.exoplayer.ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                /* handleAudioFocus = */ false
+            )
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setHandleAudioBecomingNoisy(false)
+            .build()
+        fade.volume = 0f
+        fadePlayer = fade
+        // Ecualizador del segundo reproductor (su propio juego de efectos).
+        val fadeEq = object : androidx.media3.common.Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (audioSessionId != 0 && audioSessionId != lastFadeEqSessionId) {
+                    lastFadeEqSessionId = audioSessionId
+                    EqualizerManager.initSecondSession(this@MusicService, audioSessionId)
+                }
+            }
+        }
+        fadeEqListener = fadeEq
+        fade.addListener(fadeEq)
+        // Espejo de play/pausa y cancelación del fundido, en ambos.
+        fade.addListener(makeFadeControlListener(fade))
+        mainPlayer.addListener(makeFadeControlListener(mainPlayer))
+        // Ajustes del fundido en caché (el motor los lee sin suspender).
+        serviceScope.launch {
+            app.settings.crossfadeEnabled.collect { crossfadeEnabledCache = it }
+        }
+        serviceScope.launch {
+            app.settings.crossfadeSeconds.collect { crossfadeSecondsCache = it }
+        }
+        // Vigilancia: cada 250 ms mira si falta poco para el final.
+        fadeWatchJob = serviceScope.launch {
+            while (true) {
+                delay(250)
+                try {
+                    fadeWatchTick()
+                } catch (_: Exception) {
+                    // La vigilancia nunca debe romper la reproducción
+                }
+            }
+        }
+    }
+
+    /**
+     * Listener de control del fundido, uno por reproductor: solo actúa
+     * cuando su reproductor es el de la sesión (el otro es la voz del
+     * fundido y no manda). Como el filtro es dinámico, no hay que mover
+     * listeners al intercambiar los papeles.
+     */
+    private fun makeFadeControlListener(owner: Player) = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (owner !== mediaSession?.player || !crossfadeActive) return
+            val fade = fadePlayer ?: return
+            if (fade === owner) return
+            // Pausa/reanudación durante el fundido: la segunda voz sigue
+            // a la principal (si no, seguiría sonando con todo en pausa).
+            if (isPlaying) fade.play() else fade.pause()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (owner !== mediaSession?.player || !crossfadeActive) return
+            // Parada total (botón parar) en pleno fundido: cancelar.
+            if (playbackState == Player.STATE_IDLE) abortFade()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (owner !== mediaSession?.player || !crossfadeActive) return
+            when (reason) {
+                // El usuario buscó con el slider en pleno fundido: se
+                // cancela y la canción actual sigue normal.
+                Player.DISCONTINUITY_REASON_SEEK -> abortFade()
+                // La canción terminó antes de que la rampa acabara
+                // (retraso del bucle): cerrar el fundido ya, que la
+                // segunda voz está casi a todo volumen.
+                Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> finishFade()
+            }
+        }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            if (owner !== mediaSession?.player) return
+            // Cola nueva o reordenada: lo preparado ya no vale.
+            fadePreparedForIndex = -1
+            if (crossfadeActive) abortFade()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -209,6 +340,24 @@ class MusicService : MediaSessionService() {
                     app.playback.cyclePlayMode()
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
+                CMD_CROSSFADE_NEXT -> {
+                    val ok = crossfadeToNext()
+                    return Futures.immediateFuture(
+                        SessionResult(
+                            if (ok) SessionResult.RESULT_SUCCESS
+                            else SessionResult.RESULT_ERROR_UNKNOWN
+                        )
+                    )
+                }
+                CMD_CROSSFADE_PREV -> {
+                    val ok = crossfadeToPrev()
+                    return Futures.immediateFuture(
+                        SessionResult(
+                            if (ok) SessionResult.RESULT_SUCCESS
+                            else SessionResult.RESULT_ERROR_UNKNOWN
+                        )
+                    )
+                }
             }
             return super.onCustomCommand(session, controller, customCommand, args)
         }
@@ -274,6 +423,184 @@ class MusicService : MediaSessionService() {
     /** El sistema llama a este método para entregar la sesión a los clientes. */
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
+
+    // =======================================================================
+    // FUNDIDO ENTRE CANCIONES (crossfade)
+    // El principal suena; el segundo entra con la siguiente canción unos
+    // segundos antes del final y se cruzan los volúmenes con curva de
+    // potencia igual (el oído percibe el volumen constante, como Spotify).
+    // Al acabar, la sesión cambia al segundo reproductor y los papeles se
+    // intercambian: la cola, el aleatorio y la repetición viajan con los
+    // MediaItems, así que nada de eso se toca.
+    // =======================================================================
+
+    /** Siguiente canción del timeline (null si no hay: fin de cola sin repetir). */
+    private fun nextWindowIndex(player: Player): Int? {
+        val timeline = player.currentTimeline
+        if (timeline.windowCount == 0) return null
+        val idx = timeline.getNextWindowIndex(
+            player.currentMediaItemIndex, player.repeatMode, player.shuffleModeEnabled
+        )
+        if (idx == C.INDEX_UNSET || idx == player.currentMediaItemIndex) return null
+        return idx
+    }
+
+    /** Canción anterior del timeline (null si no hay). */
+    private fun prevWindowIndex(player: Player): Int? {
+        val timeline = player.currentTimeline
+        if (timeline.windowCount == 0) return null
+        val idx = timeline.getPreviousWindowIndex(
+            player.currentMediaItemIndex, player.repeatMode, player.shuffleModeEnabled
+        )
+        if (idx == C.INDEX_UNSET || idx == player.currentMediaItemIndex) return null
+        return idx
+    }
+
+    /** Vigilancia del final de la canción: prepara y dispara el fundido. */
+    private fun fadeWatchTick() {
+        val main = mediaSession?.player ?: return
+        if (!main.isPlaying || crossfadeActive) return
+        if (!crossfadeEnabledCache) return
+        // Con parada programada no hay fundido: la canción termina y la
+        // pausa la gestiona PlaybackManager como siempre.
+        if ((application as? AuralApp)?.playback?.stopMode?.value != null) return
+        // Repetir una: la "siguiente" es la misma canción, no se funde.
+        if (main.repeatMode == Player.REPEAT_MODE_ONE) return
+        val duration = main.duration
+        if (duration <= 0) return
+        val nextIndex = nextWindowIndex(main) ?: return
+        val fadeMs = crossfadeSecondsCache * 1000L
+        val remaining = duration - main.currentPosition
+        // Preparar la siguiente con margen (la cola + prepare no deben
+        // comerse el fundido). Si la cola cambió, el índice ya no vale.
+        if (fadePreparedForIndex != nextIndex) {
+            if (remaining <= fadeMs + 5000) prepareFadePlayer(nextIndex)
+            return
+        }
+        if (remaining <= fadeMs + 250) startFade(nextIndex)
+    }
+
+    /**
+     * Carga en el segundo reproductor la cola completa (en el orden del
+     * timeline del principal) empezando en [targetIndex], lista para
+     * sonar en silencio. El aleatorio se conserva trasplantando el orden
+     * exacto: setMediaItems vuelve a barajar (cloneAndSet), así que se
+     * fija un orden identidad sobre la lista ya barajada — el interruptor
+     * de aleatorio sigue leyendo true y la cola no cambia de orden.
+     */
+    private fun prepareFadePlayer(targetIndex: Int): Boolean {
+        val main = mediaSession?.player ?: return false
+        val fade = fadePlayer ?: return false
+        if (main.mediaItemCount == 0 || targetIndex !in 0 until main.mediaItemCount) return false
+        return try {
+            val items = (0 until main.mediaItemCount).map { main.getMediaItemAt(it) }
+            fade.volume = 0f
+            fade.setMediaItems(items, targetIndex, 0L)
+            fade.shuffleModeEnabled = main.shuffleModeEnabled
+            fade.repeatMode = main.repeatMode
+            fade.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(items.size))
+            fade.setPlaybackSpeed(main.playbackParameters.speed)
+            fade.prepare()
+            fade.playWhenReady = false
+            fadePreparedForIndex = targetIndex
+            true
+        } catch (_: Exception) {
+            fadePreparedForIndex = -1
+            false
+        }
+    }
+
+    /** Arranca el fundido hacia [targetIndex]. Devuelve false si no se pudo. */
+    private fun startFade(targetIndex: Int): Boolean {
+        val main = mediaSession?.player ?: return false
+        val fade = fadePlayer ?: return false
+        if (crossfadeActive || !crossfadeEnabledCache) return false
+        if ((application as? AuralApp)?.playback?.stopMode?.value != null) return false
+        if (targetIndex == main.currentMediaItemIndex ||
+            targetIndex !in 0 until main.mediaItemCount
+        ) return false
+        if (fadePreparedForIndex != targetIndex && !prepareFadePlayer(targetIndex)) return false
+        // Fundido efectivo: el ajuste, limitado a la mitad de cada canción
+        // para que las cortas también fundan en vez de saltarse el efecto.
+        val durMain = main.duration.takeIf { it > 0 } ?: return false
+        val durTarget = fade.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        val effective = minOf(crossfadeSecondsCache * 1000L, durMain / 2, durTarget / 2)
+        if (effective < 1000) return false
+        fadeEffectiveMs = effective
+        crossfadeActive = true
+        fade.volume = 0f
+        fade.playWhenReady = true
+        rampJob?.cancel()
+        rampJob = serviceScope.launch {
+            while (crossfadeActive) {
+                // t avanza con la posición real de la segunda voz: si se
+                // pausa en pleno fundido, la rampa se congela y sigue al
+                // reanudar, sin saltos de volumen.
+                val t = (fade.currentPosition.toFloat() / fadeEffectiveMs).coerceIn(0f, 1f)
+                fade.volume = sin(t * PI / 2).toFloat()
+                main.volume = cos(t * PI / 2).toFloat()
+                if (main.playbackParameters.speed != fade.playbackParameters.speed) {
+                    fade.setPlaybackSpeed(main.playbackParameters.speed)
+                }
+                if (t >= 1f) {
+                    finishFade()
+                    break
+                }
+                delay(50)
+            }
+        }
+        return true
+    }
+
+    /** Cierra el fundido: la segunda voz queda de principal y se intercambian los papeles. */
+    private fun finishFade() {
+        if (!crossfadeActive) return
+        crossfadeActive = false
+        rampJob?.cancel()
+        rampJob = null
+        val oldMain = mediaSession?.player ?: return
+        val fade = fadePlayer ?: return
+        fade.volume = 1f
+        oldMain.volume = 0f
+        // Pausar antes del cambio: si no, al terminar su canción avanzaría
+        // solo a la siguiente y sonaría dos veces.
+        oldMain.pause()
+        mediaSession?.setPlayer(fade)
+        fadePlayer = oldMain
+        fadePreparedForIndex = -1
+        // El ecualizador principal pasa a la sesión nueva (el juego de
+        // efectos de la segunda voz ya estaba en esta sesión).
+        if (fade.audioSessionId != 0) {
+            lastEqSessionId = fade.audioSessionId
+            EqualizerManager.init(this, fade.audioSessionId)
+        }
+    }
+
+    /** Cancela el fundido y deja todo como estaba (sin cambiar de canción). */
+    private fun abortFade() {
+        if (!crossfadeActive) return
+        crossfadeActive = false
+        rampJob?.cancel()
+        rampJob = null
+        fadePlayer?.pause()
+        fadePlayer?.volume = 0f
+        mediaSession?.player?.volume = 1f
+        fadePreparedForIndex = -1
+    }
+
+    /** Fundido al saltar a la siguiente (lo pide PlaybackManager). */
+    private fun crossfadeToNext(): Boolean {
+        val main = mediaSession?.player ?: return false
+        val target = nextWindowIndex(main) ?: return false
+        return startFade(target)
+    }
+
+    /** Fundido al saltar a la anterior (lo pide PlaybackManager). */
+    private fun crossfadeToPrev(): Boolean {
+        val main = mediaSession?.player ?: return false
+        val target = prevWindowIndex(main) ?: return false
+        return startFade(target)
+    }
 
     // =======================================================================
     // ISLA DINÁMICA (v1.0.7): overlay con WindowManager.
@@ -483,6 +810,14 @@ class MusicService : MediaSessionService() {
 
     /** Liberar recursos cuando el servicio se destruye. */
     override fun onDestroy() {
+        fadeWatchJob?.cancel()
+        rampJob?.cancel()
+        fadeWatchJob = null
+        rampJob = null
+        fadeEqListener?.let { fadePlayer?.removeListener(it) }
+        fadeEqListener = null
+        runCatching { fadePlayer?.release() }
+        fadePlayer = null
         serviceScope.cancel()
         eqSessionListener?.let { mediaSession?.player?.removeListener(it) }
         eqSessionListener = null
