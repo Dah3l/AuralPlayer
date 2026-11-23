@@ -477,6 +477,9 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenContact = { screen = Screen.Contact },
                     onOpenSettings = { showSettingsScreen = true },
                     onOpenTop10 = { showTop10Screen = true },
+                    onStartDjSession = {
+                        if (viewModel.startDjSession()) showNowPlaying = true
+                    },
                     onRequestAudioPermission = onRequestAudioPermission,
                     onOpenAppSettings = onOpenAppSettings,
                     onSongMenu = { song ->
