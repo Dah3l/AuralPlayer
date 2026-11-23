@@ -188,8 +188,11 @@ object LrcLibClient {
     private fun partial(a: String, b: String): Boolean =
         a.isNotEmpty() && b.isNotEmpty() && (a.contains(b) || b.contains(a))
 
+    // Espacios en blanco: un solo Regex compilado, no uno por llamada.
+    private val whitespaceRegex = Regex("\\s+")
+
     private fun norm(s: String): String =
-        s.lowercase().trim().replace(Regex("\\s+"), " ")
+        s.lowercase().trim().replace(whitespaceRegex, " ")
 
     private suspend fun fetchLyricsOvh(artist: String, track: String): String? {
         val url = "https://api.lyrics.ovh/v1/${enc(artist)}/${enc(track)}"
@@ -222,7 +225,7 @@ object LrcLibClient {
         t = parenSuffix.replace(t, "")
         t = dashSuffix.replace(t, "")
         t = featSuffix.replace(t, "")
-        return t.replace(Regex("\\s+"), " ").trim()
+        return t.replace(whitespaceRegex, " ").trim()
     }
 
     /** Se queda con el primer artista: corta en ",", "&", "feat.", "x", etc. */
@@ -237,7 +240,7 @@ object LrcLibClient {
             val idx = a.indexOf(sep, ignoreCase = true)
             if (idx > 0 && idx < cut) cut = idx
         }
-        return a.substring(0, cut).replace(Regex("\\s+"), " ").trim()
+        return a.substring(0, cut).replace(whitespaceRegex, " ").trim()
     }
 
     // ---------- Validación de LRC ----------
