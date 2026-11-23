@@ -330,11 +330,22 @@ private fun AuralApp(viewModel: AuralViewModel,
     pendingIslandHome: Boolean = false,
     onConsumeIslandHome: () -> Unit = {}) {
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
+    val library by viewModel.library.collectAsStateWithLifecycle()
     var showSplash by remember { mutableStateOf(true) }
-    // El splash se oculta tras 1.8s (cortina mientras carga).
+    // El splash se oculta cuando la biblioteca termina de cargar, con
+    // un mínimo de 600 ms para que el logo se lea y 1,8 s de tope:
+    // antes era 1,8 s fijos aunque el escaneo terminara en 200 ms.
     val splashThemeName by settingsStore.appTheme.collectAsState(initial = "BOSQUE")
     val splashHalloween = splashThemeName == AppTheme.HALLOWEEN.name
     val splashChristmas = splashThemeName == AppTheme.CHRISTMAS.name
+    val splashStartedAt = remember { System.currentTimeMillis() }
+    androidx.compose.runtime.LaunchedEffect(library.isLoading) {
+        if (!library.isLoading) {
+            val elapsed = System.currentTimeMillis() - splashStartedAt
+            if (elapsed < 600) kotlinx.coroutines.delay(600 - elapsed)
+            showSplash = false
+        }
+    }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(1800L)
         showSplash = false
@@ -388,7 +399,6 @@ private fun AuralApp(viewModel: AuralViewModel,
     // por "Eliminar de la lista"
     var songMenuPlaylistId by remember { mutableStateOf<String?>(null) }
 
-    val library by viewModel.library.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
         val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
         val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
