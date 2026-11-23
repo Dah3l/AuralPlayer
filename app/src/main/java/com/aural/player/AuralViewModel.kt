@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -163,6 +164,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                     val ids = songs.shuffled().take(30).map { it.id }
                     settings.setDailyPlaylist(today, ids)
                 }
+            }
+        }
+        // Letras automáticas al reproducir: cuando empieza una canción
+        // con título y artista válidos y sin letra guardada, se busca
+        // en línea (LRCLIB) y se guarda sola, en silencio. Una canción
+        // a la vez, sin barrido en segundo plano; si falla no se
+        // reintenta hasta reiniciar la app.
+        viewModelScope.launch {
+            playerState.collectLatest { state ->
+                val song = state.currentSong
+                if (song == null || !state.isPlaying) return@collectLatest
+                if (song.id in lyricsAutoAttempted) return@collectLatest
+                if (lrcMap.value.containsKey(song.id)) return@collectLatest
+                if (!hasSearchableMetadata(song.title, song.artist)) return@collectLatest
+                lyricsAutoAttempted += song.id
+                searchAndSaveLyrics(song.id, song.title, song.artist, song.durationMs)
             }
         }
     }
@@ -780,6 +797,40 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeLrcForSong(songId: Long) {
         viewModelScope.launch { settings.removeLrcForSong(songId) }
+    }
+
+    /** Canciones a las que ya se les intentó la letra automática en esta sesión. */
+    private val lyricsAutoAttempted = mutableSetOf<Long>()
+
+    /**
+     * ¿Título y artista sirven para buscar la letra? MediaStore marca
+     * los desconocidos con "Artista misterioso" (título y artista).
+     */
+    private fun hasSearchableMetadata(title: String, artist: String): Boolean {
+        val badTitle = title.isBlank() || title == "Artista misterioso" || title == "Sin título"
+        val badArtist = artist.isBlank() || artist == "Artista misterioso" || artist == "Artista desconocido"
+        return !badTitle && !badArtist
+    }
+
+    /** Posición en vivo del reproductor (sin esperar al ticker de 500 ms). */
+    fun currentPositionMs(): Long = playback.currentPositionMs()
+
+    /**
+     * Metadatos de una descarga de YouTube cuando NO se pudieron
+     * incrustar en el archivo (p. ej. .webm, que jaudiotagger no
+     * escribe): quedan en los datos propios de la app, que es lo
+     * que se ve en pantalla, y la miniatura como portada propia.
+     */
+    fun applyYouTubeMetadataFallback(songId: Long, title: String, artist: String, thumbnailUrl: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setCustomMetadata(songId, title, artist, "")
+            if (!thumbnailUrl.isNullOrBlank()) {
+                val app = getApplication<Application>()
+                SongCoverStore.saveFromUrl(app, songId, thumbnailUrl)?.let { local ->
+                    settings.setCustomCover(songId, local)
+                }
+            }
+        }
     }
 
     /**
