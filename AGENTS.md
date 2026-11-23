@@ -776,6 +776,13 @@ cuanto las veas.
   LaunchedEffect(song?.id) + loadSongFileInfo (solo cabecera, sin
   decodificar). No mezclar tempo y calidad en una sola pill: el
   tempo es dato de DJ y la calidad es dato del archivo.
+- @Composable duplicado (2026-11-23, SettingsScreen): al insertar
+  un composable nuevo ANTES de una función que ya tenía su
+  @Composable, la anotación original quedó duplicada sobre la
+  nueva ("This annotation is not repeatable") y la vieja se quedó
+  sin ella (cascada de "must be marked with @Composable"). Al
+  insertar antes de una función anotada, verificar que cada función
+  tenga exactamente UNA anotación.
 
 ## Estado actual (2026-11-18)
 
