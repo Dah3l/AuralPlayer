@@ -480,6 +480,12 @@ fun NowPlayingScreen(
                     }
                 } else emptyList()
             }
+            // Letra automática al abrir el Now Playing (como en PC): si
+            // no hay una guardada, se busca en línea en ese momento.
+            LaunchedEffect(song?.id) {
+                val s = song ?: return@LaunchedEffect
+                viewModel.ensureLyrics(s)
+            }
             // La letra ocupa el espacio flexible y se centra verticalmente
             Box(
                 modifier = Modifier
