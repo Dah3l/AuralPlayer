@@ -10,8 +10,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** Una canción dentro del resumen semanal, ordenada por tiempo escuchado. */
@@ -126,11 +128,14 @@ class PlayHistoryStore(private val context: Context) {
 
     /** Las canciones más escuchadas de todo el historial guardado (máx. 30 días). */
     suspend fun getTopSongs(limit: Int = 10): List<TopSong> {
-        return try {
-            mutex.withLock {
-                val root = readRoot()
-                val days = root.optJSONObject("days")
-                    ?: return emptyList()
+        // Lectura + parseo en IO: antes corría en el hilo principal al
+        // abrir "Tu Top 10".
+        return withContext(Dispatchers.IO) {
+            try {
+                mutex.withLock {
+                    val root = readRoot()
+                    val days = root.optJSONObject("days")
+                        ?: return@withContext emptyList()
                 val agg = mutableMapOf<Long, TopSong>()
                 days.keys().forEach { dayKey ->
                     val day = days.optJSONObject(dayKey) ?: return@forEach
@@ -152,15 +157,17 @@ class PlayHistoryStore(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+        }
     }
 
     /** Estadísticas de los últimos 7 días (incluido hoy). */
     suspend fun getWeekStats(): WeekStats {
-        return try {
-            mutex.withLock {
-                val root = readRoot()
-                val days = root.optJSONObject("days")
-                    ?: return WeekStats()
+        return withContext(Dispatchers.IO) {
+            try {
+                mutex.withLock {
+                    val root = readRoot()
+                    val days = root.optJSONObject("days")
+                        ?: return@withContext WeekStats()
                 var total = 0L
                 val agg = mutableMapOf<Long, WeekSongStat>()
                 for (key in lastDayKeys(7)) {
@@ -187,6 +194,7 @@ class PlayHistoryStore(private val context: Context) {
             }
         } catch (e: Exception) {
             WeekStats()
+        }
         }
     }
 }
