@@ -3,6 +3,7 @@ package com.aural.player.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.OptIn
@@ -11,6 +12,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Song
@@ -104,7 +107,11 @@ class PlaybackManager(private val context: Context) {
     private var cachedQueueIds: List<String> = emptyList()
     private var cachedQueueIdsLong: List<Long> = emptyList()
 
+    /** Ajustes del fundido en caché (los saltos los leen sin suspender). */
+    private var crossfadeEnabledCache = false
+
     init {
+        ioScope.launch { settings.crossfadeEnabled.collect { crossfadeEnabledCache = it } }
         // Observar cambios en personalizaciones y refrescar notificación si afecta la canción actual
         ioScope.launch {
             settings.customMetadata.collect { newMeta ->
@@ -374,14 +381,36 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun seekToNext() {
-        controller?.seekToNext()
+        val c = controller ?: return
+        // Con fundido, el salto lo hace el servicio (segundo reproductor
+        // y cruce de volúmenes); si no se pudo, salto normal.
+        if (crossfadeEnabledCache) {
+            sendCrossfadeCommand(MusicService.CMD_CROSSFADE_NEXT) {
+                c.seekToNext()
+                publishState()
+            }
+            return
+        }
+        c.seekToNext()
         publishState()
     }
 
     fun seekToPrevious() {
         val c = controller ?: return
         // Convención habitual: si lleva más de 3 s, volver al inicio
-        if (c.currentPosition > 3_000) c.seekTo(0L) else c.seekToPrevious()
+        if (c.currentPosition > 3_000) {
+            c.seekTo(0L)
+            publishState()
+            return
+        }
+        if (crossfadeEnabledCache) {
+            sendCrossfadeCommand(MusicService.CMD_CROSSFADE_PREV) {
+                c.seekToPrevious()
+                publishState()
+            }
+            return
+        }
+        c.seekToPrevious()
         publishState()
     }
 
@@ -391,9 +420,37 @@ class PlaybackManager(private val context: Context) {
      *  se salta directo al índice anterior. */
     fun seekToPreviousSong() {
         val c = controller ?: return
+        if (crossfadeEnabledCache) {
+            sendCrossfadeCommand(MusicService.CMD_CROSSFADE_PREV) {
+                val prevIndex = c.currentMediaItemIndex - 1
+                if (prevIndex >= 0) c.seekTo(prevIndex, 0L) else c.seekTo(0L)
+                publishState()
+            }
+            return
+        }
         val prevIndex = c.currentMediaItemIndex - 1
         if (prevIndex >= 0) c.seekTo(prevIndex, 0L) else c.seekTo(0L)
         publishState()
+    }
+
+    /**
+     * Pide al servicio un fundido hacia la siguiente/anterior canción.
+     * Si el servicio dice que no (sin fundido, sin siguiente, parada
+     * programada...), corre el [onFallback] con el salto normal.
+     */
+    private fun sendCrossfadeCommand(action: String, onFallback: () -> Unit) {
+        val c = controller ?: return
+        scope.launch {
+            val ok = try {
+                val result = c.sendCustomCommand(
+                    SessionCommand(action, Bundle.EMPTY), Bundle.EMPTY
+                ).await()
+                result.resultCode == SessionResult.RESULT_SUCCESS
+            } catch (_: Exception) {
+                false
+            }
+            if (!ok) onFallback()
+        }
     }
 
     fun seekTo(positionMs: Long) {
