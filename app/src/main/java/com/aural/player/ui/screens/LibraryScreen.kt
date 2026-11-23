@@ -171,6 +171,7 @@ fun LibraryScreen(
     onOpenContact: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenTop10: () -> Unit = {},
+    onStartDjSession: () -> Unit = {},
     // Pantalla de permisos: re-pedir el diálogo o abrir Ajustes.
     onRequestAudioPermission: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
@@ -633,6 +634,7 @@ fun LibraryScreen(
                                 if (toPlay.isNotEmpty()) onPlayList(toPlay, 0, id)
                             },
                             onSeeAllPlaylists = { onTabSelected(tabOrder.indexOf("playlists")) },
+                            onDjSession = onStartDjSession,
                             selectionMode = selectionMode,
                             selectedIds = selectedIdsSet,
                             onToggleSelect = { song ->
@@ -1479,6 +1481,7 @@ private fun SongsTab(
     onOpenPlaylist: (String) -> Unit = {},
     onPlayPlaylist: (String) -> Unit = {},
     onSeeAllPlaylists: () -> Unit = {},
+    onDjSession: () -> Unit = {},
     // v1.0.7: selección múltiple.
     selectionMode: Boolean = false,
     selectedIds: Set<Long> = emptySet(),
@@ -1496,6 +1499,60 @@ private fun SongsTab(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
         ) {
+            // Tarjeta Sesión DJ: la cola fluye por tempo.
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .clickable { onDjSession() }
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.QueueMusic,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Sesión DJ",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "La cola fluye por tempo, sin saltos bruscos",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = { onDjSession() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Rounded.PlayArrow,
+                                contentDescription = "Iniciar sesión DJ",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+            }
             if (topPlaylists.isNotEmpty()) {
                 item {
                     MostPlayedSection(
