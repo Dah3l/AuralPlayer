@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -80,6 +81,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Estado reactivo del reproductor para toda la UI. */
     val playerState: StateFlow<PlayerUiState> = playback.state
+
+    /** Id de la canción actual: cambia solo al cambiar de pista. La
+     *  biblioteca lo colecciona en vez de playerState entero para no
+     *  recomponer cada 500 ms con el ticker de posición. */
+    val currentSongId: StateFlow<Long?> = playerState
+        .map { it.currentSong?.id }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Si suena ahora mismo: cambia solo al pausar/reanudar. */
+    val isPlaying: StateFlow<Boolean> = playerState
+        .map { it.isPlaying }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _library = MutableStateFlow(LibraryUiState())
     val library: StateFlow<LibraryUiState> = _library.asStateFlow()
@@ -555,7 +568,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 album = meta.third.ifBlank { song.album }
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Canciones filtradas por búsqueda (usa metadatos efectivos,
      *  sin las canciones de carpetas ocultas). */
@@ -574,16 +587,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 it.album.contains(query, true)
         }
         filtered.sortedBy { it.title.lowercase() }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Artistas agrupados (usa metadatos efectivos). */
     val artistsFlow: StateFlow<List<Artist>> = filteredSongsFlow
         .map { repository.groupByArtist(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Álbumes agrupados (usa metadatos efectivos). */
     val albumsFlow: StateFlow<List<Album>> = filteredSongsFlow
         .map { repository.groupByAlbum(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Carpetas agrupadas (sin las ocultas por el usuario). v1.0.7. */
@@ -592,7 +607,7 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         hiddenFolders
     ) { songs, hidden ->
         repository.groupByFolder(songs).filterNot { it.path in hidden }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Oculta o muestra una carpeta de la biblioteca. v1.0.7. */
     fun toggleHiddenFolder(path: String) {
