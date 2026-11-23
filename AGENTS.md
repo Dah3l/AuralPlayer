@@ -736,6 +736,11 @@ cuanto las veas.
   DJ encendido): la biblioteca se cubre sola escuchando; analizar
   solo bajo demanda dejaría la Sesión DJ vacía los primeros días.
   Verificado 2026-11-23 (1.2.0).
+- Mezcla DJ: el glide NO puede ir a pasos de 100 ms — cada
+  `setPlaybackSpeed` hace que Sonic reajuste el estiramiento en
+  pleno stream y 200 reajustes en 20 s se oyen como tirones.
+  Pasos de 500 ms (40 en total, ~0,2% de tono por paso, inaudible
+  como salto). Verificado 2026-11-23 (1.2.0, reporte de Dahel).
 
 ## Estado actual (2026-11-18)
 
