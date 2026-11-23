@@ -716,6 +716,26 @@ cuanto las veas.
   (la firma de startCrossfadeEngine lo usaba cualificado, por eso
   pasó desapercibido). Los errores de `volume`/`pause` en las
   líneas siguientes eran cascada del mismo fallo.
+- Mezcla DJ: el listener `onPlaybackParametersChanged` llega
+  ASÍNCRONO — un flag "estoy en glide" no sirve para ignorar el
+  propio cambio de velocidad. Se compara la velocidad recibida con
+  `lastGlideSpeed` (epsilon 0.005): si coincide es el glide y se
+  ignora; si no, es cambio del usuario y cancela el glide. El
+  glide avanza por ticks de 100 ms y SOLO mientras suena (pausa =
+  congelado); seek, cambio manual de velocidad o cambio de canción
+  lo cancelan. Verificado 2026-11-23 (1.2.0).
+- Mezcla DJ: `EqualizerManager.init` en finishFade DUPLICABA el EQ
+  (dos juegos de efectos en la sesión nueva y ninguno en la
+  reserva). Al intercambiar los papeles se usa `swapRoles()`
+  (intercambia las referencias de los dos juegos: cada sesión
+  conserva su juego). Verificado 2026-11-23 (1.2.0).
+- Mezcla DJ: el BPM se guarda CRUDO en DataStore (sin plegar); el
+  plegado a 70–180 vive SOLO en `foldBpm` al mezclar y ordenar.
+  Plegar al guardar perdería la distancia real entre 70 y 140.
+  El análisis corre SIEMPRE al sonar una canción (no solo con el
+  DJ encendido): la biblioteca se cubre sola escuchando; analizar
+  solo bajo demanda dejaría la Sesión DJ vacía los primeros días.
+  Verificado 2026-11-23 (1.2.0).
 
 ## Estado actual (2026-11-18)
 
@@ -934,3 +954,4 @@ cuanto las veas.
 | 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 1 (solo rendimiento, cero cambios de funcionamiento): la biblioteca deja de recomponer cada 500 ms (remember en "Para ti" y detalles, derivedStateOf en la selección, remember en los títulos del scroller A-Z, ViewModel expone currentSongId/isPlaying); flujos derivados con flowOn(Dispatchers.Default); notificación con distinctUntilChanged; ticker de letras con ámbito propio; YouTube con timeouts 15/30 s en Android (mismo bug que PC 1.2.22) + fallback al mejor stream | AuralViewModel.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, playback/MusicService.kt, ui/screens/LyricsScreen.kt, youtube/YouTubeManager.kt, youtube/NewPipeDownloaderImpl.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 2 (solo rendimiento, SIN tocar R8 ni build.gradle, cero cambios de funcionamiento): splash que se va al cargar la biblioteca (mín 600 ms, tope 1,8 s); PlaybackManager con scopes reutilizados + cola cacheada por firma de timeline + portada por defecto en IO; NP: claves de cola O(n) con pool por aparición + mesh a 10 fps por pasos de 100 ms; portadas de internet a 300 px (caché ~57 MB → ~2 MB); Regex de LRCLIB compilado una vez; FAB sin pulso tapado; borrar en lote con un solo edit de ajustes; guardar letra y Top 10 en IO; portadas de galería/URL por stream en dos pasadas; wake lock local en vez de Wi-Fi | shared/.../ImageDecoding.kt, ImageDecodingAndroid.kt, ImageDecodingJvm.kt, UrlImage.kt, LrcLibClient.kt; app/.../playback/PlaybackManager.kt, ui/screens/NowPlayingScreen.kt, MainActivity.kt, ui/screens/LibraryScreen.kt, data/SettingsStore.kt, AuralViewModel.kt, data/PlayHistoryStore.kt, data/SongCoverStore.kt, playback/MusicService.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, fundido entre canciones (crossfade, SOLO Android; PC después): segundo reproductor en MusicService + intercambio de papeles con MediaSession.setPlayer + rampa de potencia igual (sen/cos) a 50 ms; funde al terminar la canción Y al saltar a mano (decisión de Dahel: mejor que Spotify); no funde con repetir-una ni con parada programada; EQ con segundo juego de efectos (initSecondSession); aleatorio conservado con UnshuffledShuffleOrder; ajustes en Sonido (interruptor + duración 1-12 s, 5 s por defecto, apagado por defecto) | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, playback/EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, MainActivity.kt, AGENTS.md |
+| 2026-11-23 | Malen-IA | Android 1.2.0, Mezcla DJ (SOLO Android; PC después): beatmatching + cambio de bajos sobre el fundido — BPM por canción analizado una vez en segundo plano mientras suena (Realtime BPM Analyzer 6.3.0, decodifica 75 s por MediaExtractor/MediaCodec, guardado crudo en DataStore, plegado a 70–180 solo al mezclar) + la que entra toma el tempo de la que sale (clamp ±8% sobre la velocidad del usuario; doble/mitad mezcla a velocidad natural; fuera de eso fundido normal) y vuelve sola a su tempo en ~20 s (glide pausable, se cancela con seek/cambio manual de velocidad/cambio de canción) + cambio de bajos con el EQ doble (banda 0 cruzada durante el fundido); fix del bug latente del crossfade (finishFade re-inicializaba el EQ y dejaba dos ecualizadores en la sesión nueva y ninguno en la reserva — ahora swapRoles); el crossfade SE QUEDA como opción sencilla (el DJ lo enciende solo y al apagar el fundido se apaga el DJ); tag "128 BPM" en el Now Playing + "Información de la canción" en el menú ⋮ (BPM, formato, calidad, tamaño, carpeta) + tarjeta "Sesión DJ" en la biblioteca (ordena la cola por tempo, mínimo 3 analizadas) | app/build.gradle.kts; app/.../playback/BpmAnalysis.kt (NUEVO), MusicService.kt, EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, ui/screens/NowPlayingScreen.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, AGENTS.md |
