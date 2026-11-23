@@ -162,6 +162,9 @@ dependencies {
     // ---- NewPipe Extractor (búsqueda y descarga de YouTube) ----
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
 
+    // ---- Realtime BPM Analyzer (tempo para la Mezcla DJ, sin dependencias) ----
+    implementation("io.github.dlepaux:realtime-bpm-analyzer:6.3.0")
+
     // ---- ML Kit (traducción de letras en el teléfono + detección de idioma) ----
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.mlkit:language-id:17.0.6")
