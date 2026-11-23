@@ -18,6 +18,14 @@ object EqualizerManager {
     private var loudness: LoudnessEnhancer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
+    // Segundo juego de efectos, para la sesión del segundo reproductor
+    // del fundido (crossfade): cada reproductor tiene su propio
+    // audioSessionId y los efectos van atados a la sesión, no a la app.
+    // Los ajustes guardados son los mismos para los dos juegos.
+    private var equalizer2: Equalizer? = null
+    private var loudness2: LoudnessEnhancer? = null
+    private var bassBoost2: BassBoost? = null
+    private var virtualizer2: Virtualizer? = null
     private var prefs: android.content.SharedPreferences? = null
 
     var enabled: Boolean = false
@@ -44,7 +52,7 @@ object EqualizerManager {
         try {
             equalizer = Equalizer(0, audioSessionId)
             loudness = LoudnessEnhancer(audioSessionId)
-            applySavedSettings()
+            applySavedSettings(equalizer, loudness)
             equalizer?.enabled = enabled
             loudness?.enabled = loudnessEnabled
         } catch (e: Exception) {
@@ -70,8 +78,48 @@ object EqualizerManager {
         }
     }
 
+    /** Segundo juego de efectos para la sesión del reproductor del
+     *  fundido. NO toca el juego principal (init sí lo libera, este no). */
+    fun initSecondSession(context: Context, audioSessionId: Int) {
+        if (prefs == null) {
+            prefs = context.getSharedPreferences("aural_equalizer", Context.MODE_PRIVATE)
+            enabled = prefs?.getBoolean("enabled", false) ?: false
+            loudnessEnabled = prefs?.getBoolean("loudness_enabled", false) ?: false
+            bassBoostEnabled = prefs?.getBoolean("bass_enabled", false) ?: false
+            virtualizerEnabled = prefs?.getBoolean("virtualizer_enabled", false) ?: false
+        }
+        releaseSecondEffects()
+        if (audioSessionId == 0) return
+        try {
+            equalizer2 = Equalizer(0, audioSessionId)
+            loudness2 = LoudnessEnhancer(audioSessionId)
+            applySavedSettings(equalizer2, loudness2)
+            equalizer2?.enabled = enabled
+            loudness2?.enabled = loudnessEnabled
+        } catch (e: Exception) {
+            android.util.Log.e("EqualizerManager", "No soportado (2): ${e.message}")
+        }
+        try {
+            bassBoost2 = BassBoost(0, audioSessionId)
+            bassBoost2?.setStrength(getBassBoostStrength().toShort())
+            bassBoost2?.enabled = bassBoostEnabled
+        } catch (e: Exception) {
+            android.util.Log.w("EqualizerManager", "Sin BassBoost (2): ${e.message}")
+            bassBoost2 = null
+        }
+        try {
+            virtualizer2 = Virtualizer(0, audioSessionId)
+            virtualizer2?.setStrength(getVirtualizerStrength().toShort())
+            virtualizer2?.enabled = virtualizerEnabled
+        } catch (e: Exception) {
+            android.util.Log.w("EqualizerManager", "Sin Virtualizer (2): ${e.message}")
+            virtualizer2 = null
+        }
+    }
+
     fun release() {
         releaseEffects()
+        releaseSecondEffects()
         prefs = null
     }
 
@@ -86,6 +134,17 @@ object EqualizerManager {
         virtualizer = null
     }
 
+    private fun releaseSecondEffects() {
+        runCatching { equalizer2?.release() }
+        runCatching { loudness2?.release() }
+        runCatching { bassBoost2?.release() }
+        runCatching { virtualizer2?.release() }
+        equalizer2 = null
+        loudness2 = null
+        bassBoost2 = null
+        virtualizer2 = null
+    }
+
     val isAvailable: Boolean get() = equalizer != null
     val isBassBoostAvailable: Boolean get() = bassBoost != null
     val isVirtualizerAvailable: Boolean get() = virtualizer != null
@@ -93,12 +152,14 @@ object EqualizerManager {
     fun setEnabled(value: Boolean) {
         enabled = value
         equalizer?.enabled = value
+        equalizer2?.enabled = value
         prefs?.edit()?.putBoolean("enabled", value)?.apply()
     }
 
     fun setLoudnessEnabled(value: Boolean) {
         loudnessEnabled = value
         loudness?.enabled = value
+        loudness2?.enabled = value
         prefs?.edit()?.putBoolean("loudness_enabled", value)?.apply()
     }
 
@@ -124,6 +185,7 @@ object EqualizerManager {
     fun setBandLevelDb(band: Int, db: Int) {
         try {
             equalizer?.setBandLevel(band.toShort(), (db * 100).toShort())
+            equalizer2?.setBandLevel(band.toShort(), (db * 100).toShort())
             saveBandLevels()
         } catch (e: Exception) { /* ignorar */ }
     }
@@ -146,6 +208,7 @@ object EqualizerManager {
     fun usePreset(index: Int) {
         try {
             equalizer?.usePreset(index.toShort())
+            equalizer2?.usePreset(index.toShort())
             saveBandLevels()
         } catch (e: Exception) { /* ignorar */ }
     }
@@ -157,6 +220,7 @@ object EqualizerManager {
     fun setLoudnessGainDb(db: Int) {
         try {
             loudness?.setTargetGain(db * 100)
+            loudness2?.setTargetGain(db * 100)
             prefs?.edit()?.putInt("loudness_gain", db)?.apply()
         } catch (e: Exception) { /* ignorar */ }
     }
@@ -166,6 +230,7 @@ object EqualizerManager {
     fun setBassBoostEnabled(value: Boolean) {
         bassBoostEnabled = value
         try { bassBoost?.enabled = value } catch (e: Exception) { /* ignorar */ }
+        try { bassBoost2?.enabled = value } catch (e: Exception) { /* ignorar */ }
         prefs?.edit()?.putBoolean("bass_enabled", value)?.apply()
     }
 
@@ -176,6 +241,7 @@ object EqualizerManager {
     fun setBassBoostStrength(strength: Int) {
         val s = strength.coerceIn(0, 1000)
         try { bassBoost?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
+        try { bassBoost2?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
         prefs?.edit()?.putInt("bass_strength", s)?.apply()
     }
 
@@ -184,6 +250,7 @@ object EqualizerManager {
     fun setVirtualizerEnabled(value: Boolean) {
         virtualizerEnabled = value
         try { virtualizer?.enabled = value } catch (e: Exception) { /* ignorar */ }
+        try { virtualizer2?.enabled = value } catch (e: Exception) { /* ignorar */ }
         prefs?.edit()?.putBoolean("virtualizer_enabled", value)?.apply()
     }
 
@@ -194,6 +261,7 @@ object EqualizerManager {
     fun setVirtualizerStrength(strength: Int) {
         val s = strength.coerceIn(0, 1000)
         try { virtualizer?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
+        try { virtualizer2?.setStrength(s.toShort()) } catch (e: Exception) { /* ignorar */ }
         prefs?.edit()?.putInt("virtualizer_strength", s)?.apply()
     }
 
@@ -205,15 +273,15 @@ object EqualizerManager {
         prefs?.edit()?.putString("bands", levels)?.apply()
     }
 
-    private fun applySavedSettings() {
-        val eq = equalizer ?: return
+    private fun applySavedSettings(eq: Equalizer?, loudnessFx: LoudnessEnhancer?) {
+        val eqFx = eq ?: return
         prefs?.getString("bands", null)?.split(",")?.forEachIndexed { i, s ->
-            if (i < eq.numberOfBands) {
+            if (i < eqFx.numberOfBands) {
                 runCatching {
-                    eq.setBandLevel(i.toShort(), (s.toInt() * 100).toShort())
+                    eqFx.setBandLevel(i.toShort(), (s.toInt() * 100).toShort())
                 }
             }
         }
-        runCatching { loudness?.setTargetGain(getLoudnessGainDb() * 100) }
+        runCatching { loudnessFx?.setTargetGain(getLoudnessGainDb() * 100) }
     }
 }
