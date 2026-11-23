@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
+import com.aural.player.shared.YoutubeTitleParser
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.StreamingService
@@ -103,10 +104,16 @@ class YouTubeManager(private val context: Context) {
                     .take(20)
                     .mapNotNull { item ->
                         try {
+                            // Título y artista reales: el título del video
+                            // trae canal + artista + canción mezclados.
+                            val parsed = YoutubeTitleParser.parse(
+                                item.name ?: "Sin título",
+                                item.uploaderName ?: "Artista misterioso"
+                            )
                             YTResult(
                                 videoId = extractVideoId(item.url),
-                                title = item.name ?: "Sin título",
-                                artist = item.uploaderName ?: "Artista misterioso",
+                                title = parsed.title,
+                                artist = parsed.artist,
                                 durationSec = item.duration,
                                 thumbnailUrl = item.thumbnails.firstOrNull()?.url
                             )
