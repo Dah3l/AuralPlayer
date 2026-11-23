@@ -411,6 +411,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      * no está en la lista (MediaStore la está re-indexando), se repone.
      */
     private fun refreshLibrarySong(base: Song?, songId: Long, title: String, artist: String, album: String) {
+        // La edición manual manda: la canción sale de pendientes para
+        // que una fusión posterior no reimponga la metadata de la descarga.
+        pendingDownloadSongs.remove(songId)
         val song = base
             ?: _library.value.songs.find { it.id == songId }
             ?: playback.state.value.queue.find { it.id == songId }
@@ -476,11 +479,22 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     private fun mergePendingDownloads(scanned: List<Song>): List<Song> {
         val now = System.currentTimeMillis()
         pendingDownloadSongs.entries.removeAll { now - it.value.second > 15 * 60 * 1000 }
-        val scannedIds = scanned.map { it.id }.toSet()
-        pendingDownloadSongs.entries.removeAll { it.key in scannedIds }
         if (pendingDownloadSongs.isEmpty()) return scanned
-        return (scanned + pendingDownloadSongs.values.map { it.first })
-            .sortedBy { it.title }
+        // Una descarga pendiente MANDA sobre la fila escaneada: el escáner
+        // de Android reescribe TITLE/ARTIST desde el archivo crudo sin
+        // tags y la fila queda mal hasta su segunda pasada. Cuando la fila
+        // ya trae el mismo título y artista que la descarga, MediaStore
+        // está al día y la descarga sale de pendientes.
+        val byId = scanned.associateBy { it.id }
+        pendingDownloadSongs.entries.removeAll { (id, pending) ->
+            byId[id]?.let {
+                it.title == pending.first.title && it.artist == pending.first.artist
+            } == true
+        }
+        if (pendingDownloadSongs.isEmpty()) return scanned
+        val merged = scanned.map { s -> pendingDownloadSongs[s.id]?.first ?: s } +
+            pendingDownloadSongs.values.map { it.first }.filter { it.id !in byId }
+        return merged.sortedBy { it.title }
     }
 
     /** La restauración al abrir solo se intenta una vez por proceso. */
@@ -960,15 +974,16 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Inserta una descarga recién terminada en la biblioteca en memoria
-     * con su metadata correcta, sin esperar a MediaStore. El escaneo la
-     * descarta al principio: la fila recién insertada aún no tiene
-     * duración (MediaStore la calcula en segundo plano) y scanSongs
-     * salta todo lo que dure menos de 5 s. Por eso antes la canción no
-     * aparecía hasta reiniciar o descargar otra. La duración sale del
-     * resultado de YouTube; la portada, de la miniatura cuando los tags
-     * quedaron incrustados (la miniatura solo cubre el hueco hasta que
-     * MediaStore indexe el archivo y su portada). Queda en pendientes
-     * para que un rescan temprano no la borre.
+     * con su metadata correcta, sin esperar a MediaStore. El insert pone
+     * título y artista bien, pero el escáner de Android los reescribe
+     * desde el archivo crudo sin tags (título = nombre del archivo,
+     * artista desconocido) y los tags correctos solo llegan a la fila en
+     * su segunda pasada. Por eso antes la biblioteca mostraba la metadata
+     * mal hasta reiniciar o descargar otra. La duración sale del resultado
+     * de YouTube; la portada, de la miniatura cuando los tags quedaron
+     * incrustados (la miniatura solo cubre el hueco hasta que MediaStore
+     * indexe el archivo y su portada). Queda en pendientes para que un
+     * rescan temprano no la borre ni la devuelva con la metadata mala.
      */
     private fun insertDownloadedSong(mediaId: Long, result: YTResult, tagsEmbedded: Boolean) {
         val song = Song(
