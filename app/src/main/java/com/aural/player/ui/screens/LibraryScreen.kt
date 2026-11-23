@@ -65,6 +65,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -190,7 +191,11 @@ fun LibraryScreen(
     isAmbientVisible: Boolean = true
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
-    val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+    // Solo el id de la canción actual y si suena: la biblioteca NO
+    // colecciona playerState entero para no recomponer cada 500 ms
+    // con el ticker de posición (el MiniPlayer y el NP sí lo necesitan).
+    val currentSongId by viewModel.currentSongId.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
@@ -245,6 +250,7 @@ fun LibraryScreen(
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
+    val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
@@ -276,6 +282,10 @@ fun LibraryScreen(
     // v1.0.7: selección múltiple en Canciones.
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
+    // Set estable: toSet() en cada recomposición creaba una instancia
+    // nueva y obligaba a SongsTab a recomponer sus filas; derivedStateOf
+    // solo recalcula cuando cambia la selección de verdad.
+    val selectedIdsSet by remember { derivedStateOf { selectedIds.toSet() } }
     // v1.0.9: eliminar las canciones seleccionadas (borra los archivos).
     var showDeleteSongsConfirm by remember { mutableStateOf(false) }
     var pendingDeleteIds by remember { mutableStateOf<List<Long>>(emptyList()) }
@@ -336,7 +346,14 @@ fun LibraryScreen(
     // después, las más sonadas. Siempre 2 tarjetas. Sin datos todavía:
     // Favoritas y Descargas.
     val downloadsPlaylist = playlists.firstOrNull { it.name == "Descargas" }
-    val topPlaylists: List<TopPlaylist> = run {
+    // remember: "Para ti" se recalcula solo cuando cambia lo que la
+    // alimenta, no en cada recomposición. favoriteSongs() construye dos
+    // mapas de toda la biblioteca y recentlyAddedSongs() ordena todo de
+    // nuevo: sin remember eso corría 2 veces por segundo con música.
+    val topPlaylists: List<TopPlaylist> = remember(
+        playlists, playCounts, playlistCovers, customCovers,
+        favorites, favoriteOrder, dailyPlaylist, songs
+    ) {
         fun entryOf(pl: Playlist): TopPlaylist {
             val songsOfPl = viewModel.songsOfPlaylist(pl)
             return TopPlaylist(
@@ -592,8 +609,8 @@ fun LibraryScreen(
                         "songs" -> SongsTab(
                             songs = songs,
                             favorites = favorites,
-                            currentId = playerState.currentSong?.id,
-                            isPlaying = playerState.isPlaying,
+                            currentId = currentSongId,
+                            isPlaying = isPlaying,
                             onPlay = { song ->
                                 val list = songs
                                 onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
@@ -617,7 +634,7 @@ fun LibraryScreen(
                             },
                             onSeeAllPlaylists = { onTabSelected(tabOrder.indexOf("playlists")) },
                             selectionMode = selectionMode,
-                            selectedIds = selectedIds.toSet(),
+                            selectedIds = selectedIdsSet,
                             onToggleSelect = { song ->
                                 if (song.id in selectedIds) selectedIds.remove(song.id)
                                 else selectedIds.add(song.id)
@@ -1503,8 +1520,9 @@ private fun SongsTab(
                 )
             }
         }
+        val songTitles = remember(songs) { songs.map { it.title } }
         AlphabetFastScroller(
-            keys = songs.map { it.title },
+            keys = songTitles,
             onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
         )
@@ -1541,8 +1559,9 @@ private fun ArtistsTab(
                 )
             }
         }
+        val artistNames = remember(artists) { artists.map { it.name } }
         AlphabetFastScroller(
-            keys = artists.map { it.name },
+            keys = artistNames,
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
         )
@@ -1579,8 +1598,9 @@ private fun AlbumsTab(
                 )
             }
         }
+        val albumTitles = remember(albums) { albums.map { it.title } }
         AlphabetFastScroller(
-            keys = albums.map { it.title },
+            keys = albumTitles,
             onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
             modifier = Modifier.fillMaxSize(),
         )
