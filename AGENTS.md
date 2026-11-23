@@ -751,6 +751,16 @@ cuanto las veas.
   cancelación esperando no deje la canción marcada para siempre);
   el campo del glide es @Volatile porque se lee desde IO.
   Verificado 2026-11-23 (1.2.0, reporte de Dahel).
+- Mezcla DJ: `triggerBpmAnalysis` NUNCA puede leer el índice y
+  luego pedir el ítem en dos lecturas separadas
+  (`currentMediaItemIndex` + `getMediaItemAt`): al abrir, la cola
+  restaurada se está aplicando mientras el estado ya se publicó y
+  el índice llega >= 0 con el timeline todavía vacío =
+  IndexOutOfBoundsException al abrir (crash 2026-11-23). Se lee el
+  timeline UNA vez y se camina solo sobre esa foto, con los índices
+  acotados a ella y el mediaId comprobado contra la canción que
+  disparó el análisis; si no cuadra, se sale y el próximo cambio lo
+  reintenta. El análisis nunca debe tumbar la app.
 
 ## Estado actual (2026-11-18)
 
