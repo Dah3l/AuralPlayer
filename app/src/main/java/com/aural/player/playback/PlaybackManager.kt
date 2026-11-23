@@ -90,22 +90,44 @@ class PlaybackManager(private val context: Context) {
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    // Scopes reutilizados: crear un CoroutineScope por llamada no
+    // cancela nada y reserva objetos de más (los dos collectors del
+    // init corren toda la vida del proceso). Se declaran ANTES del
+    // init: el init los usa y las propiedades se inicializan en
+    // orden textual.
+    private val scope = CoroutineScope(Dispatchers.Main.immediate)
+    private val ioScope = CoroutineScope(Dispatchers.IO)
+
+    /** Cola cacheada para publishState: se reconstruye solo cuando
+     *  cambia el timeline (firma = ids de los MediaItems en orden). */
+    private var cachedQueue: List<Song> = emptyList()
+    private var cachedQueueIds: List<String> = emptyList()
+    private var cachedQueueIdsLong: List<Long> = emptyList()
+
     init {
         // Observar cambios en personalizaciones y refrescar notificación si afecta la canción actual
-        CoroutineScope(Dispatchers.IO).launch {
+        ioScope.launch {
             settings.customMetadata.collect { newMeta ->
                 val oldMeta = customMetadataCache
                 customMetadataCache = newMeta
+                // La cola cacheada puede tener Songs con la metadata
+                // vieja: invalidarla para que el próximo publishState
+                // la reconstruya (igual que antes del caché).
+                cachedQueueIds = emptyList()
                 refreshCurrentIfAffected(oldMeta, newMeta)
             }
         }
-        CoroutineScope(Dispatchers.IO).launch {
+        ioScope.launch {
             settings.customCovers.collect { newCovers ->
                 val oldCovers = customCoversCache
                 customCoversCache = newCovers
+                cachedQueueIds = emptyList()
                 refreshCurrentIfCoverAffected(oldCovers, newCovers)
             }
         }
+        // La portada por defecto se renderiza aquí (hilo IO), no en
+        // el primer uso en el hilo principal (toMediaItem).
+        ioScope.launch { defaultCoverBytes }
     }
 
     /** Si la canción actual fue editada, actualiza su metadata en el reproductor. */
@@ -132,7 +154,7 @@ class PlaybackManager(private val context: Context) {
     /** Reconstruye el MediaItem actual con los metadatos actualizados. */
     private fun refreshCurrentMediaItem() {
         // MediaController debe usarse en el hilo principal
-        CoroutineScope(Dispatchers.Main).launch {
+        scope.launch {
             try {
                 val c = controller ?: return@launch
                 val index = c.currentMediaItemIndex
@@ -154,7 +176,6 @@ class PlaybackManager(private val context: Context) {
     /** Restauración pendiente si el controlador aún no estaba listo. */
     private var pendingRestore: Pair<List<Song>, Int>? = null
 
-    private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private var tickerJob: kotlinx.coroutines.Job? = null
 
     private val playerListener = object : Player.Listener {
@@ -227,7 +248,7 @@ class PlaybackManager(private val context: Context) {
         if (trackedMillis.isEmpty()) return
         val snapshot = trackedMillis.toMap()
         trackedMillis.clear()
-        CoroutineScope(Dispatchers.IO).launch {
+        ioScope.launch {
             try {
                 snapshot.forEach { (id, data) ->
                     val seconds = data.third / 1000
@@ -513,8 +534,21 @@ class PlaybackManager(private val context: Context) {
     /** Publica el estado derivado del reproductor en el StateFlow. */
     private fun publishState() {
         val c = controller ?: return
-        val items = (0 until c.mediaItemCount).mapNotNull { i ->
-            c.getMediaItemAt(i).mediaId.toLongOrNull()?.let { libraryById[it] }
+        // La cola solo se reconstruye cuando cambia el timeline: en
+        // cada evento (play/pausa, seek, cambio de pista) los ids son
+        // los mismos y se reutiliza la lista anterior — misma instancia,
+        // así los coleccionistas que solo leen la cola no recomponen.
+        val ids = (0 until c.mediaItemCount).map { c.getMediaItemAt(it).mediaId }
+        val items = if (ids == cachedQueueIds) {
+            cachedQueue
+        } else {
+            val rebuilt = ids.mapNotNull { id ->
+                id.toLongOrNull()?.let { libraryById[it] }
+            }
+            cachedQueueIds = ids
+            cachedQueue = rebuilt
+            cachedQueueIdsLong = rebuilt.map { it.id }
+            rebuilt
         }
         val current = c.currentMediaItem?.mediaId?.toLongOrNull()?.let { libraryById[it] }
         val curIdx = c.currentMediaItemIndex
@@ -548,13 +582,12 @@ class PlaybackManager(private val context: Context) {
         // Guardar última reproducción (solo cuando cambia la canción o la cola,
         // para no escribir en cada evento del reproductor).
         if (current != null && items.isNotEmpty()) {
-            val queueIds = items.map { it.id }
-            val snapshot = current.id to queueIds
+            val snapshot = current.id to cachedQueueIdsLong
             if (snapshot != lastSavedPlayback) {
                 lastSavedPlayback = snapshot
-                CoroutineScope(Dispatchers.IO).launch {
+                ioScope.launch {
                     try {
-                        settings.setLastPlayback(current.id, queueIds)
+                        settings.setLastPlayback(current.id, cachedQueueIdsLong)
                     } catch (e: Exception) {
                         // No bloquear la reproducción si falla el guardado
                     }
