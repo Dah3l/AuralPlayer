@@ -335,6 +335,31 @@ cuanto las veas.
   `LrcParser.isSynced` (al menos 2 tiempos distintos) distingue la letra
   sincronizada de la plana: la plana se muestra sin línea activa ni
   auto-scroll. Verificado 2026-11-22 (1.2.0).
+- NUNCA una llamada de red dentro de `collectLatest` sobre un estado que
+  emite por tick: el observador de letras automáticas corría en
+  `playerState.collectLatest` y el ticker de 500 ms cancelaba cada
+  búsqueda en LRCLIB antes de que respondiera (desde Cuba tarda más de
+  500 ms); la canción ya quedaba marcada como intentada y no se reintentaba
+  hasta reiniciar. La búsqueda manual funcionaba porque corría fuera del
+  observador. Regla: trabajo largo va en su propia corrutina, o se busca
+  perezoso desde la pantalla que muestra el resultado (patrón de PC:
+  LaunchedEffect por canción en el Now Playing). Verificado 2026-11-22
+  (1.2.0).
+- El detalle de una playlist debe SUSCRIBIRSE a `songsFlow`: la rama
+  Playlist de MainActivity calculaba las canciones con `songsOfPlaylist()`
+  (lectura directa de `.value`) sin `collectAsStateWithLifecycle`, a
+  diferencia de Álbum y Artista — la edición manual de metadata no se
+  veía hasta salir y volver a entrar. Verificado 2026-11-22 (1.2.0).
+- El título de un video de YouTube NO es el título de la canción y el
+  canal NO es el artista: `YoutubeTitleParser` (shared) parte el título
+  por el primer " - " (artista antes, canción después), quita sufijos de
+  video ("(Official Video)", "(Lyrics)", "(Video Oficial)"...) y usa el
+  canal solo si no hay guion (y sin " - Topic"). Se aplica al buscar
+  (Android y PC): nombre del archivo, MediaStore y tags salen limpios.
+  En PC, el escáner además parte "Artista - Título" del nombre del
+  archivo cuando no hay tags (si no, la descarga se ve con el nombre
+  entero de título y "Artista desconocido"). Verificado 2026-11-22
+  (1.2.0).
 - Scrollbar de escritorio: la barra por defecto se come el contenido
   con solo 12 dp de padding — reservar carril con contentPadding end
   (24 dp en listas, 32 dp en grids, 2026-11-19, 1.2.18; antes 16/24).
@@ -734,3 +759,4 @@ cuanto las veas.
 | 2026-11-22 | Malen-IA | FAB reconocimiento vs barra A-Z | LibraryScreen.kt (FAB a 40dp del borde derecho para librar la barra A-Z; barra de selección con 32dp por la derecha), AGENTS.md |
 | 2026-11-22 | Malen-IA | Pantalla de permiso de audio (spinner infinito al negar) | AuralViewModel.kt (isLoading=false al negar, rescan try/finally, permanentlyDenied), MainActivity.kt (audio por clave, onResume, Ajustes), LibraryScreen.kt (PermissionRequiredState con Dar permiso / Abrir Ajustes), AGENTS.md |
 | 2026-11-22 | Malen-IA | Letras automáticas al reproducir + metadata YouTube incrustada + letras sin retraso | AuralViewModel.kt (observador playerState con collectLatest: letra automática al sonar una canción con título/artista válidos y sin letra guardada, intento único por sesión; applyYouTubeMetadataFallback; currentPositionMs), PlaybackManager.kt (currentPositionMs en vivo), data/LrcParser.kt ([offset:±ms] + isSynced), youtube/YouTubeManager.kt (TagEditor tras la descarga: título/artista/portada dentro del archivo, remux si es fragmentado; .webm sin etiquetar), ui/screens/DownloadsScreen.kt + LibraryScreen.kt (onDownloadComplete con result y tagsEmbedded; fallback a metadatos de la app si no se incrustó), ui/screens/LyricsScreen.kt (ticker 100 ms en vivo, letra plana sin línea activa ni auto-scroll), ui/screens/NowPlayingScreen.kt (ticker propio 200 ms solo en el Box de la línea, primera línea si es plana, lambda en vivo a LyricsScreen), AGENTS.md |
+| 2026-11-22 | Malen-IA | Letras automáticas como en PC + título real de YouTube + lista que se actualiza al editar | YoutubeTitleParser.kt (NUEVO, shared: parte "Artista - Canción" del título del video, quita sufijos de video en inglés y español, canal solo como fallback sin " - Topic"), youtube/YouTubeManager.kt (búsqueda con título/artista limpios: archivo, MediaStore y tags), desktopApp/.../YoutubeDownloads.kt (búsqueda limpia) + LibraryScanner.kt (sin tags, parte "Artista - Título" del nombre del archivo), AuralViewModel.kt (observador roto de letras borrado — collectLatest + ticker 500 ms cancelaba cada búsqueda — + ensureLyrics), ui/screens/NowPlayingScreen.kt (LaunchedEffect por canción → ensureLyrics al abrir el NP, como en PC), MainActivity.kt (detalle de playlist suscrito a songsFlow: la edición manual se ve sin re-entrar), AGENTS.md |
