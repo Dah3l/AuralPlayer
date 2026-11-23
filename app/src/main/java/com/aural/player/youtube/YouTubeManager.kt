@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aural.player.data.TagEditor
+import com.aural.player.data.TagWriteResult
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.StreamingService
@@ -135,7 +137,7 @@ class YouTubeManager(private val context: Context) {
      * Descarga el audio. onComplete recibe el nombre del archivo guardado
      * (o null si falló) y el ID exacto de MediaStore de la canción (-1 si falló).
      */
-    fun download(result: YTResult, onComplete: (fileName: String?, mediaId: Long) -> Unit) {
+    fun download(result: YTResult, onComplete: (fileName: String?, mediaId: Long, tagsEmbedded: Boolean) -> Unit) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
@@ -143,6 +145,7 @@ class YouTubeManager(private val context: Context) {
         scope.launch {
             var savedFileName: String? = null
             var savedMediaId = -1L
+            var tagsEmbedded = false
             var errorMsg: String? = null
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
@@ -175,6 +178,14 @@ class YouTubeManager(private val context: Context) {
                     if (mediaId > 0L) {
                         savedFileName = fileName
                         savedMediaId = mediaId
+                        // Metadata incrustada en el archivo (título,
+                        // artista, portada): el archivo es nuestro
+                        // (lo creó la app), así que no pide permiso.
+                        // .webm no se puede etiquetar: queda con lo
+                        // de MediaStore y el fallback de la app.
+                        tagsEmbedded = if (ext == "m4a") {
+                            embedMetadata(mediaId, result)
+                        } else false
                     } else {
                         errorMsg = "No se pudo guardar el archivo"
                     }
@@ -189,7 +200,7 @@ class YouTubeManager(private val context: Context) {
                 _downloading.value = _downloading.value - result.videoId
                 _progress.value = _progress.value - result.videoId
                 _error.value = errorMsg
-                onComplete(savedFileName, savedMediaId)
+                onComplete(savedFileName, savedMediaId, tagsEmbedded)
             }
         }
     }
@@ -320,6 +331,46 @@ class YouTubeManager(private val context: Context) {
         connection.disconnect()
         if (!cancelled) onProgress(1f)
         else throw java.io.IOException("Descarga cancelada por el usuario")
+    }
+
+    /**
+     * Escribe título/artista/portada DENTRO del archivo descargado
+     * (TagEditor: remux sin pérdida si es MP4 fragmentado +
+     * verificación releyendo). Devuelve true solo si los tags
+     * quedaron en el archivo. La portada es la miniatura del video.
+     */
+    private suspend fun embedMetadata(mediaId: Long, result: YTResult): Boolean {
+        return try {
+            val uri = android.content.ContentUris.withAppendedId(
+                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, mediaId
+            ).toString()
+            val coverArt = result.thumbnailUrl?.let { downloadThumbnail(it) }
+            TagEditor.writeTags(
+                context, uri, result.title, result.artist, "", coverArt
+            ) == TagWriteResult.Success
+        } catch (e: Exception) {
+            android.util.Log.w("YouTubeManager", "No se pudo incrustar metadata: ${e.message}")
+            false
+        }
+    }
+
+    /** Baja la miniatura del video (para incrustarla como portada). */
+    private fun downloadThumbnail(url: String): Pair<ByteArray, String>? {
+        return try {
+            val conn = URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("User-Agent", "AuralPlayer/1.0")
+            if (conn.responseCode != 200) return null
+            val bytes = conn.inputStream.use { it.readBytes() }
+            if (bytes.isEmpty()) return null
+            val mime = conn.contentType?.substringBefore(";")?.trim()
+                ?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+            bytes to mime
+        } catch (e: Exception) {
+            android.util.Log.w("YouTubeManager", "No se pudo bajar la miniatura: ${e.message}")
+            null
+        }
     }
 
     fun clearResults() {
