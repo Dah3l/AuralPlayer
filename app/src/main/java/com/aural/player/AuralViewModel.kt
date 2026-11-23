@@ -27,6 +27,8 @@ import android.provider.MediaStore
 import android.widget.Toast
 import com.aural.player.alarm.AlarmConfig
 import com.aural.player.alarm.AlarmScheduler
+import com.aural.player.playback.AudioFileInfo
+import com.aural.player.playback.BpmAnalysis
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.StopMode
 import com.aural.player.youtube.YTResult
@@ -46,6 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.abs
 
 /** Estado de la interfaz de la biblioteca. */
 data class LibraryUiState(
@@ -651,6 +654,21 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
     }
 
+    /** Mezcla DJ activada (implica fundido; el fundido solo sigue
+     *  siendo la opción sencilla). */
+    val djMixEnabled: StateFlow<Boolean> = settings.djMixEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    fun setDjMixEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setDjMixEnabled(enabled) }
+    }
+
+    /** BPM por canción (songId -> BPM real). */
+    val bpmMap: StateFlow<Map<Long, Float>> = settings.bpmMap.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyMap()
+    )
+
     /** Aural Light de Dynamic Aural activado. */
     val cometEnabled: StateFlow<Boolean> = settings.cometEnabled.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
@@ -773,6 +791,77 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleFavorite(songId: Long) {
         viewModelScope.launch { settings.toggleFavorite(songId) }
+    }
+
+    /**
+     * Sesión DJ: arma una cola que fluye por tempo (cada canción sigue
+     * a la más cercana en BPM, con doble/mitad como compatibles) y la
+     * pone a sonar con la Mezcla DJ activada. Solo entran canciones ya
+     * analizadas; si hay menos de 3, avisa y no hace nada.
+     * Devuelve true si la sesión arrancó.
+     */
+    fun startDjSession(): Boolean {
+        val bpm = bpmMap.value
+        val analyzed = songsFlow.value.filter { bpm.containsKey(it.id) }
+        if (analyzed.size < 3) {
+            Toast.makeText(
+                getApplication(),
+                "Aún hay pocas canciones analizadas, sigue escuchando",
+                Toast.LENGTH_SHORT
+            ).show()
+            return false
+        }
+        val ordered = buildDjOrder(analyzed, bpm)
+        viewModelScope.launch { settings.setDjMixEnabled(true) }
+        playSongs(ordered)
+        return true
+    }
+
+    /** Ordena las canciones en cadena por tempo: cada una sigue a la
+     *  más cercana en BPM (doble/mitad cuenta como cercana). Si suena
+     *  una canción analizada, la sesión empieza por ella. */
+    private fun buildDjOrder(songs: List<Song>, bpm: Map<Long, Float>): List<Song> {
+        val remaining = songs.toMutableList()
+        val ordered = ArrayList<Song>(songs.size)
+        val currentId = playback.state.value.currentSong?.id
+        val startIndex = currentId?.let { id ->
+            remaining.indexOfFirst { it.id == id }.takeIf { it >= 0 }
+        }
+        var current = if (startIndex != null) {
+            remaining.removeAt(startIndex)
+        } else {
+            remaining.removeAt((0 until remaining.size).random())
+        }
+        ordered += current
+        while (remaining.isNotEmpty()) {
+            val curBpm = BpmAnalysis.foldBpm(bpm[current.id] ?: 120f)
+            var bestIdx = 0
+            var bestDist = Float.MAX_VALUE
+            for (i in remaining.indices) {
+                val b = BpmAnalysis.foldBpm(bpm[remaining[i].id] ?: 120f)
+                val dist = minOf(
+                    abs(b - curBpm),
+                    abs(b * 2f - curBpm),
+                    abs(b / 2f - curBpm)
+                )
+                if (dist < bestDist) {
+                    bestDist = dist
+                    bestIdx = i
+                }
+            }
+            current = remaining.removeAt(bestIdx)
+            ordered += current
+        }
+        return ordered
+    }
+
+    /** Datos de archivo de una canción (para "Información de la canción"). */
+    suspend fun loadSongFileInfo(song: Song): AudioFileInfo? = withContext(Dispatchers.IO) {
+        try {
+            BpmAnalysis.readAudioFileInfo(getApplication(), Uri.parse(song.uri))
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun createPlaylist(name: String) {
