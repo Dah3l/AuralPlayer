@@ -664,6 +664,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setDjMixEnabled(enabled) }
     }
 
+    /** Calidad de descarga de YouTube ("data_saver" o "quality"). */
+    val downloadQuality: StateFlow<String> = settings.downloadQuality.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "data_saver"
+    )
+
+    fun setDownloadQuality(quality: String) {
+        viewModelScope.launch { settings.setDownloadQuality(quality) }
+    }
+
     /** BPM por canción (songId -> BPM real). */
     val bpmMap: StateFlow<Map<Long, Float>> = settings.bpmMap.stateIn(
         viewModelScope, SharingStarted.Eagerly, emptyMap()
