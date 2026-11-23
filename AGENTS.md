@@ -761,6 +761,21 @@ cuanto las veas.
   acotados a ella y el mediaId comprobado contra la canción que
   disparó el análisis; si no cuadra, se sale y el próximo cambio lo
   reintenta. El análisis nunca debe tumbar la app.
+- Calidad de descarga (2026-11-23): SettingsStore
+  KEY_DOWNLOAD_QUALITY ("data_saver" por defecto, "quality"); la
+  fila vive en Ajustes → Sonido con tarjeta desplegable y opciones
+  con RadioButton. YouTubeManager lee el ajuste con
+  `.downloadQuality.first()` dentro de download(): calidad = primer
+  m4a >= 128 Kbps, ahorro = primer m4a >= 48 Kbps (lo de antes);
+  fallback mejor m4a y luego mejor disponible (para no perder las
+  etiquetas). El ajuste también va en el mapa de respaldo.
+- Pills del Now Playing (2026-11-23): DOS como mucho en la fila
+  (BPM + calidad "48 kbps · Estéreo"), mismo estilo y mismo toque
+  (abren Información de la canción); cada pill solo se dibuja si su
+  dato existe. La info de archivo se carga por canción con
+  LaunchedEffect(song?.id) + loadSongFileInfo (solo cabecera, sin
+  decodificar). No mezclar tempo y calidad en una sola pill: el
+  tempo es dato de DJ y la calidad es dato del archivo.
 
 ## Estado actual (2026-11-18)
 
