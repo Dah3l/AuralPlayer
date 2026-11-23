@@ -756,25 +756,36 @@ fun LibraryScreen(
         // A 40dp del borde derecho para librar la barra A-Z (el anillo que
         // pulsa llega 8dp más allá del botón) y 100dp del fondo para quedar
         // por encima del mini-reproductor flotante.
-        val fabPulse = rememberInfiniteTransition(label = "fab_pulse")
-        val fabPulseScale by fabPulse.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.3f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "fab_pulse_scale"
-        )
-        val fabPulseAlpha by fabPulse.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "fab_pulse_alpha"
-        )
+        // El pulso solo anima cuando el FAB se ve: con el Now Playing
+        // abierto la biblioteca queda tapada debajo y el anillo corría
+        // a 60 fps para nadie (isAmbientVisible ya lo sabe MainActivity).
+        // Tapado: escala 1 y alfa 0 (anillo quieto e invisible).
+        val fabPulseScale: Float
+        val fabPulseAlpha: Float
+        if (isAmbientVisible) {
+            val fabPulse = rememberInfiniteTransition(label = "fab_pulse")
+            fabPulseScale = fabPulse.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.3f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "fab_pulse_scale"
+            ).value
+            fabPulseAlpha = fabPulse.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "fab_pulse_alpha"
+            ).value
+        } else {
+            fabPulseScale = 1f
+            fabPulseAlpha = 0f
+        }
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
