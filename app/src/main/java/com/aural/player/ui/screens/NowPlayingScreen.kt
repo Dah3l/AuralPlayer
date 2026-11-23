@@ -202,6 +202,23 @@ fun NowPlayingScreen(
     val isHalloweenTheme = themeName == AppTheme.HALLOWEEN.name
     val song = state.currentSong
     val songBpm = song?.let { bpmMap[it.id] }
+    // Info de archivo de la canción actual (bitrate, canales) para la
+    // pill de calidad: solo se lee la cabecera, sin decodificar.
+    var songFileInfo by remember {
+        mutableStateOf<com.aural.player.playback.AudioFileInfo?>(null)
+    }
+    LaunchedEffect(song?.id) {
+        songFileInfo = song?.let { viewModel.loadSongFileInfo(it) }
+    }
+    val qualityText = songFileInfo?.let { info ->
+        val parts = ArrayList<String>()
+        if (info.bitrateKbps > 0) parts += "${info.bitrateKbps} kbps"
+        when (info.channels) {
+            1 -> parts += "Mono"
+            2 -> parts += "Estéreo"
+        }
+        parts.joinToString(" · ").takeIf { it.isNotEmpty() }
+    }
     var showQueue by remember { mutableStateOf(false) }
     val queueListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val queueHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -584,28 +601,56 @@ fun NowPlayingScreen(
                     }
                 }
             }
-            // Tag de tempo: aparece cuando la canción ya tiene BPM
-            // analizado (el feedback visual de la Mezcla DJ). Toca para
-            // ver la información de la canción.
-            if (songBpm != null) {
-                Row(Modifier.fillMaxWidth()) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant,
-                                RoundedCornerShape(12.dp)
+            // Tags de la canción: tempo (si ya tiene BPM analizado) y
+            // calidad del archivo (bitrate · mono/estéreo). Dos pills
+            // como mucho en la fila, mismo estilo y mismo toque (abren
+            // la información de la canción). El tempo es dato de DJ y
+            // la calidad es dato del archivo: van juntos pero no
+            // mezclados en una sola pill.
+            if (songBpm != null || qualityText != null) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (songBpm != null) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable { showSongInfo = true }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "${songBpm.toInt()} BPM",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            .clickable { showSongInfo = true }
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "${songBpm.toInt()} BPM",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        }
+                    }
+                    if (qualityText != null) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable { showSongInfo = true }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                qualityText,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
