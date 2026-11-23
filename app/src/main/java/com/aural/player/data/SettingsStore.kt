@@ -71,6 +71,9 @@ class SettingsStore(private val context: Context) {
         val KEY_CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         // Mezcla DJ: tempo + bajos. Apagada por defecto.
         val KEY_DJ_MIX_ENABLED = booleanPreferencesKey("dj_mix_enabled")
+        // Calidad de descarga de YouTube: "data_saver" (48 Kbps) o
+        // "quality" (128 Kbps). Ahorro por defecto.
+        val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
@@ -735,6 +738,20 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Calidad de descarga de YouTube: "data_saver" (48 Kbps, poco
+     *  peso) o "quality" (128 Kbps, suena mejor). Ahorro por defecto:
+     *  no se le cambia nada a nadie sin que lo pida. */
+    val downloadQuality: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DOWNLOAD_QUALITY] ?: "data_saver"
+    }
+
+    suspend fun setDownloadQuality(quality: String) {
+        if (quality != "quality" && quality != "data_saver") return
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DOWNLOAD_QUALITY] = quality
+        }
+    }
+
     /** BPM por canción (songId -> BPM real, sin plegar): lo analiza la
      *  app una sola vez en segundo plano. Solo entran las analizadas. */
     val bpmMap: Flow<Map<Long, Float>> = context.dataStore.data.map { prefs ->
@@ -1001,6 +1018,7 @@ class SettingsStore(private val context: Context) {
         "playlist_play_counts_json" to KEY_PLAYLIST_PLAY_COUNTS,
         "custom_metadata_json" to KEY_CUSTOM_METADATA,
         "bpm_map_json" to KEY_BPM_MAP,
+        "download_quality" to KEY_DOWNLOAD_QUALITY,
         "hidden_folders_json" to KEY_HIDDEN_FOLDERS,
         "library_tab_order" to KEY_TAB_ORDER,
         "island_appearance" to KEY_ISLAND_APPEARANCE,
