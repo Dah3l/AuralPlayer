@@ -633,6 +633,24 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setIslandAppearance(mode) }
     }
 
+    /** Fundido entre canciones activado. */
+    val crossfadeEnabled: StateFlow<Boolean> = settings.crossfadeEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    fun setCrossfadeEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setCrossfadeEnabled(enabled) }
+    }
+
+    /** Duración del fundido en segundos (1..12). */
+    val crossfadeSeconds: StateFlow<Int> = settings.crossfadeSeconds.stateIn(
+        viewModelScope, SharingStarted.Eagerly, 5
+    )
+
+    fun setCrossfadeSeconds(seconds: Int) {
+        viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
+    }
+
     /** Aural Light de Dynamic Aural activado. */
     val cometEnabled: StateFlow<Boolean> = settings.cometEnabled.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
