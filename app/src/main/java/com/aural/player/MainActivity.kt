@@ -487,12 +487,17 @@ private fun AuralApp(viewModel: AuralViewModel,
 
                 is Screen.Album -> {
                     val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
-                    val songs = allSongs.filter { it.album == s.title }
+                    // remember: la rama se recompone con el ticker de 500 ms
+                    // del reproductor; sin esto, filtrar+ordenar corría
+                    // 2 veces por segundo.
+                    val songs = remember(allSongs, s.title) {
+                        allSongs.filter { it.album == s.title }.sortedBy { it.trackNumber }
+                    }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.title,
                         subtitle = songs.firstOrNull()?.artist ?: "",
-                        songs = songs.sortedBy { it.trackNumber },
+                        songs = songs,
                         coverUri = songs.firstOrNull()?.albumArtUri,
                         listState = detailListState("album:${s.title}"),
                         onBack = { screen = Screen.Library },
@@ -527,7 +532,10 @@ private fun AuralApp(viewModel: AuralViewModel,
 
                 is Screen.Artist -> {
                     val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
-                    val songs = allSongs.filter { it.artist == s.name }
+                    // remember: igual que Álbum (ver arriba).
+                    val songs = remember(allSongs, s.name) {
+                        allSongs.filter { it.artist == s.name }
+                    }
                     DetailScreen(
                         viewModel = viewModel,
                         title = s.name,
@@ -548,18 +556,30 @@ private fun AuralApp(viewModel: AuralViewModel,
                     // al editar la metadata, la lista se actualiza sola
                     // sin salir y volver a entrar.
                     val allSongs by viewModel.songsFlow.collectAsStateWithLifecycle()
+                    val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
+                    val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
                     val isFavorites = s.id == FAVORITES_ID
                     val isDaily = s.id == DAILY_PLAYLIST_ID
                     val isRecent = s.id == RECENTLY_ADDED_ID
                     val playlist = playlists.find { it.id == s.id }
                     val isDownloads = playlist?.name == "Descargas"
-                    val songs = if (isFavorites) viewModel.favoriteSongs()
-                    else if (isDaily) viewModel.dailyPlaylistSongs()
-                    else if (isRecent) viewModel.recentlyAddedSongs()
-                    else playlist?.let { pl ->
-                        val byId = allSongs.associateBy { it.id }
-                        pl.songIds.mapNotNull { byId[it] }
-                    } ?: emptyList()
+                    // remember: favoriteSongs() construye dos mapas de toda
+                    // la biblioteca y recentlyAddedSongs() ordena todo de
+                    // nuevo; sin esto corrían 2 veces por segundo con el
+                    // ticker del reproductor. Las claves cubren todo lo
+                    // que alimenta el cálculo (favoritos, su orden, la
+                    // del día, las playlists y la biblioteca).
+                    val songs = remember(
+                        allSongs, favorites, favoriteOrder, dailyPlaylist, playlists, s.id
+                    ) {
+                        if (isFavorites) viewModel.favoriteSongs()
+                        else if (isDaily) viewModel.dailyPlaylistSongs()
+                        else if (isRecent) viewModel.recentlyAddedSongs()
+                        else playlist?.let { pl ->
+                            val byId = allSongs.associateBy { it.id }
+                            pl.songIds.mapNotNull { byId[it] }
+                        } ?: emptyList()
+                    }
 
                     DetailScreen(
                         viewModel = viewModel,
