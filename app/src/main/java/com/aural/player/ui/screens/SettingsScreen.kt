@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Restore
@@ -59,6 +60,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -93,6 +95,10 @@ import kotlinx.coroutines.withContext
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    crossfadeEnabled: Boolean,
+    onToggleCrossfade: () -> Unit,
+    crossfadeSeconds: Int,
+    onCrossfadeSeconds: (Int) -> Unit,
     islandEnabled: Boolean,
     onToggleIsland: () -> Unit,
     islandAppearance: String,
@@ -254,6 +260,54 @@ fun SettingsScreen(
                 },
                 onClick = onOpenEqualizer
             )
+            SettingsRow(
+                icon = Icons.Rounded.MusicNote,
+                title = "Fundido entre canciones",
+                subtitle = "La siguiente entra mientras la anterior se apaga",
+                trailing = {
+                    Switch(checked = crossfadeEnabled, onCheckedChange = { onToggleCrossfade() })
+                },
+                onClick = onToggleCrossfade
+            )
+            if (crossfadeEnabled) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Duración del fundido",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "$crossfadeSeconds s",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = crossfadeSeconds.toFloat(),
+                        onValueChange = { onCrossfadeSeconds(it.toInt()) },
+                        valueRange = 1f..12f,
+                        steps = 10
+                    )
+                }
+            }
             SettingsSection("Interfaz")
             SettingsRow(
                 icon = Icons.Rounded.PhoneAndroid,
