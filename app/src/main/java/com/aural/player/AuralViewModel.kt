@@ -812,11 +812,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settings.removeFavorites(set)
             settings.removeSongsFromAllPlaylists(set)
-            ids.forEach { id ->
-                settings.setCustomMetadata(id, "", "", "")
-                settings.setCustomCover(id, "")
-                settings.removeLrcForSong(id)
-            }
+            // Un solo edit para metadata+portada+letra de todas (antes:
+            // 3 rewrites de ajustes por canción).
+            settings.clearSongData(ids)
             rescan()
         }
     }
@@ -889,12 +887,13 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             val lrcContent = com.aural.player.data.LrcLibClient.searchLyrics(artist, track, durationSec)
                 ?.takeIf { it.isNotBlank() }
                 ?: return false
-            // Guardar el .lrc en almacenamiento interno
+            // Guardar el .lrc en almacenamiento interno (hilo IO: antes
+            // se escribía en el hilo principal).
             val file = java.io.File(
                 getApplication<android.app.Application>().filesDir,
                 "lyrics_$songId.lrc"
             )
-            file.writeText(lrcContent)
+            withContext(Dispatchers.IO) { file.writeText(lrcContent) }
             settings.setLrcForSong(songId, file.absolutePath)
             true
         } catch (e: Exception) {
