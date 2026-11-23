@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -65,6 +66,9 @@ class SettingsStore(private val context: Context) {
         val KEY_ISLAND_APPEARANCE = stringPreferencesKey("island_appearance")
         val KEY_COMET_ENABLED = booleanPreferencesKey("comet_enabled")
         val KEY_AURAL_LIGHT_COLOR = stringPreferencesKey("aural_light_color")
+        // Fundido entre canciones (crossfade): apagado por defecto, 5 s.
+        val KEY_CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
+        val KEY_CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
         val KEY_TAB_ORDER = stringPreferencesKey("library_tab_order")
         // v1.1.0: despertador (JSON de AlarmConfig).
@@ -695,6 +699,29 @@ class SettingsStore(private val context: Context) {
     suspend fun setIslandAppearance(mode: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ISLAND_APPEARANCE] = mode
+        }
+    }
+
+    /** Fundido entre canciones (crossfade): la siguiente entra mientras
+     *  la anterior se apaga. Apagado por defecto. */
+    val crossfadeEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CROSSFADE_ENABLED] ?: false
+    }
+
+    suspend fun setCrossfadeEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CROSSFADE_ENABLED] = enabled
+        }
+    }
+
+    /** Duración del fundido en segundos (1..12, 5 por defecto). */
+    val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs ->
+        (prefs[KEY_CROSSFADE_SECONDS] ?: 5).coerceIn(1, 12)
+    }
+
+    suspend fun setCrossfadeSeconds(seconds: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CROSSFADE_SECONDS] = seconds.coerceIn(1, 12)
         }
     }
 
