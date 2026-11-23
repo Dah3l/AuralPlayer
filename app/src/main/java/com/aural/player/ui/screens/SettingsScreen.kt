@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
@@ -171,6 +172,8 @@ fun SettingsScreen(
     // Subtítulo del perfil según los datos guardados.
     val profileName by viewModel.userName.collectAsStateWithLifecycle()
     val profileBirthday by viewModel.birthday.collectAsStateWithLifecycle()
+    val djMixEnabled by viewModel.djMixEnabled.collectAsStateWithLifecycle()
+    val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
     // Funciones nuevas ya vistas (sin puntito).
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val profileSubtitle = run {
@@ -305,6 +308,44 @@ fun SettingsScreen(
                         onValueChange = { onCrossfadeSeconds(it.toInt()) },
                         valueRange = 1f..12f,
                         steps = 10
+                    )
+                }
+            }
+            SettingsRow(
+                icon = Icons.Rounded.QueueMusic,
+                title = "Mezcla DJ",
+                subtitle = "Iguala el tempo y cambia los bajos al pasar de canción",
+                trailing = {
+                    Switch(
+                        checked = djMixEnabled,
+                        onCheckedChange = { viewModel.setDjMixEnabled(!djMixEnabled) }
+                    )
+                },
+                onClick = { viewModel.setDjMixEnabled(!djMixEnabled) }
+            )
+            if (djMixEnabled) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        "${bpmMap.size} canciones analizadas",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "El tempo se analiza en segundo plano mientras escuchas; sin BPM, la canción mezcla con el fundido normal.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
