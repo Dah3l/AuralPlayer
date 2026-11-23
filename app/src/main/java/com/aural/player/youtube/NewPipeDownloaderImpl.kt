@@ -14,6 +14,10 @@ class NewPipeDownloaderImpl : Downloader() {
         var connection: HttpURLConnection? = null
         try {
             connection = url.openConnection() as HttpURLConnection
+            // Timeouts como en PC (1.2.22): sin ellos, un corte de red
+            // deja la búsqueda de YouTube colgada para siempre.
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
             connection.requestMethod = request.httpMethod()
             connection.instanceFollowRedirects = true
             // Headers de navegador real para evitar detección
