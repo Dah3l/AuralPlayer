@@ -768,6 +768,26 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Quita de una sola vez los datos de varias canciones (metadata,
+     *  portada y letra) con un solo edit: borrar en lote hacía 3
+     *  rewrites completos de ajustes por canción (150 con 50). */
+    suspend fun clearSongData(songIds: Collection<Long>) {
+        context.dataStore.edit { prefs ->
+            val meta = decodeMetadata(prefs[KEY_CUSTOM_METADATA]).toMutableMap()
+            songIds.forEach { meta.remove(it) }
+            prefs[KEY_CUSTOM_METADATA] = encodeMetadata(meta)
+            val covers = decodeCovers(prefs[KEY_CUSTOM_COVERS]).toMutableMap()
+            songIds.forEach { covers.remove(it) }
+            prefs[KEY_CUSTOM_COVERS] = encodeCovers(covers)
+            val lrc = decodeLrcMap(prefs[KEY_LRC_MAP]).toMutableMap()
+            songIds.forEach { lrc.remove(it) }
+            prefs[KEY_LRC_MAP] = JSONObject(lrc.mapKeys { it.key.toString() } as Map<String, String>).toString()
+        }
+        // Al quitar las portadas, borrar también sus archivos locales
+        // (igual que setCustomCover con "" lo hacía por canción).
+        songIds.forEach { SongCoverStore.deleteCover(context, it) }
+    }
+
     private fun decodeLrcMap(json: String?): Map<Long, String> {
         if (json.isNullOrBlank()) return emptyMap()
         return try {
