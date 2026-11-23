@@ -764,12 +764,17 @@ class MusicService : MediaSessionService() {
                     main.playbackState == Player.STATE_ENDED
                 ) break
                 if (main.isPlaying) {
-                    playedMs += 100
+                    // Pasos de 500 ms, NO de 100 ms: cada setPlaybackSpeed
+                    // hace que Sonic reajuste el estiramiento de tiempo
+                    // en pleno stream y eso se oye como tirones. Con 40
+                    // pasos en 20 s cada salto es ~0,2% de tono
+                    // (inaudible como salto) y los tirones desaparecen.
+                    playedMs += 500
                     val t = (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
                     val rate = fromRate + (toRate - fromRate) * t
                     lastGlideSpeed = rate
                     main.setPlaybackSpeed(rate)
-                    delay(100)
+                    delay(500)
                 } else {
                     delay(500)
                 }
