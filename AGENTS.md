@@ -319,6 +319,22 @@ cuanto las veas.
   sale: detectar con `shouldShowRequestPermissionRationale == false` tras haber
   pedido antes, y ofrecer 'Abrir Ajustes' (ACTION_APPLICATION_DETAILS_SETTINGS);
   al volver, onResume re-comprueba y escanea. Verificado 2026-11-22 (1.2.0).
+- El ticker del reproductor actualiza `positionMs` cada 500 ms Y suma 500L
+  por tick al registro de escucha del Top 10: cambiar el delay sin tocar
+  ese `+ 500L` rompe el Top 10. El retraso de la letra se arregla
+  interpolando en la UI (posición en vivo + ticker propio de 100/200 ms
+  en la pantalla de letras), nunca tocando el ticker. Verificado
+  2026-11-22 (1.2.0).
+- Un archivo que la app misma creó en MediaStore (descargas de YouTube)
+  se puede reescribir con `openOutputStream(uri, "wt")` SIN
+  `createWriteRequest`: el diálogo de permiso solo salta para archivos
+  de otras apps (caso del editor manual de tags). Verificado 2026-11-22
+  (1.2.0).
+- La letra plana de respaldo (`plainToLrc`) pone TODAS las líneas en
+  [00:00.00] y `currentIndex` devuelve entonces siempre la ÚLTIMA línea.
+  `LrcParser.isSynced` (al menos 2 tiempos distintos) distingue la letra
+  sincronizada de la plana: la plana se muestra sin línea activa ni
+  auto-scroll. Verificado 2026-11-22 (1.2.0).
 - Scrollbar de escritorio: la barra por defecto se come el contenido
   con solo 12 dp de padding — reservar carril con contentPadding end
   (24 dp en listas, 32 dp en grids, 2026-11-19, 1.2.18; antes 16/24).
@@ -717,3 +733,4 @@ cuanto las veas.
 | 2026-11-22 | Malen-IA | Ecualizador + FAB reconocimiento | MusicService.kt (listener onAudioSessionIdChanged re-inicializa el EQ cuando la sesión se crea), LibraryScreen.kt (FAB reconocimiento y barra de selección suben 100dp sobre el MiniPlayer flotante), AGENTS.md |
 | 2026-11-22 | Malen-IA | FAB reconocimiento vs barra A-Z | LibraryScreen.kt (FAB a 40dp del borde derecho para librar la barra A-Z; barra de selección con 32dp por la derecha), AGENTS.md |
 | 2026-11-22 | Malen-IA | Pantalla de permiso de audio (spinner infinito al negar) | AuralViewModel.kt (isLoading=false al negar, rescan try/finally, permanentlyDenied), MainActivity.kt (audio por clave, onResume, Ajustes), LibraryScreen.kt (PermissionRequiredState con Dar permiso / Abrir Ajustes), AGENTS.md |
+| 2026-11-22 | Malen-IA | Letras automáticas al reproducir + metadata YouTube incrustada + letras sin retraso | AuralViewModel.kt (observador playerState con collectLatest: letra automática al sonar una canción con título/artista válidos y sin letra guardada, intento único por sesión; applyYouTubeMetadataFallback; currentPositionMs), PlaybackManager.kt (currentPositionMs en vivo), data/LrcParser.kt ([offset:±ms] + isSynced), youtube/YouTubeManager.kt (TagEditor tras la descarga: título/artista/portada dentro del archivo, remux si es fragmentado; .webm sin etiquetar), ui/screens/DownloadsScreen.kt + LibraryScreen.kt (onDownloadComplete con result y tagsEmbedded; fallback a metadatos de la app si no se incrustó), ui/screens/LyricsScreen.kt (ticker 100 ms en vivo, letra plana sin línea activa ni auto-scroll), ui/screens/NowPlayingScreen.kt (ticker propio 200 ms solo en el Box de la línea, primera línea si es plana, lambda en vivo a LyricsScreen), AGENTS.md |
