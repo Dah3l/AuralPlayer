@@ -9,8 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aural.player.data.SettingsStore
 import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
 import com.aural.player.shared.YoutubeTitleParser
@@ -161,7 +163,17 @@ class YouTubeManager(private val context: Context) {
                     "https://www.youtube.com/watch?v=${result.videoId}"
                 )
 
-                // SOLO audio puro — sin fallback a video
+                // SOLO audio puro — sin fallback a video. Calidad
+                // elegida en Ajustes → Sonido (ahorro 48 Kbps por
+                // defecto; calidad 128 Kbps). Se sigue prefiriendo el
+                // m4a porque es el único al que se le incrustan título,
+                // artista y portada.
+                val preferQuality = try {
+                    SettingsStore(context).downloadQuality.first() == "quality"
+                } catch (_: Exception) {
+                    false
+                }
+                val minBitrate = if (preferQuality) 128000 else 48000
                 val audioStream = streamInfo.audioStreams
                     .sortedWith(
                         compareBy(
@@ -169,9 +181,14 @@ class YouTubeManager(private val context: Context) {
                             { it.averageBitrate }
                         )
                     )
-                    .firstOrNull { it.averageBitrate >= 48000 }
-                    // Fallback: el MEJOR disponible (antes era minByOrNull
-                    // = el peor; en PC 1.2.22 ya se cambió a maxByOrNull).
+                    .firstOrNull { it.averageBitrate >= minBitrate }
+                    // Fallback: el mejor m4a (para no perder las
+                    // etiquetas) y si no hay, el mejor disponible
+                    // (antes era minByOrNull = el peor; en PC 1.2.22
+                    // ya se cambió a maxByOrNull).
+                    ?: streamInfo.audioStreams
+                        .filter { it.content.contains("mime=audio/mp4") }
+                        .maxByOrNull { it.averageBitrate }
                     ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
 
                 if (audioStream != null) {
