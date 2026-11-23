@@ -558,7 +558,7 @@ class MusicService : MediaSessionService() {
         crossfadeActive = false
         rampJob?.cancel()
         rampJob = null
-        val oldMain = mediaSession?.player ?: return
+        val oldMain = mediaSession?.player as? ExoPlayer ?: return
         val fade = fadePlayer ?: return
         fade.volume = 1f
         oldMain.volume = 0f
