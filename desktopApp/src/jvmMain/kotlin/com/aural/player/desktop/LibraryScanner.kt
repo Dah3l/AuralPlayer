@@ -1,6 +1,7 @@
 package com.aural.player.desktop
 
 import com.aural.player.shared.Song
+import com.aural.player.shared.YoutubeTitleParser
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import java.io.File
@@ -64,13 +65,17 @@ object LibraryScanner {
         readSong(file.absolutePath.hashCode().toLong(), file, artworkDir = null)
 
     private fun readSong(id: Long, file: File, artworkDir: String?): Song {
+        // Sin tags, el nombre del archivo suele ser "Artista - Título"
+        // (así se guardan las descargas de YouTube): se parte para que
+        // el título sea la canción y el artista no sea "desconocido".
+        val fileName = YoutubeTitleParser.parse(file.nameWithoutExtension, "")
         return try {
             val audio = AudioFileIO.read(file)
             val tag = audio.tag
             val title = tag?.getFirst(FieldKey.TITLE)?.takeIf { it.isNotBlank() }
-                ?: file.nameWithoutExtension
+                ?: fileName.title
             val artist = tag?.getFirst(FieldKey.ARTIST)?.takeIf { it.isNotBlank() }
-                ?: "Artista desconocido"
+                ?: fileName.artist.ifBlank { "Artista desconocido" }
             val album = tag?.getFirst(FieldKey.ALBUM)?.takeIf { it.isNotBlank() } ?: ""
             val durationMs = (audio.audioHeader?.trackLength?.toLong() ?: 0L) * 1000L
             // Arte incrustado → caché de portadas (si aún no está).
@@ -93,8 +98,8 @@ object LibraryScanner {
             // Archivo ilegible: se muestra igual con el nombre del archivo.
             Song(
                 id,
-                file.nameWithoutExtension,
-                "Artista desconocido",
+                fileName.title,
+                fileName.artist.ifBlank { "Artista desconocido" },
                 "",
                 0L,
                 file.absolutePath,
