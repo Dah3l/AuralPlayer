@@ -43,7 +43,7 @@ private val YouTubeRedDark = Color(0xFFC93A3E)
 @Composable
 fun DownloadsScreen(
     youTubeManager: YouTubeManager,
-    onDownloadComplete: (String?, Long) -> Unit = { _, _ -> },
+    onDownloadComplete: (String?, Long, YTResult, Boolean) -> Unit = { _, _, _, _ -> },
     listState: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState(),
     modifier: Modifier = Modifier
@@ -318,12 +318,12 @@ fun DownloadsScreen(
                             )
                             IconButton(
                                 onClick = {
-                                    youTubeManager.download(result) { fileName, mediaId ->
+                                    youTubeManager.download(result) { fileName, mediaId, tagsEmbedded ->
                                         // v1.0.7: marcar éxito para el indicador.
                                         if (fileName != null) {
                                             youTubeManager.markDownloaded(result.videoId, fileName)
                                         }
-                                        onDownloadComplete(fileName, mediaId)
+                                        onDownloadComplete(fileName, mediaId, result, tagsEmbedded)
                                     }
                                 },
                                 interactionSource = dlInteraction,
