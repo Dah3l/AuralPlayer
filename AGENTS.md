@@ -705,6 +705,11 @@ cuanto las veas.
   (`CMD_CROSSFADE_NEXT`/`CMD_CROSSFADE_PREV`): PlaybackManager lo
   pide y si el servicio dice que no, cae al salto normal. La cola
   (playAt) y el play directo no funden: salto inmediato.
+- `MediaSession.player` devuelve `Player`, NO `ExoPlayer`:
+  al intercambiar los papeles hay que castear (`as? ExoPlayer`)
+  — seguro porque los dos reproductores los crea el servicio
+  (el principal en onCreate y el del fundido en el motor).
+  (Error de compilación 2026-11-23, MusicService.kt:569.)
 
 ## Estado actual (2026-11-18)
 
