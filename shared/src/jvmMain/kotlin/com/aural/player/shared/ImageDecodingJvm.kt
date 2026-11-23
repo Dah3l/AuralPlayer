@@ -14,12 +14,15 @@ import kotlin.math.roundToInt
 /** Lado mayor máximo de una portada decodificada (px). */
 private const val MAX_COVER_PX = 512
 
-actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? {
+actual fun decodeImageBitmap(bytes: ByteArray, maxDimension: Int): ImageBitmap? {
     return try {
         val image = Image.makeFromEncoded(bytes)
+        // Tope: 512 px para portadas, o menos si el que llama lo pide
+        // (UrlImageCache pasa 300 px).
+        val cap = minOf(maxDimension, MAX_COVER_PX)
         val maxSide = maxOf(image.width, image.height)
-        val scaled = if (maxSide > MAX_COVER_PX) {
-            val scale = MAX_COVER_PX.toFloat() / maxSide
+        val scaled = if (maxSide > cap) {
+            val scale = cap.toFloat() / maxSide
             val w = (image.width * scale).roundToInt().coerceAtLeast(1)
             val h = (image.height * scale).roundToInt().coerceAtLeast(1)
             val surface = Surface.makeRasterN32Premul(w, h)
