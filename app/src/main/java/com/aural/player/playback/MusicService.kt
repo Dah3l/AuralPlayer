@@ -53,7 +53,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -94,6 +96,29 @@ class MusicService : MediaSessionService() {
     private var fadeEffectiveMs = 0L
     private var crossfadeEnabledCache = false
     private var crossfadeSecondsCache = 5
+
+    // ------------------------- Mezcla DJ -------------------------
+    /** Mezcla DJ activada (implica fundido). */
+    private var djMixEnabledCache = false
+    /** BPM guardados (songId -> BPM real, sin plegar). */
+    private var bpmCache: Map<Long, Float> = emptyMap()
+    /** Velocidad de la voz del fundido en este fundido (1f = sin igualar). */
+    private var fadeTargetRate = 1f
+    /** Si este fundido lleva cambio de bajos (tempo igualado o compatible). */
+    private var fadeBassSwap = false
+    /** Velocidad que el usuario tiene puesta (la del selector del Now
+     *  Playing): a ella vuelve la canción tras la mezcla. */
+    private var userSpeed = 1f
+    /** Última velocidad puesta por el glide (para distinguir sus cambios
+     *  de los del usuario en onPlaybackParametersChanged). */
+    private var lastGlideSpeed = 1f
+    /** Glide de vuelta al tempo tras una mezcla (null = no hay). */
+    private var tempoRecoveryJob: Job? = null
+    /** Análisis de BPM en curso (ids) + trabajo de análisis. */
+    private var analysisJob: Job? = null
+    private val analyzingIds = mutableSetOf<Long>()
+    private val analyzedIds = mutableSetOf<Long>()
+    private var lastAnalyzedSongId: Long? = null
 
     companion object {
         const val CMD_TOGGLE_FAVORITE = "aural_toggle_favorite"
@@ -166,6 +191,8 @@ class MusicService : MediaSessionService() {
         startIslandOverlay()
         // Fundido entre canciones: segundo reproductor + vigilancia.
         startCrossfadeEngine(player)
+        // Análisis de BPM en segundo plano (para la Mezcla DJ).
+        startBpmAnalysis()
     }
 
     /** Crea el segundo reproductor del fundido y arranca su vigilancia. */
@@ -209,6 +236,13 @@ class MusicService : MediaSessionService() {
         serviceScope.launch {
             app.settings.crossfadeSeconds.collect { crossfadeSecondsCache = it }
         }
+        // Ajustes y BPM de la Mezcla DJ en caché.
+        serviceScope.launch {
+            app.settings.djMixEnabled.collect { djMixEnabledCache = it }
+        }
+        serviceScope.launch {
+            app.settings.bpmMap.collect { bpmCache = it }
+        }
         // Vigilancia: cada 250 ms mira si falta poco para el final.
         fadeWatchJob = serviceScope.launch {
             while (true) {
@@ -249,16 +283,48 @@ class MusicService : MediaSessionService() {
             newPosition: Player.PositionInfo,
             reason: Int
         ) {
-            if (owner !== mediaSession?.player || !crossfadeActive) return
-            when (reason) {
-                // El usuario buscó con el slider en pleno fundido: se
-                // cancela y la canción actual sigue normal.
-                Player.DISCONTINUITY_REASON_SEEK -> abortFade()
+            if (owner !== mediaSession?.player) return
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                // El usuario buscó con el slider: se cancela el fundido
+                // (si lo había) y el glide de vuelta al tempo, y la
+                // canción sigue a la velocidad del usuario.
+                if (crossfadeActive) abortFade()
+                stopTempoRecovery()
+                resetSpeedToUser()
+                return
+            }
+            if (!crossfadeActive) return
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
                 // La canción terminó antes de que la rampa acabara
                 // (retraso del bucle): cerrar el fundido ya, que la
                 // segunda voz está casi a todo volumen.
-                Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> finishFade()
+                finishFade()
             }
+        }
+
+        override fun onPlaybackParametersChanged(
+            playbackParameters: androidx.media3.common.PlaybackParameters
+        ) {
+            if (owner !== mediaSession?.player) return
+            // Los sets del glide se mueven de a milésimas: si el cambio
+            // es así de pequeño, es el glide, no el usuario (llega por
+            // el looper con retraso, así que no vale un flag).
+            if (abs(playbackParameters.speed - lastGlideSpeed) < 0.005f) return
+            // Cambio de velocidad del usuario (selector del Now Playing):
+            // anota la elegida y cancela el glide (el selector ya puso
+            // la velocidad; aquí solo se para el glide).
+            userSpeed = playbackParameters.speed
+            stopTempoRecovery()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (owner !== mediaSession?.player) return
+            if (crossfadeActive) return
+            // La canción cambió sola sin fundido (o el usuario saltó
+            // directo): se acabó el glide y la nueva suena a la
+            // velocidad del usuario, no a la que dejó el glide a medias.
+            stopTempoRecovery()
+            resetSpeedToUser()
         }
 
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -436,13 +502,17 @@ class MusicService : MediaSessionService() {
     // =======================================================================
 
     /** Siguiente canción del timeline (null si no hay: fin de cola sin repetir). */
-    private fun nextWindowIndex(player: Player): Int? {
+    private fun nextWindowIndex(player: Player): Int? =
+        nextWindowIndexFrom(player, player.currentMediaItemIndex)
+
+    /** Siguiente canción desde [fromIndex] (para encadenar varias). */
+    private fun nextWindowIndexFrom(player: Player, fromIndex: Int): Int? {
         val timeline = player.currentTimeline
         if (timeline.windowCount == 0) return null
         val idx = timeline.getNextWindowIndex(
-            player.currentMediaItemIndex, player.repeatMode, player.shuffleModeEnabled
+            fromIndex, player.repeatMode, player.shuffleModeEnabled
         )
-        if (idx == C.INDEX_UNSET || idx == player.currentMediaItemIndex) return null
+        if (idx == C.INDEX_UNSET || idx == fromIndex) return null
         return idx
     }
 
@@ -500,7 +570,22 @@ class MusicService : MediaSessionService() {
             fade.shuffleModeEnabled = main.shuffleModeEnabled
             fade.repeatMode = main.repeatMode
             fade.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(items.size))
-            fade.setPlaybackSpeed(main.playbackParameters.speed)
+            // Mezcla DJ: la que entra toma el tempo de la que sale (o
+            // suena a su tempo si son doble/mitad); sin mezcla, la
+            // segunda voz copia la velocidad del usuario, como antes.
+            val match = if (djMixEnabledCache) {
+                val outId = main.currentMediaItem?.mediaId?.toLongOrNull()
+                val inId = items[targetIndex].mediaId.toLongOrNull()
+                BpmAnalysis.matchTempo(
+                    bpmOutRaw = outId?.let { bpmCache[it] },
+                    bpmInRaw = inId?.let { bpmCache[it] },
+                    speedOut = main.playbackParameters.speed,
+                    baseSpeed = userSpeed
+                )
+            } else null
+            fadeTargetRate = match?.rate ?: main.playbackParameters.speed
+            fadeBassSwap = match?.bassSwap ?: false
+            fade.setPlaybackSpeed(fadeTargetRate)
             fade.prepare()
             fade.playWhenReady = false
             fadePreparedForIndex = targetIndex
@@ -529,8 +614,16 @@ class MusicService : MediaSessionService() {
         if (effective < 1000) return false
         fadeEffectiveMs = effective
         crossfadeActive = true
+        // Un glide anterior no sigue: la nueva mezcla manda.
+        stopTempoRecovery()
         fade.volume = 0f
         fade.playWhenReady = true
+        // Cambio de bajos: la que sale pierde los graves y la que entra
+        // los gana, durante el fundido (misma t que el volumen).
+        val bassSwap = fadeBassSwap
+        val savedBassDb = if (bassSwap) EqualizerManager.getSavedBandLevelDb(0) else 0
+        val minBassDb = if (bassSwap) EqualizerManager.levelRangeDb().first else 0
+        if (bassSwap) EqualizerManager.bassSwapActive = true
         rampJob?.cancel()
         rampJob = serviceScope.launch {
             while (crossfadeActive) {
@@ -540,7 +633,15 @@ class MusicService : MediaSessionService() {
                 val t = (fade.currentPosition.toFloat() / fadeEffectiveMs).coerceIn(0f, 1f)
                 fade.volume = sin(t * PI / 2).toFloat()
                 main.volume = cos(t * PI / 2).toFloat()
-                if (main.playbackParameters.speed != fade.playbackParameters.speed) {
+                if (bassSwap) {
+                    val outBass = (savedBassDb + (minBassDb - savedBassDb) * t).roundToInt()
+                    val inBass = (minBassDb + (savedBassDb - minBassDb) * t).roundToInt()
+                    EqualizerManager.setBandLevelTransient(false, 0, outBass)
+                    EqualizerManager.setBandLevelTransient(true, 0, inBass)
+                } else if (main.playbackParameters.speed != fade.playbackParameters.speed) {
+                    // Sin mezcla, la segunda voz sigue a la principal si
+                    // el usuario cambia la velocidad en pleno fundido.
+                    // Con mezcla no: su velocidad es el tempo igualado.
                     fade.setPlaybackSpeed(main.playbackParameters.speed)
                 }
                 if (t >= 1f) {
@@ -569,12 +670,26 @@ class MusicService : MediaSessionService() {
         mediaSession?.setPlayer(fade)
         fadePlayer = oldMain
         fadePreparedForIndex = -1
-        // El ecualizador principal pasa a la sesión nueva (el juego de
-        // efectos de la segunda voz ya estaba en esta sesión).
-        if (fade.audioSessionId != 0) {
-            lastEqSessionId = fade.audioSessionId
-            EqualizerManager.init(this, fade.audioSessionId)
+        // Los papeles se intercambian también en el ecualizador: cada
+        // juego de efectos sigue a su sesión (re-crear el juego
+        // principal con init() dejaba al nuevo principal con DOS EQs
+        // y a la reserva sin ninguno).
+        EqualizerManager.swapRoles()
+        // Los bajos vuelven a su nivel: la nueva principal ya está en
+        // el suyo (la rampa terminó ahí) y la reserva se restaura.
+        if (fadeBassSwap) {
+            EqualizerManager.setBandLevelTransient(
+                true, 0, EqualizerManager.getSavedBandLevelDb(0)
+            )
+            EqualizerManager.bassSwapActive = false
         }
+        fadeBassSwap = false
+        // La que entra venía al tempo de la que sale: vuelve sola a la
+        // velocidad del usuario en ~20 s (si no era ya esa).
+        if (fadeTargetRate != userSpeed) {
+            startTempoRecovery(fromRate = fadeTargetRate, toRate = userSpeed)
+        }
+        fadeTargetRate = 1f
     }
 
     /** Cancela el fundido y deja todo como estaba (sin cambiar de canción). */
@@ -587,6 +702,15 @@ class MusicService : MediaSessionService() {
         fadePlayer?.volume = 0f
         mediaSession?.player?.volume = 1f
         fadePreparedForIndex = -1
+        // Los bajos vuelven a su nivel en los dos juegos.
+        if (fadeBassSwap) {
+            val saved = EqualizerManager.getSavedBandLevelDb(0)
+            EqualizerManager.setBandLevelTransient(false, 0, saved)
+            EqualizerManager.setBandLevelTransient(true, 0, saved)
+            EqualizerManager.bassSwapActive = false
+        }
+        fadeBassSwap = false
+        fadeTargetRate = 1f
     }
 
     /** Fundido al saltar a la siguiente (lo pide PlaybackManager). */
@@ -601,6 +725,131 @@ class MusicService : MediaSessionService() {
         val main = mediaSession?.player ?: return false
         val target = prevWindowIndex(main) ?: return false
         return startFade(target)
+    }
+
+    // =======================================================================
+    // MEZCLA DJ: vuelta al tempo + análisis de BPM
+    // =======================================================================
+
+    /** Para el glide de vuelta al tempo (sin tocar la velocidad). */
+    private fun stopTempoRecovery() {
+        tempoRecoveryJob?.cancel()
+        tempoRecoveryJob = null
+    }
+
+    /** Deja la velocidad en la que el usuario tiene puesta. */
+    private fun resetSpeedToUser() {
+        val main = mediaSession?.player ?: return
+        if (main.playbackParameters.speed != userSpeed) {
+            main.setPlaybackSpeed(userSpeed)
+        }
+    }
+
+    /**
+     * Vuelta al tempo: la velocidad vuelve sola de [fromRate] a [toRate]
+     * en ~20 s. Se congela en pausa (solo avanza lo que suena) y se
+     * cancela al saltar, cambiar de canción o tocar la velocidad a mano.
+     */
+    private fun startTempoRecovery(fromRate: Float, toRate: Float) {
+        tempoRecoveryJob?.cancel()
+        val totalMs = 20_000L
+        tempoRecoveryJob = serviceScope.launch {
+            val songId = mediaSession?.player?.currentMediaItem?.mediaId
+                ?: return@launch
+            var playedMs = 0L
+            while (playedMs < totalMs) {
+                val main = mediaSession?.player ?: break
+                if (main.currentMediaItem?.mediaId != songId) break
+                if (main.playbackState == Player.STATE_IDLE ||
+                    main.playbackState == Player.STATE_ENDED
+                ) break
+                if (main.isPlaying) {
+                    playedMs += 100
+                    val t = (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
+                    val rate = fromRate + (toRate - fromRate) * t
+                    lastGlideSpeed = rate
+                    main.setPlaybackSpeed(rate)
+                    delay(100)
+                } else {
+                    delay(500)
+                }
+            }
+            // Cierre: velocidad exacta del usuario (sin decimales a
+            // medias). Solo si el glide terminó y sigue la misma canción.
+            if (playedMs >= totalMs) {
+                val main = mediaSession?.player
+                if (main != null && main.currentMediaItem?.mediaId == songId &&
+                    main.playbackParameters.speed != toRate
+                ) {
+                    lastGlideSpeed = toRate
+                    main.setPlaybackSpeed(toRate)
+                }
+            }
+            tempoRecoveryJob = null
+        }
+    }
+
+    /**
+     * Análisis de BPM en segundo plano: al cambiar de canción se
+     * analiza la actual y las 3 siguientes de la cola (las que van a
+     * necesitar el BPM), una por una y en orden. Las ya analizadas no
+     * se repiten. No depende de que la Mezcla DJ esté activada: así la
+     * biblioteca se cubre sola mientras se escucha normal.
+     */
+    private fun startBpmAnalysis() {
+        val app = application as? AuralApp ?: return
+        serviceScope.launch {
+            app.playback.state.collect { playerState ->
+                val songId = playerState.currentSong?.id ?: return@collect
+                if (songId == lastAnalyzedSongId) return@collect
+                lastAnalyzedSongId = songId
+                triggerBpmAnalysis(songId)
+            }
+        }
+    }
+
+    private fun triggerBpmAnalysis(currentSongId: Long) {
+        val player = mediaSession?.player ?: return
+        val app = application as? AuralApp ?: return
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex < 0) return
+        val wanted = ArrayList<Pair<Long, android.net.Uri>>()
+        val currentUri = player.getMediaItemAt(currentIndex).localConfiguration?.uri
+        if (currentUri != null) wanted += currentSongId to currentUri
+        var idx = currentIndex
+        var steps = 0
+        while (steps < 3) {
+            val next = nextWindowIndexFrom(player, idx) ?: break
+            val item = player.getMediaItemAt(next)
+            val id = item.mediaId.toLongOrNull()
+            val uri = item.localConfiguration?.uri
+            if (id != null && uri != null) wanted += id to uri
+            idx = next
+            steps++
+        }
+        if (wanted.isEmpty()) return
+        analysisJob?.cancel()
+        analysisJob = serviceScope.launch(Dispatchers.IO) {
+            for ((id, uri) in wanted) {
+                if (id in analyzedIds || id in analyzingIds) continue
+                if (bpmCache.containsKey(id)) {
+                    analyzedIds += id
+                    continue
+                }
+                analyzingIds += id
+                try {
+                    val bpm = BpmAnalysis.analyzeBpm(this@MusicService, uri)
+                    if (bpm != null) {
+                        app.settings.setBpm(id, bpm)
+                    }
+                    analyzedIds += id
+                } catch (_: Exception) {
+                    // El análisis nunca debe romper la reproducción
+                } finally {
+                    analyzingIds -= id
+                }
+            }
+        }
     }
 
     // =======================================================================
@@ -813,8 +1062,12 @@ class MusicService : MediaSessionService() {
     override fun onDestroy() {
         fadeWatchJob?.cancel()
         rampJob?.cancel()
+        tempoRecoveryJob?.cancel()
+        analysisJob?.cancel()
         fadeWatchJob = null
         rampJob = null
+        tempoRecoveryJob = null
+        analysisJob = null
         fadeEqListener?.let { fadePlayer?.removeListener(it) }
         fadeEqListener = null
         runCatching { fadePlayer?.release() }
