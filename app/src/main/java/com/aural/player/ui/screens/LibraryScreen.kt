@@ -689,9 +689,19 @@ fun LibraryScreen(
                                 DownloadsScreen(
                                     youTubeManager = ytm,
                                     listState = downloadsListState,
-                                    onDownloadComplete = { fileName, mediaId ->
+                                    onDownloadComplete = { fileName, mediaId, result, tagsEmbedded ->
                                         if (fileName != null) {
                                             viewModel.addDownloadToPlaylist(fileName, mediaId)
+                                            // Si los tags no quedaron en el
+                                            // archivo (p. ej. .webm), la
+                                            // metadata queda en los datos
+                                            // propios de la app.
+                                            if (!tagsEmbedded) {
+                                                viewModel.applyYouTubeMetadataFallback(
+                                                    mediaId, result.title, result.artist,
+                                                    result.thumbnailUrl
+                                                )
+                                            }
                                             android.widget.Toast.makeText(
                                                 appContext,
                                                 "Canción descargada",
