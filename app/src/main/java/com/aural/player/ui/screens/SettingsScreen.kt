@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
@@ -59,6 +60,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -117,6 +119,7 @@ fun SettingsScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showAlarmDialog by remember { mutableStateOf(false) }
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showDownloadQuality by remember { mutableStateOf(false) }
     var pendingImportJson by remember { mutableStateOf<String?>(null) }
 
     // Respaldo: exportar (crear archivo) e importar (elegir archivo).
@@ -174,6 +177,7 @@ fun SettingsScreen(
     val profileBirthday by viewModel.birthday.collectAsStateWithLifecycle()
     val djMixEnabled by viewModel.djMixEnabled.collectAsStateWithLifecycle()
     val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
+    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
     // Funciones nuevas ya vistas (sin puntito).
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val profileSubtitle = run {
@@ -346,6 +350,46 @@ fun SettingsScreen(
                         "El tempo se analiza en segundo plano mientras escuchas; sin BPM, la canción mezcla con el fundido normal.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            SettingsRow(
+                icon = Icons.Rounded.Download,
+                title = "Calidad de descarga",
+                subtitle = if (downloadQuality == "quality") "Calidad · 128 Kbps" else "Ahorro de datos · 48 Kbps",
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { showDownloadQuality = !showDownloadQuality }
+            )
+            if (showDownloadQuality) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    DownloadQualityOption(
+                        title = "Ahorro de datos",
+                        subtitle = "48 Kbps · ~1 MB por canción de 3 min. Suenan bien y gastan poco.",
+                        selected = downloadQuality != "quality",
+                        onClick = { viewModel.setDownloadQuality("data_saver") }
+                    )
+                    DownloadQualityOption(
+                        title = "Calidad",
+                        subtitle = "128 Kbps · ~3 MB por canción de 3 min. Se escuchan mejor y gastan más datos.",
+                        selected = downloadQuality == "quality",
+                        onClick = { viewModel.setDownloadQuality("quality") }
                     )
                 }
             }
@@ -752,6 +796,36 @@ fun SettingsScreen(
 }
 
 @Composable
+@Composable
+private fun DownloadQualityOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 private fun SettingsSection(title: String) {    Text(
         text = title,
         style = MaterialTheme.typography.titleLarge,
