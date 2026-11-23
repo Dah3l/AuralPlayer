@@ -149,6 +149,47 @@ object EqualizerManager {
     val isBassBoostAvailable: Boolean get() = bassBoost != null
     val isVirtualizerAvailable: Boolean get() = virtualizer != null
 
+    /**
+     * Intercambio de papeles tras un fundido: el reproductor que era
+     * la segunda voz pasa a ser el principal y viceversa. Los efectos
+     * van atados a la sesión de audio, así que se intercambian las
+     * referencias: si se re-creara el juego principal con init() (como
+     * hacía el fundido), el nuevo principal quedaba con DOS
+     * ecualizadores (el viejo segundo juego + el nuevo, el doble de
+     * ganancia) y la reserva sin ninguno. Con el intercambio, cada
+     * sesión keeps su juego y el "principal" siempre es el de la
+     * sesión que suena.
+     */
+    fun swapRoles() {
+        val eq = equalizer; equalizer = equalizer2; equalizer2 = eq
+        val ld = loudness; loudness = loudness2; loudness2 = ld
+        val bb = bassBoost; bassBoost = bassBoost2; bassBoost2 = bb
+        val vz = virtualizer; virtualizer = virtualizer2; virtualizer2 = vz
+    }
+
+    /** La mezcla DJ está moviendo los bajos (el fundido la pone y la quita). */
+    var bassSwapActive: Boolean = false
+
+    /**
+     * Nivel de una banda en UN juego de efectos, sin guardar: lo usa
+     * la rampa de bajos de la mezcla DJ (el nivel guardado del usuario
+     * no se toca; al terminar el fundido se restaura).
+     */
+    fun setBandLevelTransient(second: Boolean, band: Int, db: Int) {
+        try {
+            val eq = if (second) equalizer2 else equalizer
+            eq?.setBandLevel(band.toShort(), (db * 100).toShort())
+        } catch (e: Exception) { /* ignorar */ }
+    }
+
+    /** Nivel guardado de una banda en dB (el del usuario, no el que la
+     *  mezcla está moviendo ahora mismo). */
+    fun getSavedBandLevelDb(band: Int): Int {
+        return try {
+            prefs?.getString("bands", null)?.split(",")?.getOrNull(band)?.toInt() ?: 0
+        } catch (e: Exception) { 0 }
+    }
+
     fun setEnabled(value: Boolean) {
         enabled = value
         equalizer?.enabled = value
@@ -267,8 +308,13 @@ object EqualizerManager {
 
     private fun saveBandLevels() {
         val eq = equalizer ?: return
+        // Durante el cambio de bajos de la mezcla, la banda 0 del juego
+        // principal está bajada por la rampa: si el usuario guarda el EQ
+        // en ese momento, la banda 0 conserva su valor guardado (si no,
+        // el nivel bajado se grabaría como ajuste del usuario).
         val levels = (0 until eq.numberOfBands).joinToString(",") {
-            (eq.getBandLevel(it.toShort()) / 100).toString()
+            if (it == 0 && bassSwapActive) getSavedBandLevelDb(0).toString()
+            else (eq.getBandLevel(it.toShort()) / 100).toString()
         }
         prefs?.edit()?.putString("bands", levels)?.apply()
     }
