@@ -360,16 +360,16 @@ cuanto las veas.
   archivo cuando no hay tags (si no, la descarga se ve con el nombre
   entero de título y "Artista desconocido"). Verificado 2026-11-22
   (1.2.0).
-- Una fila de MediaStore NACE SIN DURACIÓN: al insertar, DURATION es 0
-  hasta que el escáner de Android la calcula en segundo plano, y
-  scanSongs descarta todo lo que dure menos de 5 s. Una canción recién
-  descargada es invisible para los rescans hasta que MediaStore la
-  indexe (segundos o más). NUNCA condicionar la visibilidad de una
-  descarga a un rescan: insertarla directo en el estado de la biblioteca
-  con la metadata que ya se conoce (duración del resultado de YouTube,
-  portada de la miniatura) y guardarla en pendientes para fusionarla en
-  los rescans hasta que el escaneo la recoja. Verificado 2026-11-22
-  (1.2.0).
+- El insert de MediaStore NO manda: pone TITLE/ARTIST correctos, pero el
+  escáner de Android los reescribe desde el archivo crudo sin tags
+  (título = nombre del archivo, artista desconocido) y los tags correctos
+  solo llegan a la fila en su segunda pasada, en segundo plano. Por eso
+  la biblioteca mostraba la metadata mal hasta reiniciar o descargar
+  otra. No confiar en la fila escaneada justo después de descargar:
+  insertar directo con la metadata conocida y, en la fusión de rescans,
+  que la descarga pendiente mande sobre la fila escaneada hasta que
+  coincidan título y artista (o caduque a los 15 min). Verificado
+  2026-11-22 (1.2.0).
 - `rescan()` es fire-and-forget (lanza la corrutina y vuelve al instante):
   un bucle que llama a rescan() y acto seguido lee el estado lee datos
   viejos, y 8 rescans seguidos apilan 8 escaneos completos concurrentes.
@@ -775,4 +775,4 @@ cuanto las veas.
 | 2026-11-22 | Malen-IA | Pantalla de permiso de audio (spinner infinito al negar) | AuralViewModel.kt (isLoading=false al negar, rescan try/finally, permanentlyDenied), MainActivity.kt (audio por clave, onResume, Ajustes), LibraryScreen.kt (PermissionRequiredState con Dar permiso / Abrir Ajustes), AGENTS.md |
 | 2026-11-22 | Malen-IA | Letras automáticas al reproducir + metadata YouTube incrustada + letras sin retraso | AuralViewModel.kt (observador playerState con collectLatest: letra automática al sonar una canción con título/artista válidos y sin letra guardada, intento único por sesión; applyYouTubeMetadataFallback; currentPositionMs), PlaybackManager.kt (currentPositionMs en vivo), data/LrcParser.kt ([offset:±ms] + isSynced), youtube/YouTubeManager.kt (TagEditor tras la descarga: título/artista/portada dentro del archivo, remux si es fragmentado; .webm sin etiquetar), ui/screens/DownloadsScreen.kt + LibraryScreen.kt (onDownloadComplete con result y tagsEmbedded; fallback a metadatos de la app si no se incrustó), ui/screens/LyricsScreen.kt (ticker 100 ms en vivo, letra plana sin línea activa ni auto-scroll), ui/screens/NowPlayingScreen.kt (ticker propio 200 ms solo en el Box de la línea, primera línea si es plana, lambda en vivo a LyricsScreen), AGENTS.md |
 | 2026-11-22 | Malen-IA | Letras automáticas como en PC + título real de YouTube + lista que se actualiza al editar | YoutubeTitleParser.kt (NUEVO, shared: parte "Artista - Canción" del título del video, quita sufijos de video en inglés y español, canal solo como fallback sin " - Topic"), youtube/YouTubeManager.kt (búsqueda con título/artista limpios: archivo, MediaStore y tags), desktopApp/.../YoutubeDownloads.kt (búsqueda limpia) + LibraryScanner.kt (sin tags, parte "Artista - Título" del nombre del archivo), AuralViewModel.kt (observador roto de letras borrado — collectLatest + ticker 500 ms cancelaba cada búsqueda — + ensureLyrics), ui/screens/NowPlayingScreen.kt (LaunchedEffect por canción → ensureLyrics al abrir el NP, como en PC), MainActivity.kt (detalle de playlist suscrito a songsFlow: la edición manual se ve sin re-entrar), AGENTS.md |
-| 2026-11-22 | Malen-IA | Descarga visible al instante en la biblioteca | AuralViewModel.kt (insertDownloadedSong: la canción entra en _library + playback al terminar la descarga, con título/artista/duración de YouTube y portada de la miniatura; pendientes fusionados en rescan hasta que MediaStore la indexe, caducan a los 15 min; bucle de reintentos con rescan() borrado — rescan es fire-and-forget y la fila nace sin duración), ui/screens/LibraryScreen.kt (addDownloadToPlaylist con result y tagsEmbedded), AGENTS.md |
+| 2026-11-22 | Malen-IA | Descarga visible al instante en la biblioteca | AuralViewModel.kt (insertDownloadedSong: la canción entra en _library + playback al terminar la descarga, con título/artista/duración de YouTube y portada de la miniatura; pendientes fusionados en rescan — la descarga pendiente manda sobre la fila escaneada hasta que coincidan título y artista, caducan a los 15 min; la edición manual saca la canción de pendientes; bucle de reintentos con rescan() borrado — rescan es fire-and-forget y el escáner reescribe TITLE/ARTIST desde el archivo crudo sin tags), ui/screens/LibraryScreen.kt (addDownloadToPlaylist con result y tagsEmbedded), AGENTS.md |
