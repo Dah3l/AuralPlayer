@@ -80,6 +80,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -486,11 +487,32 @@ fun NowPlayingScreen(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
+                // Ticker propio (200 ms) con posición en vivo: la línea
+                // no depende del ticker de 500 ms del reproductor.
+                // Solo recompone este Box, no todo el Now Playing.
+                var lyricsTick by remember { mutableIntStateOf(0) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        kotlinx.coroutines.delay(200)
+                        lyricsTick++
+                    }
+                }
                 if (lrcLines.isNotEmpty()) {
-                    val currentIdx = com.aural.player.data.LrcParser.currentIndex(
-                        lrcLines, state.positionMs
-                    )
-                    val currentLine = lrcLines.getOrNull(currentIdx)?.text ?: ""
+                    val livePositionMs = remember(lyricsTick) {
+                        viewModel.currentPositionMs()
+                    }
+                    val synced = remember(lrcLines) {
+                        com.aural.player.data.LrcParser.isSynced(lrcLines)
+                    }
+                    val currentLine = if (synced) {
+                        val currentIdx = com.aural.player.data.LrcParser.currentIndex(
+                            lrcLines, livePositionMs
+                        )
+                        lrcLines.getOrNull(currentIdx)?.text ?: ""
+                    } else {
+                        // Letra plana: se muestra la primera línea.
+                        lrcLines.firstOrNull()?.text ?: ""
+                    }
                     if (currentLine.isNotBlank()) {
                         Text(
                             currentLine,
@@ -854,7 +876,7 @@ fun NowPlayingScreen(
                         customMetadata[it.id]?.second?.ifBlank { it.artist } ?: it.artist
                     } ?: "",
                     coverUri = song?.let { customCovers[it.id] ?: it.albumArtUri },
-                    currentPositionMs = { state.positionMs },
+                    currentPositionMs = { viewModel.currentPositionMs() },
                     onBack = { showLyrics = false },
                     showTranslateDot = FeatureKeys.TRANSLATE !in seenFeatures,
                     onTranslateInteracted = { viewModel.markFeatureSeen(FeatureKeys.TRANSLATE) }
