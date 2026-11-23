@@ -410,6 +410,55 @@ cuanto las veas.
   el índice solo cuando cambia (mismo patrón que el ticker de 200 ms
   del NP, que vive dentro del Box de la línea). Verificado 2026-11-23
   (1.2.0).
+- Portada a tope global NO (2026-11-23, 1.2.0): `decodeImageBitmap` se
+  usa también en CoverArt.kt:99 para portadas que se muestran GRANDES
+  — nunca bajar el tope compartido, solo pasar `maxDimension` por
+  parámetro (UrlImageCache pasa 300 px para miniaturas; el resto usa
+  el default = sin cambio). Verificado 2026-11-23 (1.2.0).
+- Orden de inicialización de PlaybackManager (2026-11-23, 1.2.0): las
+  corrutinas lanzadas en `init` pueden correr antes de que los
+  inicializadores posteriores ejecuten (mismo peligro que el NPE de
+  `_state`): los scopes compartidos y los cachés de cola se declaran
+  ANTES del `init`. Verificado 2026-11-23 (1.2.0).
+- Caché de cola en publishState (2026-11-23, 1.2.0): la cola se
+  reconstruye solo si cambia la firma del timeline (ids en orden);
+  los collectors de metadata/portadas del `init` la invalidan
+  (cachedQueueIds = emptyList) en el mismo momento que antes
+  refrescaban la canción actual — si no, la metadata editada no se
+  vería hasta cambiar de canción. Verificado 2026-11-23 (1.2.0).
+- La cola puede tener la misma canción dos veces (2026-11-23, 1.2.0):
+  el pool de claves del NP debe consumir UNA clave por aparición
+  (mapa id → ArrayDeque), no una por id — si no, los duplicados
+  compartirían clave y Compose reciclaría la fila. Verificado
+  2026-11-23 (1.2.0).
+- Splash con tiempo fijo NO (2026-11-23, 1.2.0): 1,8 s fijos aunque
+  la biblioteca cargara en 200 ms. Fix: ocultar cuando
+  `library.isLoading` pasa a false, mínimo 600 ms (que el logo se
+  lea) y tope de 1,8 s por si el escaneo se atasca. Verificado
+  2026-11-23 (1.2.0).
+- Animación infinita bajo pantalla tapada (2026-11-23, 1.2.0): el pulso
+  del FAB corría a 60 fps con el Now Playing abierto encima. Fix:
+  condicionar a `isAmbientVisible` (ya lo sabe MainActivity) — tapado:
+  escala 1, alfa 0. Verificado 2026-11-23 (1.2.0).
+- Borrar en lote con un solo edit (2026-11-23, 1.2.0): 3 setters por
+  canción = 3 rewrites de ajustes por canción. Fix:
+  `SettingsStore.clearSongData(ids)` — un solo `edit` para
+  metadata+portada+letra de todas, y `deleteCover` DESPUÉS del edit
+  (preserva el borrado de archivo que hacía `setCustomCover("")`).
+  Verificado 2026-11-23 (1.2.0).
+- `withContext` NO es inline (2026-11-23, 1.2.0): un `return` pelado
+  dentro no compila — usar `return@withContext` (PlayHistoryStore:
+  getTopSongs/getWeekStats). Verificado 2026-11-23 (1.2.0).
+- Stream de HttpURLConnection de un solo uso (2026-11-23, 1.2.0):
+  para decodificar en dos pasadas (medidas + decode) hace falta una
+  conexión NUEVA por pasada — `openCoverConnection` por llamada; y
+  nunca `readBytes()` entero antes de achicar (foto de 10-20 MB en
+  RAM). Verificado 2026-11-23 (1.2.0).
+- `WAKE_MODE_NETWORK` sin streaming (2026-11-23, 1.2.0): el lock de
+  Wi-Fi solo sirve para streaming — con todo local es batería
+  gastada. Fix: `WAKE_MODE_LOCAL` (la CPU sigue despierta con la
+  pantalla apagada); volver a NETWORK cuando llegue el streaming Pro.
+  Verificado 2026-11-23 (1.2.0).
 - Scrollbar de escritorio: la barra por defecto se come el contenido
   con solo 12 dp de padding — reservar carril con contentPadding end
   (24 dp en listas, 32 dp en grids, 2026-11-19, 1.2.18; antes 16/24).
@@ -812,3 +861,4 @@ cuanto las veas.
 | 2026-11-22 | Malen-IA | Letras automáticas como en PC + título real de YouTube + lista que se actualiza al editar | YoutubeTitleParser.kt (NUEVO, shared: parte "Artista - Canción" del título del video, quita sufijos de video en inglés y español, canal solo como fallback sin " - Topic"), youtube/YouTubeManager.kt (búsqueda con título/artista limpios: archivo, MediaStore y tags), desktopApp/.../YoutubeDownloads.kt (búsqueda limpia) + LibraryScanner.kt (sin tags, parte "Artista - Título" del nombre del archivo), AuralViewModel.kt (observador roto de letras borrado — collectLatest + ticker 500 ms cancelaba cada búsqueda — + ensureLyrics), ui/screens/NowPlayingScreen.kt (LaunchedEffect por canción → ensureLyrics al abrir el NP, como en PC), MainActivity.kt (detalle de playlist suscrito a songsFlow: la edición manual se ve sin re-entrar), AGENTS.md |
 | 2026-11-22 | Malen-IA | Descarga visible al instante en la biblioteca | AuralViewModel.kt (insertDownloadedSong: la canción entra en _library + playback al terminar la descarga, con título/artista/duración de YouTube y portada de la miniatura; pendientes fusionados en rescan — la descarga pendiente manda sobre la fila escaneada hasta que coincidan título y artista, caducan a los 15 min; la edición manual saca la canción de pendientes; bucle de reintentos con rescan() borrado — rescan es fire-and-forget y el escáner reescribe TITLE/ARTIST desde el archivo crudo sin tags), ui/screens/LibraryScreen.kt (addDownloadToPlaylist con result y tagsEmbedded), AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 1 (solo rendimiento, cero cambios de funcionamiento): la biblioteca deja de recomponer cada 500 ms (remember en "Para ti" y detalles, derivedStateOf en la selección, remember en los títulos del scroller A-Z, ViewModel expone currentSongId/isPlaying); flujos derivados con flowOn(Dispatchers.Default); notificación con distinctUntilChanged; ticker de letras con ámbito propio; YouTube con timeouts 15/30 s en Android (mismo bug que PC 1.2.22) + fallback al mejor stream | AuralViewModel.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, playback/MusicService.kt, ui/screens/LyricsScreen.kt, youtube/YouTubeManager.kt, youtube/NewPipeDownloaderImpl.kt, AGENTS.md |
+| 2026-11-23 | Malen-IA | Android 1.2.0, optimización tanda 2 (solo rendimiento, SIN tocar R8 ni build.gradle, cero cambios de funcionamiento): splash que se va al cargar la biblioteca (mín 600 ms, tope 1,8 s); PlaybackManager con scopes reutilizados + cola cacheada por firma de timeline + portada por defecto en IO; NP: claves de cola O(n) con pool por aparición + mesh a 10 fps por pasos de 100 ms; portadas de internet a 300 px (caché ~57 MB → ~2 MB); Regex de LRCLIB compilado una vez; FAB sin pulso tapado; borrar en lote con un solo edit de ajustes; guardar letra y Top 10 en IO; portadas de galería/URL por stream en dos pasadas; wake lock local en vez de Wi-Fi | shared/.../ImageDecoding.kt, ImageDecodingAndroid.kt, ImageDecodingJvm.kt, UrlImage.kt, LrcLibClient.kt; app/.../playback/PlaybackManager.kt, ui/screens/NowPlayingScreen.kt, MainActivity.kt, ui/screens/LibraryScreen.kt, data/SettingsStore.kt, AuralViewModel.kt, data/PlayHistoryStore.kt, data/SongCoverStore.kt, playback/MusicService.kt, AGENTS.md |
