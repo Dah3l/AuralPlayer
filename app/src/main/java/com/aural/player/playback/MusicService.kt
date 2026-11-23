@@ -113,6 +113,7 @@ class MusicService : MediaSessionService() {
      *  de los del usuario en onPlaybackParametersChanged). */
     private var lastGlideSpeed = 1f
     /** Glide de vuelta al tempo tras una mezcla (null = no hay). */
+    @Volatile
     private var tempoRecoveryJob: Job? = null
     /** Análisis de BPM en curso (ids) + trabajo de análisis. */
     private var analysisJob: Job? = null
@@ -841,6 +842,15 @@ class MusicService : MediaSessionService() {
                     analyzedIds += id
                     continue
                 }
+                // El análisis NO corre mientras el glide está activo:
+                // decodificar 75 s + analizar (autocorrelación) a la vez
+                // que Sonic estira el tiempo satura la CPU y se oye el
+                // tirón al volver al tempo. El glide dura 20 s como
+                // mucho y el BPM no corre prisa (la siguiente transición
+                // está a minutos). La espera va ANTES de marcar el id
+                // como analizando: si cancelan el trabajo esperando,
+                // la canción se reintenta en el próximo cambio.
+                while (tempoRecoveryJob?.isActive == true) delay(500)
                 analyzingIds += id
                 try {
                     val bpm = BpmAnalysis.analyzeBpm(this@MusicService, uri)
