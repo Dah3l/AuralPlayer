@@ -16,6 +16,7 @@ import com.aural.player.data.SettingsStore
 import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
 import com.aural.player.shared.YoutubeTitleParser
+import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.StreamingService
@@ -168,35 +169,32 @@ class YouTubeManager(private val context: Context) {
                 // defecto; calidad 128 Kbps). Se sigue prefiriendo el
                 // m4a porque es el único al que se le incrustan título,
                 // artista y portada.
+                // OJO UNIDADES: NewPipe reporta averageBitrate en KBPS
+                // (139→48, 140→128, 141→256, 251→160), NO en bps — por
+                // eso el viejo ">= 48000" NUNCA matcheaba y todo caía
+                // en el fallback (el más chico antes de tanda 1; el más
+                // grande = Opus 251 tras tanda 1; el mejor m4a = 141
+                // en c5aa71c = archivos enormes y descargas lentas).
+                // La selección se hace por FORMATO (MediaFormat.M4A),
+                // no por el "mime=" de la URL, y por bitrate en kbps.
                 val preferQuality = try {
                     SettingsStore(context).downloadQuality.first() == "quality"
                 } catch (_: Exception) {
                     false
                 }
-                val minBitrate = if (preferQuality) 128000 else 48000
-                val audioStream = streamInfo.audioStreams
-                    .sortedWith(
-                        compareBy(
-                            { !it.content.contains("mime=audio/mp4") },
-                            { it.averageBitrate }
-                        )
-                    )
-                    .firstOrNull { it.averageBitrate >= minBitrate }
-                    // Fallback: el mejor m4a (para no perder las
-                    // etiquetas) y si no hay, el mejor disponible
-                    // (antes era minByOrNull = el peor; en PC 1.2.22
-                    // ya se cambió a maxByOrNull).
-                    ?: streamInfo.audioStreams
-                        .filter { it.content.contains("mime=audio/mp4") }
-                        .maxByOrNull { it.averageBitrate }
+                val minKbps = if (preferQuality) 128 else 48
+                val mp4Streams = streamInfo.audioStreams
+                    .filter { it.format == MediaFormat.M4A }
+                val audioStream = mp4Streams
+                    .sortedBy { it.averageBitrate }
+                    .firstOrNull { it.averageBitrate >= minKbps }
+                    // Fallback: el mejor m4a, y si no hay m4a, el mejor
+                    // disponible (nunca Opus si hay m4a).
+                    ?: mp4Streams.maxByOrNull { it.averageBitrate }
                     ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
 
                 if (audioStream != null) {
-                    val ext = when {
-                        audioStream.content.contains("mime=audio/mp4") -> "m4a"
-                        audioStream.content.contains("mime=audio/webm") -> "webm"
-                        else -> "m4a"
-                    }
+                    val ext = if (audioStream.format == MediaFormat.M4A) "m4a" else "webm"
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
                     val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
                         _progress.value = _progress.value + (result.videoId to pct)
