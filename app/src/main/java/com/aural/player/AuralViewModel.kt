@@ -14,6 +14,7 @@ import com.aural.player.data.SettingsStore
 import com.aural.player.data.SongCoverStore
 import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
+import com.aural.player.data.TopArtist
 import com.aural.player.data.TopSong
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
@@ -146,6 +147,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     private val playHistory = PlayHistoryStore(auralApp)
     private val _topSongs = MutableStateFlow<List<TopSong>>(emptyList())
     val topSongs: StateFlow<List<TopSong>> = _topSongs.asStateFlow()
+
+    /** Los 5 artistas más escuchados (para "Tus artistas favoritos" del Inicio). */
+    private val _topArtists = MutableStateFlow<List<TopArtist>>(emptyList())
+    val topArtists: StateFlow<List<TopArtist>> = _topArtists.asStateFlow()
 
     /** Playlist del día: UNA sola instancia { fecha, ids } que rota a diario. */
     val dailyPlaylist: StateFlow<SettingsStore.DailyPlaylist?> = settings.dailyPlaylist.stateIn(
@@ -844,8 +849,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Detiene la Sesión DJ infinita (la cola sigue como esté). */
+    /**
+     * Detener la Sesión DJ: para la MÚSICA por completo (Stop), no solo
+     * la sesión — la tarjeta vuelve a mostrar "Nueva sesión".
+     */
     fun stopDjSession() {
-        playback.setEndlessDj(false)
+        playback.stop()
     }
 
     /** Datos de archivo de una canción (para "Información de la canción"). */
@@ -1326,6 +1335,13 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshTopSongs() {
         viewModelScope.launch {
             _topSongs.value = playHistory.getTopSongs()
+        }
+    }
+
+    /** Recarga los 5 artistas más escuchados. */
+    fun refreshTopArtists() {
+        viewModelScope.launch {
+            _topArtists.value = playHistory.getTopArtists()
         }
     }
 
