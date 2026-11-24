@@ -808,13 +808,29 @@ cuanto las veas.
   una al azar (orderByTempo con el BPM de la elegida como ancla: distancia
   0 = va primera) y las sin BPM después, mezcladas; cada toque rearma la
   lista (otro azar + otra cadena). El estado activo vive en
-  PlaybackManager.endlessDjActive (StateFlow, lo marca el servicio con
-  setEndlessDjActive); apagar la Mezcla DJ o parar la reproducción apaga
-  la sesión (el watcher está en el collector de djMixEnabled, y stop()
-  manda CMD_STOP). La tarjeta hero es DjSessionCard en LibraryScreen
+  PlaybackManager.endlessDjActive (StateFlow); apagar la Mezcla DJ o
+  parar la reproducción apaga la sesión (el watcher está en el collector
+  de djMixEnabled, y stop() pone el flag en falso). La tarjeta hero es DjSessionCard en LibraryScreen
   (degradado vertical primary 32% → surfaceContainerLow + círculo
   decorativo recortado por el clip; el botón pastilla usa primary con
   onPrimary); va DEBAJO de "Para ti" en el LazyColumn.
+- Sesión DJ infinita, RECONSTRUCCIÓN (2026-11-23): el arranque por
+  comando custom (CMD_START_ENDLESS_DJ) NO funcionaba en el teléfono —
+  tocar "Escuchar" solo abría el Now Playing vacío, ni con una canción
+  sonando, y la tarjeta nunca mostraba "Sesión activa"; la teoría de la
+  carrera (controlador aún no conectado) quedó descartada por la prueba
+  de Dahel y el fallo era silencioso (el catch de setEndlessDj y el
+  SupervisorJob del servicio se lo tragaban). REGLA: la sesión NO se
+  arranca con comandos — el ViewModel arma la cola (biblioteca +
+  bpmMap, misma orden inicial) y la pone con PlaybackManager.playDjQueue
+  (mismo camino que tocar una canción: setMediaItems + prepare +
+  playWhenReady, con la cola pendiente si el controlador aún no está,
+  igual que pendingRestore); el flag endlessDjActive es el único canal
+  (el servicio lo colecciona y arranca el motor; la tarjeta lo
+  colecciona para mostrarse). orderByTempo es PURA en BpmAnalysis
+  (ids + mapa de BPM + ancla) y la usan el servicio (reorden) y el
+  ViewModel (cola inicial). startEndlessDjSession y los comandos
+  CMD_START/STOP_ENDLESS_DJ se ELIMINARON — no reintroducirlos.
 
 ## Estado actual (2026-11-18)
 
@@ -1035,4 +1051,4 @@ cuanto las veas.
 | 2026-11-23 | Malen-IA | Android 1.2.0, fundido entre canciones (crossfade, SOLO Android; PC después): segundo reproductor en MusicService + intercambio de papeles con MediaSession.setPlayer + rampa de potencia igual (sen/cos) a 50 ms; funde al terminar la canción Y al saltar a mano (decisión de Dahel: mejor que Spotify); no funde con repetir-una ni con parada programada; EQ con segundo juego de efectos (initSecondSession); aleatorio conservado con UnshuffledShuffleOrder; ajustes en Sonido (interruptor + duración 1-12 s, 5 s por defecto, apagado por defecto) | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, playback/EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, MainActivity.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, Mezcla DJ (SOLO Android; PC después): beatmatching + cambio de bajos sobre el fundido — BPM por canción analizado una vez en segundo plano mientras suena (Realtime BPM Analyzer 6.3.0, decodifica 75 s por MediaExtractor/MediaCodec, guardado crudo en DataStore, plegado a 70–180 solo al mezclar) + la que entra toma el tempo de la que sale (clamp ±8% sobre la velocidad del usuario; doble/mitad mezcla a velocidad natural; fuera de eso fundido normal) y vuelve sola a su tempo en ~20 s (glide pausable, se cancela con seek/cambio manual de velocidad/cambio de canción) + cambio de bajos con el EQ doble (banda 0 cruzada durante el fundido); fix del bug latente del crossfade (finishFade re-inicializaba el EQ y dejaba dos ecualizadores en la sesión nueva y ninguno en la reserva — ahora swapRoles); el crossfade SE QUEDA como opción sencilla (el DJ lo enciende solo y al apagar el fundido se apaga el DJ); tag "128 BPM" en el Now Playing + "Información de la canción" en el menú ⋮ (BPM, formato, calidad, tamaño, carpeta) + tarjeta "Sesión DJ" en la biblioteca (ordena la cola por tempo, mínimo 3 analizadas) | app/build.gradle.kts; app/.../playback/BpmAnalysis.kt (NUEVO), MusicService.kt, EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, ui/screens/NowPlayingScreen.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Sesión DJ INFINITA (reemplaza la sesión finita de mínimo 3 analizadas): la tarjeta "Sesión DJ" arranca toda la biblioteca mezclada en una cola que no se acaba nunca — el servicio (MusicService, CMD_START/STOP_ENDLESS_DJ) reordena la cola que viene por tempo con cada BPM nuevo y al cambiar de canción (cadena del más cercano, doble/mitad como cercanos, sin BPM al final) y la rellena sola cuando quedan ≤5 (sin repetir las 50 recientes; si no hay elegibles se olvida el historial salvo la que suena y la siguiente); nunca se mueve la que suena ni la siguiente, nunca se reordena en mitad de un fundido ni con aleatorio/repetición (manda el usuario); arranca con aleatorio y repetición apagados; se detiene al poner cualquier otra cola (playQueue manda CMD_STOP) o al apagar la Mezcla DJ | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, AuralViewModel.kt (startDjSession ya no usa buildDjOrder — borrado), ui/screens/LibraryScreen.kt (subtítulo "Sesión infinita"), AGENTS.md |
-| 2026-11-23 | Malen-IA | Sesión DJ infinita, vuelta 2 (a pedido de Dahel: como una lista aleatoria más, lista nueva en cada toque): la cola inicial pone primero las que ya tienen BPM en cadena de tempo desde una al azar (cada toque = lista distinta) y las sin BPM después, mezcladas; el análisis sigue hasta cubrir toda la biblioteca y el reorden las sube solas. Tarjeta hero debajo de "Para ti" (degradado del color del tema, pill "SESIÓN INFINITA", título grande, "Que la música no pare", botón pastilla con el color primario; muestra "Sesión activa" + "Detener" cuando suena, el botón principal siempre arranca una lista nueva). Estado activo expuesto por PlaybackManager.endlessDjActive (lo marca el servicio; apagar la Mezcla DJ o parar la reproducción apaga la sesión) | app/.../playback/MusicService.kt (orden inicial + flag), playback/PlaybackManager.kt (endlessDjActive + stop), AuralViewModel.kt (stopDjSession), MainActivity.kt (onStopDjSession), ui/screens/LibraryScreen.kt (DjSessionCard + mover debajo de Para ti), AGENTS.md |
+| 2026-11-23 | Malen-IA | Sesión DJ infinita, RECONSTRUIDA (a pedido de Dahel: el arranque por comando NO funcionaba — tocar "Escuchar" solo abría el Now Playing vacío, ni con una canción sonando; la teoría de la carrera quedó descartada y el fallo era silencioso): el arranque ya no usa comandos — el ViewModel arma la cola (biblioteca + bpmMap, con BPM primero en cadena de tempo desde una al azar) y la pone con playDjQueue (mismo camino que tocar una canción); el flag endlessDjActive es el único canal (el servicio lo colecciona y arranca el motor de reorden+relleno; la tarjeta lo colecciona para mostrarse). orderByTempo pasó a pura en BpmAnalysis (la usan el servicio y el ViewModel). playDjQueue guarda la cola pendiente si el controlador aún no está (igual que pendingRestore). Comandos CMD_START/STOP_ENDLESS_DJ y startEndlessDjSession ELIMINADOS | app/.../playback/BpmAnalysis.kt (orderByTempo pura), playback/PlaybackManager.kt (setEndlessDj = solo flag, playDjQueue + pendiente), playback/MusicService.kt (startEndlessEngine solo pool, collector del flag, sin ramas de comando), AuralViewModel.kt (startDjSession arma la cola), AGENTS.md |
