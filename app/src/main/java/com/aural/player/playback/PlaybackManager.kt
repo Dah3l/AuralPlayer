@@ -293,6 +293,11 @@ class PlaybackManager(private val context: Context) {
             publishState()
             // Si la restauración al abrir llegó antes que el controlador,
             // se aplica ahora (sin pisar nada que ya esté sonando).
+            // La cola DJ pendiente va primero: es la intención más nueva.
+            pendingDjQueue?.let { songs ->
+                pendingDjQueue = null
+                applyDjQueue(songs)
+            }
             pendingRestore?.let { (songs, index) ->
                 pendingRestore = null
                 applyRestore(songs, index)
@@ -445,25 +450,45 @@ class PlaybackManager(private val context: Context) {
     }
 
     /**
-     * Enciende o apaga la Sesión DJ infinita en el servicio. La parada
-     * no toca la cola que suena: solo deja de reordenarla y rellenarla.
+     * Enciende o apaga la Sesión DJ infinita. Ya NO manda ningún comando
+     * al servicio: el flag es el único canal — el servicio lo colecciona
+     * y arranca/para el motor, y la tarjeta lo colecciona para mostrarse.
+     * La cola la pone el cliente con playDjQueue, así el arranque no
+     * depende de que un comando llegue al servicio.
      */
     fun setEndlessDj(enabled: Boolean) {
-        val c = controller ?: return
-        scope.launch {
-            try {
-                c.sendCustomCommand(
-                    SessionCommand(
-                        if (enabled) MusicService.CMD_START_ENDLESS_DJ
-                        else MusicService.CMD_STOP_ENDLESS_DJ,
-                        Bundle.EMPTY
-                    ),
-                    Bundle.EMPTY
-                ).await()
-            } catch (_: Exception) {
-                // Sin servicio no hay sesión: la cola sigue como esté.
-            }
+        setEndlessDjActive(enabled)
+    }
+
+    /** Cola de Sesión DJ que llegó antes que el controlador (igual que pendingRestore). */
+    private var pendingDjQueue: List<Song>? = null
+
+    /**
+     * Pone la cola de la Sesión DJ y la reproduce. Si el controlador aún
+     * no está conectado (recién instalada), la cola queda pendiente y se
+     * aplica al conectar. La parada programada se cancela y el repeat se
+     * apaga: la sesión es infinita por relleno, no por repetir la cola.
+     * El flag de sesión NO se toca aquí: lo pone quien arranca la sesión.
+     */
+    fun playDjQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        if (controller == null) {
+            pendingDjQueue = songs
+            return
         }
+        applyDjQueue(songs)
+    }
+
+    private fun applyDjQueue(songs: List<Song>) {
+        val c = controller ?: return
+        _stopMode.value = null
+        val items = songs.map { it.toMediaItem() }
+        c.setMediaItems(items, 0, 0L)
+        c.shuffleModeEnabled = false
+        c.repeatMode = Player.REPEAT_MODE_OFF
+        c.prepare()
+        c.playWhenReady = true
+        publishState()
     }
 
     /**
