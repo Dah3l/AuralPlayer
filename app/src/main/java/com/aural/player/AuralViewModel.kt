@@ -16,6 +16,7 @@ import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
 import com.aural.player.data.TopArtist
 import com.aural.player.data.TopSong
+import com.aural.player.data.WeekStats
 import com.aural.player.data.buildM3u
 import com.aural.player.data.parseM3u
 import android.app.PendingIntent
@@ -1343,6 +1344,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _topArtists.value = playHistory.getTopArtists()
         }
+    }
+
+    /** Las 10 últimas canciones que sonaron (para "Escuchadas recientemente" del Inicio). */
+    private val _recentSongs = MutableStateFlow<List<Song>>(emptyList())
+    val recentSongs: StateFlow<List<Song>> = _recentSongs.asStateFlow()
+
+    /** Recarga las canciones recientes: del historial a la biblioteca (las que ya no existen, fuera). */
+    fun refreshRecentSongs() {
+        viewModelScope.launch {
+            val ids = playHistory.getRecentSongs().map { it.songId }
+            val byId = library.value.songs.associateBy { it.id }
+            _recentSongs.value = ids.mapNotNull { byId[it] }
+        }
+    }
+
+    /** Estadísticas de escucha de los últimos 7 días (para "Tu semana en Aural"). */
+    private val _weekStats = MutableStateFlow(WeekStats())
+    val weekStats: StateFlow<WeekStats> = _weekStats.asStateFlow()
+
+    /** Recarga las estadísticas de la semana. */
+    fun refreshWeekStats() {
+        viewModelScope.launch {
+            _weekStats.value = playHistory.getWeekStats()
+        }
+    }
+
+    /** Reproduce toda la biblioteca mezclada. */
+    fun playAllShuffled() {
+        val songs = library.value.songs
+        if (songs.isEmpty()) return
+        playback.playQueue(songs.shuffled(), 0, false)
     }
 
     // ---- Perfil (nombre y cumpleaños) ----
