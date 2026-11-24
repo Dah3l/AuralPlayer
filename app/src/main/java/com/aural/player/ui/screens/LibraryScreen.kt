@@ -172,6 +172,7 @@ fun LibraryScreen(
     onOpenSettings: () -> Unit = {},
     onOpenTop10: () -> Unit = {},
     onStartDjSession: () -> Unit = {},
+    onStopDjSession: () -> Unit = {},
     // Pantalla de permisos: re-pedir el diálogo o abrir Ajustes.
     onRequestAudioPermission: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
@@ -197,6 +198,7 @@ fun LibraryScreen(
     // con el ticker de posición (el MiniPlayer y el NP sí lo necesitan).
     val currentSongId by viewModel.currentSongId.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val isDjSessionActive by viewModel.playback.endlessDjActive.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
@@ -635,6 +637,8 @@ fun LibraryScreen(
                             },
                             onSeeAllPlaylists = { onTabSelected(tabOrder.indexOf("playlists")) },
                             onDjSession = onStartDjSession,
+                            isDjSessionActive = isDjSessionActive,
+                            onStopDjSession = onStopDjSession,
                             selectionMode = selectionMode,
                             selectedIds = selectedIdsSet,
                             onToggleSelect = { song ->
@@ -1463,6 +1467,134 @@ private fun MostPlayedSection(
     }
 }
 
+/**
+ * Tarjeta hero de la Sesión DJ: degradado del color del tema, pill
+ * superior, título grande y botón pastilla. Cuando la sesión está
+ * activa lo muestra y ofrece detenerla; el botón principal siempre
+ * arranca una lista NUEVA (cada toque = lista distinta).
+ */
+@Composable
+private fun DjSessionCard(
+    isActive: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        primary.copy(alpha = 0.32f),
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                )
+            )
+            .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+            .clickable { onStart() }
+            .padding(20.dp)
+    ) {
+        // Decoración: círculo de color arriba a la derecha, como el mesh.
+        Box(
+            Modifier
+                .size(140.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 48.dp, y = (-48).dp)
+                .background(primary.copy(alpha = 0.18f), CircleShape)
+        )
+        Column {
+            // Pill superior.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(primary.copy(alpha = 0.16f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "SESIÓN INFINITA",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = primary
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Sesión DJ",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Que la música no pare",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (isActive) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(primary, CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Sesión activa",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = primary
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Botón pastilla: siempre arranca una lista NUEVA.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(primary)
+                        .clickable { onStart() }
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (isActive) "Nueva sesión" else "Escuchar",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = onPrimary
+                    )
+                }
+                if (isActive) {
+                    Spacer(Modifier.width(12.dp))
+                    TextButton(onClick = onStop) {
+                        Text("Detener", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // --------------------------- Pestaña: Canciones ---------------------------
 
 @Composable
@@ -1482,6 +1614,8 @@ private fun SongsTab(
     onPlayPlaylist: (String) -> Unit = {},
     onSeeAllPlaylists: () -> Unit = {},
     onDjSession: () -> Unit = {},
+    isDjSessionActive: Boolean = false,
+    onStopDjSession: () -> Unit = {},
     // v1.0.7: selección múltiple.
     selectionMode: Boolean = false,
     selectedIds: Set<Long> = emptySet(),
@@ -1499,60 +1633,6 @@ private fun SongsTab(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
         ) {
-            // Tarjeta Sesión DJ: la cola fluye por tempo.
-            item {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant,
-                            RoundedCornerShape(16.dp)
-                        )
-                        .clickable { onDjSession() }
-                        .padding(16.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.QueueMusic,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Sesión DJ",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Sesión infinita: se ordena sola por tempo y no se acaba nunca",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = { onDjSession() },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                contentDescription = "Iniciar sesión DJ",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                }
-            }
             if (topPlaylists.isNotEmpty()) {
                 item {
                     MostPlayedSection(
@@ -1563,6 +1643,15 @@ private fun SongsTab(
                         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                     )
                 }
+            }
+            // Tarjeta Sesión DJ: va DEBAJO de "Para ti", como tarjeta hero.
+            item {
+                DjSessionCard(
+                    isActive = isDjSessionActive,
+                    onStart = onDjSession,
+                    onStop = onStopDjSession,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                )
             }
             items(songs, key = { it.id }) { song ->
                 val meta = customMetadata[song.id]
