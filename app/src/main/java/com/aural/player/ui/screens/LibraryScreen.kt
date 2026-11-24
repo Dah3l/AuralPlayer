@@ -37,12 +37,6 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
@@ -54,7 +48,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +58,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
+import com.aural.player.data.TopArtist
 import com.aural.player.data.birthdayDisplayName
 import com.aural.player.data.greetingDisplayName
 import com.aural.player.data.isBirthdayToday
@@ -184,7 +179,7 @@ fun LibraryScreen(
     pagerState: androidx.compose.foundation.pager.PagerState =
         // v1.0.8: el juego de pestañas es fijo (6 claves); el orden lo elige
         // el usuario pero la cantidad no cambia.
-        rememberPagerState(pageCount = { 6 }),
+        rememberPagerState(pageCount = { 7 }),
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
@@ -263,15 +258,19 @@ fun LibraryScreen(
     val tabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
     val tabs = tabOrder.map { tabLabel(it) }
     var showTabCustomizer by remember { mutableStateOf(false) }
+    // Artistas favoritos del Inicio.
+    val topArtists by viewModel.topArtists.collectAsStateWithLifecycle()
 
     // La fila de pills se desplaza sola para mostrar la pestaña activa
-    LaunchedEffect(selectedTab) {
+    LaunchedEffect(selectedTab, tabOrder) {
         val layout = pillsListState.layoutInfo
         val item = layout.visibleItemsInfo.firstOrNull { it.index == selectedTab }
         val fullyVisible = item != null &&
             item.offset >= layout.viewportStartOffset &&
             item.offset + item.size <= layout.viewportEndOffset
         if (!fullyVisible) pillsListState.animateScrollToItem(selectedTab)
+        // Al entrar al Inicio, los artistas favoritos se actualizan.
+        if (tabOrder.getOrNull(selectedTab) == "home") viewModel.refreshTopArtists()
     }
 
     var showNewPlaylist by remember { mutableStateOf(false) }
@@ -472,11 +471,27 @@ fun LibraryScreen(
                     unfocusedIndicatorColor = Color.Transparent
                 ),
                 trailingIcon = {
-                    if (library.query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setQuery("") }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (library.query.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setQuery("") }) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Borrar búsqueda",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // Rayita divisoria entre la X y el micrófono.
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .height(24.dp)
+                                    .padding(horizontal = 2.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                        }
+                        IconButton(onClick = { viewModel.openAudioSearch() }) {
                             Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "Borrar búsqueda",
+                                Icons.Rounded.Mic,
+                                contentDescription = "Identificar canción",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -610,20 +625,7 @@ fun LibraryScreen(
                 ) { page ->
                     // v1.0.8: las páginas se resuelven por clave, no por índice fijo.
                     when (tabOrder[page]) {
-                        "songs" -> SongsTab(
-                            songs = songs,
-                            favorites = favorites,
-                            currentId = currentSongId,
-                            isPlaying = isPlaying,
-                            onPlay = { song ->
-                                val list = songs
-                                onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
-                            },
-                            onFavorite = viewModel::toggleFavorite,
-                            onMenu = onSongMenu,
-                            listState = songsListState,
-                            customCovers = customCovers,
-                            customMetadata = customMetadata,
+                        "home" -> HomeTab(
                             topPlaylists = topPlaylists,
                             onOpenPlaylist = onOpenPlaylist,
                             onPlayPlaylist = { id ->
@@ -640,6 +642,24 @@ fun LibraryScreen(
                             onDjSession = onStartDjSession,
                             isDjSessionActive = isDjSessionActive,
                             onStopDjSession = onStopDjSession,
+                            topArtists = topArtists,
+                            onOpenArtist = onOpenArtist
+                        )
+
+                        "songs" -> SongsTab(
+                            songs = songs,
+                            favorites = favorites,
+                            currentId = currentSongId,
+                            isPlaying = isPlaying,
+                            onPlay = { song ->
+                                val list = songs
+                                onPlayList(list, list.indexOfFirst { it.id == song.id }, null)
+                            },
+                            onFavorite = viewModel::toggleFavorite,
+                            onMenu = onSongMenu,
+                            listState = songsListState,
+                            customCovers = customCovers,
+                            customMetadata = customMetadata,
                             selectionMode = selectionMode,
                             selectedIds = selectedIdsSet,
                             onToggleSelect = { song ->
@@ -759,63 +779,6 @@ fun LibraryScreen(
         }
     }
 
-        // ---- Botón flotante de reconocimiento (opción A) ----
-        // A 40dp del borde derecho para librar la barra A-Z (el anillo que
-        // pulsa llega 8dp más allá del botón) y 100dp del fondo para quedar
-        // por encima del mini-reproductor flotante.
-        // El pulso solo anima cuando el FAB se ve: con el Now Playing
-        // abierto la biblioteca queda tapada debajo y el anillo corría
-        // a 60 fps para nadie (isAmbientVisible ya lo sabe MainActivity).
-        // Tapado: escala 1 y alfa 0 (anillo quieto e invisible).
-        val fabPulseScale: Float
-        val fabPulseAlpha: Float
-        if (isAmbientVisible) {
-            val fabPulse = rememberInfiniteTransition(label = "fab_pulse")
-            fabPulseScale = fabPulse.animateFloat(
-                initialValue = 1f,
-                targetValue = 1.3f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "fab_pulse_scale"
-            ).value
-            fabPulseAlpha = fabPulse.animateFloat(
-                initialValue = 0.35f,
-                targetValue = 0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "fab_pulse_alpha"
-            ).value
-        } else {
-            fabPulseScale = 1f
-            fabPulseAlpha = 0f
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(start = 16.dp, top = 16.dp, end = 40.dp, bottom = 100.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .scale(fabPulseScale)
-                    .background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = fabPulseAlpha),
-                        CircleShape
-                    )
-            )
-            FloatingActionButton(
-                onClick = { viewModel.openAudioSearch() },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Rounded.Mic, contentDescription = "Identificar canción")
-            }
-        }
         // ---- Menú general ⋮ fijo arriba a la derecha, como antes ----
         Box(
             modifier = Modifier
@@ -1496,7 +1459,6 @@ private fun DjSessionCard(
                 )
             )
             .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
-            .clickable { onStart() }
             .padding(20.dp)
     ) {
         // Decoración: círculo de color arriba a la derecha, como el mesh.
@@ -1561,35 +1523,169 @@ private fun DjSessionCard(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Botón pastilla: siempre arranca una lista NUEVA.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(primary)
-                        .clickable { onStart() }
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                ) {
+            // Solo el botón arranca o para: la tarjeta ya no es un botón
+            // entero. Inactiva: "Nueva sesión". Activa: SOLO "Detener",
+            // que para la música por completo (Stop).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(primary)
+                    .clickable { if (isActive) onStop() else onStart() }
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                if (isActive) {
+                    // Cuadrito de stop dibujado (sin depender de un icono).
+                    Box(
+                        Modifier
+                            .size(12.dp)
+                            .background(onPrimary, RoundedCornerShape(2.dp))
+                    )
+                } else {
                     Icon(
                         Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = onPrimary,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (isActive) "Nueva sesión" else "Escuchar",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = onPrimary
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (isActive) "Detener" else "Nueva sesión",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = onPrimary
+                )
+            }
+        }
+    }
+}
+
+// --------------------------- Pestaña: Inicio ---------------------------
+// El inicio de Aural: lo más escuchado, la Sesión DJ y los artistas
+// favoritos. Sin barra A-Z (como Descargas y Playlists): es contenido
+// corto y curado, no una lista larga.
+
+@Composable
+private fun HomeTab(
+    topPlaylists: List<TopPlaylist>,
+    onOpenPlaylist: (String) -> Unit,
+    onPlayPlaylist: (String) -> Unit,
+    onSeeAllPlaylists: () -> Unit,
+    onDjSession: () -> Unit,
+    isDjSessionActive: Boolean,
+    onStopDjSession: () -> Unit,
+    topArtists: List<TopArtist>,
+    onOpenArtist: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        if (topPlaylists.isNotEmpty()) {
+            item {
+                MostPlayedSection(
+                    topPlaylists = topPlaylists,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onPlayPlaylist = onPlayPlaylist,
+                    onSeeAll = onSeeAllPlaylists,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp, end = 16.dp)
+                )
+            }
+        }
+        // Tarjeta Sesión DJ: va DEBAJO de "Para ti", como tarjeta hero.
+        item {
+            DjSessionCard(
+                isActive = isDjSessionActive,
+                onStart = onDjSession,
+                onStop = onStopDjSession,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
+            )
+        }
+        if (topArtists.isNotEmpty()) {
+            item {
+                FavoriteArtistsSection(
+                    topArtists = topArtists,
+                    onOpenArtist = onOpenArtist,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+/** "3 h 20 min" / "45 min" / "30 s" para el tiempo escuchado. */
+private fun formatListenedTime(seconds: Long): String {
+    val h = seconds / 3600
+    val m = seconds % 3600 / 60
+    return when {
+        h > 0 && m > 0 -> "$h h $m min"
+        h > 0 -> "$h h"
+        m > 0 -> "$m min"
+        else -> "$seconds s"
+    }
+}
+
+@Composable
+private fun FavoriteArtistsSection(
+    topArtists: List<TopArtist>,
+    onOpenArtist: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Tarjeta definida: fondo propio + borde 1dp + radio 16dp.
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Text(
+            "Tus artistas favoritos",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(4.dp))
+        topArtists.forEach { artist ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpenArtist(artist.name) }
+                    .padding(vertical = 10.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                if (isActive) {
-                    Spacer(Modifier.width(12.dp))
-                    TextButton(onClick = onStop) {
-                        Text("Detener", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        artist.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    Text(
+                        "${artist.songCount} ${if (artist.songCount == 1) "canción" else "canciones"} · ${formatListenedTime(artist.seconds)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
         }
@@ -1610,13 +1706,6 @@ private fun SongsTab(
     listState: androidx.compose.foundation.lazy.LazyListState,
     customCovers: Map<Long, String> = emptyMap(),
     customMetadata: Map<Long, Triple<String, String, String>> = emptyMap(),
-    topPlaylists: List<TopPlaylist> = emptyList(),
-    onOpenPlaylist: (String) -> Unit = {},
-    onPlayPlaylist: (String) -> Unit = {},
-    onSeeAllPlaylists: () -> Unit = {},
-    onDjSession: () -> Unit = {},
-    isDjSessionActive: Boolean = false,
-    onStopDjSession: () -> Unit = {},
     // v1.0.7: selección múltiple.
     selectionMode: Boolean = false,
     selectedIds: Set<Long> = emptySet(),
@@ -1634,26 +1723,6 @@ private fun SongsTab(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
         ) {
-            if (topPlaylists.isNotEmpty()) {
-                item {
-                    MostPlayedSection(
-                        topPlaylists = topPlaylists,
-                        onOpenPlaylist = onOpenPlaylist,
-                        onPlayPlaylist = onPlayPlaylist,
-                        onSeeAll = onSeeAllPlaylists,
-                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
-                    )
-                }
-            }
-            // Tarjeta Sesión DJ: va DEBAJO de "Para ti", como tarjeta hero.
-            item {
-                DjSessionCard(
-                    isActive = isDjSessionActive,
-                    onStart = onDjSession,
-                    onStop = onStopDjSession,
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                )
-            }
             items(songs, key = { it.id }) { song ->
                 val meta = customMetadata[song.id]
                 SongRow(
