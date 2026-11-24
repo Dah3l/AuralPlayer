@@ -4,6 +4,19 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+## v1.2.0 — 2026-11-24
+
+### Novedades
+- **Nueva pestaña Inicio** — la app abre ahora en Inicio, todo en un solo lugar: Para ti, la Sesión DJ, tus artistas favoritos, lo último que escuchaste y tu semana en Aural, con accesos rápidos a Aleatorio, Favoritas, Tu Top 10 y Descargas.
+- **Sesión DJ infinita** — música que no se acaba nunca: toda la biblioteca mezclada en una cola que se rellena sola, ordenada por ritmo para que una canción lleve a la siguiente sin parar. Se detiene al poner cualquier otra cola o al apagar la Mezcla DJ.
+- **Mezcla DJ** — en Ajustes → Sonido, activa la mezcla: las canciones se funden y la que entra toma el tempo de la que sale, con cambio de bajos. Las canciones con tempo doble o mitad también mezclan. El BPM se analiza una vez en segundo plano mientras suena y se guarda, y se ve en el reproductor.
+- **Crossfade** — las canciones se funden entre sí al terminar y también cuando saltas a mano. De 1 a 12 segundos, en Ajustes → Sonido.
+- **Calidad de descarga** — en Ajustes → Sonido, elige entre ahorrar datos (48 kbps) o mejor calidad (128 kbps) al bajar canciones de YouTube.
+- **Nuevo diseño** — la biblioteca se ve menos plana: secciones más claras y definidas, con el MiniPlayer flotando sobre la lista. Los temas oscuros ya no son negro puro y los claros separan mejor sus superficies.
+- **Letras automáticas** — la letra aparece sola cuando suena la canción, sin buscarla a mano, y sigue la posición en vivo.
+- **Optimizaciones de rendimiento** — se hicieron optimizaciones en la app para mejorar su rendimiento, incluso en teléfonos más antiguos.
+- **Arreglos y detalles** — la mezcla DJ ya no da tirones al volver al tempo natural; la app ya no se cerraba al abrir con una cola restaurada; al negar el permiso de audio ya no queda girando sin fin: sale la pantalla para dar el permiso; las descargas de YouTube eligen ahora el mejor audio disponible y avisan el motivo si fallan.
+
 ## v1.1.0 — 2026-11-13
 
 ### Novedades
