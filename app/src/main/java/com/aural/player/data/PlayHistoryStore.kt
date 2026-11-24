@@ -32,6 +32,15 @@ data class TopSong(
     val seconds: Long
 )
 
+/** Un artista entre los más escuchados (para "Tus artistas favoritos" del Inicio). */
+data class TopArtist(
+    val name: String,
+    /** Segundos escuchados en total (ventana: últimos 30 días). */
+    val seconds: Long,
+    /** Canciones distintas de ese artista que sonaron. */
+    val songCount: Int
+)
+
 /** Resumen de los últimos 7 días (incluido hoy). */
 data class WeekStats(
     val totalSeconds: Long = 0L,
@@ -157,6 +166,47 @@ class PlayHistoryStore(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+        }
+    }
+
+    /** Los artistas más escuchados: mismo historial que el Top 10, agrupado por artista. */
+    suspend fun getTopArtists(limit: Int = 5): List<TopArtist> {
+        return withContext(Dispatchers.IO) {
+            try {
+                mutex.withLock {
+                    val root = readRoot()
+                    val days = root.optJSONObject("days")
+                        ?: return@withContext emptyList()
+                    val secondsByArtist = mutableMapOf<String, Long>()
+                    val songsByArtist = mutableMapOf<String, MutableSet<Long>>()
+                    days.keys().forEach { dayKey ->
+                        val day = days.optJSONObject(dayKey) ?: return@forEach
+                        val songs = day.optJSONObject("songs") ?: return@forEach
+                        songs.keys().forEach { idStr ->
+                            val id = idStr.toLongOrNull() ?: return@forEach
+                            val e = songs.optJSONObject(idStr) ?: return@forEach
+                            // Sin artista real no hay artista favorito.
+                            val artist = e.optString("artist")
+                            if (artist.isBlank() || artist == "Artista misterioso") return@forEach
+                            secondsByArtist[artist] =
+                                (secondsByArtist[artist] ?: 0L) + e.optLong("seconds")
+                            songsByArtist.getOrPut(artist) { mutableSetOf() }.add(id)
+                        }
+                    }
+                    secondsByArtist.entries
+                        .sortedByDescending { it.value }
+                        .take(limit)
+                        .map { (name, seconds) ->
+                            TopArtist(
+                                name = name,
+                                seconds = seconds,
+                                songCount = songsByArtist[name]?.size ?: 0
+                            )
+                        }
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
