@@ -14,6 +14,7 @@ import android.net.Uri
 import io.github.dlepaux.realtimebpmanalyzer.BpmAnalyzer
 import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.ByteOrder
+import kotlin.math.abs
 
 /** Datos de archivo que enseña "Información de la canción". */
 data class AudioFileInfo(
@@ -219,6 +220,45 @@ object BpmAnalysis {
         while (b < 70f) b *= 2f
         while (b > 180f) b /= 2f
         return b
+    }
+
+    /**
+     * Ordena ids por tempo en cadena voraz desde un BPM ancla: en cada
+     * paso toma la canción con el BPM (o su doble/mitad) más cercano al
+     * actual. Las que no tienen BPM van al final, en su orden. Pura: no
+     * toca ningún estado; la usan el servicio (reorden de la cola que
+     * viene) y el ViewModel (cola inicial de la Sesión DJ).
+     */
+    fun orderByTempo(
+        ids: List<Long>,
+        bpmById: Map<Long, Float>,
+        anchorBpm: Float
+    ): List<Long> {
+        val withBpm = ids.filter { bpmById.containsKey(it) }
+        val withoutBpm = ids.filterNot { bpmById.containsKey(it) }
+        val remaining = withBpm.toMutableList()
+        val ordered = ArrayList<Long>(ids.size)
+        var curBpm = anchorBpm
+        while (remaining.isNotEmpty()) {
+            var bestIdx = 0
+            var bestDist = Float.MAX_VALUE
+            for (i in remaining.indices) {
+                val b = foldBpm(bpmById[remaining[i]] ?: 120f)
+                val dist = minOf(
+                    abs(b - curBpm),
+                    abs(b * 2f - curBpm),
+                    abs(b / 2f - curBpm)
+                )
+                if (dist < bestDist) {
+                    bestDist = dist
+                    bestIdx = i
+                }
+            }
+            curBpm = foldBpm(bpmById[remaining[bestIdx]] ?: 120f)
+            ordered += remaining.removeAt(bestIdx)
+        }
+        ordered += withoutBpm
+        return ordered
     }
 
     /** Resultado del cálculo de tempo para una transición. */
