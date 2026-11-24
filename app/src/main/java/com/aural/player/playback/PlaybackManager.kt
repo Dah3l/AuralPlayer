@@ -70,6 +70,15 @@ class PlaybackManager(private val context: Context) {
     private val _stopMode = MutableStateFlow<StopMode?>(null)
     val stopMode: StateFlow<StopMode?> = _stopMode.asStateFlow()
 
+    private val _endlessDjActive = MutableStateFlow(false)
+    /** Si la Sesión DJ infinita está activa (la lleva el servicio). */
+    val endlessDjActive: StateFlow<Boolean> = _endlessDjActive.asStateFlow()
+
+    /** Marca la Sesión DJ infinita como activa o no (lo llama el servicio). */
+    fun setEndlessDjActive(active: Boolean) {
+        _endlessDjActive.value = active
+    }
+
     /** Registro de escucha para "Tu Top 10". */
     private val playHistory = PlayHistoryStore(context)
 
@@ -597,6 +606,8 @@ class PlaybackManager(private val context: Context) {
 
     fun stop() {
         _stopMode.value = null
+        // Dejar de reproducir dentro de la lista apaga la sesión infinita.
+        setEndlessDj(false)
         flushTracking()
         controller?.stop()
         publishState()
