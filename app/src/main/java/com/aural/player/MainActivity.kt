@@ -356,7 +356,7 @@ private fun AuralApp(viewModel: AuralViewModel,
     val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
     // El pager vive aquí para que al volver de un detalle siga en la misma pestaña
-    val libraryPagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 6 })
+    val libraryPagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 7 })
     val themesGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // Estados de scroll de cada detalle, por destino: al volver atrás la
     // lista queda donde estaba (cada álbum, artista y playlist por separado)
