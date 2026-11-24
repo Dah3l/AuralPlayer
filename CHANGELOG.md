@@ -15,7 +15,25 @@ en GitHub salen de aquí.
 - **Nuevo diseño** — la biblioteca se ve menos plana: secciones más claras y definidas, con el MiniPlayer flotando sobre la lista. Los temas oscuros ya no son negro puro y los claros separan mejor sus superficies.
 - **Letras automáticas** — la letra aparece sola cuando suena la canción, sin buscarla a mano, y sigue la posición en vivo.
 - **Optimizaciones de rendimiento** — se hicieron optimizaciones en la app para mejorar su rendimiento, incluso en teléfonos más antiguos.
-- **Arreglos y detalles** — la mezcla DJ ya no da tirones al volver al tempo natural; la app ya no se cerraba al abrir con una cola restaurada; al negar el permiso de audio ya no queda girando sin fin: sale la pantalla para dar el permiso; las descargas de YouTube eligen ahora el mejor audio disponible y avisan el motivo si fallan.
+
+### Más en esta versión
+- **Portadas personalizadas** — cambia la portada de tus canciones desde iTunes o tu galería; la imagen se guarda en el teléfono y se ve al instante, sin internet.
+- **Respaldo que sobrevive al cambio de equipo** — el respaldo casa ahora por título y artista (no por el ID del teléfono), así que al importar en otro equipo las playlists, favoritos y ajustes caen en la canción correcta. Incluye el historial del Top 10.
+- **Editar las etiquetas reales del archivo** — al editar el título, artista o álbum, la app escribe los tags en el archivo mismo (MP3, M4A, FLAC), no solo en AuralPlayer: cualquier reproductor los ve.
+
+### Arreglos
+- La app ya no se cerraba al abrir con una cola restaurada.
+- Al negar el permiso de audio ya no queda girando sin fin: sale la pantalla para dar el permiso.
+- Las descargas de YouTube eligen ahora el mejor audio disponible y avisan el motivo si fallan.
+- El ecualizador se activa al sonar la primera canción.
+
+### Problema conocido
+- La mezcla DJ puede dar tirones pequeños de vez en cuando al volver al tempo natural. Queda para la próxima versión (issue #3).
+
+### Detalles técnicos
+- La biblioteca ya no se recompone entera con cada tick del reproductor: StateFlows derivados, caché de la cola por firma y la notificación mapeada solo a lo que usa.
+- Las portadas se decodifican a un tamaño máximo y el caché está limitado, para no disparar la RAM.
+- Las descargas de YouTube ahora tienen timeouts y reintentan una vez con un enlace nuevo.
 
 ## v1.1.0 — 2026-11-13
 
