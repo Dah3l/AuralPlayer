@@ -1530,7 +1530,7 @@ private fun SongsTab(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "La cola fluye por tempo, sin saltos bruscos",
+                                "Sesión infinita: se ordena sola por tempo y no se acaba nunca",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
