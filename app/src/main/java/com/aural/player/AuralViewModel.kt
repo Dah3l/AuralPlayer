@@ -48,7 +48,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.abs
 
 /** Estado de la interfaz de la biblioteca. */
 data class LibraryUiState(
@@ -803,65 +802,17 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Sesión DJ: arma una cola que fluye por tempo (cada canción sigue
-     * a la más cercana en BPM, con doble/mitad como compatibles) y la
-     * pone a sonar con la Mezcla DJ activada. Solo entran canciones ya
-     * analizadas; si hay menos de 3, avisa y no hace nada.
-     * Devuelve true si la sesión arrancó.
+     * Sesión DJ infinita: toda la biblioteca mezclada en una cola que no
+     * se acaba nunca — el servicio la reordena sola por tempo a medida que
+     * se analizan los BPM y la rellena sola cuando se va acabando. Enciende
+     * la Mezcla DJ, cancela la parada programada y arranca la sesión en
+     * el servicio. La sesión se detiene al poner cualquier otra cola.
      */
     fun startDjSession(): Boolean {
-        val bpm = bpmMap.value
-        val analyzed = songsFlow.value.filter { bpm.containsKey(it.id) }
-        if (analyzed.size < 3) {
-            Toast.makeText(
-                getApplication(),
-                "Aún hay pocas canciones analizadas, sigue escuchando",
-                Toast.LENGTH_SHORT
-            ).show()
-            return false
-        }
-        val ordered = buildDjOrder(analyzed, bpm)
         viewModelScope.launch { settings.setDjMixEnabled(true) }
-        playSongs(ordered)
+        playback.setStopMode(null)
+        playback.setEndlessDj(true)
         return true
-    }
-
-    /** Ordena las canciones en cadena por tempo: cada una sigue a la
-     *  más cercana en BPM (doble/mitad cuenta como cercana). Si suena
-     *  una canción analizada, la sesión empieza por ella. */
-    private fun buildDjOrder(songs: List<Song>, bpm: Map<Long, Float>): List<Song> {
-        val remaining = songs.toMutableList()
-        val ordered = ArrayList<Song>(songs.size)
-        val currentId = playback.state.value.currentSong?.id
-        val startIndex = currentId?.let { id ->
-            remaining.indexOfFirst { it.id == id }.takeIf { it >= 0 }
-        }
-        var current = if (startIndex != null) {
-            remaining.removeAt(startIndex)
-        } else {
-            remaining.removeAt((0 until remaining.size).random())
-        }
-        ordered += current
-        while (remaining.isNotEmpty()) {
-            val curBpm = BpmAnalysis.foldBpm(bpm[current.id] ?: 120f)
-            var bestIdx = 0
-            var bestDist = Float.MAX_VALUE
-            for (i in remaining.indices) {
-                val b = BpmAnalysis.foldBpm(bpm[remaining[i].id] ?: 120f)
-                val dist = minOf(
-                    abs(b - curBpm),
-                    abs(b * 2f - curBpm),
-                    abs(b / 2f - curBpm)
-                )
-                if (dist < bestDist) {
-                    bestDist = dist
-                    bestIdx = i
-                }
-            }
-            current = remaining.removeAt(bestIdx)
-            ordered += current
-        }
-        return ordered
     }
 
     /** Datos de archivo de una canción (para "Información de la canción"). */
