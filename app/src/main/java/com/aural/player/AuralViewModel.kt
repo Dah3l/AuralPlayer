@@ -808,9 +808,37 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      * la Mezcla DJ, cancela la parada programada y arranca la sesión en
      * el servicio. La sesión se detiene al poner cualquier otra cola.
      */
+    /** BPM ya calculados (id -> BPM crudo); alimenta la cola inicial de la Sesión DJ. */
+    private val bpmMapFlow: StateFlow<Map<Long, Float>> = settings.bpmMap.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyMap()
+    )
+
+    /**
+     * Arranca la Sesión DJ infinita. La cola se arma AQUÍ — toda la
+     * biblioteca, con BPM primero en cadena de tempo desde una al azar
+     * (cada toque = lista nueva) y las sin BPM después, mezcladas — y se
+     * pone con playDjQueue, el mismo camino que tocar una canción. El
+     * servicio solo recibe el flag y arranca el motor (reorden por tempo
+     * + relleno); ya no hay comando que se pueda perder en silencio.
+     * Si la biblioteca está vacía no se abre el Now Playing.
+     */
     fun startDjSession(): Boolean {
+        val songs = library.value.songs
+        if (songs.isEmpty()) return false
         viewModelScope.launch { settings.setDjMixEnabled(true) }
         playback.setStopMode(null)
+        val bpmById = bpmMapFlow.value
+        val analyzedIds = songs.filter { bpmById.containsKey(it.id) }.map { it.id }
+        val unanalyzed = songs.filterNot { bpmById.containsKey(it.id) }.shuffled()
+        val startId = analyzedIds.randomOrNull()
+        val chainedIds = if (startId != null) {
+            BpmAnalysis.orderByTempo(analyzedIds, bpmById, BpmAnalysis.foldBpm(bpmById[startId] ?: 120f))
+        } else {
+            emptyList()
+        }
+        val byId = songs.associateBy { it.id }
+        val orderedSongs = chainedIds.mapNotNull { byId[it] } + unanalyzed
+        playback.playDjQueue(orderedSongs)
         playback.setEndlessDj(true)
         return true
     }
