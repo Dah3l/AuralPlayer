@@ -115,6 +115,13 @@ class MusicService : MediaSessionService() {
     /** Glide de vuelta al tempo tras una mezcla (null = no hay). */
     @Volatile
     private var tempoRecoveryJob: Job? = null
+    // Sesión DJ infinita: la cola se reordena sola por tempo y se
+    // rellena sola cuando se acaba. El pool es toda la biblioteca.
+    private var endlessDjSession = false
+    private var endlessPool: List<MediaItem> = emptyList()
+    private val endlessRecentlyPlayed = ArrayDeque<Long>()
+    private var lastBpmMapSize = 0
+
     /** Análisis de BPM en curso (ids) + trabajo de análisis. */
     private var analysisJob: Job? = null
     private val analyzingIds = mutableSetOf<Long>()
@@ -127,6 +134,13 @@ class MusicService : MediaSessionService() {
         /** Fundido al saltar a la siguiente/anterior (lo pide PlaybackManager). */
         const val CMD_CROSSFADE_NEXT = "aural_crossfade_next"
         const val CMD_CROSSFADE_PREV = "aural_crossfade_prev"
+        /** Sesión DJ infinita: arrancar / detener (lo pide PlaybackManager). */
+        const val CMD_START_ENDLESS_DJ = "aural_start_endless_dj"
+        const val CMD_STOP_ENDLESS_DJ = "aural_stop_endless_dj"
+        /** Rellenar la cola infinita cuando quedan pocas canciones. */
+        private const val ENDLESS_REFILL_THRESHOLD = 5
+        /** Canciones recientes que el relleno no repite. */
+        private const val ENDLESS_RECENT_CAP = 50
         /** Acción del despertador: sonar la canción o playlist elegida. */
         const val ACTION_ALARM_PLAY = "com.aural.player.ALARM_PLAY"
         const val EXTRA_ALARM_SONG_IDS = "alarm_song_ids"
@@ -242,7 +256,15 @@ class MusicService : MediaSessionService() {
             app.settings.djMixEnabled.collect { djMixEnabledCache = it }
         }
         serviceScope.launch {
-            app.settings.bpmMap.collect { bpmCache = it }
+            app.settings.bpmMap.collect {
+                bpmCache = it
+                // Sesión infinita: cada BPM nuevo reordena la cola
+                // que viene por tempo.
+                if (endlessDjSession && it.size > lastBpmMapSize) {
+                    reorderDjTail()
+                }
+                lastBpmMapSize = it.size
+            }
         }
         // Vigilancia: cada 250 ms mira si falta poco para el final.
         fadeWatchJob = serviceScope.launch {
@@ -425,6 +447,14 @@ class MusicService : MediaSessionService() {
                             else SessionResult.RESULT_ERROR_UNKNOWN
                         )
                     )
+                }
+                CMD_START_ENDLESS_DJ -> {
+                    startEndlessDjSession()
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                CMD_STOP_ENDLESS_DJ -> {
+                    endlessDjSession = false
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
             }
             return super.onCustomCommand(session, controller, customCommand, args)
@@ -822,6 +852,14 @@ class MusicService : MediaSessionService() {
                 if (songId == lastAnalyzedSongId) return@collect
                 lastAnalyzedSongId = songId
                 triggerBpmAnalysis(songId)
+                if (endlessDjSession) {
+                    endlessRecentlyPlayed.addLast(songId)
+                    while (endlessRecentlyPlayed.size > ENDLESS_RECENT_CAP) {
+                        endlessRecentlyPlayed.removeFirst()
+                    }
+                    refillEndlessQueueIfNeeded()
+                    reorderDjTail()
+                }
             }
         }
     }
@@ -891,6 +929,156 @@ class MusicService : MediaSessionService() {
                 }
             }
         }
+    }
+
+    // =======================================================================
+    // SESIÓN DJ INFINITA: la cola no se acaba nunca. Arranca con toda la
+    // biblioteca mezclada; cada BPM nuevo reordena la cola que viene por
+    // tempo (la más cercana primero, doble/mitad como cercanos) y cuando
+    // quedan pocas canciones se rellena sola sin repetir las recientes.
+    // Nunca se mueve la que suena ni la siguiente (el fundido la tiene
+    // preparada) y no se reordena en mitad de un fundido ni con el
+    // aleatorio o la repetición activados (entonces manda el usuario).
+    // =======================================================================
+
+    private fun startEndlessDjSession() {
+        serviceScope.launch {
+            val songs = withContext(Dispatchers.IO) {
+                MusicRepository(this@MusicService).scanSongs()
+            }
+            if (songs.isEmpty()) return@launch
+            val player = mediaSession?.player ?: return@launch
+            if (crossfadeActive) abortFade()
+            endlessPool = songs.shuffled().map { song ->
+                MediaItem.Builder()
+                    .setMediaId(song.id.toString())
+                    .setUri(song.uri)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(song.title)
+                            .setArtist(song.artist)
+                            .setAlbumTitle(song.album)
+                            .build()
+                    )
+                    .build()
+            }
+            endlessRecentlyPlayed.clear()
+            endlessDjSession = true
+            player.shuffleModeEnabled = false
+            player.repeatMode = Player.REPEAT_MODE_OFF
+            player.setMediaItems(endlessPool)
+            player.prepare()
+            player.playWhenReady = true
+        }
+    }
+
+    /** Reordena la cola que viene (desde la tercera en adelante) por tempo. */
+    private fun reorderDjTail() {
+        if (!endlessDjSession || !djMixEnabledCache) return
+        if (crossfadeActive) return
+        val player = mediaSession?.player ?: return
+        if (player.shuffleModeEnabled || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex < 0 || currentIndex >= timeline.windowCount) return
+        // Ancla: el BPM de la siguiente (la que va a mezclar). Si aún no
+        // tiene BPM, el de la que suena. Sin ancla no se puede ordenar.
+        val window = Timeline.Window()
+        val nextIndex = nextWindowIndexFrom(timeline, player, currentIndex) ?: return
+        val nextId = timeline.getWindow(nextIndex, window).mediaItem.mediaId.toLongOrNull()
+        val currentId = timeline.getWindow(currentIndex, window).mediaItem.mediaId.toLongOrNull()
+        val anchor = (nextId?.let { bpmCache[it] } ?: currentId?.let { bpmCache[it] })
+            ?.let { BpmAnalysis.foldBpm(it) } ?: return
+        // Cola que viene: desde la tercera en adelante. La siguiente no
+        // se toca: el fundido ya la tiene preparada.
+        val tailStart = currentIndex + 2
+        if (tailStart >= timeline.windowCount) return
+        val tailIds = ArrayList<Long>(timeline.windowCount - tailStart)
+        for (i in tailStart until timeline.windowCount) {
+            timeline.getWindow(i, window).mediaItem.mediaId.toLongOrNull()?.let { tailIds += it }
+        }
+        if (tailIds.size < 2) return
+        val ordered = orderByTempo(tailIds, anchor)
+        if (ordered == tailIds) return
+        // Aplicar el orden con moveMediaItem, espejando cada movimiento
+        // en la lista local para no perder la cuenta de los índices.
+        val mirror = tailIds.toMutableList()
+        for (pos in ordered.indices) {
+            val id = ordered[pos]
+            val from = mirror.indexOf(id)
+            if (from < 0 || from == pos) continue
+            player.moveMediaItem(tailStart + from, tailStart + pos)
+            mirror.removeAt(from)
+            mirror.add(pos, id)
+        }
+    }
+
+    /** Cadena por tempo: cada id sigue al más cercano en BPM (doble/mitad
+     *  como cercanos). Los sin BPM van al final, en su orden actual: ya
+     *  se ordenarán cuando se analicen. */
+    private fun orderByTempo(ids: List<Long>, anchorBpm: Float): List<Long> {
+        val withBpm = ids.filter { bpmCache.containsKey(it) }
+        val withoutBpm = ids.filterNot { bpmCache.containsKey(it) }
+        val remaining = withBpm.toMutableList()
+        val ordered = ArrayList<Long>(ids.size)
+        var curBpm = anchorBpm
+        while (remaining.isNotEmpty()) {
+            var bestIdx = 0
+            var bestDist = Float.MAX_VALUE
+            for (i in remaining.indices) {
+                val b = BpmAnalysis.foldBpm(bpmCache[remaining[i]] ?: 120f)
+                val dist = minOf(
+                    abs(b - curBpm),
+                    abs(b * 2f - curBpm),
+                    abs(b / 2f - curBpm)
+                )
+                if (dist < bestDist) {
+                    bestDist = dist
+                    bestIdx = i
+                }
+            }
+            curBpm = BpmAnalysis.foldBpm(bpmCache[remaining[bestIdx]] ?: 120f)
+            ordered += remaining.removeAt(bestIdx)
+        }
+        ordered += withoutBpm
+        return ordered
+    }
+
+    /** Si quedan pocas canciones en la cola, la rellena con canciones del
+     *  pool que no estén en la cola ni hayan sonado hace poco. Si no queda
+     *  ninguna elegible, se olvida el historial reciente (salvo la que
+     *  suena y la siguiente) y se reintenta: la sesión no se acaba nunca. */
+    private fun refillEndlessQueueIfNeeded() {
+        if (!endlessDjSession) return
+        val player = mediaSession?.player ?: return
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex < 0 || currentIndex >= timeline.windowCount) return
+        if (timeline.windowCount - currentIndex - 1 > ENDLESS_REFILL_THRESHOLD) return
+        val window = Timeline.Window()
+        val inQueue = HashSet<Long>()
+        for (i in 0 until timeline.windowCount) {
+            timeline.getWindow(i, window).mediaItem.mediaId.toLongOrNull()?.let { inQueue += it }
+        }
+        val keepRecent = HashSet<Long>()
+        timeline.getWindow(currentIndex, window).mediaItem.mediaId.toLongOrNull()?.let { keepRecent += it }
+        nextWindowIndexFrom(timeline, player, currentIndex)?.let { ni ->
+            timeline.getWindow(ni, window).mediaItem.mediaId.toLongOrNull()?.let { keepRecent += it }
+        }
+        var candidates = endlessPool
+            .mapNotNull { it.mediaId.toLongOrNull() }
+            .filter { it !in inQueue && it !in endlessRecentlyPlayed }
+        if (candidates.isEmpty()) {
+            endlessRecentlyPlayed.removeAll { it !in keepRecent }
+            candidates = endlessPool
+                .mapNotNull { it.mediaId.toLongOrNull() }
+                .filter { it !in inQueue && it !in endlessRecentlyPlayed }
+            if (candidates.isEmpty()) return
+        }
+        val wanted = candidates.toSet()
+        player.addMediaItems(endlessPool.filter { it.mediaId.toLongOrNull() in wanted })
     }
 
     // =======================================================================
