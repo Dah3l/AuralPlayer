@@ -75,13 +75,14 @@ fun NewsModal(
     onDismiss: () -> Unit
 ) {
     val items = listOf(
-        "Tu Top 10" to "Tus 10 canciones más escuchadas, con tarjeta para compartir y guardar.",
-        "Traducción de letras" to "Lee la letra en español, sin conexión tras descargar los modelos una vez.",
-        "Despertador" to "Despiértate con tu música, todos los días o solo una vez.",
-        "Respaldo" to "Guarda tus playlists, favoritos y ajustes en un archivo y restáuralos cuando quieras.",
-        "Apagar al terminar" to "La música se detiene sola al terminar la canción o la lista.",
-        "Compartir Escuchando ahora" to "Una imagen con la portada y la canción, con Aural link opcional.",
-        "Saludo personalizado" to "La app te saluda por tu nombre y te felicita en tu cumpleaños."
+        "Nueva pestaña Inicio" to "Para ti, Sesión DJ, tus artistas favoritos, lo último que escuchaste y tu semana en Aural, todo en un solo lugar.",
+        "Sesión DJ infinita" to "Música que no se acaba nunca: la cola se rellena sola, mezclada por ritmo.",
+        "Mezcla DJ" to "Las canciones se funden y siguen el mismo tempo, con cambio de bajos.",
+        "Crossfade" to "Las canciones se funden entre sí, también cuando saltas a mano.",
+        "Calidad de descarga" to "Elige entre ahorrar datos o mejor calidad al bajar de YouTube.",
+        "Nuevo diseño" to "Secciones más claras y definidas, con el MiniPlayer flotando sobre la lista.",
+        "Letras automáticas" to "La letra aparece sola cuando suena la canción.",
+        "Optimizaciones de rendimiento" to "Se hicieron optimizaciones en la app para mejorar su rendimiento, incluso en teléfonos más antiguos."
     )
     Dialog(onDismissRequest = onDismiss) {
         Surface(
