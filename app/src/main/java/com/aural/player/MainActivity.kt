@@ -480,6 +480,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onStartDjSession = {
                         if (viewModel.startDjSession()) showNowPlaying = true
                     },
+                    onStopDjSession = { viewModel.stopDjSession() },
                     onRequestAudioPermission = onRequestAudioPermission,
                     onOpenAppSettings = onOpenAppSettings,
                     onSongMenu = { song ->
