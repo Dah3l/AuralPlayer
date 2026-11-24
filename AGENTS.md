@@ -783,6 +783,16 @@ cuanto las veas.
   sin ella (cascada de "must be marked with @Composable"). Al
   insertar antes de una función anotada, verificar que cada función
   tenga exactamente UNA anotación.
+- Bitrate de NewPipe en KBPS (2026-11-23, YouTubeManager): la
+  tabla de ItagItem de NewPipe 0.26.5 guarda el bitrate crudo
+  (139→48, 140→128, 141→256, 251→160) y el extractor lo pasa
+  tal cual a AudioStream.averageBitrate — SON KBPS, no bps. El
+  viejo `>= 48000` NUNCA matcheaba: todo caía en el fallback
+  (min → 48k m4a antes de tanda 1; max → Opus 251 tras tanda 1;
+  mejor-mp4 → 141/256k en c5aa71c = archivos enormes y descargas
+  lentas). Comparar en kbps (48/128) y seleccionar por FORMATO
+  (it.format == MediaFormat.M4A), nunca por el "mime=" de la URL
+  (va codificado como audio%2Fmp4 y el contains falla).
 
 ## Estado actual (2026-11-18)
 
