@@ -316,7 +316,9 @@ class PlaybackManager(private val context: Context) {
     fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
         val c = controller ?: return
         if (songs.isEmpty()) return
-        // Cola nueva = intención nueva: se cancela la parada programada.
+        // Cola nueva = intención nueva: se apaga la sesión DJ infinita
+        // y se cancela la parada programada.
+        setEndlessDj(false)
         _stopMode.value = null
         val items = songs.map { it.toMediaItem() }
         c.setMediaItems(items, startIndex.coerceIn(0, items.size - 1), 0L)
@@ -431,6 +433,28 @@ class PlaybackManager(private val context: Context) {
         val prevIndex = c.currentMediaItemIndex - 1
         if (prevIndex >= 0) c.seekTo(prevIndex, 0L) else c.seekTo(0L)
         publishState()
+    }
+
+    /**
+     * Enciende o apaga la Sesión DJ infinita en el servicio. La parada
+     * no toca la cola que suena: solo deja de reordenarla y rellenarla.
+     */
+    fun setEndlessDj(enabled: Boolean) {
+        val c = controller ?: return
+        scope.launch {
+            try {
+                c.sendCustomCommand(
+                    SessionCommand(
+                        if (enabled) MusicService.CMD_START_ENDLESS_DJ
+                        else MusicService.CMD_STOP_ENDLESS_DJ,
+                        Bundle.EMPTY
+                    ),
+                    Bundle.EMPTY
+                ).await()
+            } catch (_: Exception) {
+                // Sin servicio no hay sesión: la cola sigue como esté.
+            }
+        }
     }
 
     /**
