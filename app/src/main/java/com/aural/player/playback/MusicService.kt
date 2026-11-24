@@ -134,9 +134,6 @@ class MusicService : MediaSessionService() {
         /** Fundido al saltar a la siguiente/anterior (lo pide PlaybackManager). */
         const val CMD_CROSSFADE_NEXT = "aural_crossfade_next"
         const val CMD_CROSSFADE_PREV = "aural_crossfade_prev"
-        /** Sesión DJ infinita: arrancar / detener (lo pide PlaybackManager). */
-        const val CMD_START_ENDLESS_DJ = "aural_start_endless_dj"
-        const val CMD_STOP_ENDLESS_DJ = "aural_stop_endless_dj"
         /** Rellenar la cola infinita cuando quedan pocas canciones. */
         private const val ENDLESS_REFILL_THRESHOLD = 5
         /** Canciones recientes que el relleno no repite. */
@@ -260,6 +257,14 @@ class MusicService : MediaSessionService() {
                     endlessDjSession = false
                     app.playback.setEndlessDjActive(false)
                 }
+            }
+        }
+        // Sesión DJ infinita: el cliente enciende el flag y el servicio
+        // arranca/para el motor. Sin comandos: el flag es el único canal
+        // y no se puede perder en silencio.
+        serviceScope.launch {
+            app.playback.endlessDjActive.collect { active ->
+                if (active) startEndlessEngine() else endlessDjSession = false
             }
         }
         serviceScope.launch {
@@ -454,15 +459,6 @@ class MusicService : MediaSessionService() {
                             else SessionResult.RESULT_ERROR_UNKNOWN
                         )
                     )
-                }
-                CMD_START_ENDLESS_DJ -> {
-                    startEndlessDjSession()
-                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                }
-                CMD_STOP_ENDLESS_DJ -> {
-                    endlessDjSession = false
-                    app.playback.setEndlessDjActive(false)
-                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
             }
             return super.onCustomCommand(session, controller, customCommand, args)
@@ -949,29 +945,23 @@ class MusicService : MediaSessionService() {
     // aleatorio o la repetición activados (entonces manda el usuario).
     // =======================================================================
 
-    private fun startEndlessDjSession() {
+    /**
+     * Arranca el MOTOR de la sesión infinita: construye el pool con toda
+     * la biblioteca (para rellenar) y activa el reorden por tempo. La
+     * COLA ya la puso el cliente (PlaybackManager.playDjQueue): el
+     * servicio nunca toca los media items al arrancar, solo reordena y
+     * rellena lo que suena. Si el flag se apagó mientras se escaneaba,
+     * no se arranca nada.
+     */
+    private fun startEndlessEngine() {
         serviceScope.launch {
+            val app = application as? AuralApp ?: return@launch
             val songs = withContext(Dispatchers.IO) {
                 MusicRepository(this@MusicService).scanSongs()
             }
             if (songs.isEmpty()) return@launch
-            val player = mediaSession?.player ?: return@launch
-            if (crossfadeActive) abortFade()
-            // Cola inicial: primero las que ya tienen BPM, en cadena de
-            // tempo desde una al azar (cada sesión arranca distinto); las
-            // que aún no tienen BPM van después, mezcladas, y el reorden
-            // las sube solas cuando se analizan.
-            val analyzedIds = songs.filter { bpmCache.containsKey(it.id) }.map { it.id }
-            val unanalyzed = songs.filterNot { bpmCache.containsKey(it.id) }.shuffled()
-            val startId = analyzedIds.randomOrNull()
-            val chainedIds = if (startId != null) {
-                orderByTempo(analyzedIds, BpmAnalysis.foldBpm(bpmCache[startId] ?: 120f))
-            } else {
-                emptyList()
-            }
-            val byId = songs.associateBy { it.id }
-            val initialSongs = chainedIds.mapNotNull { byId[it] } + unanalyzed
-            endlessPool = initialSongs.map { song ->
+            if (!app.playback.endlessDjActive.value) return@launch
+            endlessPool = songs.map { song ->
                 MediaItem.Builder()
                     .setMediaId(song.id.toString())
                     .setUri(song.uri)
@@ -986,12 +976,6 @@ class MusicService : MediaSessionService() {
             }
             endlessRecentlyPlayed.clear()
             endlessDjSession = true
-            (application as? AuralApp)?.playback?.setEndlessDjActive(true)
-            player.shuffleModeEnabled = false
-            player.repeatMode = Player.REPEAT_MODE_OFF
-            player.setMediaItems(endlessPool)
-            player.prepare()
-            player.playWhenReady = true
         }
     }
 
@@ -1040,33 +1024,9 @@ class MusicService : MediaSessionService() {
     /** Cadena por tempo: cada id sigue al más cercano en BPM (doble/mitad
      *  como cercanos). Los sin BPM van al final, en su orden actual: ya
      *  se ordenarán cuando se analicen. */
-    private fun orderByTempo(ids: List<Long>, anchorBpm: Float): List<Long> {
-        val withBpm = ids.filter { bpmCache.containsKey(it) }
-        val withoutBpm = ids.filterNot { bpmCache.containsKey(it) }
-        val remaining = withBpm.toMutableList()
-        val ordered = ArrayList<Long>(ids.size)
-        var curBpm = anchorBpm
-        while (remaining.isNotEmpty()) {
-            var bestIdx = 0
-            var bestDist = Float.MAX_VALUE
-            for (i in remaining.indices) {
-                val b = BpmAnalysis.foldBpm(bpmCache[remaining[i]] ?: 120f)
-                val dist = minOf(
-                    abs(b - curBpm),
-                    abs(b * 2f - curBpm),
-                    abs(b / 2f - curBpm)
-                )
-                if (dist < bestDist) {
-                    bestDist = dist
-                    bestIdx = i
-                }
-            }
-            curBpm = BpmAnalysis.foldBpm(bpmCache[remaining[bestIdx]] ?: 120f)
-            ordered += remaining.removeAt(bestIdx)
-        }
-        ordered += withoutBpm
-        return ordered
-    }
+    /** Cadena de tempo: la lógica pura vive en BpmAnalysis (la usa también el ViewModel). */
+    private fun orderByTempo(ids: List<Long>, anchorBpm: Float): List<Long> =
+        BpmAnalysis.orderByTempo(ids, bpmCache, anchorBpm)
 
     /** Si quedan pocas canciones en la cola, la rellena con canciones del
      *  pool que no estén en la cola ni hayan sonado hace poco. Si no queda
