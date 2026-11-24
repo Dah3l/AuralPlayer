@@ -38,7 +38,16 @@ data class TopArtist(
     /** Segundos escuchados en total (ventana: últimos 30 días). */
     val seconds: Long,
     /** Canciones distintas de ese artista que sonaron. */
-    val songCount: Int
+    val songCount: Int,
+    /** La canción más escuchada de ese artista (para enseñar su portada). */
+    val topSongId: Long? = null
+)
+
+/** Una canción escuchada hace poco (para "Escuchadas recientemente" del Inicio). */
+data class RecentSong(
+    val songId: Long,
+    val title: String,
+    val artist: String
 )
 
 /** Resumen de los últimos 7 días (incluido hoy). */
@@ -127,6 +136,7 @@ class PlayHistoryStore(private val context: Context) {
                 entry.put("seconds", entry.optLong("seconds") + seconds)
                 entry.put("title", title)
                 entry.put("artist", artist)
+                entry.put("lastPlayedAt", System.currentTimeMillis())
                 prune(root)
                 file().writeText(root.toString())
             }
@@ -179,6 +189,7 @@ class PlayHistoryStore(private val context: Context) {
                         ?: return@withContext emptyList()
                     val secondsByArtist = mutableMapOf<String, Long>()
                     val songsByArtist = mutableMapOf<String, MutableSet<Long>>()
+                    val secondsBySong = mutableMapOf<Long, Long>()
                     days.keys().forEach { dayKey ->
                         val day = days.optJSONObject(dayKey) ?: return@forEach
                         val songs = day.optJSONObject("songs") ?: return@forEach
@@ -188,8 +199,10 @@ class PlayHistoryStore(private val context: Context) {
                             // Sin artista real no hay artista favorito.
                             val artist = e.optString("artist")
                             if (artist.isBlank() || artist == "Artista misterioso") return@forEach
+                            val secs = e.optLong("seconds")
                             secondsByArtist[artist] =
-                                (secondsByArtist[artist] ?: 0L) + e.optLong("seconds")
+                                (secondsByArtist[artist] ?: 0L) + secs
+                            secondsBySong[id] = (secondsBySong[id] ?: 0L) + secs
                             songsByArtist.getOrPut(artist) { mutableSetOf() }.add(id)
                         }
                     }
@@ -200,9 +213,52 @@ class PlayHistoryStore(private val context: Context) {
                             TopArtist(
                                 name = name,
                                 seconds = seconds,
-                                songCount = songsByArtist[name]?.size ?: 0
+                                songCount = songsByArtist[name]?.size ?: 0,
+                                topSongId = songsByArtist[name]
+                                    ?.maxByOrNull { secondsBySong[it] ?: 0L }
                             )
                         }
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    /**
+     * Las últimas canciones que sonaron, en orden de recencia. Cada
+     * canción guarda su última reproducción (lastPlayedAt); las que aún
+     * no lo tienen (historial viejo) quedan al final.
+     */
+    suspend fun getRecentSongs(limit: Int = 10): List<RecentSong> {
+        return withContext(Dispatchers.IO) {
+            try {
+                mutex.withLock {
+                    val root = readRoot()
+                    val days = root.optJSONObject("days")
+                        ?: return@withContext emptyList()
+                    val latest = mutableMapOf<Long, RecentSong>()
+                    val playedAt = mutableMapOf<Long, Long>()
+                    days.keys().forEach { dayKey ->
+                        val day = days.optJSONObject(dayKey) ?: return@forEach
+                        val songs = day.optJSONObject("songs") ?: return@forEach
+                        songs.keys().forEach { idStr ->
+                            val id = idStr.toLongOrNull() ?: return@forEach
+                            val e = songs.optJSONObject(idStr) ?: return@forEach
+                            val at = e.optLong("lastPlayedAt", 0L)
+                            if (at > (playedAt[id] ?: 0L)) {
+                                playedAt[id] = at
+                                latest[id] = RecentSong(
+                                    songId = id,
+                                    title = e.optString("title"),
+                                    artist = e.optString("artist")
+                                )
+                            }
+                        }
+                    }
+                    latest.values
+                        .sortedByDescending { playedAt[it.songId] ?: 0L }
+                        .take(limit)
                 }
             } catch (e: Exception) {
                 emptyList()
