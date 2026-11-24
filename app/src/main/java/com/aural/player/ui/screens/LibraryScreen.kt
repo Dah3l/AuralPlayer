@@ -24,16 +24,19 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
@@ -81,6 +84,7 @@ import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
 import com.aural.player.data.Song
 import com.aural.player.data.TopArtist
+import com.aural.player.data.WeekStats
 import com.aural.player.data.birthdayDisplayName
 import com.aural.player.data.greetingDisplayName
 import com.aural.player.data.isBirthdayToday
@@ -131,11 +135,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
@@ -260,6 +269,16 @@ fun LibraryScreen(
     var showTabCustomizer by remember { mutableStateOf(false) }
     // Artistas favoritos del Inicio.
     val topArtists by viewModel.topArtists.collectAsStateWithLifecycle()
+    // Escuchadas recientemente y estadísticas de la semana (Inicio).
+    val recentSongs by viewModel.recentSongs.collectAsStateWithLifecycle()
+    val weekStats by viewModel.weekStats.collectAsStateWithLifecycle()
+    // La canción más escuchada de la semana, resuelta a la biblioteca
+    // completa (la lista filtrada por la búsqueda podría no tenerla).
+    val weekTopSong = remember(weekStats, library) {
+        weekStats.topSongs.firstOrNull()?.let { top ->
+            library.songs.firstOrNull { it.id == top.songId }
+        }
+    }
 
     // La fila de pills se desplaza sola para mostrar la pestaña activa
     LaunchedEffect(selectedTab, tabOrder) {
@@ -269,8 +288,12 @@ fun LibraryScreen(
             item.offset >= layout.viewportStartOffset &&
             item.offset + item.size <= layout.viewportEndOffset
         if (!fullyVisible) pillsListState.animateScrollToItem(selectedTab)
-        // Al entrar al Inicio, los artistas favoritos se actualizan.
-        if (tabOrder.getOrNull(selectedTab) == "home") viewModel.refreshTopArtists()
+        // Al entrar al Inicio, sus secciones se actualizan.
+        if (tabOrder.getOrNull(selectedTab) == "home") {
+            viewModel.refreshTopArtists()
+            viewModel.refreshRecentSongs()
+            viewModel.refreshWeekStats()
+        }
     }
 
     var showNewPlaylist by remember { mutableStateOf(false) }
@@ -643,7 +666,20 @@ fun LibraryScreen(
                             isDjSessionActive = isDjSessionActive,
                             onStopDjSession = onStopDjSession,
                             topArtists = topArtists,
-                            onOpenArtist = onOpenArtist
+                            onOpenArtist = onOpenArtist,
+                            songs = songs,
+                            customCovers = customCovers,
+                            recentSongs = recentSongs,
+                            onPlayRecent = { index -> onPlayList(recentSongs, index, null) },
+                            weekStats = weekStats,
+                            weekTopSong = weekTopSong,
+                            onPlayWeekTopSong = {
+                                weekTopSong?.let { onPlayList(listOf(it), 0, null) }
+                            },
+                            onShuffleAll = { viewModel.playAllShuffled() },
+                            onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
+                            onOpenTop10 = onOpenTop10,
+                            onOpenDownloads = { onTabSelected(tabOrder.indexOf("downloads")) }
                         )
 
                         "songs" -> SongsTab(
@@ -1576,14 +1612,42 @@ private fun HomeTab(
     isDjSessionActive: Boolean,
     onStopDjSession: () -> Unit,
     topArtists: List<TopArtist>,
-    onOpenArtist: (String) -> Unit
+    onOpenArtist: (String) -> Unit,
+    songs: List<Song>,
+    customCovers: Map<Long, String>,
+    recentSongs: List<Song>,
+    onPlayRecent: (Int) -> Unit,
+    weekStats: WeekStats,
+    weekTopSong: Song?,
+    onPlayWeekTopSong: () -> Unit,
+    onShuffleAll: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenTop10: () -> Unit,
+    onOpenDownloads: () -> Unit
 ) {
+    val homeListState = rememberLazyListState()
+    // La animación del odómetro solo corre cuando la tarjeta de la semana
+    // está COMPLETAMENTE visible: ni un píxel asomando, ni tapada por el
+    // MiniPlayer (los 100dp de aire inferior). Si corriera al abrir el
+    // Inicio, nadie vería la animación.
+    val density = LocalDensity.current
+    val bottomClearancePx = with(density) { 100.dp.toPx() }.toInt()
+    val weekFullyVisible by remember {
+        derivedStateOf {
+            val info = homeListState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.key == "week_stats" }
+            item != null &&
+                item.offset >= info.viewportStartOffset &&
+                item.offset + item.size <= info.viewportEndOffset - bottomClearancePx
+        }
+    }
     LazyColumn(
+        state = homeListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
         if (topPlaylists.isNotEmpty()) {
-            item {
+            item(key = "para_ti") {
                 MostPlayedSection(
                     topPlaylists = topPlaylists,
                     onOpenPlaylist = onOpenPlaylist,
@@ -1594,7 +1658,7 @@ private fun HomeTab(
             }
         }
         // Tarjeta Sesión DJ: va DEBAJO de "Para ti", como tarjeta hero.
-        item {
+        item(key = "dj") {
             DjSessionCard(
                 isActive = isDjSessionActive,
                 onStart = onDjSession,
@@ -1603,13 +1667,46 @@ private fun HomeTab(
             )
         }
         if (topArtists.isNotEmpty()) {
-            item {
+            item(key = "artists") {
                 FavoriteArtistsSection(
                     topArtists = topArtists,
                     onOpenArtist = onOpenArtist,
+                    songs = songs,
+                    customCovers = customCovers,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
                 )
             }
+        }
+        if (recentSongs.isNotEmpty()) {
+            item(key = "recent") {
+                RecentlyPlayedSection(
+                    recentSongs = recentSongs,
+                    customCovers = customCovers,
+                    onPlayRecent = onPlayRecent,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                )
+            }
+        }
+        if (weekStats.totalSeconds > 0) {
+            item(key = "week_stats") {
+                WeekStatsSection(
+                    weekStats = weekStats,
+                    weekTopSong = weekTopSong,
+                    customCovers = customCovers,
+                    onPlayWeekTopSong = onPlayWeekTopSong,
+                    odometerVisible = weekFullyVisible,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
+                )
+            }
+        }
+        item(key = "quick") {
+            QuickActionsSection(
+                onShuffleAll = onShuffleAll,
+                onOpenFavorites = onOpenFavorites,
+                onOpenTop10 = onOpenTop10,
+                onOpenDownloads = onOpenDownloads,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
+            )
         }
     }
 }
@@ -1630,8 +1727,13 @@ private fun formatListenedTime(seconds: Long): String {
 private fun FavoriteArtistsSection(
     topArtists: List<TopArtist>,
     onOpenArtist: (String) -> Unit,
+    songs: List<Song>,
+    customCovers: Map<Long, String>,
     modifier: Modifier = Modifier
 ) {
+    // Portada de cada artista: la de su canción más escuchada (o la nota
+    // musical solo si ese artista no tiene ninguna portada).
+    val songsById = remember(songs) { songs.associateBy { it.id } }
     // Tarjeta definida: fondo propio + borde 1dp + radio 16dp.
     Column(
         modifier
@@ -1657,6 +1759,9 @@ private fun FavoriteArtistsSection(
                     .clickable { onOpenArtist(artist.name) }
                     .padding(vertical = 10.dp)
             ) {
+                val coverUri = artist.topSongId?.let { id ->
+                    customCovers[id] ?: songsById[id]?.albumArtUri
+                }
                 Box(
                     Modifier
                         .size(40.dp)
@@ -1670,6 +1775,14 @@ private fun FavoriteArtistsSection(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
+                    if (!coverUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = android.net.Uri.parse(coverUri),
+                            contentDescription = "Portada",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -1689,6 +1802,333 @@ private fun FavoriteArtistsSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecentlyPlayedSection(
+    recentSongs: List<Song>,
+    customCovers: Map<Long, String>,
+    onPlayRecent: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth()) {
+        Text(
+            "Escuchadas recientemente",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 16.dp)
+        ) {
+            itemsIndexed(recentSongs, key = { _, song -> song.id }) { index, song ->
+                Column(
+                    Modifier
+                        .width(112.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { onPlayRecent(index) }
+                ) {
+                    // Portada de la canción (o nota musical solo si no hay).
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        val cover = customCovers[song.id] ?: song.albumArtUri
+                        if (!cover.isNullOrBlank()) {
+                            AsyncImage(
+                                model = android.net.Uri.parse(cover),
+                                contentDescription = "Portada",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        song.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        song.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Número con efecto odómetro: sube rodando desde 0 hasta [value] cuando
+ * [visible] es true, con una animación suave. Si no está visible, vuelve
+ * a 0 para que la próxima vez se vea la animación entera.
+ */
+@Composable
+private fun OdometerNumber(
+    value: Int,
+    visible: Boolean,
+    style: TextStyle,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    val animated by animateIntAsState(
+        targetValue = if (visible) value else 0,
+        animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+        label = "odometer"
+    )
+    Text(
+        text = animated.toString(),
+        style = style,
+        fontWeight = FontWeight.Bold,
+        color = color
+    )
+}
+
+@Composable
+private fun WeekStatsSection(
+    weekStats: WeekStats,
+    weekTopSong: Song?,
+    customCovers: Map<Long, String>,
+    onPlayWeekTopSong: () -> Unit,
+    odometerVisible: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    // Tarjeta definida: fondo propio + borde 1dp + radio 16dp.
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Text(
+            "Tu semana en Aural",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(12.dp))
+        // Tiempo escuchado, con odómetro (horas y minutos suben por separado).
+        val hours = (weekStats.totalSeconds / 3600).toInt()
+        val minutes = ((weekStats.totalSeconds % 3600) / 60).toInt()
+        Row(verticalAlignment = Alignment.Bottom) {
+            OdometerNumber(
+                value = hours,
+                visible = odometerVisible,
+                style = MaterialTheme.typography.headlineMedium,
+                color = primary
+            )
+            Text(
+                " h ",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            OdometerNumber(
+                value = minutes,
+                visible = odometerVisible,
+                style = MaterialTheme.typography.headlineMedium,
+                color = primary
+            )
+            Text(
+                " min",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OdometerNumber(
+                value = weekStats.distinctSongs,
+                visible = odometerVisible,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                " ${if (weekStats.distinctSongs == 1) "canción distinta" else "canciones distintas"} esta semana",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        val top = weekStats.topSongs.firstOrNull()
+        if (top != null && weekTopSong != null) {
+            Spacer(Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onPlayWeekTopSong() }
+                    .padding(vertical = 4.dp)
+            ) {
+                // Portada de la más escuchada (o nota si no hay).
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(primary.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    val cover = customCovers[weekTopSong.id] ?: weekTopSong.albumArtUri
+                    if (!cover.isNullOrBlank()) {
+                        AsyncImage(
+                            model = android.net.Uri.parse(cover),
+                            contentDescription = "Portada",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "La más escuchada",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = primary
+                    )
+                    Text(
+                        top.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        top.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionsSection(
+    onShuffleAll: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenTop10: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        QuickActionButton(
+            label = "Aleatorio",
+            onClick = onShuffleAll,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                Icons.Rounded.Shuffle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        QuickActionButton(
+            label = "Favoritas",
+            onClick = onOpenFavorites,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                Icons.Rounded.Favorite,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        QuickActionButton(
+            label = "Top 10",
+            onClick = onOpenTop10,
+            modifier = Modifier.weight(1f)
+        ) {
+            // El "10" dibujado, sin depender de un icono de trofeo.
+            Text(
+                "10",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        QuickActionButton(
+            label = "Descargas",
+            onClick = onOpenDownloads,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                Icons.Rounded.Download,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(vertical = 14.dp)
+    ) {
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) { icon() }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
