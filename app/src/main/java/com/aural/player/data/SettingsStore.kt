@@ -25,10 +25,11 @@ import org.json.JSONObject
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "aural_prefs")
 
 /** Orden por defecto de las pestañas de la biblioteca (claves estables). */
-val defaultTabOrder = listOf("songs", "artists", "albums", "playlists", "downloads", "folders")
+val defaultTabOrder = listOf("home", "songs", "artists", "albums", "playlists", "downloads", "folders")
 
 /** Etiqueta visible de cada clave de pestaña. */
 fun tabLabel(key: String): String = when (key) {
+    "home" -> "Inicio"
     "songs" -> "Canciones"
     "artists" -> "Artistas"
     "albums" -> "Álbumes"
@@ -829,8 +830,10 @@ class SettingsStore(private val context: Context) {
             val list = List(arr.length()) { arr.getString(it) }
             // Si falta o sobra alguna clave (p. ej. tras una actualización),
             // se normaliza contra el orden por defecto sin perder las válidas.
+            // "home" es la pestaña de inicio: si falta, va primera para todos.
             val valid = list.filter { it in defaultTabOrder }
-            (valid + defaultTabOrder.filter { it !in valid })
+            val withHome = if ("home" in valid) valid else listOf("home") + valid
+            (withHome + defaultTabOrder.filter { it !in withHome })
         } catch (e: Exception) {
             defaultTabOrder
         }
