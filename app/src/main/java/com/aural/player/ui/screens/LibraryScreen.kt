@@ -1825,10 +1825,12 @@ private fun RecentlyPlayedSection(
             contentPadding = PaddingValues(end = 16.dp)
         ) {
             itemsIndexed(recentSongs, key = { _, song -> song.id }) { index, song ->
+                // Sin clip en la columna: el recorte redondeado es solo de
+                // la portada. (El clip en la columna recortaba también el
+                // nombre del artista y la esquina de la portada.)
                 Column(
                     Modifier
                         .width(112.dp)
-                        .clip(RoundedCornerShape(16.dp))
                         .clickable { onPlayRecent(index) }
                 ) {
                     // Portada de la canción (o nota musical solo si no hay).
