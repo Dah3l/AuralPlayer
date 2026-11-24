@@ -253,7 +253,14 @@ class MusicService : MediaSessionService() {
         }
         // Ajustes y BPM de la Mezcla DJ en caché.
         serviceScope.launch {
-            app.settings.djMixEnabled.collect { djMixEnabledCache = it }
+            app.settings.djMixEnabled.collect {
+                djMixEnabledCache = it
+                // Apagar la Mezcla DJ apaga la sesión infinita.
+                if (!it && endlessDjSession) {
+                    endlessDjSession = false
+                    app.playback.setEndlessDjActive(false)
+                }
+            }
         }
         serviceScope.launch {
             app.settings.bpmMap.collect {
@@ -454,6 +461,7 @@ class MusicService : MediaSessionService() {
                 }
                 CMD_STOP_ENDLESS_DJ -> {
                     endlessDjSession = false
+                    app.playback.setEndlessDjActive(false)
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
             }
@@ -949,7 +957,21 @@ class MusicService : MediaSessionService() {
             if (songs.isEmpty()) return@launch
             val player = mediaSession?.player ?: return@launch
             if (crossfadeActive) abortFade()
-            endlessPool = songs.shuffled().map { song ->
+            // Cola inicial: primero las que ya tienen BPM, en cadena de
+            // tempo desde una al azar (cada sesión arranca distinto); las
+            // que aún no tienen BPM van después, mezcladas, y el reorden
+            // las sube solas cuando se analizan.
+            val analyzedIds = songs.filter { bpmCache.containsKey(it.id) }.map { it.id }
+            val unanalyzed = songs.filterNot { bpmCache.containsKey(it.id) }.shuffled()
+            val startId = analyzedIds.randomOrNull()
+            val chainedIds = if (startId != null) {
+                orderByTempo(analyzedIds, BpmAnalysis.foldBpm(bpmCache[startId] ?: 120f))
+            } else {
+                emptyList()
+            }
+            val byId = songs.associateBy { it.id }
+            val initialSongs = chainedIds.mapNotNull { byId[it] } + unanalyzed
+            endlessPool = initialSongs.map { song ->
                 MediaItem.Builder()
                     .setMediaId(song.id.toString())
                     .setUri(song.uri)
@@ -964,6 +986,7 @@ class MusicService : MediaSessionService() {
             }
             endlessRecentlyPlayed.clear()
             endlessDjSession = true
+            (application as? AuralApp)?.playback?.setEndlessDjActive(true)
             player.shuffleModeEnabled = false
             player.repeatMode = Player.REPEAT_MODE_OFF
             player.setMediaItems(endlessPool)
