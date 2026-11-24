@@ -814,16 +814,28 @@ cuanto las veas.
   (degradado vertical primary 32% → surfaceContainerLow + círculo
   decorativo recortado por el clip; el botón pastilla usa primary con
   onPrimary); va DEBAJO de "Para ti" en el LazyColumn.
-- Pestaña Inicio (2026-11-23): "home" es la primera clave de
-  defaultTabOrder y la fusión de órdenes guardados la antepone si falta
-  (un orden guardado sin "home" la recibe primera, no última). El Inicio
-  lleva "Para ti" + tarjeta DJ + "Tus artistas favoritos" (TopArtist en
-  PlayHistoryStore, getTopArtists(5) por segundos del mismo historial
-  del Top 10, sin "Artista misterioso"; el ViewModel expone topArtists y
-  refreshTopArtists, que LibraryScreen llama al entrar al Inicio). Sin
-  barra A-Z (como Descargas y Playlists). "Para ti" y la DJ salieron de
-  Canciones: SongsTab ya no recibe esos parámetros. pageCount del pager
-  es 7 (MainActivity + default de LibraryScreen).
+- Inicio completo (2026-11-24): orden final Para ti → Sesión DJ →
+  Artistas favoritos → Escuchadas recientemente (10) → Tu semana en
+  Aural → Accesos rápidos. "Escuchadas recientemente" suena con las 10
+  en cola desde la tocada (onPlayList(recentSongs, index, null)).
+  "Tu semana en Aural" trae tiempo total, canciones distintas y la más
+  escuchada (WeekStats de PlayHistoryStore, ventana 7 días; la más
+  escuchada se resuelve a Song en LibraryScreen con library.songs, la
+  lista completa, no la filtrada por la búsqueda). El odómetro
+  (OdometerNumber: animateIntAsState 0 → valor, 1200 ms,
+  FastOutSlowInEasing) SOLO corre cuando la tarjeta está COMPLETAMENTE
+  visible: HomeTab calcula weekFullyVisible con derivedStateOf sobre
+  homeListState.layoutInfo (item con key "week_stats", offset >=
+  viewportStartOffset y offset+size <= viewportEndOffset − 100dp del
+  MiniPlayer); si no está visible vuelve a 0 y la próxima vez se ve la
+  animación entera. "Escuchadas recientemente" se ordena por
+  lastPlayedAt, que record() guarda en cada canción (el historial viejo
+  sin ese campo queda al final). Portadas en todo lo que las tiene:
+  artista = la de su canción más escuchada (TopArtist.topSongId, del
+  historial); icono genérico SOLO si no hay portada. Accesos rápidos:
+  Aleatorio (ViewModel.playAllShuffled: biblioteca mezclada),
+  Favoritas (onOpenPlaylist(FAVORITES_ID)), Top 10 ("10" dibujado, sin
+  icono de trofeo), Descargas (pestaña downloads).
 - Tarjeta DJ simplificada (2026-11-23): la tarjeta NO es un botón entero
   (el clic exterior no arranca nada); el botón dice "Nueva sesión" por
   defecto y en activo SOLO muestra "Detener" (cuadrito de stop dibujado,
@@ -1061,4 +1073,4 @@ cuanto las veas.
 | 2026-11-23 | Malen-IA | Android 1.2.0, fundido entre canciones (crossfade, SOLO Android; PC después): segundo reproductor en MusicService + intercambio de papeles con MediaSession.setPlayer + rampa de potencia igual (sen/cos) a 50 ms; funde al terminar la canción Y al saltar a mano (decisión de Dahel: mejor que Spotify); no funde con repetir-una ni con parada programada; EQ con segundo juego de efectos (initSecondSession); aleatorio conservado con UnshuffledShuffleOrder; ajustes en Sonido (interruptor + duración 1-12 s, 5 s por defecto, apagado por defecto) | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, playback/EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, MainActivity.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Android 1.2.0, Mezcla DJ (SOLO Android; PC después): beatmatching + cambio de bajos sobre el fundido — BPM por canción analizado una vez en segundo plano mientras suena (Realtime BPM Analyzer 6.3.0, decodifica 75 s por MediaExtractor/MediaCodec, guardado crudo en DataStore, plegado a 70–180 solo al mezclar) + la que entra toma el tempo de la que sale (clamp ±8% sobre la velocidad del usuario; doble/mitad mezcla a velocidad natural; fuera de eso fundido normal) y vuelve sola a su tempo en ~20 s (glide pausable, se cancela con seek/cambio manual de velocidad/cambio de canción) + cambio de bajos con el EQ doble (banda 0 cruzada durante el fundido); fix del bug latente del crossfade (finishFade re-inicializaba el EQ y dejaba dos ecualizadores en la sesión nueva y ninguno en la reserva — ahora swapRoles); el crossfade SE QUEDA como opción sencilla (el DJ lo enciende solo y al apagar el fundido se apaga el DJ); tag "128 BPM" en el Now Playing + "Información de la canción" en el menú ⋮ (BPM, formato, calidad, tamaño, carpeta) + tarjeta "Sesión DJ" en la biblioteca (ordena la cola por tempo, mínimo 3 analizadas) | app/build.gradle.kts; app/.../playback/BpmAnalysis.kt (NUEVO), MusicService.kt, EqualizerManager.kt, data/SettingsStore.kt, AuralViewModel.kt, ui/screens/SettingsScreen.kt, ui/screens/NowPlayingScreen.kt, ui/screens/LibraryScreen.kt, MainActivity.kt, AGENTS.md |
 | 2026-11-23 | Malen-IA | Sesión DJ INFINITA (reemplaza la sesión finita de mínimo 3 analizadas): la tarjeta "Sesión DJ" arranca toda la biblioteca mezclada en una cola que no se acaba nunca — el servicio (MusicService, CMD_START/STOP_ENDLESS_DJ) reordena la cola que viene por tempo con cada BPM nuevo y al cambiar de canción (cadena del más cercano, doble/mitad como cercanos, sin BPM al final) y la rellena sola cuando quedan ≤5 (sin repetir las 50 recientes; si no hay elegibles se olvida el historial salvo la que suena y la siguiente); nunca se mueve la que suena ni la siguiente, nunca se reordena en mitad de un fundido ni con aleatorio/repetición (manda el usuario); arranca con aleatorio y repetición apagados; se detiene al poner cualquier otra cola (playQueue manda CMD_STOP) o al apagar la Mezcla DJ | app/.../playback/MusicService.kt, playback/PlaybackManager.kt, AuralViewModel.kt (startDjSession ya no usa buildDjOrder — borrado), ui/screens/LibraryScreen.kt (subtítulo "Sesión infinita"), AGENTS.md |
-| 2026-11-23 | Malen-IA | Pestaña Inicio + pulido de la Sesión DJ (a pedido de Dahel, tras probar el arranque reconstruido): tarjeta DJ ya no es un botón entero (solo el botón arranca), el botón dice "Nueva sesión" por defecto y en activo SOLO muestra "Detener" (para la música por completo con playback.stop()); micrófono de reconocimiento DENTRO de la barra de búsqueda (X + divisoria + mic) y FAB flotante eliminado con su pulso; pestaña nueva "Inicio" (primera para todos) con "Para ti", la tarjeta DJ y "Tus artistas favoritos" (Top 5 por tiempo escuchado, del mismo historial del Top 10, excluye "Artista misterioso"; tocar uno abre sus canciones); el Inicio no lleva barra A-Z (como Descargas/Playlists). "Para ti" y la DJ salieron de Canciones | app/.../data/PlayHistoryStore.kt (TopArtist + getTopArtists), AuralViewModel.kt (topArtists + refresh + stopDjSession=stop), data/SettingsStore.kt ("home" primero + etiqueta + merge), MainActivity.kt (pageCount 7), ui/screens/LibraryScreen.kt (HomeTab + FavoriteArtistsSection + tarjeta + mic + sin FAB), AGENTS.md |
+| 2026-11-24 | Malen-IA | Inicio completo (a pedido de Dahel): "Escuchadas recientemente" (fila horizontal de 10 portadas; tocar una suena con las 10 en cola desde esa), "Tu semana en Aural" (tiempo + canciones distintas + la más escuchada, con odómetro que solo corre cuando la tarjeta está COMPLETAMENTE visible — ni un píxel asomando ni tapada por el MiniPlayer) y "Accesos rápidos" (Aleatorio, Favoritas, Top 10, Descargas). Portadas en todo lo que las tiene (artistas: la de su canción más escuchada; semana: la de la más escuchada; recientes: la de cada canción) — icono genérico solo si no hay portada. Orden final del Inicio: Para ti, Sesión DJ, Artistas favoritos, Recientes, Semana, Accesos rápidos | app/.../data/PlayHistoryStore.kt (lastPlayedAt + getRecentSongs + TopArtist.topSongId), AuralViewModel.kt (recentSongs + weekStats + playAllShuffled), ui/screens/LibraryScreen.kt (HomeTab + RecentlyPlayedSection + WeekStatsSection + OdometerNumber + QuickActionsSection + artistas con portada), AGENTS.md |
