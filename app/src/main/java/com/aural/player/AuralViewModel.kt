@@ -815,6 +815,11 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** Detiene la Sesión DJ infinita (la cola sigue como esté). */
+    fun stopDjSession() {
+        playback.setEndlessDj(false)
+    }
+
     /** Datos de archivo de una canción (para "Información de la canción"). */
     suspend fun loadSongFileInfo(song: Song): AudioFileInfo? = withContext(Dispatchers.IO) {
         try {
