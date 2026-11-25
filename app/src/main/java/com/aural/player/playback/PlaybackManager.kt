@@ -110,6 +110,14 @@ class PlaybackManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private val ioScope = CoroutineScope(Dispatchers.IO)
 
+    /** PNG de la portada predeterminada (signo de música) para canciones
+     *  sin arte. Declarada ANTES del init por la misma razón que _state:
+     *  el init lanza su pre-render en IO y si esa corrutina corre antes
+     *  de que el constructor asigne el delegado lazy, el acceso da
+     *  NullPointerException (crash 2026-11-25, primera apertura tras
+     *  actualizar; era el único lazy declarado tras el init). */
+    private val defaultCoverBytes: ByteArray by lazy { renderDefaultCover() }
+
     /** Cola cacheada para publishState: se reconstruye solo cuando
      *  cambia el timeline (firma = ids de los MediaItems en orden). */
     private var cachedQueue: List<Song> = emptyList()
@@ -758,9 +766,6 @@ class PlaybackManager(private val context: Context) {
         tickerJob?.cancel()
         tickerJob = null
     }
-
-    /** PNG de la portada predeterminada (signo de música) para canciones sin arte. */
-    private val defaultCoverBytes: ByteArray by lazy { renderDefaultCover() }
 
     /** Dibuja el signo de música sobre fondo neutro y lo devuelve como PNG. */
     private fun renderDefaultCover(): ByteArray {
