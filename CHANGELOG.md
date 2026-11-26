@@ -10,6 +10,7 @@ en GitHub salen de aquí.
 - **Detalle en línea como el local** — al tocar un álbum, artista o playlist en línea se abre su vista detallada de siempre, con su portada grande, sus canciones y los botones de reproducir y aleatorio. El botón de reproducir de la fila sigue sonando directo.
 - **Streaming a tu manera** — en Ajustes → Sonido: calidad de streaming y opción de escuchar en línea solo con Wi-Fi. El aviso de consumo de datos sale una sola vez.
 - **Streaming más fluido** — las canciones en línea cargan con más colchón y por flujo continuo, con la siguiente preparada y una caché pequeña para repeticiones y saltos; si la red flaquea, la siguiente carga baja temporalmente a ahorro.
+- **Streaming sin VPN** — el audio en línea se pide con la misma conexión que las descargas y la dirección se prueba antes de sonar; si el servidor la rechaza, se resuelve una nueva y se reintenta con otro formato disponible.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
 
 ## v1.2.0 — 2026-11-24
