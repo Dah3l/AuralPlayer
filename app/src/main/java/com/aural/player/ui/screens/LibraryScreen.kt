@@ -1153,7 +1153,7 @@ fun LibraryScreen(
     // el mismo ancho: sin el hueco asimétrico de la derecha, que
     // apretaba la última acción y partía su texto.
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, bottom = 100.dp),
+        modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 100.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
     androidx.compose.animation.AnimatedVisibility(
