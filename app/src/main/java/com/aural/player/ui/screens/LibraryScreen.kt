@@ -663,6 +663,9 @@ fun LibraryScreen(
                 online = searchOnline,
                 onChange = { searchOnline = it }
             )
+            if (searchOnline) {
+                OnlineVpnNoticeBanner(viewModel)
+            }
         }
 
         // ---- Contenido por pestaña (con pull-to-refresh) ----
@@ -798,7 +801,8 @@ fun LibraryScreen(
                                         },
                                         listState = songsListState,
                                         customCovers = customCovers,
-                                        customMetadata = customMetadata
+                                        customMetadata = customMetadata,
+                                        emptyText = ONLINE_EMPTY_TEXT
                                     )
                                 }
                             }
