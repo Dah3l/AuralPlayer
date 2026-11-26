@@ -746,3 +746,351 @@ internal fun SaveDailyPlaylistDialog(onDismiss: () -> Unit, onConfirm: (String) 
     )
 }
 
+// --------------------------- Pestaña: Playlists ---------------------------
+
+@Composable
+internal fun PlaylistsTab(
+    playlists: List<Playlist>,
+    songCount: (Playlist) -> Int,
+    onCreate: () -> Unit,
+    onOpen: (Playlist) -> Unit,
+    onPlayPlaylist: (Playlist) -> Unit,
+    onRename: (Playlist) -> Unit,
+    onDelete: (Playlist) -> Unit,
+    onExport: (Playlist) -> Unit,
+    onImport: () -> Unit,
+    hasFavorites: Boolean,
+    onOpenFavorites: () -> Unit,
+    downloadsCount: Int,
+    onOpenDownloads: () -> Unit,
+    dailySongCount: Int,
+    dailyCoverUri: String?,
+    onOpenDaily: () -> Unit,
+    onPlayDaily: () -> Unit,
+    onSaveDailyPermanent: () -> Unit,
+    recentSongCount: Int,
+    recentCoverUri: String?,
+    onOpenRecent: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    playlistCovers: Map<String, String>,
+    firstSongCover: (Playlist) -> String?,
+    onRemoveCover: (Playlist) -> Unit,
+    showFixedEntries: Boolean = true
+) {
+    LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+        item {
+            Text(
+                text = "Tuyas",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
+        }
+        if (showFixedEntries) {
+        // Entrada fija de Favoritos
+        item {
+            val favInteraction = remember { MutableInteractionSource() }
+            val favPressed by favInteraction.collectIsPressedAsState()
+            val favScale by animateFloatAsState(
+                targetValue = if (favPressed) 0.98f else 1f,
+                label = "fav_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(favScale)
+                    .clickable(
+                        interactionSource = favInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenFavorites() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = null, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Favoritas", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (hasFavorites) "Tu selección" else "Toca el ♡ en tus canciones",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onOpenFavorites) {
+                    Icon(Icons.Rounded.Favorite, "Abrir favoritas",
+                        tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+        // Entrada fija de Descargas
+        item {
+            val dlInteraction = remember { MutableInteractionSource() }
+            val dlPressed by dlInteraction.collectIsPressedAsState()
+            val dlScale by animateFloatAsState(
+                targetValue = if (dlPressed) 0.98f else 1f,
+                label = "dl_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(dlScale)
+                    .clickable(
+                        interactionSource = dlInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenDownloads() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = null, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Descargas", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (downloadsCount > 0) "$downloadsCount ${if (downloadsCount == 1) "canción" else "canciones"}"
+                        else "Tus canciones de YouTube",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onOpenDownloads) {
+                    Icon(Icons.Default.Download, "Abrir descargas",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        // Entrada fija de Agregadas recientemente (v1.0.9): va ANTES de la
+        // Playlist del día; su icono de la derecha es un reloj (lista
+        // basada en tiempo) que abre la lista, como el corazón de
+        // Favoritas y el icono de Descargas.
+        item {
+            val recentInteraction = remember { MutableInteractionSource() }
+            val recentPressed by recentInteraction.collectIsPressedAsState()
+            val recentScale by animateFloatAsState(
+                targetValue = if (recentPressed) 0.98f else 1f,
+                label = "recent_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(recentScale)
+                    .clickable(
+                        interactionSource = recentInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenRecent() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = recentCoverUri, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Agregadas recientemente", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (recentSongCount > 0)
+                            "$recentSongCount ${if (recentSongCount == 1) "canción nueva" else "canciones nuevas"}"
+                        else "Todavía no hay canciones",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onOpenRecent) {
+                    Icon(Icons.Rounded.Schedule, "Abrir",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        // Entrada fija de Playlist del día (UNA sola instancia; rota a diario)
+        item {
+            val dailyInteraction = remember { MutableInteractionSource() }
+            val dailyPressed by dailyInteraction.collectIsPressedAsState()
+            val dailyScale by animateFloatAsState(
+                targetValue = if (dailyPressed) 0.98f else 1f,
+                label = "daily_press"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(dailyScale)
+                    .clickable(
+                        interactionSource = dailyInteraction,
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) { onOpenDaily() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = dailyCoverUri, size = 48.dp)
+                Spacer(Modifier.height(0.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text("Playlist del día", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (dailySongCount > 0)
+                            "$dailySongCount ${if (dailySongCount == 1) "canción aleatoria" else "canciones aleatorias"} · se renueva cada día"
+                        else "Se genera al abrir la app",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onPlayDaily) {
+                    Icon(Icons.Rounded.PlayArrow, "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+                var showDailyMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showDailyMenu = true }) {
+                        Icon(Icons.Default.MoreVert, "Opciones")
+                    }
+                    DropdownMenu(
+                        expanded = showDailyMenu,
+                        onDismissRequest = { showDailyMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Guardar como permanente") },
+                            onClick = {
+                                showDailyMenu = false
+                                onSaveDailyPermanent()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        // Botones crear / importar playlist
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.height(0.dp))
+                TextButton(onClick = onCreate, modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Crear playlist", style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onImport) {
+                    Text("Importar playlist", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+
+        }
+        if (playlists.isEmpty()) {
+            item { EmptyState("Todavía no has creado playlists") }
+        } else {
+            items(playlists.filter { it.name != "Descargas" }, key = { it.id }) { pl ->
+                val rowInteraction = remember { MutableInteractionSource() }
+                val rowPressed by rowInteraction.collectIsPressedAsState()
+                val rowScale by animateFloatAsState(
+                    targetValue = if (rowPressed) 0.98f else 1f,
+                    label = "playlist_press"
+                )
+                // El conteo se calcula una sola vez por fila (no en cada Text).
+                val count = songCount(pl)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(rowScale)
+                        .clickable(
+                            interactionSource = rowInteraction,
+                            indication = androidx.compose.foundation.LocalIndication.current
+                        ) { onOpen(pl) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CoverArt(uri = playlistCovers[pl.id] ?: firstSongCover(pl), size = 48.dp)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(pl.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                        Text(
+                            "$count ${if (count == 1) "canción" else "canciones"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = { onPlayPlaylist(pl) }) {
+                        Icon(Icons.Rounded.PlayArrow, "Reproducir",
+                            tint = MaterialTheme.colorScheme.primary)
+                    }
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Renombrar") },
+                                onClick = {
+                                    showMenu = false
+                                    onRename(pl)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Eliminar") },
+                                onClick = {
+                                    showMenu = false
+                                    onDelete(pl)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Exportar lista") },
+                                onClick = {
+                                    showMenu = false
+                                    onExport(pl)
+                                }
+                            )
+                            if (playlistCovers.containsKey(pl.id)) {
+                                DropdownMenuItem(
+                                    text = { Text("Quitar foto") },
+                                    onClick = {
+                                        showMenu = false
+                                        onRemoveCover(pl)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
