@@ -30,20 +30,12 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --teal: #2ED3B7; --bg: #121212; --card: color-mix(in srgb, var(--teal) 6%, #1c1c1c); --line: color-mix(in srgb, var(--teal) 16%, #2a2a2a); --txt: #f5f5f5; --mut: #9a9a9a; }
-  body { background: color-mix(in srgb, var(--teal) 7%, #080808); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
+  :root { --teal: #2ED3B7; --bg: #121212; --card: #1c1c1c; --line: #2a2a2a; --txt: #f5f5f5; --mut: #9a9a9a; }
+  body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
   a { color: var(--teal); text-decoration: none; }
   .wrap { max-width: 1020px; margin: 0 auto; padding: 0 20px; }
-  html { scroll-behavior: smooth; background: color-mix(in srgb, var(--teal) 7%, #080808); }
-  /* Fondo ambiental: manchas suaves de color detrás de toda la página, sobre el negro */
-  .ambient { position: fixed; inset: -20%; z-index: -1; pointer-events: none; filter: blur(28px); background:
-    radial-gradient(38% 32% at 14% 12%, color-mix(in srgb, var(--teal) 17%, transparent), transparent 70%),
-    radial-gradient(34% 30% at 88% 38%, rgba(157,123,255,.13), transparent 70%),
-    radial-gradient(40% 34% at 40% 62%, color-mix(in srgb, var(--teal) 9%, transparent), transparent 70%),
-    radial-gradient(32% 28% at 86% 92%, rgba(255,77,141,.08), transparent 70%);
-    animation: ambient-drift 28s ease-in-out infinite alternate; }
-  @keyframes ambient-drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-3%, 2%, 0) scale(1.06); } }
-  header { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--teal) 7%, rgba(8,8,8,.92)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  html { scroll-behavior: smooth; }
+  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
   .head-in { display: flex; align-items: center; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--txt); }
   .brand img { width: 30px; height: 30px; border-radius: 8px; }
@@ -233,7 +225,7 @@
     .menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--txt); font-size: 20px; cursor: pointer; }
     .head-cta { margin-left: 0; }
     nav { display: none; }
-    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; width: auto; margin: 0; padding: 6px 20px 14px; background: color-mix(in srgb, var(--teal) 7%, rgba(8,8,8,.97)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; width: auto; margin: 0; padding: 6px 20px 14px; background: rgba(18,18,18,.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
     header.menu-open nav a { width: 100%; padding: 12px 0; font-size: 16px; border-top: 1px solid var(--line); }
     header.menu-open nav a:first-child { border-top: none; }
     .btns { flex-direction: column; }
@@ -248,7 +240,7 @@
   .scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--teal); transform-origin: 0 50%; transform: scaleX(0); z-index: 60; animation: scroll-grow linear both; animation-timeline: scroll(root); }
   @keyframes scroll-grow { to { transform: scaleX(1); } }
   header { transition: box-shadow .3s ease, background-color .3s ease; }
-  header.scrolled { background: color-mix(in srgb, var(--teal) 7%, rgba(8,8,8,.97)); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  header.scrolled { background: rgba(18,18,18,.97); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
 
   .island { transition: opacity .35s ease, transform .5s cubic-bezier(.22,1,.36,1); transform: translate(calc(var(--px, 0) * 12px), calc(var(--py, 0) * 10px)); }
   .island-progress { position: absolute; left: 22px; right: 22px; bottom: -9px; height: 2px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
@@ -278,14 +270,13 @@
   @keyframes faq-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
   @media (prefers-reduced-motion: reduce) {
-    .ambient, .scroll-progress, .island-progress i, .faq details[open] p, .theme-dots button.on { animation: none; }
+    .scroll-progress, .island-progress i, .faq details[open] p, .theme-dots button.on { animation: none; }
     .btn.primary::after { display: none; }
     .island, .island-stage, .card::after, .contact-card::after, header, :root { transition: none; }
   }
 </style>
 </head>
 <body>
-<div class="ambient" aria-hidden="true"></div>
 <div class="scroll-progress" aria-hidden="true"></div>
 <div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><div class="splash-inner"><img class="splash-logo" id="splashLogo" src="favicon.svg" alt="" fetchpriority="high"><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div></div>
 <noscript><style>.splash { display: none; }</style></noscript>
