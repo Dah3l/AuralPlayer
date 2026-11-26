@@ -401,7 +401,7 @@ internal fun OnlineArtistsTab(
             contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(artists, key = { it.url }) { artist ->
+            items(artists.distinctBy { it.url }, key = { it.url }) { artist ->
                 MediaGridCard(
                     coverUri = artist.thumbnailUrl,
                     title = artist.title,
@@ -440,7 +440,7 @@ internal fun OnlineAlbumsTab(
             contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(albums, key = { it.url }) { album ->
+            items(albums.distinctBy { it.url }, key = { it.url }) { album ->
                 MediaGridCard(
                     coverUri = album.thumbnailUrl,
                     title = album.title,
@@ -477,7 +477,7 @@ internal fun OnlinePlaylistsTab(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
-        items(playlists, key = { it.url }) { playlist ->
+        items(playlists.distinctBy { it.url }, key = { it.url }) { playlist ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -774,13 +774,19 @@ internal fun SongsTab(
         return
     }
     val scope = rememberCoroutineScope()
+    // Defensa global de claves: si la fuente trae un id
+    // repetido (p. ej. el mismo video online dos veces), la
+    // LazyColumn crashea con «Key was already used». Se
+    // deduplica una sola vez y la lista única alimenta
+    // también el scroller A–Z (mismos índices).
+    val uniqueSongs = remember(songs) { songs.distinctBy { it.id } }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
         ) {
-            items(songs, key = { it.id }) { song ->
+            items(uniqueSongs, key = { it.id }) { song ->
                 val meta = customMetadata[song.id]
                 SongRow(
                     title = meta?.first?.ifBlank { song.title } ?: song.title,
@@ -808,7 +814,7 @@ internal fun SongsTab(
                 )
             }
         }
-        val songTitles = remember(songs) { songs.map { it.title } }
+        val songTitles = remember(uniqueSongs) { uniqueSongs.map { it.title } }
         AlphabetFastScroller(
             keys = songTitles,
             onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
@@ -838,7 +844,7 @@ internal fun ArtistsTab(
             contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(artists, key = { it.name }) { artist ->
+            items(artists.distinctBy { it.name }, key = { it.name }) { artist ->
                 MediaGridCard(
                     coverUri = artist.representativeSong.albumArtUri,
                     title = artist.name,
@@ -877,7 +883,7 @@ internal fun AlbumsTab(
             contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(albums, key = { it.id }) { album ->
+            items(albums.distinctBy { it.id }, key = { it.id }) { album ->
                 MediaGridCard(
                     coverUri = album.songs.firstOrNull()?.albumArtUri,
                     title = album.title,
@@ -914,7 +920,7 @@ internal fun FoldersTab(
         contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        items(folders, key = { it.path }) { folder ->
+        items(folders.distinctBy { it.path }, key = { it.path }) { folder ->
             FolderRow(
                 folder = folder,
                 onClick = { onOpen(folder) },
@@ -1319,7 +1325,7 @@ internal fun PlaylistsTab(
         if (playlists.isEmpty()) {
             item { EmptyState("Todavía no has creado playlists") }
         } else {
-            items(playlists.filter { it.name != "Descargas" }, key = { it.id }) { pl ->
+            items(playlists.filter { it.name != "Descargas" }.distinctBy { it.id }, key = { it.id }) { pl ->
                 val rowInteraction = remember { MutableInteractionSource() }
                 val rowPressed by rowInteraction.collectIsPressedAsState()
                 val rowScale by animateFloatAsState(
