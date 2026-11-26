@@ -80,6 +80,7 @@ class SettingsStore(private val context: Context) {
         val KEY_STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val KEY_STREAMING_WIFI_ONLY = booleanPreferencesKey("streaming_wifi_only")
         val KEY_STREAMING_DATA_NOTICE_SEEN = booleanPreferencesKey("streaming_data_notice_seen")
+        val KEY_ONLINE_VPN_NOTICE_SEEN = booleanPreferencesKey("online_vpn_notice_seen")
         val KEY_ONLINE_SONGS = stringPreferencesKey("online_songs_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
@@ -790,6 +791,17 @@ class SettingsStore(private val context: Context) {
     suspend fun setStreamingDataNoticeSeen() {
         context.dataStore.edit { prefs ->
             prefs[KEY_STREAMING_DATA_NOTICE_SEEN] = true
+        }
+    }
+
+    /** Aviso VPN de la primera búsqueda online ya descartado. */
+    val onlineVpnNoticeSeen: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ONLINE_VPN_NOTICE_SEEN] ?: false
+    }
+
+    suspend fun setOnlineVpnNoticeSeen() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ONLINE_VPN_NOTICE_SEEN] = true
         }
     }
 
