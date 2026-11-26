@@ -1566,6 +1566,10 @@ private class ChunkedRangeDataSource(
 
     private var spec: DataSpec? = null
     private var chunked = false
+    /** Respaldo progresivo: la URL solo acepta la lectura
+     *  secuencial abierta tipo descarga; se lee en una sola
+     *  conexión abierta y la caché se llena mientras suena. */
+    private var progressive = false
     private var position = 0L
     private var remaining = C.LENGTH_UNSET.toLong()
     private var chunkBytesRead = 0L
@@ -1587,6 +1591,7 @@ private class ChunkedRangeDataSource(
         generation++
         spec = dataSpec
         chunked = dataSpec.uri.host?.contains("googlevideo.com") == true
+        progressive = chunked && dataSpec.key?.endsWith(":prog") == true
         position = dataSpec.position
         remaining = dataSpec.length
         chunkBytesRead = 0L
@@ -1602,7 +1607,9 @@ private class ChunkedRangeDataSource(
     }
 
     private fun chunkSizeFor(remainingAtChunk: Long): Long =
-        if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
+        if (progressive) {
+            Long.MAX_VALUE
+        } else if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
             minOf(CHUNK_BYTES, remainingAtChunk)
         } else {
             CHUNK_BYTES
@@ -1610,7 +1617,9 @@ private class ChunkedRangeDataSource(
 
     private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
         val base = spec ?: throw IOException("DataSource sin abrir")
-        val chunkLength = if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
+        // En progresivo se pide abierto (bytes=posición-), como
+        // la descarga; en directo, rangos acotados de 1 MB.
+        val chunkLength = if (chunked && !progressive && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
             minOf(CHUNK_BYTES, remainingAtChunk)
         } else {
             remainingAtChunk
@@ -1642,6 +1651,8 @@ private class ChunkedRangeDataSource(
         } ?: return false
         refreshAttempts++
         spec = refreshed
+        progressive = refreshed.key?.endsWith(":prog") == true
+        chunkSize = chunkSizeFor(remaining)
         // El rango preabierto usa la URL vieja: fuera.
         synchronized(this) {
             next?.dataSource?.close()
@@ -1665,7 +1676,7 @@ private class ChunkedRangeDataSource(
         }
 
     private fun maybePrefetchNext() {
-        if (!chunked || prefetching || next != null) return
+        if (!chunked || progressive || prefetching || next != null) return
         if (remaining == C.LENGTH_UNSET.toLong()) return
         val chunkLeft = chunkSize - chunkBytesRead
         if (chunkLeft <= 0L || chunkLeft > PREFETCH_THRESHOLD_BYTES) return
@@ -1723,6 +1734,32 @@ private class ChunkedRangeDataSource(
             val read = active.read(buffer, offset, length)
             if (read > 0) {
                 position += read
+                if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+            }
+            return read
+        }
+        if (progressive) {
+            val read = try {
+                active.read(buffer, offset, length)
+            } catch (e: IOException) {
+                if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
+                    return read(buffer, offset, length)
+                }
+                return C.RESULT_END_OF_INPUT
+            }
+            if (read == C.RESULT_END_OF_INPUT) {
+                if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
+                    return C.RESULT_END_OF_INPUT
+                }
+                // Corte de la conexión abierta: URL fresca y
+                // reabrir en la misma posición (acotado por los
+                // refrescos, para no girar en vacío).
+                return if (refreshSpec() && advanceChunk()) read(buffer, offset, length)
+                else C.RESULT_END_OF_INPUT
+            }
+            if (read > 0) {
+                position += read
+                chunkBytesRead += read
                 if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
             }
             return read
