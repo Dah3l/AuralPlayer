@@ -202,7 +202,7 @@ fun DownloadsScreen(
             contentPadding = PaddingValues(bottom = 100.dp, top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(results, key = { it.videoId }) { result ->
+            items(results.distinctBy { it.videoId }, key = { it.videoId }) { result ->
                 val isDl = result.videoId in downloading
                 val pct = progress[result.videoId] ?: 0f
 
