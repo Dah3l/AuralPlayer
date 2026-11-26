@@ -45,6 +45,13 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.shape.CircleShape
@@ -202,6 +209,75 @@ internal const val ONLINE_EMPTY_TEXT =
     "Sin resultados. En algunas regiones YouTube limita el catálogo; sin VPN los resultados pueden no ser óptimos."
 
 /**
+ * Estado vacío online con presencia: globo terráqueo vectorial
+ * dibujado en Canvas (sin emojis ni imágenes), título corto y
+ * la referencia regional en tono secundario. El mismo en las
+ * cuatro pestañas Online.
+ */
+@Composable
+internal fun OnlineEmptyState() {
+    val primary = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Canvas(Modifier.size(76.dp)) {
+            val stroke = Stroke(width = 3f)
+            val radius = size.minDimension / 2f - 4f
+            val center = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(primary, radius = radius, center = center, style = stroke)
+            drawLine(
+                primary,
+                Offset(center.x - radius, center.y),
+                Offset(center.x + radius, center.y),
+                strokeWidth = 3f
+            )
+            drawOval(
+                primary,
+                topLeft = Offset(center.x - radius * 0.45f, center.y - radius),
+                size = androidx.compose.ui.geometry.Size(radius * 0.9f, radius * 2f),
+                style = stroke
+            )
+            drawArc(
+                primary,
+                startAngle = 20f,
+                sweepAngle = 140f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius, center.y - radius * 0.55f),
+                size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 1.1f),
+                style = stroke
+            )
+            drawArc(
+                primary,
+                startAngle = 200f,
+                sweepAngle = 140f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius, center.y - radius * 0.55f),
+                size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 1.1f),
+                style = stroke
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "Sin resultados",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "En algunas regiones YouTube limita el catálogo; sin VPN los resultados pueden no ser óptimos.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
  * Aviso único de la primera búsqueda online: el streaming de
  * YouTube puede variar por región y con VPN los resultados y
  * la reproducción suelen ser mejores. Se descarta con
@@ -250,15 +326,58 @@ internal fun OnlineSearchNotice(hasInternet: Boolean, onlineError: String?) {
     }
 }
 
-/** Esqueletos de carga con la misma fila de las canciones. */
+/**
+ * Esqueletos de carga a pantalla completa con shimmer: la
+ * lista llena el área de resultados con la misma fila de las
+ * canciones y la rejilla hace lo propio para Álbumes y
+ * Artistas. Mientras se ve esto, nunca se muestra el vacío.
+ */
 @Composable
 internal fun OnlineSkeletonList() {
+    val brush = shimmerBrush()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
-        items(5) { SearchSkeletonRow() }
+        items(14) { SearchSkeletonRow(brush) }
     }
+}
+
+@Composable
+internal fun OnlineSkeletonGrid(minSize: androidx.compose.ui.unit.Dp) {
+    val brush = shimmerBrush()
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = minSize),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(12) { SearchSkeletonCard(brush) }
+    }
+}
+
+/** Gradiente que se desplaza en bucle sobre los esqueletos. */
+@Composable
+private fun shimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "skeletonShimmer")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "skeletonShimmerProgress"
+    )
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
+    val highlight = MaterialTheme.colorScheme.surfaceContainerHighest
+    val x = progress * 900f
+    return Brush.linearGradient(
+        colors = listOf(base, highlight, base),
+        start = Offset(x - 450f, 0f),
+        end = Offset(x, 0f)
+    )
 }
 
 /**
@@ -272,7 +391,7 @@ internal fun OnlineArtistsTab(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
 ) {
     if (artists.isEmpty()) {
-        EmptyState(ONLINE_EMPTY_TEXT); return
+        OnlineEmptyState(); return
     }
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
@@ -311,7 +430,7 @@ internal fun OnlineAlbumsTab(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
 ) {
     if (albums.isEmpty()) {
-        EmptyState(ONLINE_EMPTY_TEXT); return
+        OnlineEmptyState(); return
     }
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
@@ -351,7 +470,7 @@ internal fun OnlinePlaylistsTab(
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
     if (playlists.isEmpty()) {
-        EmptyState(ONLINE_EMPTY_TEXT); return
+        OnlineEmptyState(); return
     }
     LazyColumn(
         state = listState,
@@ -525,7 +644,7 @@ internal fun OnlineSongMenuSheet(
 
 
 @Composable
-private fun SearchSkeletonRow() {
+private fun SearchSkeletonRow(brush: Brush) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -536,7 +655,7 @@ private fun SearchSkeletonRow() {
             Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .background(brush)
         )
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
@@ -545,7 +664,7 @@ private fun SearchSkeletonRow() {
                     .fillMaxWidth(0.55f)
                     .height(14.dp)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .background(brush)
             )
             Spacer(Modifier.height(6.dp))
             Box(
@@ -553,9 +672,38 @@ private fun SearchSkeletonRow() {
                     .fillMaxWidth(0.35f)
                     .height(11.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .background(brush)
             )
         }
+    }
+}
+
+@Composable
+private fun SearchSkeletonCard(brush: Brush) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(brush)
+        )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier
+                .fillMaxWidth(0.7f)
+                .height(13.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(brush)
+        )
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier
+                .fillMaxWidth(0.45f)
+                .height(11.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(brush)
+        )
     }
 }
 
