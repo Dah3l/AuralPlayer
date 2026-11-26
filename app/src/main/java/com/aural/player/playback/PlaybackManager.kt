@@ -83,6 +83,17 @@ class PlaybackManager(private val context: Context) {
         _message.value = text
     }
 
+    /** Diagnóstico completo de la escalera agotada (cliente,
+     *  status y reason por cliente). Se muestra en un modal con
+     *  botón de copiar y queda hasta que el usuario lo cierra;
+     *  no se pierde al saltar a la siguiente canción. */
+    private val _diagnosticReport = MutableStateFlow<String?>(null)
+    val diagnosticReport: StateFlow<String?> = _diagnosticReport.asStateFlow()
+
+    fun clearDiagnosticReport() {
+        _diagnosticReport.value = null
+    }
+
     /** Índices online que ya fallaron en esta cola (anti-bucle al saltar). */
     private val failedOnlineIndices = mutableSetOf<Int>()
 
@@ -289,17 +300,20 @@ class PlaybackManager(private val context: Context) {
                 )
             } else C.INDEX_UNSET
             // Motivo técnico del player (playabilityStatus o
-            // formatos solo cifrados): visible en el aviso para
-            // que la próxima prueba diga qué respondió YouTube.
-            val diagnostic =
-                com.aural.player.youtube.YouTubeStreamResolver.lastPlayabilityDiagnostic()
-            val detail = if (diagnostic != null) " ($diagnostic)" else ""
+            // formatos solo cifrados): va completo al modal de
+            // diagnóstico, que queda hasta cerrarlo. El aviso
+            // corto no lleva el detalle: el Toast lo truncaba.
+            val resolver = com.aural.player.youtube.YouTubeStreamResolver
+            resolver.playabilityDiagnosticReport()?.let { report ->
+                _diagnosticReport.value = report
+            }
+            resolver.clearPlayabilityDiagnostics()
             if (nextIdx == C.INDEX_UNSET || nextIdx in failedOnlineIndices) {
-                _message.value = "No se pudo reproducir en línea$detail"
+                _message.value = "No se pudo reproducir en línea"
                 publishState()
                 return
             }
-            _message.value = "No se pudo reproducir en línea$detail. Saltando…"
+            _message.value = "No se pudo reproducir en línea. Saltando…"
             c.seekTo(nextIdx, 0L)
             c.prepare()
             c.playWhenReady = true
