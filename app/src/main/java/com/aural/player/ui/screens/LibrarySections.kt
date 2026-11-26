@@ -312,6 +312,7 @@ internal fun OnlineAlbumsTab(
 @Composable
 internal fun OnlinePlaylistsTab(
     playlists: List<com.aural.player.youtube.OnlineCollectionResult>,
+    onOpen: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
     onPlay: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
@@ -327,7 +328,7 @@ internal fun OnlinePlaylistsTab(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPlay(playlist) }
+                    .clickable { onOpen(playlist) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -363,6 +364,131 @@ internal fun OnlinePlaylistsTab(
         }
     }
 }
+
+/** Aviso de consumo de datos del primer streaming (una sola vez). */
+@Composable
+internal fun StreamingNoticeDialog(viewModel: AuralViewModel) {
+    val streamingNoticePending by viewModel.streamingNoticePending.collectAsStateWithLifecycle()
+    if (streamingNoticePending) {
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelStreamingNotice() },
+            title = { Text("Consumo de datos") },
+            text = {
+                Text("Escuchar en línea usa datos móviles. Puedes cambiar la calidad o limitarlo a Wi-Fi en Ajustes → Sonido.")
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmStreamingNotice() }) {
+                    Text("Escuchar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelStreamingNotice() }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+/** Menú ⋮ de una canción online: el mismo en búsqueda y en el detalle. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun OnlineSongMenuSheet(
+    result: com.aural.player.youtube.YTResult,
+    playlists: List<Playlist>,
+    viewModel: AuralViewModel,
+    youTubeManager: YouTubeManager?,
+    onDismiss: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val appContext = LocalContext.current
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Text(
+            text = result.title,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 4.dp),
+            maxLines = 1
+        )
+        TextButton(
+            onClick = {
+                onDismiss()
+                scope.launch {
+                    viewModel.enqueueOnlineSong(
+                        viewModel.registerOnlineSong(result), next = true
+                    )
+                }
+            },
+            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+        ) { Text("Reproducir siguiente") }
+        TextButton(
+            onClick = {
+                onDismiss()
+                scope.launch {
+                    viewModel.enqueueOnlineSong(
+                        viewModel.registerOnlineSong(result), next = false
+                    )
+                }
+            },
+            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+        ) { Text("Añadir a la cola") }
+        TextButton(
+            onClick = {
+                onDismiss()
+                youTubeManager?.download(result) { fileName, mediaId, tagsEmbedded ->
+                    if (fileName != null) {
+                        viewModel.addDownloadToPlaylist(
+                            fileName, mediaId, result, tagsEmbedded
+                        )
+                        if (!tagsEmbedded) {
+                            viewModel.applyYouTubeMetadataFallback(
+                                mediaId, result.title, result.artist,
+                                result.thumbnailUrl
+                            )
+                        }
+                        android.widget.Toast.makeText(
+                            appContext,
+                            "Canción descargada",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            },
+            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+        ) { Text("Descargar") }
+        Text(
+            "Guardar en playlist",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 24.dp, top = 12.dp)
+        )
+        if (playlists.isEmpty()) {
+            Text(
+                "No tienes playlists todavía",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(24.dp)
+            )
+        } else {
+            playlists.forEach { pl ->
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        scope.launch {
+                            val song = viewModel.registerOnlineSong(result)
+                            viewModel.addToPlaylist(pl.id, song.id)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                ) { Text(pl.name) }
+            }
+        }
+        Box(Modifier.padding(bottom = 24.dp)) {}
+    }
+}
+
 
 @Composable
 private fun SearchSkeletonRow() {
