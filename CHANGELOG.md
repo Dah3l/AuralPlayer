@@ -4,6 +4,11 @@ Todas las novedades de cada versión del APK, de la más reciente a la primera.
 Este archivo es la constancia oficial de cambios; las notas de cada release
 en GitHub salen de aquí.
 
+### En preparación
+- **Streaming** — busca canciones, álbumes, playlists y artistas en línea y escúchalos sin descargarlos: la dirección se resuelve al reproducir y la cola mezcla canciones del teléfono con canciones en línea (marcadas «En línea»). Si una no se puede cargar, aviso corto y salto automático a la siguiente.
+- **Búsqueda unificada** — un solo buscador: primero tu biblioteca y después los resultados en línea, con filtros por tipo. Sin conexión se ve solo tu biblioteca, con su aviso.
+- **Streaming a tu manera** — en Ajustes → Sonido: calidad de streaming y opción de escuchar en línea solo con Wi-Fi. El aviso de consumo de datos sale una sola vez.
+
 ## v1.2.0 — 2026-11-24
 
 ### Novedades
