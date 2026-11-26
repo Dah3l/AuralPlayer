@@ -189,14 +189,24 @@ class YouTubeManager(private val context: Context) {
         scope.launch {
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
-                val songsDeferred = async { searchSongs(service, clean) }
+                // Cada sección se aísla: si un filtro falla sin VPN
+                // (p. ej. music_songs), las demás siguen saliendo.
+                val songsDeferred = async {
+                    runCatching { searchSongs(service, clean) }.getOrDefault(emptyList())
+                }
                 val albumsDeferred = async {
-                    searchCollections(service, clean, "music_albums", OnlineCollectionKind.ALBUM)
+                    runCatching {
+                        searchCollections(service, clean, "music_albums", OnlineCollectionKind.ALBUM)
+                    }.getOrDefault(emptyList())
                 }
                 val playlistsDeferred = async {
-                    searchCollections(service, clean, "music_playlists", OnlineCollectionKind.PLAYLIST)
+                    runCatching {
+                        searchCollections(service, clean, "music_playlists", OnlineCollectionKind.PLAYLIST)
+                    }.getOrDefault(emptyList())
                 }
-                val artistsDeferred = async { searchArtists(service, clean) }
+                val artistsDeferred = async {
+                    runCatching { searchArtists(service, clean) }.getOrDefault(emptyList())
+                }
                 val results = OnlineSearchResults(
                     query = clean,
                     songs = songsDeferred.await(),
@@ -233,11 +243,15 @@ class YouTubeManager(private val context: Context) {
     private fun searchItems(
         service: StreamingService,
         query: String,
-        filter: String
+        filter: String?
     ): List<org.schabi.newpipe.extractor.InfoItem> {
         val searchInfo: SearchInfo = SearchInfo.getInfo(
             service,
-            service.searchQHFactory.fromQuery(query, listOf(filter), "")
+            if (filter == null) {
+                service.searchQHFactory.fromQuery(query)
+            } else {
+                service.searchQHFactory.fromQuery(query, listOf(filter), "")
+            }
         )
         return searchInfo.relatedItems
     }
@@ -256,11 +270,25 @@ class YouTubeManager(private val context: Context) {
         ).takeIf { it.videoId.isNotBlank() }
     } catch (_: Exception) { null }
 
-    private fun searchSongs(service: StreamingService, query: String): List<YTResult> =
-        searchItems(service, query, "music_songs")
-            .filterIsInstance<StreamInfoItem>()
-            .take(20)
-            .mapNotNull { mapSongItem(it) }
+    private fun searchSongs(service: StreamingService, query: String): List<YTResult> {
+        val musicSongs = runCatching {
+            searchItems(service, query, "music_songs")
+                .filterIsInstance<StreamInfoItem>()
+                .take(20)
+                .mapNotNull { mapSongItem(it) }
+        }.getOrDefault(emptyList())
+        if (musicSongs.isNotEmpty()) return musicSongs
+        // Respaldo sin VPN: el filtro music_songs puede volver
+        // vacío o fallar aunque la búsqueda general sí devuelva
+        // videos. Se mapean igual que las canciones, mismo diseño.
+        return runCatching {
+            searchItems(service, query, null)
+                .filterIsInstance<StreamInfoItem>()
+                .take(20)
+                .mapNotNull { mapSongItem(it) }
+                .distinctBy { it.videoId }
+        }.getOrDefault(emptyList())
+    }
 
     private fun searchCollections(
         service: StreamingService,
@@ -609,7 +637,11 @@ class YouTubeManager(private val context: Context) {
  */
 object YouTubeStreamResolver {
 
-    data class ResolvedStream(val url: String, val cacheKey: String)
+    data class ResolvedStream(
+        val url: String,
+        val cacheKey: String,
+        val progressive: Boolean = false
+    )
 
     private data class CachedUrl(val url: String, val expiresAtMs: Long, val diskKey: String)
 
@@ -672,8 +704,14 @@ object YouTubeStreamResolver {
                 if (cached.expiresAtMs > now + 30_000L && cached.url != excludeUrl) {
                     // La URL cacheada se prueba igual: la red pudo
                     // cambiar (p. ej. VPN apagado) desde que se guardó.
-                    if (probeUrl(cached.url)) {
-                        return ResolvedStream(cached.url, cached.diskKey)
+                    val cachedMode = probeCandidate(cached.url)
+                    if (cachedMode != ProbeMode.FAIL) {
+                        val progressive = cachedMode == ProbeMode.PROGRESSIVE
+                        return ResolvedStream(
+                            cached.url,
+                            diskKeyWithMode(cached.diskKey, progressive),
+                            progressive
+                        )
                     }
                     cache.remove(cacheKey)
                 }
@@ -691,16 +729,35 @@ object YouTubeStreamResolver {
                 "https://www.youtube.com/watch?v=$videoId"
             )
             // Candidatas en orden: la preferida (48/128) primero y
-            // luego otros formatos/bitrates. Se entrega la primera
-            // cuyos primeros bytes responden; si ninguna responde,
-            // se falla limpio y el reproductor avisa/salta.
-            for (audioStream in candidateStreams(streamInfo, effectiveQuality)) {
+            // luego otros formatos/bitrates. Se prefiere la que
+            // acepta rangos directos (inicio + rango intermedio);
+            // si ninguna los acepta pero alguna responde a la
+            // lectura secuencial tipo descarga, se entrega en modo
+            // progresivo. Si ninguna responde, se falla limpio y
+            // el reproductor avisa/salta.
+            var progressiveFallback: ResolvedStream? = null
+            var progressiveFallbackExpiry = 0L
+            for (audioStream in candidateStreams(streamInfo, effectiveQuality).take(6)) {
                 val url = audioStream.content ?: continue
                 if (url == excludeUrl) continue
-                if (!probeUrl(url)) continue
-                val diskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
-                cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
-                return ResolvedStream(url, diskKey)
+                val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
+                when (probeCandidate(url)) {
+                    ProbeMode.DIRECT -> {
+                        val diskKey = diskKeyWithMode(baseDiskKey, false)
+                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                        return ResolvedStream(url, diskKey, false)
+                    }
+                    ProbeMode.PROGRESSIVE -> if (progressiveFallback == null) {
+                        val diskKey = diskKeyWithMode(baseDiskKey, true)
+                        progressiveFallback = ResolvedStream(url, diskKey, true)
+                        progressiveFallbackExpiry = expiryMs(url, now)
+                    }
+                    ProbeMode.FAIL -> Unit
+                }
+            }
+            progressiveFallback?.let { fallback ->
+                cache[cacheKey] = CachedUrl(fallback.url, progressiveFallbackExpiry, fallback.cacheKey)
+                return fallback
             }
             android.util.Log.e(
                 "YouTubeStreamResolver",
@@ -713,34 +770,98 @@ object YouTubeStreamResolver {
         }
     }
 
-    /** Prueba los primeros bytes con la misma petición que usa la
-     *  descarga (headers de navegador): googlevideo puede rechazar
-     *  la petición de Media3 sin VPN aunque la URL sea válida. */
-    private fun probeUrl(url: String): Boolean {
+    private enum class ProbeMode { DIRECT, PROGRESSIVE, FAIL }
+
+    private fun diskKeyWithMode(diskKey: String, progressive: Boolean): String {
+        val base = diskKey.removeSuffix(":direct").removeSuffix(":prog")
+        return base + if (progressive) ":prog" else ":direct"
+    }
+
+    /** Prueba una URL candidata con la misma petición que usa la
+     *  descarga (headers de navegador). DIRECT si acepta rangos
+     *  acotados al inicio y en un punto intermedio; PROGRESSIVE
+     *  si solo acepta la lectura secuencial abierta tipo descarga
+     *  (pasa sin VPN con algunos formatos: el rango acotado se
+     *  rechaza pero el abierto no). */
+    private fun probeCandidate(url: String): ProbeMode {
+        val first = probeRange(url, 0L, 2047L)
+        if (first.ok) {
+            val total = first.totalLength
+            val mid = when {
+                total != null && total > 8192L -> total / 2
+                total != null -> 0L
+                else -> 262_144L
+            }
+            if (mid == 0L || probeRange(url, mid, mid + 2047L).ok) {
+                return ProbeMode.DIRECT
+            }
+        }
+        return if (probeOpenEnded(url)) ProbeMode.PROGRESSIVE else ProbeMode.FAIL
+    }
+
+    private data class ProbeRangeResult(val ok: Boolean, val totalLength: Long?)
+
+    private fun probeRange(url: String, start: Long, end: Long): ProbeRangeResult {
         var connection: java.net.HttpURLConnection? = null
         return try {
-            connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-            )
-            connection.setRequestProperty("Accept", "*/*")
-            connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-            connection.setRequestProperty("Range", "bytes=0-2047")
+            connection = openProbeConnection(url, "bytes=$start-$end")
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                ProbeRangeResult(false, null)
+            } else {
+                val total = connection.getHeaderField("Content-Range")
+                    ?.substringAfterLast("/")
+                    ?.toLongOrNull()
+                    ?: connection.contentLengthLong.takeIf { it > 0L }
+                val ok = connection.inputStream.use { input -> input.read() >= 0 }
+                ProbeRangeResult(ok, total)
+            }
+        } catch (_: Exception) {
+            ProbeRangeResult(false, null)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /** Lectura secuencial abierta, como la descarga: si los
+     *  primeros bytes llegan así, el modo progresivo puede sonar
+     *  desde caché mientras baja por esta misma vía. */
+    private fun probeOpenEnded(url: String): Boolean {
+        var connection: java.net.HttpURLConnection? = null
+        return try {
+            connection = openProbeConnection(url, "bytes=0-")
             val code = connection.responseCode
             if (code !in 200..299) {
                 false
             } else {
-                connection.inputStream.use { input -> input.read() >= 0 }
+                connection.inputStream.use { input ->
+                    val buffer = ByteArray(8192)
+                    input.read(buffer) > 0
+                }
             }
         } catch (_: Exception) {
             false
         } finally {
             connection?.disconnect()
         }
+    }
+
+    private fun openProbeConnection(
+        url: String,
+        range: String
+    ): java.net.HttpURLConnection {
+        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        )
+        connection.setRequestProperty("Accept", "*/*")
+        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+        connection.setRequestProperty("Range", range)
+        return connection
     }
 
     @Synchronized
