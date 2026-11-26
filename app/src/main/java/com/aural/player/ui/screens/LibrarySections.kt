@@ -198,6 +198,40 @@ internal fun SearchSourceSelector(
     }
 }
 
+internal const val ONLINE_EMPTY_TEXT =
+    "Sin resultados. En algunas regiones YouTube limita el catálogo; sin VPN los resultados pueden no ser óptimos."
+
+/**
+ * Aviso único de la primera búsqueda online: el streaming de
+ * YouTube puede variar por región y con VPN los resultados y
+ * la reproducción suelen ser mejores. Se descarta con
+ * «Entendido» y no vuelve (persistente en SettingsStore).
+ */
+@Composable
+internal fun OnlineVpnNoticeBanner(viewModel: AuralViewModel) {
+    val seen by viewModel.onlineVpnNoticeSeen.collectAsStateWithLifecycle()
+    if (seen) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "El streaming de YouTube puede variar por región; con VPN los resultados y la reproducción suelen ser mejores.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = { viewModel.dismissOnlineVpnNotice() }) {
+            Text("Entendido")
+        }
+    }
+}
+
 /** Aviso de estado online (sin conexión / error) sobre la pestaña activa. */
 @Composable
 internal fun OnlineSearchNotice(hasInternet: Boolean, onlineError: String?) {
@@ -238,7 +272,7 @@ internal fun OnlineArtistsTab(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
 ) {
     if (artists.isEmpty()) {
-        EmptyState("Sin resultados"); return
+        EmptyState(ONLINE_EMPTY_TEXT); return
     }
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
@@ -277,7 +311,7 @@ internal fun OnlineAlbumsTab(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState
 ) {
     if (albums.isEmpty()) {
-        EmptyState("Sin resultados"); return
+        EmptyState(ONLINE_EMPTY_TEXT); return
     }
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
@@ -317,7 +351,7 @@ internal fun OnlinePlaylistsTab(
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
     if (playlists.isEmpty()) {
-        EmptyState("Sin resultados"); return
+        EmptyState(ONLINE_EMPTY_TEXT); return
     }
     LazyColumn(
         state = listState,
@@ -584,10 +618,11 @@ internal fun SongsTab(
     selectionMode: Boolean = false,
     selectedIds: Set<Long> = emptySet(),
     onToggleSelect: (Song) -> Unit = {},
-    onEnterSelection: (Song) -> Unit = {}
+    onEnterSelection: (Song) -> Unit = {},
+    emptyText: String = "Sin resultados para tu búsqueda"
 ) {
     if (songs.isEmpty()) {
-        EmptyState("Sin resultados para tu búsqueda")
+        EmptyState(emptyText)
         return
     }
     val scope = rememberCoroutineScope()
