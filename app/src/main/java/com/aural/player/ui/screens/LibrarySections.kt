@@ -151,184 +151,217 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.material3.RadioButton
 
 
-// --------------------------- Búsqueda unificada (1.3.0) ---------------------------
-
-private enum class SearchFilter(val label: String) {
-    ALL("Todo"),
-    LIBRARY("Mi biblioteca"),
-    SONGS("Canciones"),
-    ALBUMS("Álbumes"),
-    PLAYLISTS("Playlists"),
-    PODCASTS("Podcasts"),
-    EMISORAS("Emisoras")
-}
+// --------------------------- Búsqueda por pills (1.3.0) ---------------------------
 
 /**
- * Resultados unificados con texto: Mi biblioteca primero y después
- * los grupos online. Sin internet solo se ve lo local y la línea
- * de aviso; cargando se muestran esqueletos.
+ * Selector de fuente de la búsqueda: Locales (por defecto) u Online.
+ * Las pills superiores mandan el tipo (Canciones/Artistas/Álbumes/
+ * Playlists); este selector solo decide de dónde salen los resultados.
  */
 @Composable
-internal fun UnifiedSearchContent(
-    localSongs: List<Song>,
-    onlineResults: com.aural.player.youtube.OnlineSearchResults,
-    onlineSearching: Boolean,
-    onlineError: String?,
-    hasInternet: Boolean,
-    currentId: Long?,
-    isPlaying: Boolean,
-    customCovers: Map<Long, String>,
-    onPlayLocal: (Song) -> Unit,
-    onLocalMenu: (Song) -> Unit,
-    onPlayOnline: (
-        com.aural.player.youtube.YTResult,
-        List<com.aural.player.youtube.YTResult>
-    ) -> Unit,
-    onOnlineMenu: (com.aural.player.youtube.YTResult) -> Unit,
-    onPlayCollection: (com.aural.player.youtube.OnlineCollectionResult) -> Unit
+internal fun SearchSourceSelector(
+    online: Boolean,
+    onChange: (Boolean) -> Unit
 ) {
-    var filter by remember(onlineResults.query) { mutableStateOf(SearchFilter.ALL) }
-    val showLocal = filter == SearchFilter.ALL || filter == SearchFilter.LIBRARY
-    val showSongs = hasInternet &&
-        (filter == SearchFilter.ALL || filter == SearchFilter.SONGS)
-    val showAlbums = hasInternet &&
-        (filter == SearchFilter.ALL || filter == SearchFilter.ALBUMS)
-    val showPlaylists = hasInternet &&
-        (filter == SearchFilter.ALL || filter == SearchFilter.PLAYLISTS)
-    val showArtists = hasInternet && filter == SearchFilter.ALL
-    val nothingOnline = !onlineSearching &&
-        onlineResults.songs.isEmpty() && onlineResults.albums.isEmpty() &&
-        onlineResults.playlists.isEmpty() && onlineResults.artists.isEmpty()
-
-    Column(Modifier.fillMaxSize()) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            items(SearchFilter.entries.size) { i ->
-                val entry = SearchFilter.entries[i]
-                val selected = filter == entry
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                        .clickable { filter = entry }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = entry.label,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        listOf(false to "Locales", true to "Online").forEach { (value, label) ->
+            val selected = online == value
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else Color.Transparent
                     )
-                }
-            }
-        }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp)
-        ) {
-            if (!hasInternet) {
-                item {
-                    Text(
-                        text = "Sin conexión: resultados en línea no disponibles",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            } else if (onlineError != null && nothingOnline) {
-                item {
-                    Text(
-                        text = "No se pudieron cargar resultados en línea",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            }
-            if (showLocal && localSongs.isNotEmpty()) {
-                item { SearchGroupHeader("Mi biblioteca") }
-                items(localSongs, key = { "local-${it.id}" }) { song ->
-                    SongRow(
-                        title = song.title,
-                        subtitle = song.artist,
-                        coverUri = customCovers[song.id] ?: song.albumArtUri,
-                        durationMs = song.durationMs,
-                        isPlaying = song.id == currentId && isPlaying,
-                        onlineBadge = song.isOnline,
-                        onClick = { onPlayLocal(song) },
-                        trailing = {
-                            TextButton(onClick = { onLocalMenu(song) }) {
-                                Text("···", style = MaterialTheme.typography.titleMedium)
-                            }
-                        }
-                    )
-                }
-            }
-            if (onlineSearching && hasInternet) {
-                item { SearchGroupHeader("En línea") }
-                items(3) { SearchSkeletonRow() }
-            }
-            if (showSongs && onlineResults.songs.isNotEmpty()) {
-                item { SearchGroupHeader("Canciones") }
-                items(onlineResults.songs, key = { "song-${it.videoId}" }) { result ->
-                    SongRow(
-                        title = result.title,
-                        subtitle = result.artist,
-                        coverUri = result.thumbnailUrl,
-                        durationMs = result.durationSec * 1000L,
-                        isPlaying = false,
-                        onlineBadge = true,
-                        onClick = { onPlayOnline(result, onlineResults.songs) },
-                        trailing = {
-                            TextButton(onClick = { onOnlineMenu(result) }) {
-                                Text("···", style = MaterialTheme.typography.titleMedium)
-                            }
-                        }
-                    )
-                }
-            }
-            if (showAlbums && onlineResults.albums.isNotEmpty()) {
-                item { SearchGroupHeader("Álbumes") }
-                items(onlineResults.albums, key = { "album-${it.url}" }) { album ->
-                    OnlineCollectionRow(album) { onPlayCollection(album) }
-                }
-            }
-            if (showPlaylists && onlineResults.playlists.isNotEmpty()) {
-                item { SearchGroupHeader("Playlists") }
-                items(onlineResults.playlists, key = { "playlist-${it.url}" }) { playlist ->
-                    OnlineCollectionRow(playlist) { onPlayCollection(playlist) }
-                }
-            }
-            if (showArtists && onlineResults.artists.isNotEmpty()) {
-                item { SearchGroupHeader("Artistas") }
-                items(onlineResults.artists, key = { "artist-${it.url}" }) { artist ->
-                    OnlineCollectionRow(artist) { onPlayCollection(artist) }
-                }
-            }
-            if (!onlineSearching && localSongs.isEmpty() && nothingOnline) {
-                item { EmptyState("Sin resultados para tu búsqueda") }
+                    .clickable { onChange(value) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
+/** Aviso de estado online (sin conexión / error) sobre la pestaña activa. */
 @Composable
-private fun SearchGroupHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp)
-    )
+internal fun OnlineSearchNotice(hasInternet: Boolean, onlineError: String?) {
+    val text = when {
+        !hasInternet -> "Sin conexión: resultados en línea no disponibles"
+        onlineError != null -> "No se pudieron cargar resultados en línea"
+        else -> null
+    }
+    if (text != null) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
+}
+
+/** Esqueletos de carga con la misma fila de las canciones. */
+@Composable
+internal fun OnlineSkeletonList() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        items(5) { SearchSkeletonRow() }
+    }
+}
+
+/**
+ * Artistas online con el mismo diseño de la pestaña local:
+ * cuadrícula de tarjetas con portada, nombre y subtítulo.
+ */
+@Composable
+internal fun OnlineArtistsTab(
+    artists: List<com.aural.player.youtube.OnlineCollectionResult>,
+    onOpen: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+) {
+    if (artists.isEmpty()) {
+        EmptyState("Sin resultados"); return
+    }
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 110.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(artists, key = { it.url }) { artist ->
+                MediaGridCard(
+                    coverUri = artist.thumbnailUrl,
+                    title = artist.title,
+                    subtitle = artist.subtitle.ifBlank { "Artista" },
+                    onClick = { onOpen(artist) }
+                )
+            }
+        }
+        val artistNames = remember(artists) { artists.map { it.title } }
+        AlphabetFastScroller(
+            keys = artistNames,
+            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/**
+ * Álbumes online con el mismo diseño de la pestaña local:
+ * cuadrícula de tarjetas con portada, título y artista.
+ */
+@Composable
+internal fun OnlineAlbumsTab(
+    albums: List<com.aural.player.youtube.OnlineCollectionResult>,
+    onOpen: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
+) {
+    if (albums.isEmpty()) {
+        EmptyState("Sin resultados"); return
+    }
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(albums, key = { it.url }) { album ->
+                MediaGridCard(
+                    coverUri = album.thumbnailUrl,
+                    title = album.title,
+                    subtitle = album.subtitle,
+                    onClick = { onOpen(album) }
+                )
+            }
+        }
+        val albumTitles = remember(albums) { albums.map { it.title } }
+        AlphabetFastScroller(
+            keys = albumTitles,
+            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/**
+ * Playlists online con el mismo molde de fila de Playlists:
+ * miniatura cuadrada, nombre, subtítulo y botón de reproducir.
+ */
+@Composable
+internal fun OnlinePlaylistsTab(
+    playlists: List<com.aural.player.youtube.OnlineCollectionResult>,
+    onPlay: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    if (playlists.isEmpty()) {
+        EmptyState("Sin resultados"); return
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        items(playlists, key = { it.url }) { playlist ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPlay(playlist) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CoverArt(uri = playlist.thumbnailUrl, size = 48.dp)
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text(
+                        playlist.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (playlist.subtitle.isNotBlank()) {
+                        Text(
+                            playlist.subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(onClick = { onPlay(playlist) }) {
+                    Icon(
+                        Icons.Rounded.PlayArrow, "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -442,7 +475,10 @@ internal fun SongsTab(
                 val meta = customMetadata[song.id]
                 SongRow(
                     title = meta?.first?.ifBlank { song.title } ?: song.title,
-                    subtitle = "${meta?.second?.ifBlank { song.artist } ?: song.artist} · ${meta?.third?.ifBlank { song.album } ?: song.album}",
+                    subtitle = listOf(
+                        meta?.second?.ifBlank { song.artist } ?: song.artist,
+                        meta?.third?.ifBlank { song.album } ?: song.album
+                    ).filter { it.isNotBlank() }.joinToString(" · "),
                     coverUri = customCovers[song.id] ?: song.albumArtUri,
                     durationMs = song.durationMs,
                     isPlaying = song.id == currentId,
