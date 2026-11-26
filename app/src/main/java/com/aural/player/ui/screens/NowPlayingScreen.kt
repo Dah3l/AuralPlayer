@@ -144,7 +144,6 @@ import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -152,6 +151,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.launch
@@ -756,17 +756,20 @@ fun NowPlayingScreen(
                         .height(26.dp)
                         .padding(top = 6.dp)
                 ) {
-                    AnimatedVisibility(
-                        visible = state.isBuffering,
-                        enter = fadeIn(tween(160)),
-                        exit = fadeOut(tween(160))
-                    ) {
-                        Text(
-                            text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    // Fade con alpha (AnimatedVisibility dentro
+                    // del Box chocaba con el receiver ColumnScope
+                    // exterior: DSL_SCOPE_VIOLATION).
+                    val waitingAlpha by animateFloatAsState(
+                        targetValue = if (state.isBuffering) 1f else 0f,
+                        animationSpec = tween(160),
+                        label = "waitingAlpha"
+                    )
+                    Text(
+                        text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.alpha(waitingAlpha)
+                    )
                 }
             }
             Spacer(Modifier.height(8.dp))
