@@ -86,6 +86,11 @@ class PlaybackManager(private val context: Context) {
     /** Índices online que ya fallaron en esta cola (anti-bucle al saltar). */
     private val failedOnlineIndices = mutableSetOf<Int>()
 
+    /** Peldaños de la escalera sin VPN ya intentados por video:
+     *  1 NewPipe fresco, 2 InnerTube, 3 progresivo. Se limpia
+     *  cuando la canción suena (READY). */
+    private val onlineLadderAttempts = mutableMapOf<String, Int>()
+
     private val _endlessDjActive = MutableStateFlow(false)
     /** Si la Sesión DJ infinita está activa (la lleva el servicio). */
     val endlessDjActive: StateFlow<Boolean> = _endlessDjActive.asStateFlow()
@@ -237,16 +242,44 @@ class PlaybackManager(private val context: Context) {
             if (playbackState == Player.STATE_ENDED && _stopMode.value != null) {
                 _stopMode.value = null
             }
+            // La canción suena: la escalera de ese video se reinicia.
+            if (playbackState == Player.STATE_READY) {
+                _state.value.currentSong?.onlineVideoId?.let { videoId ->
+                    onlineLadderAttempts.remove(videoId)
+                    com.aural.player.youtube.YouTubeStreamResolver.clearEscalation(videoId)
+                }
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // Streaming que no resuelve o se corta: aviso corto y
-            // salto automático a la siguiente, sin parar la música.
+            // Escalera de respaldo de la MISMA canción (Etapa 2):
+            // ante un error online —también si ni empieza— se
+            // escala conservando la posición: 1) NewPipe fresco
+            // excluyendo la URL fallida, 2) InnerTube directo,
+            // 3) progresivo. Solo con la escalera agotada se avisa
+            // y se salta a la siguiente.
             val c = controller ?: return
             val current = _state.value.currentSong ?: return
             if (!current.isOnline) return
-            current.onlineVideoId?.let {
-                com.aural.player.youtube.YouTubeStreamResolver.invalidate(it)
+            val videoId = current.onlineVideoId
+            if (videoId != null) {
+                val attempts = (onlineLadderAttempts[videoId] ?: 0) + 1
+                if (attempts <= 3) {
+                    onlineLadderAttempts[videoId] = attempts
+                    com.aural.player.youtube.YouTubeStreamResolver
+                        .prepareEscalation(videoId, attempts)
+                    val curIdx = c.currentMediaItemIndex
+                    val pos = c.currentPosition
+                    if (curIdx >= 0) {
+                        c.seekTo(curIdx, pos)
+                        c.prepare()
+                        c.playWhenReady = true
+                        publishState()
+                        return
+                    }
+                }
+                onlineLadderAttempts.remove(videoId)
+                com.aural.player.youtube.YouTubeStreamResolver.invalidate(videoId)
             }
             val curIdx = c.currentMediaItemIndex
             failedOnlineIndices += curIdx
