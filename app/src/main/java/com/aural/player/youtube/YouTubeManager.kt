@@ -741,6 +741,10 @@ object InnerTubeSearch {
     private var webConfig: WebConfig? = null
     @Volatile
     private var lastConfigAttemptMs: Long = 0L
+    @Volatile
+    private var youtubeConfig: WebConfig? = null
+    @Volatile
+    private var lastYoutubeConfigAttemptMs: Long = 0L
 
     fun visitorData(): String? = webConfig().visitorData?.takeIf { isValidVisitorData(it) }
 
@@ -780,6 +784,48 @@ object InnerTubeSearch {
                 apiKey = findConfig(html, "INNERTUBE_API_KEY") ?: FALLBACK_WEB_KEY,
                 clientVersion = findConfig(html, "INNERTUBE_CONTEXT_CLIENT_VERSION")
                     ?: FALLBACK_WEB_VERSION,
+                visitorData = (findConfig(html, "VISITOR_DATA")
+                    ?: findConfig(html, "EOM_VISITOR_DATA"))?.takeIf { isValidVisitorData(it) }
+            )
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /** Config WEB propia de youtube.com (INNERTUBE_API_KEY y
+     *  versión del cliente WEB): la llave de Music no sirve en
+     *  el endpoint de youtube.com. Se scrapea de la portada,
+     *  igual que la de Music, con su propio cooldown. */
+    @Synchronized
+    private fun youtubeWebConfig(): WebConfig? {
+        youtubeConfig?.takeIf { it.apiKey.isNotBlank() }?.let { return it }
+        val now = System.currentTimeMillis()
+        if (now - lastYoutubeConfigAttemptMs < CONFIG_RETRY_COOLDOWN_MS) {
+            return youtubeConfig
+        }
+        lastYoutubeConfigAttemptMs = now
+        val fetched = runCatching { fetchYoutubeWebConfig() }.getOrNull()
+        if (fetched != null && fetched.apiKey.isNotBlank()) {
+            youtubeConfig = fetched
+            return fetched
+        }
+        return youtubeConfig
+    }
+
+    private fun fetchYoutubeWebConfig(): WebConfig {
+        var connection: java.net.HttpURLConnection? = null
+        try {
+            connection = java.net.URL("$YOUTUBE_ORIGIN/")
+                .openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("User-Agent", WEB_USER_AGENT)
+            connection.setRequestProperty("Cookie", CONSENT_COOKIE)
+            val html = connection.inputStream.bufferedReader().readText()
+            return WebConfig(
+                apiKey = findConfig(html, "INNERTUBE_API_KEY") ?: "",
+                clientVersion = findConfig(html, "INNERTUBE_CONTEXT_CLIENT_VERSION")
+                    ?: WEB_CLIENT_VERSION,
                 visitorData = (findConfig(html, "VISITOR_DATA")
                     ?: findConfig(html, "EOM_VISITOR_DATA"))?.takeIf { isValidVisitorData(it) }
             )
@@ -960,12 +1006,15 @@ object InnerTubeSearch {
      *  catálogo que Music (los álbumes viven como listas OLAK),
      *  sin la restricción regional de YouTube Music. */
     private fun webSearchRoot(query: String, params: String?): org.json.JSONObject? {
-        val config = webConfig()
+        val config = youtubeWebConfig() ?: return null
         val client = org.json.JSONObject()
             .put("clientName", "WEB")
-            .put("clientVersion", WEB_CLIENT_VERSION)
+            .put("clientVersion", config.clientVersion)
             .put("hl", "en")
             .put("gl", "US")
+        if (isValidVisitorData(config.visitorData)) {
+            client.put("visitorData", config.visitorData)
+        }
         val body = org.json.JSONObject()
             .put("context", org.json.JSONObject().put("client", client))
             .put("query", query)
@@ -985,9 +1034,12 @@ object InnerTubeSearch {
             connection.setRequestProperty("Referer", "$YOUTUBE_ORIGIN/")
             connection.setRequestProperty("X-Goog-Api-Format-Version", "1")
             connection.setRequestProperty("X-YouTube-Client-Name", "1")
-            connection.setRequestProperty("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
+            connection.setRequestProperty("X-YouTube-Client-Version", config.clientVersion)
             connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
             connection.setRequestProperty("Cookie", CONSENT_COOKIE)
+            if (isValidVisitorData(config.visitorData)) {
+                connection.setRequestProperty("X-Goog-Visitor-Id", config.visitorData)
+            }
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             if (connection.responseCode !in 200..299) {
                 null
@@ -1001,40 +1053,88 @@ object InnerTubeSearch {
         }
     }
 
-    /** Álbumes desde la búsqueda WEB: listas playlistRenderer
-     *  con playlistId OLAK (título, byline artista/año y
-     *  miniatura), mismo molde OnlineCollectionResult. */
+    /** Álbumes desde la búsqueda WEB: listas OLAK en
+     *  playlistRenderer (playlistId) y en lockupViewModel
+     *  (contentId), con título en title/metadata y miniatura;
+     *  mismo molde OnlineCollectionResult. */
     private fun parseWebAlbums(root: org.json.JSONObject): List<OnlineCollectionResult> {
-        val out = mutableListOf<org.json.JSONObject>()
-        collectWebPlaylists(root, out)
-        return out.mapNotNull { item ->
-            val playlistId = item.optString("playlistId")
-                .takeIf { it.startsWith("OLAK") } ?: return@mapNotNull null
-            val title = runsText(item.optJSONObject("title")).trim()
+        val found = mutableListOf<Pair<String, org.json.JSONObject>>()
+        collectWebAlbums(root, found)
+        return found.mapNotNull { (playlistId, item) ->
+            val title = webAlbumTitle(item).trim()
                 .takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val subtitle = runsText(item.optJSONObject("longBylineText")).trim()
-                .ifBlank { runsText(item.optJSONObject("shortBylineText")).trim() }
             OnlineCollectionResult(
                 kind = OnlineCollectionKind.ALBUM,
                 url = "https://music.youtube.com/playlist?list=$playlistId",
                 title = title,
-                subtitle = subtitle,
+                subtitle = webAlbumSubtitle(item),
                 thumbnailUrl = findThumbnail(item)
             )
+        }.distinctBy { it.url }
+    }
+
+    private fun collectWebAlbums(
+        node: Any?,
+        out: MutableList<Pair<String, org.json.JSONObject>>
+    ) {
+        when (node) {
+            is org.json.JSONObject -> {
+                node.optJSONObject("playlistRenderer")?.let { renderer ->
+                    renderer.optString("playlistId")
+                        .takeIf { it.startsWith("OLAK") }
+                        ?.let { out += it to renderer }
+                }
+                node.optJSONObject("lockupViewModel")?.let { lockup ->
+                    lockup.optString("contentId")
+                        .takeIf { it.startsWith("OLAK") }
+                        ?.let { out += it to lockup }
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) collectWebAlbums(node.opt(keys.next()), out)
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until node.length()) collectWebAlbums(node.opt(i), out)
+            }
         }
     }
 
-    private fun collectWebPlaylists(node: Any?, out: MutableList<org.json.JSONObject>) {
-        when (node) {
-            is org.json.JSONObject -> {
-                node.optJSONObject("playlistRenderer")?.let { out += it }
-                val keys = node.keys()
-                while (keys.hasNext()) collectWebPlaylists(node.opt(keys.next()), out)
+    private fun webAlbumTitle(item: org.json.JSONObject): String {
+        val fromTitle = runsText(item.optJSONObject("title")).trim()
+        if (fromTitle.isNotBlank()) return fromTitle
+        val metadata = item.optJSONObject("metadata")
+            ?.optJSONObject("lockupMetadataViewModel")
+            ?: item.optJSONObject("lockupMetadataViewModel")
+        val metaTitle = metadata?.optJSONObject("title")
+        val content = metaTitle?.optString("content").orEmpty().trim()
+        if (content.isNotBlank()) return content
+        return runsText(metaTitle).trim()
+    }
+
+    private fun webAlbumSubtitle(item: org.json.JSONObject): String {
+        val byline = runsText(item.optJSONObject("longBylineText")).trim()
+            .ifBlank { runsText(item.optJSONObject("shortBylineText")).trim() }
+        if (byline.isNotBlank()) return byline
+        val metadata = item.optJSONObject("metadata")
+            ?.optJSONObject("lockupMetadataViewModel")
+            ?: item.optJSONObject("lockupMetadataViewModel")
+        val rows = metadata?.optJSONObject("metadata")
+            ?.optJSONArray("metadataRows")
+        if (rows != null) {
+            val parts = mutableListOf<String>()
+            for (i in 0 until rows.length()) {
+                val partsArr = rows.optJSONObject(i)?.optJSONArray("metadataParts")
+                if (partsArr != null) {
+                    for (j in 0 until partsArr.length()) {
+                        val text = partsArr.optJSONObject(j)
+                            ?.optJSONObject("text")?.optString("content").orEmpty().trim()
+                        if (text.isNotBlank()) parts += text
+                    }
+                }
             }
-            is org.json.JSONArray -> {
-                for (i in 0 until node.length()) collectWebPlaylists(node.opt(i), out)
-            }
+            val joined = parts.joinToString(" · ")
+            if (joined.isNotBlank()) return joined
         }
+        return ""
     }
 
     fun searchArtists(query: String): List<OnlineCollectionResult> {
@@ -1168,6 +1268,12 @@ object InnerTubeSearch {
                     if (thumbs != null && thumbs.length() > 0) {
                         val url = thumbs.optJSONObject(thumbs.length() - 1)?.optString("url")
                         if (!url.isNullOrBlank()) return url
+                    }
+                    // lockupViewModel: image.sources[].url
+                    val sources = node.optJSONArray("sources")
+                    if (sources != null && sources.length() > 0) {
+                        val url = sources.optJSONObject(sources.length() - 1)?.optString("url")
+                        if (!url.isNullOrBlank() && url.startsWith("http")) return url
                     }
                     val keys = node.keys()
                     while (keys.hasNext()) {
@@ -1358,16 +1464,12 @@ object YouTubeStreamResolver {
         )
     }
 
-    /** Formato/bitrate (o cliente/itag InnerTube) de una clave de
-     *  caché: el refresco busca primero el MISMO formato para que
-     *  los offsets ya bufferizados sigan válidos. */
+    /** Formato/bitrate de una clave de caché: el refresco busca
+     *  primero el MISMO formato para que los offsets ya
+     *  bufferizados sigan válidos. */
     private fun formatKeyOf(diskKey: String?): String? {
         val parts = diskKey?.split(":") ?: return null
-        return when {
-            parts.size >= 6 && parts[3] == "IT" -> "IT:" + parts[4] + ":" + parts[5]
-            parts.size >= 5 -> parts[3] + ":" + parts[4]
-            else -> null
-        }
+        return if (parts.size >= 5) parts[3] + ":" + parts[4] else null
     }
 
     private fun resolveStreamInternal(
@@ -1381,39 +1483,17 @@ object YouTubeStreamResolver {
         val now = System.currentTimeMillis()
         val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
         val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
-        val ladderMode = ladderModes[videoId] ?: LadderMode.FULL
-        // Peldaño 2: solo InnerTube (URLs directas, sin PoToken).
-        if (ladderMode == LadderMode.INNERTUBE) {
-            return tryInnerTubeDirect(
-                videoId, effectiveQuality, cacheKey,
-                excludeUrl ?: lastFailedUrls[videoId], sameFormatKey, now
-            )
-        }
-        val effectiveForceFresh = forceFresh || ladderMode != LadderMode.FULL
-        val effectiveExclude = excludeUrl
-            ?: if (ladderMode == LadderMode.NEWPIPE_FRESH) lastFailedUrls[videoId] else null
-        if (!effectiveForceFresh) {
+        val effectiveExclude = excludeUrl ?: lastFailedUrls[videoId]
+        if (!forceFresh) {
             cache[cacheKey]?.let { cached ->
                 if (cached.expiresAtMs > now + 30_000L && cached.url != effectiveExclude) {
                     // La URL cacheada se prueba igual: la red pudo
                     // cambiar (p. ej. VPN apagado) desde que se guardó.
-                    val cachedMode = if (isOpusDiskKey(cached.diskKey)) {
-                        // Opus cacheado: solo primeros bytes, sin
-                        // sondas de rango completo (fluidez).
-                        if (probeOpenEnded(cached.url, cached.requestHeaders)) {
-                            ProbeMode.PROGRESSIVE
-                        } else {
-                            ProbeMode.FAIL
-                        }
-                    } else {
-                        probeCandidate(cached.url, cached.requestHeaders)
-                    }
-                    if (cachedMode != ProbeMode.FAIL) {
-                        val progressive = cachedMode == ProbeMode.PROGRESSIVE
+                    if (probeCandidate(cached.url, cached.requestHeaders)) {
                         return ResolvedStream(
                             cached.url,
-                            diskKeyWithMode(cached.diskKey, progressive),
-                            progressive,
+                            diskKeyWithMode(cached.diskKey, false),
+                            false,
                             cached.requestHeaders
                         )
                     }
@@ -1432,14 +1512,12 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            // Escalera (aprobada 2026-11-26): Opus secuencial
-            // primero (suena mientras baja, como la descarga que
-            // sí funciona sin VPN; sin sondas de rango completo),
-            // luego M4A directo fresco, InnerTube directo y al
-            // final progresivo M4A. En Android <29 no hay
-            // decodificador Opus: se salta a M4A.
-            var progressiveFallback: ResolvedStream? = null
-            var progressiveFallbackExpiry = 0L
+            // Motor simple (decisión de Dahel 2026-11-26): NewPipe
+            // resuelve y Media3 reproduce directo en M4A. Sin
+            // escalera InnerTube ni Opus primero: un reintento
+            // fresco excluyendo la URL fallida lo hace
+            // PlaybackManager; aquí solo se entrega la primera
+            // candidata M4A que pasa la sonda de rangos.
             val candidates = candidateStreams(streamInfo, effectiveQuality)
                 .sortedByDescending {
                     sameFormatKey != null &&
@@ -1448,61 +1526,12 @@ object YouTubeStreamResolver {
             for (audioStream in candidates.take(6)) {
                 val url = audioStream.content ?: continue
                 if (url == effectiveExclude) continue
+                if (!probeCandidate(url, BROWSER_HEADERS)) continue
                 val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
-                val isOpus = isOpusFormat(audioStream.format) && opusSupported()
-                // Peldaño 3: progresivo M4A (lectura secuencial).
-                if (ladderMode == LadderMode.PROGRESSIVE) {
-                    if (audioStream.format != MediaFormat.M4A) continue
-                    if (probeOpenEnded(url, BROWSER_HEADERS)) {
-                        val diskKey = diskKeyWithMode(baseDiskKey, true)
-                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
-                        return ResolvedStream(url, diskKey, true)
-                    }
-                    continue
-                }
-                // Peldaño 1: M4A directo fresco (sin progresivo).
-                if (ladderMode == LadderMode.NEWPIPE_FRESH && isOpus) continue
-                if (isOpus) {
-                    // Opus: solo primeros bytes y lectura
-                    // secuencial hacia la caché, sonando con
-                    // colchón pequeño. Nada de rangos completos.
-                    if (probeOpenEnded(url, BROWSER_HEADERS)) {
-                        val diskKey = diskKeyWithMode(baseDiskKey, true)
-                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
-                        return ResolvedStream(url, diskKey, true)
-                    }
-                    continue
-                }
-                when (probeCandidate(url, BROWSER_HEADERS)) {
-                    ProbeMode.DIRECT -> {
-                        val diskKey = diskKeyWithMode(baseDiskKey, false)
-                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
-                        return ResolvedStream(url, diskKey, false)
-                    }
-                    ProbeMode.PROGRESSIVE -> if (
-                        progressiveFallback == null &&
-                        ladderMode != LadderMode.NEWPIPE_FRESH
-                    ) {
-                        val diskKey = diskKeyWithMode(baseDiskKey, true)
-                        progressiveFallback = ResolvedStream(url, diskKey, true)
-                        progressiveFallbackExpiry = expiryMs(url, now)
-                    }
-                    ProbeMode.FAIL -> Unit
-                }
-            }
-            // Peldaño 1 agotado: NewPipe fresco no dio directo y la
-            // escalera sigue en el reproductor (peldaño 2).
-            if (ladderMode == LadderMode.NEWPIPE_FRESH) return null
-            // NewPipe no dio directo: respaldo InnerTube directo
-            // (clientes sin token tipo ANDROID_VR/VISIONOS/TVHTML5)
-            // antes de caer al progresivo.
-            tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, effectiveExclude, sameFormatKey, now)
-                ?.let { return it }
-            progressiveFallback?.let { fallback ->
-                cache[cacheKey] = CachedUrl(
-                    fallback.url, progressiveFallbackExpiry, fallback.cacheKey, fallback.requestHeaders
-                )
-                return fallback
+                val diskKey = diskKeyWithMode(baseDiskKey, false)
+                cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                lastFailedUrls.remove(videoId)
+                return ResolvedStream(url, diskKey, false)
             }
             android.util.Log.e(
                 "YouTubeStreamResolver",
@@ -1511,38 +1540,24 @@ object YouTubeStreamResolver {
             null
         } catch (e: Exception) {
             android.util.Log.e("YouTubeStreamResolver", "No se pudo resolver $videoId: ${e.message}")
-            if (ladderMode == LadderMode.NEWPIPE_FRESH) null
-            else tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, effectiveExclude, sameFormatKey, now)
+            null
         }
     }
 
-    private enum class ProbeMode { DIRECT, PROGRESSIVE, FAIL }
-
-    private fun diskKeyWithMode(diskKey: String, progressive: Boolean): String {
-        val base = diskKey.removeSuffix(":direct").removeSuffix(":prog")
-        return base + if (progressive) ":prog" else ":direct"
-    }
-
-    /** Prueba una URL candidata con la misma identidad HTTP y el
-     *  mismo rango que reproducirá Media3 (512 KB completos, no
-     *  una sonda tiny: LastWave documenta sondas cortas que pasan
-     *  y luego el rango real recibe 403). DIRECT si el rango
-     *  inicial y uno intermedio llegan completos; PROGRESSIVE si
-     *  solo acepta la lectura secuencial abierta tipo descarga. */
-    private fun probeCandidate(url: String, headers: Map<String, String>): ProbeMode {
+    /** Prueba una URL candidata con la misma identidad HTTP y
+     *  los mismos rangos que reproducirá Media3 (512 KB
+     *  completos, inicial e intermedio): si ambos llegan, el
+     *  directo puede sonar fluido. */
+    private fun probeCandidate(url: String, headers: Map<String, String>): Boolean {
         val first = probeRange(url, 0L, headers)
-        if (first.ok) {
-            val total = first.totalLength
-            val mid = when {
-                total != null && total > PROBE_CHUNK_BYTES -> total / 2
-                total != null -> 0L
-                else -> PROBE_CHUNK_BYTES
-            }
-            if (mid == 0L || probeRange(url, mid, headers).ok) {
-                return ProbeMode.DIRECT
-            }
+        if (!first.ok) return false
+        val total = first.totalLength
+        val mid = when {
+            total != null && total > PROBE_CHUNK_BYTES -> total / 2
+            total != null -> 0L
+            else -> PROBE_CHUNK_BYTES
         }
-        return if (probeOpenEnded(url, headers)) ProbeMode.PROGRESSIVE else ProbeMode.FAIL
+        return mid == 0L || probeRange(url, mid, headers).ok
     }
 
     private data class ProbeRangeResult(val ok: Boolean, val totalLength: Long?)
@@ -1584,29 +1599,6 @@ object YouTubeStreamResolver {
         }
     }
 
-    /** Lectura secuencial abierta, como la descarga: si los
-     *  primeros bytes llegan así, el modo progresivo puede sonar
-     *  desde caché mientras baja por esta misma vía. */
-    private fun probeOpenEnded(url: String, headers: Map<String, String>): Boolean {
-        var connection: java.net.HttpURLConnection? = null
-        return try {
-            connection = openProbeConnection(url, "bytes=0-", headers)
-            val code = connection.responseCode
-            if (code !in 200..299) {
-                false
-            } else {
-                connection.inputStream.use { input ->
-                    val buffer = ByteArray(8192)
-                    input.read(buffer) > 0
-                }
-            }
-        } catch (_: Exception) {
-            false
-        } finally {
-            connection?.disconnect()
-        }
-    }
-
     private fun openProbeConnection(
         url: String,
         range: String,
@@ -1626,352 +1618,42 @@ object YouTubeStreamResolver {
         cache.keys.removeAll { it.startsWith("yt:$videoId:") }
     }
 
-    /** Escalera de respaldo de la misma canción (Etapa 2): el
-     *  reproductor marca el peldaño tras cada error y la siguiente
-     *  resolución de ese video usa solo ese peldaño. Adaptativa:
-     *  no detecta VPN ni país. */
-    private enum class LadderMode { FULL, NEWPIPE_FRESH, INNERTUBE, PROGRESSIVE }
+    /** Marca la URL cacheada de ese video como fallida: el
+     *  reintento de PlaybackManager re-resuelve con StreamInfo
+     *  fresco excluyéndola, conservando la posición. */
+    @Synchronized
+    fun markFailed(videoId: String) {
+        val cached = cache.entries.firstOrNull { it.key.startsWith("yt:$videoId:") }?.value
+        if (cached != null) lastFailedUrls[videoId] = cached.url
+        invalidate(videoId)
+    }
 
-    private val ladderModes = mutableMapOf<String, LadderMode>()
+    /** La canción suena: se olvida la URL fallida de ese video. */
+    @Synchronized
+    fun clearFailed(videoId: String) {
+        lastFailedUrls.remove(videoId)
+    }
+
     private val lastFailedUrls = mutableMapOf<String, String>()
 
-    @Synchronized
-    fun prepareEscalation(videoId: String, step: Int) {
-        ladderModes[videoId] = when (step) {
-            1 -> LadderMode.NEWPIPE_FRESH
-            2 -> LadderMode.INNERTUBE
-            else -> LadderMode.PROGRESSIVE
-        }
-        cache.keys.removeAll { it.startsWith("yt:$videoId:") }
-    }
-
-    @Synchronized
-    fun clearEscalation(videoId: String) {
-        ladderModes.remove(videoId)
-        clearPlayabilityDiagnostics()
-    }
-
-    /** Formatos Opus de NewPipe (audio WebM/Opus): el enum de
-     *  audio es WEBMA_OPUS, no WEBM (ese es de video). */
-    private fun isOpusFormat(format: MediaFormat?): Boolean =
-        format == MediaFormat.WEBMA_OPUS || format == MediaFormat.WEBMA ||
-            format == MediaFormat.OPUS
-
-    private fun isOpusDiskKey(diskKey: String): Boolean =
-        diskKey.contains(":WEBMA_OPUS:") || diskKey.contains(":WEBMA:") ||
-            diskKey.contains(":OPUS:")
-
-    /** Opus solo desde Android 10 (API 29): por debajo no hay
-     *  decodificador y el streaming va directo a M4A. */
-    private fun opusSupported(): Boolean =
-        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
-
-    /** Candidatas ordenadas para streaming: Opus/WebM primero
-     *  (bitrate NewPipe en KBPS: ahorro ~50, calidad 160) para
-     *  la lectura secuencial fluida; después M4A (48/128, el
-     *  respaldo directo y el formato de descarga, intacto) y
-     *  el resto de formatos. */
+    /** Candidatas M4A para streaming (bitrate NewPipe en KBPS:
+     *  ahorro 48, calidad 128): primero la del objetivo y
+     *  luego el resto de M4A por cercanía. Las descargas usan
+     *  su propia selección y no se tocan. */
     private fun candidateStreams(
         streamInfo: StreamInfo,
         preferQuality: Boolean
     ): List<org.schabi.newpipe.extractor.stream.AudioStream> {
-        val opusTarget = if (preferQuality) 160 else 50
-        val m4aTarget = if (preferQuality) 128 else 48
-        val opusStreams = if (opusSupported()) {
-            streamInfo.audioStreams
-                .filter { isOpusFormat(it.format) }
-                .sortedBy { it.averageBitrate }
-        } else {
-            emptyList()
-        }
-        val mp4Streams = streamInfo.audioStreams
+        val target = if (preferQuality) 128 else 48
+        val m4a = streamInfo.audioStreams
             .filter { it.format == MediaFormat.M4A }
             .sortedBy { it.averageBitrate }
-        val otherStreams = streamInfo.audioStreams
-            .filter { it.format != MediaFormat.M4A && !isOpusFormat(it.format) }
-            .sortedBy { it.averageBitrate }
+        val preferred = m4a.firstOrNull { it.averageBitrate >= target }
+            ?: m4a.maxByOrNull { it.averageBitrate }
         val ordered = mutableListOf<org.schabi.newpipe.extractor.stream.AudioStream>()
-        val preferredOpus = opusStreams.firstOrNull { it.averageBitrate >= opusTarget }
-            ?: opusStreams.maxByOrNull { it.averageBitrate }
-        preferredOpus?.let { ordered += it }
-        ordered += if (preferQuality) opusStreams.reversed() else opusStreams
-        val preferredM4a = mp4Streams.firstOrNull { it.averageBitrate >= m4aTarget }
-            ?: mp4Streams.maxByOrNull { it.averageBitrate }
-        preferredM4a?.let { ordered += it }
-        ordered += mp4Streams
-        ordered += if (preferQuality) otherStreams.reversed() else otherStreams
+        preferred?.let { ordered += it }
+        ordered += m4a
         return ordered.distinctBy { it.content }
-    }
-
-
-    // ---- Respaldo InnerTube directo (adaptación LastWave) ----
-    // Clientes sin token (ANDROID_VR/VISIONOS/TVHTML5/TESTSUITE):
-    // IOS queda fuera para audio (sus URL cortan con 403 al
-    // minuto). Solo se aceptan formatos con URL directa; los
-    // cifrados se saltan y NewPipe sigue siendo el respaldo.
-
-    private data class InnerTubeClient(
-        val name: String,
-        val clientId: String,
-        val version: String,
-        val apiKey: String,
-        val userAgent: String,
-        val osName: String,
-        val osVersion: String,
-        val deviceMake: String = "",
-        val deviceModel: String = "",
-        val androidSdkVersion: String = ""
-    )
-
-    private val innerTubeClients = listOf(
-        InnerTubeClient(
-            "ANDROID_VR", "28", "1.60.19", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
-            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1) gzip",
-            "Android", "12", "Oculus", "Quest 3", "32"
-        ),
-        InnerTubeClient(
-            "VISIONOS", "101", "0.1", "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
-            "visionOS", "1.3.21O771", "Apple", "RealityDevice14,1"
-        ),
-        InnerTubeClient(
-            "TVHTML5", "7", "7.20260308.08.00", "AIzaSyAO_FJ2SlqAz8GlBg1fA54p0wDE7Xk80mU",
-            "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36",
-            "", ""
-        ),
-        InnerTubeClient(
-            "ANDROID_TESTSUITE", "30", "1.9", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
-            "com.google.android.youtube/1.9 (Linux; U; Android 12) gzip",
-            "Android", "12"
-        )
-    )
-
-    private val innerTubeCooldownUntil = mutableMapOf<String, Long>()
-    @Volatile
-    private var lastInnerTubeClient: String? = null
-    private const val INNERTUBE_COOLDOWN_MS = 5 * 60_000L
-
-    /** Motivos técnicos de los fallos InnerTube de la escalera
-     *  (playabilityStatus por cliente o formatos solo cifrados).
-     *  Se acumulan por cliente y se muestran completos en el
-     *  modal de diagnóstico al agotar la escalera. */
-    private val playabilityDiagnostics = mutableListOf<String>()
-
-    @Synchronized
-    fun playabilityDiagnosticReport(): String? =
-        playabilityDiagnostics.takeIf { it.isNotEmpty() }?.joinToString("\n")
-
-    @Synchronized
-    fun clearPlayabilityDiagnostics() {
-        playabilityDiagnostics.clear()
-    }
-
-    @Synchronized
-    private fun noteDiagnostic(line: String) {
-        if (line !in playabilityDiagnostics) playabilityDiagnostics += line
-    }
-
-    private fun notePlayability(clientName: String, root: org.json.JSONObject) {
-        val status = root.optJSONObject("playabilityStatus") ?: return
-        val code = status.optString("status")
-        if (code.isBlank() || code == "OK") return
-        val reason = status.optString("reason").trim()
-        noteDiagnostic(
-            if (reason.isNotBlank()) "$clientName · $code · $reason" else "$clientName · $code"
-        )
-    }
-
-    /** Contexto del cliente InnerTube con el visitante web en
-     *  el contexto (estilo LastWave): sin visitante, los
-     *  clientes directos responden UNPLAYABLE sin formatos
-     *  para las oficiales (modal de Dahel 2026-11-26). */
-    private fun clientContextJson(
-        client: InnerTubeClient,
-        visitor: String?
-    ): org.json.JSONObject {
-        val clientJson = org.json.JSONObject()
-            .put("clientName", client.name)
-            .put("clientVersion", client.version)
-            .put("hl", "en")
-            .put("gl", "US")
-        if (!visitor.isNullOrBlank()) clientJson.put("visitorData", visitor)
-        if (client.osName.isNotBlank()) clientJson.put("osName", client.osName)
-        if (client.osVersion.isNotBlank()) clientJson.put("osVersion", client.osVersion)
-        if (client.deviceMake.isNotBlank()) clientJson.put("deviceMake", client.deviceMake)
-        if (client.deviceModel.isNotBlank()) clientJson.put("deviceModel", client.deviceModel)
-        if (client.androidSdkVersion.isNotBlank()) {
-            clientJson.put("androidSdkVersion", client.androidSdkVersion.toInt())
-        }
-        return clientJson
-    }
-
-    private fun tryInnerTubeDirect(
-        videoId: String,
-        preferQuality: Boolean,
-        cacheKey: String,
-        excludeUrl: String?,
-        sameFormatKey: String?,
-        now: Long
-    ): ResolvedStream? {
-        // Enfriamiento por sesión: un cliente que falla no se
-        // reintenta en cadena; el último que funcionó va primero.
-        val ordered = innerTubeClients
-            .filter { now >= (innerTubeCooldownUntil[it.name] ?: 0L) }
-            .sortedByDescending { it.name == lastInnerTubeClient }
-        val visitor = InnerTubeSearch.visitorData()
-        for (client in ordered) {
-            val resolved = runCatching {
-                resolveWithInnerTubeClient(client, videoId, preferQuality, cacheKey, excludeUrl, sameFormatKey, visitor, now)
-            }.getOrNull()
-            if (resolved != null) {
-                lastInnerTubeClient = client.name
-                return resolved
-            }
-            innerTubeCooldownUntil[client.name] = now + INNERTUBE_COOLDOWN_MS
-        }
-        return null
-    }
-
-    private fun resolveWithInnerTubeClient(
-        client: InnerTubeClient,
-        videoId: String,
-        preferQuality: Boolean,
-        cacheKey: String,
-        excludeUrl: String?,
-        sameFormatKey: String?,
-        visitor: String?,
-        now: Long
-    ): ResolvedStream? {
-        val clientJson = clientContextJson(client, visitor)
-        val body = org.json.JSONObject()
-            .put("context", org.json.JSONObject().put("client", clientJson))
-            .put("videoId", videoId)
-            .put(
-                "playbackContext",
-                org.json.JSONObject().put(
-                    "contentPlaybackContext",
-                    org.json.JSONObject().put("html5Preference", "HTML5_PREF_WANTS")
-                )
-            )
-        var connection: java.net.HttpURLConnection? = null
-        val root = try {
-            connection = java.net.URL(
-                "https://www.youtube.com/youtubei/v1/player?key=${client.apiKey}&prettyPrint=false"
-            ).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 20_000
-            connection.doOutput = true
-            connection.setRequestProperty("User-Agent", client.userAgent)
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Origin", "https://www.youtube.com")
-            connection.setRequestProperty("Referer", "https://www.youtube.com/")
-            connection.setRequestProperty("X-YouTube-Client-Name", client.clientId)
-            connection.setRequestProperty("X-YouTube-Client-Version", client.version)
-            if (!visitor.isNullOrBlank()) connection.setRequestProperty("X-Goog-Visitor-Id", visitor)
-            connection.outputStream.use { it.write(body.toString().toByteArray()) }
-            if (connection.responseCode !in 200..299) return null
-            org.json.JSONObject(connection.inputStream.bufferedReader().readText())
-        } finally {
-            connection?.disconnect()
-        }
-        notePlayability(client.name, root)
-        val streaming = root.optJSONObject("streamingData") ?: return null
-        val formats = streaming.optJSONArray("adaptiveFormats") ?: return null
-        data class Candidate(val url: String, val itag: Int, val kbps: Int, val isOpus: Boolean)
-        val candidates = mutableListOf<Candidate>()
-        var sawAudioFormat = false
-        var sawCipheredAudio = false
-        for (i in 0 until formats.length()) {
-            val format = formats.optJSONObject(i) ?: continue
-            val mime = format.optString("mimeType")
-            if (!mime.startsWith("audio/")) continue
-            sawAudioFormat = true
-            val url = format.optString("url")
-            if (url.isBlank()) {
-                if (format.optString("signatureCipher").isNotBlank() ||
-                    format.optString("cipher").isNotBlank()
-                ) {
-                    sawCipheredAudio = true
-                }
-                continue
-            }
-            if (url == excludeUrl) continue
-            val kbps = (format.optLong("averageBitrate", format.optLong("bitrate")) / 1000).toInt()
-            val itag = format.optInt("itag")
-            candidates += Candidate(
-                url, itag, kbps,
-                mime.contains("opus") || itag == 249 || itag == 250 || itag == 251
-            )
-        }
-        if (candidates.isEmpty()) {
-            if (sawCipheredAudio) {
-                noteDiagnostic("${client.name} · formatos solo cifrados")
-            } else if (!sawAudioFormat &&
-                root.optJSONObject("playabilityStatus")?.optString("status") == "OK"
-            ) {
-                noteDiagnostic("${client.name} · sin formatos de audio")
-            }
-            return null
-        }
-        val opusTarget = if (preferQuality) 160 else 50
-        val m4aTarget = if (preferQuality) 128 else 48
-        val sorted = candidates.sortedBy { it.kbps }
-        val opusSorted = sorted.filter { it.isOpus }
-        val preferred = if (opusSupported() && opusSorted.isNotEmpty()) {
-            opusSorted.firstOrNull { it.kbps >= opusTarget } ?: opusSorted.last()
-        } else {
-            sorted.firstOrNull { it.kbps >= m4aTarget } ?: sorted.last()
-        }
-        val ordered = (listOf(preferred) + sorted).distinctBy { it.url }
-            .sortedByDescending { sameFormatKey == "IT:${client.name}:${it.itag}" }
-        val headers = mutableMapOf(
-            "User-Agent" to client.userAgent,
-            "Origin" to "https://www.youtube.com",
-            "Referer" to "https://www.youtube.com/",
-            "Accept" to "*/*",
-            "X-YouTube-Client-Name" to client.clientId,
-            "X-YouTube-Client-Version" to client.version
-        )
-        if (!visitor.isNullOrBlank()) headers["X-Goog-Visitor-Id"] = visitor
-        val expiresSec = streaming.optLong("expiresInSeconds", 0L)
-        var progressiveCandidate: ResolvedStream? = null
-        for (candidate in ordered.take(4)) {
-            val baseKey = "$cacheKey:IT:${client.name}:${candidate.itag}"
-            val expiry = if (expiresSec > 0) now + expiresSec * 1000L else expiryMs(candidate.url, now)
-            if (candidate.isOpus && opusSupported()) {
-                if (probeOpenEnded(candidate.url, headers)) {
-                    val diskKey = diskKeyWithMode(baseKey, true)
-                    cache[cacheKey] = CachedUrl(candidate.url, expiry, diskKey, headers)
-                    return ResolvedStream(candidate.url, diskKey, true, headers)
-                }
-                continue
-            }
-            when (probeCandidate(candidate.url, headers)) {
-                ProbeMode.DIRECT -> {
-                    val diskKey = diskKeyWithMode(baseKey, false)
-                    cache[cacheKey] = CachedUrl(candidate.url, expiry, diskKey, headers)
-                    return ResolvedStream(candidate.url, diskKey, false, headers)
-                }
-                // Sin rangos directos pero con lectura secuencial:
-                // peldaño progresivo también desde InnerTube.
-                ProbeMode.PROGRESSIVE -> if (progressiveCandidate == null) {
-                    progressiveCandidate = ResolvedStream(
-                        candidate.url, diskKeyWithMode(baseKey, true), true, headers
-                    )
-                }
-                ProbeMode.FAIL -> Unit
-            }
-        }
-        progressiveCandidate?.let { fallback ->
-            cache[cacheKey] = CachedUrl(
-                fallback.url,
-                if (expiresSec > 0) now + expiresSec * 1000L else expiryMs(fallback.url, now),
-                fallback.cacheKey, fallback.requestHeaders
-            )
-            return fallback
-        }
-        return null
     }
 
     private const val PROBE_CHUNK_BYTES = 512L * 1024L
