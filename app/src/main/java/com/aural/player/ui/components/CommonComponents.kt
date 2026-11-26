@@ -144,7 +144,8 @@ fun SongRow(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     showCheckbox: Boolean = false,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    onlineBadge: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -195,6 +196,21 @@ fun SongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (onlineBadge) {
+                Spacer(Modifier.height(3.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "En línea",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
         Spacer(Modifier.width(4.dp))
         Text(
