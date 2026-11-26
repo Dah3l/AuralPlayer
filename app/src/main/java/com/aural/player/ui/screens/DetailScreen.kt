@@ -597,6 +597,19 @@ fun DetailScreen(
             }
         }
         val listSongs = if (reorderable) displaySongs else visibleSongs
+        // Clave compuesta estable (id + nº de aparición): una
+        // playlist puede traer la misma canción dos veces y la
+        // clave solo-id crashearía con «Key was already used».
+        // El reorden mueve por índice, así que la clave solo
+        // necesita ser única por aparición.
+        val listKeys = remember(listSongs) {
+            val counts = mutableMapOf<Long, Int>()
+            listSongs.map { song ->
+                val occurrence = counts.getOrDefault(song.id, 0)
+                counts[song.id] = occurrence + 1
+                "${song.id}#$occurrence"
+            }
+        }
 
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -632,9 +645,9 @@ fun DetailScreen(
                     modifier = Modifier.onSizeChanged { headerHeightPx = it.height }
                 )
             }
-            itemsIndexed(listSongs, key = { _, song -> song.id }) { index, song ->
+            itemsIndexed(listSongs, key = { index, _ -> listKeys[index] }) { index, song ->
                 if (reorderable) {
-                    ReorderableItem(reorderableState, key = song.id) { isDragging ->
+                    ReorderableItem(reorderableState, key = listKeys[index]) { isDragging ->
                         SongRow(
                             title = customMetadata[song.id]?.first?.ifBlank { song.title } ?: song.title,
                             subtitle = customMetadata[song.id]?.second?.ifBlank { song.artist } ?: song.artist,
@@ -847,7 +860,7 @@ private fun SongPickerDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(filtered, key = { it.id }) { song ->
+                    items(filtered.distinctBy { it.id }, key = { it.id }) { song ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
