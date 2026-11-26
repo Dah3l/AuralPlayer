@@ -1519,7 +1519,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Recarga las canciones recientes: del historial a la biblioteca (las que ya no existen, fuera). */
     fun refreshRecentSongs() {
         viewModelScope.launch {
-            val ids = playHistory.getRecentSongs().map { it.songId }
+            // Sin repetidas: la fila de recientes usa el id como
+            // clave y un duplicado crashearía al hacer scroll.
+            val ids = playHistory.getRecentSongs().map { it.songId }.distinct()
             val byId = library.value.songs.associateBy { it.id }
             _recentSongs.value = ids.mapNotNull { byId[it] }
         }
