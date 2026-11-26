@@ -609,16 +609,50 @@ class YouTubeManager(private val context: Context) {
  */
 object YouTubeStreamResolver {
 
+    data class ResolvedStream(val url: String, val cacheKey: String)
+
     private data class CachedUrl(val url: String, val expiresAtMs: Long)
 
     private val cache = mutableMapOf<String, CachedUrl>()
+    private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "aural-stream-prefetch").apply { isDaemon = true }
+    }
+
+    /** Tras un rebuffer real, la siguiente resolución baja a ahorro
+     *  durante unos minutos; el ajuste del usuario sigue siendo el
+     *  techo cuando la red se recupera. */
+    @Volatile
+    private var temporarySaverUntilMs: Long = 0L
+
+    fun noteRebuffer() {
+        temporarySaverUntilMs = System.currentTimeMillis() + 10 * 60_000L
+    }
+
+    fun prefetch(videoId: String, preferQuality: Boolean) {
+        if (videoId.isBlank()) return
+        prefetchExecutor.execute {
+            try {
+                resolveStream(videoId, preferQuality)
+            } catch (_: Exception) {
+                // La precarga es oportunista: si falla, la resolución
+                // normal al reproducir lo intentará de nuevo.
+            }
+        }
+    }
+
+    fun resolve(videoId: String, preferQuality: Boolean): String? =
+        resolveStream(videoId, preferQuality)?.url
 
     @Synchronized
-    fun resolve(videoId: String, preferQuality: Boolean): String? {
+    fun resolveStream(videoId: String, preferQuality: Boolean): ResolvedStream? {
         if (videoId.isBlank()) return null
         val now = System.currentTimeMillis()
-        cache[videoId]?.let { cached ->
-            if (cached.expiresAtMs > now + 30_000L) return cached.url
+        val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
+        val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
+        cache[cacheKey]?.let { cached ->
+            if (cached.expiresAtMs > now + 30_000L) {
+                return ResolvedStream(cached.url, cacheKey)
+            }
         }
         return try {
             try {
@@ -631,10 +665,10 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            val audioStream = selectAudioStream(streamInfo, preferQuality) ?: return null
+            val audioStream = selectAudioStream(streamInfo, effectiveQuality) ?: return null
             val url = audioStream.content ?: return null
-            cache[videoId] = CachedUrl(url, expiryMs(url, now))
-            url
+            cache[cacheKey] = CachedUrl(url, expiryMs(url, now))
+            ResolvedStream(url, cacheKey)
         } catch (e: Exception) {
             android.util.Log.e("YouTubeStreamResolver", "No se pudo resolver $videoId: ${e.message}")
             null
@@ -643,7 +677,8 @@ object YouTubeStreamResolver {
 
     @Synchronized
     fun invalidate(videoId: String) {
-        cache.remove(videoId)
+        cache.remove("yt:$videoId:quality")
+        cache.remove("yt:$videoId:saver")
     }
 
     private fun selectAudioStream(
