@@ -263,12 +263,13 @@ class PlaybackManager(private val context: Context) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // Escalera de respaldo de la MISMA canción (Etapa 2):
-            // ante un error online —también si ni empieza— se
-            // escala conservando la posición: 1) NewPipe fresco
+            // Escalera de respaldo de la MISMA canción: la
+            // resolución inicial ya prueba Opus secuencial; ante
+            // un error online —también si ni empieza— se escala
+            // conservando la posición: 1) M4A directo fresco
             // excluyendo la URL fallida, 2) InnerTube directo,
-            // 3) progresivo. Solo con la escalera agotada se avisa
-            // y se salta a la siguiente.
+            // 3) progresivo M4A. Solo con la escalera agotada se
+            // avisa y se salta a la siguiente.
             val c = controller ?: return
             val current = _state.value.currentSong ?: return
             if (!current.isOnline) return
