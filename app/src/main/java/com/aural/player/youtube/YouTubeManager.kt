@@ -1438,6 +1438,50 @@ object YouTubeStreamResolver {
      *  aún no se resolvió. */
     fun streamBitrateKbps(videoId: String): Int? = streamBitrates[videoId]
 
+    /** Limpia URLs y bitrates cacheados: al cambiar la calidad
+     *  en Ajustes, la próxima resolución ya usa la calidad
+     *  nueva. La canción que suena no se reinicia. */
+    fun clearAll() {
+        cache.clear()
+        streamBitrates.clear()
+    }
+
+    // Medición de conexión para el indicador del Now Playing:
+    // throughput real de las cargas del stream (sin gastar
+    // datos extra), suavizado con media móvil para que no
+    // parpadee. Se reinicia al cambiar de video: sin muestra
+    // del video actual, el indicador no se muestra.
+    private val connectionLock = Any()
+
+    @Volatile
+    private var connectionVideoId: String? = null
+
+    @Volatile
+    private var connectionKbpsSmooth: Double = -1.0
+
+    /** Anota una carga completada del stream de ese video.
+     *  Cargas muy cortas (lecturas de caché en disco) no
+     *  cuentan: no miden la red. */
+    fun noteConnectionLoad(videoId: String, bytesLoaded: Long, loadDurationMs: Long) {
+        if (videoId.isBlank() || bytesLoaded < 32L * 1024L || loadDurationMs < 150L) return
+        val sampleKbps = bytesLoaded * 8.0 / loadDurationMs
+        synchronized(connectionLock) {
+            connectionKbpsSmooth =
+                if (connectionVideoId != videoId || connectionKbpsSmooth < 0.0) sampleKbps
+                else connectionKbpsSmooth * 0.7 + sampleKbps * 0.3
+            connectionVideoId = videoId
+        }
+    }
+
+    /** Velocidad suavizada (kbps) del stream de ese video, o
+     *  null si aún no hay muestra de ese video. */
+    fun connectionKbps(videoId: String): Int? =
+        if (connectionVideoId == videoId && connectionKbpsSmooth >= 0.0) {
+            connectionKbpsSmooth.toInt()
+        } else {
+            null
+        }
+
     /** Candado por video: principal, fundido y precarga solo se
      *  turnan cuando resuelven la MISMA canción; canciones
      *  distintas resuelven en paralelo (el candado global
@@ -1686,22 +1730,24 @@ object YouTubeStreamResolver {
     private val lastFailedUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** Candidatas M4A para streaming (bitrate NewPipe en KBPS:
-     *  ahorro 48, calidad 128): primero la del objetivo y
-     *  luego el resto de M4A por cercanía. Las descargas usan
-     *  su propia selección y no se tocan. */
+     *  ahorro 48, calidad 128). En Calidad: 128, luego 256 y
+     *  48 solo como último recurso — el orden ascendente
+     *  anterior hacía que un fallo de la URL de 128 cayera a
+     *  48 y ahí se quedaba. En Ahorro: 48 primero y
+     *  ascendentes. Las descargas usan su propia selección y
+     *  no se tocan. */
     private fun candidateStreams(
         streamInfo: StreamInfo,
         preferQuality: Boolean
     ): List<org.schabi.newpipe.extractor.stream.AudioStream> {
-        val target = if (preferQuality) 128 else 48
         val m4a = streamInfo.audioStreams
             .filter { it.format == MediaFormat.M4A }
-            .sortedBy { it.averageBitrate }
-        val preferred = m4a.firstOrNull { it.averageBitrate >= target }
-            ?: m4a.maxByOrNull { it.averageBitrate }
-        val ordered = mutableListOf<org.schabi.newpipe.extractor.stream.AudioStream>()
-        preferred?.let { ordered += it }
-        ordered += m4a
+        val ordered = if (preferQuality) {
+            m4a.filter { it.averageBitrate >= 128 }.sortedBy { it.averageBitrate } +
+                m4a.filter { it.averageBitrate < 128 }.sortedByDescending { it.averageBitrate }
+        } else {
+            m4a.sortedBy { it.averageBitrate }
+        }
         return ordered.distinctBy { it.content }
     }
 
