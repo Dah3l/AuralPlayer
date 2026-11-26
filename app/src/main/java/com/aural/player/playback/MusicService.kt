@@ -117,7 +117,9 @@ class MusicService : MediaSessionService() {
     private var streamingQualityCache = false
 
     /** Caché de disco del streaming (una sola instancia por proceso). */
+    @Volatile
     private var streamCache: SimpleCache? = null
+    private val streamCacheLock = Any()
 
     // ------------------------- Mezcla DJ -------------------------
     /** Mezcla DJ activada (implica fundido). */
@@ -171,26 +173,54 @@ class MusicService : MediaSessionService() {
      * real se resuelve aquí, en el hilo de carga, al reproducir.
      * Lo local pasa intacto por el DataSource por defecto.
      */
-    private fun createLoadControl(): DefaultLoadControl =
-        DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                60_000,
-                120_000,
-                4_000,
-                8_000
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
+    /**
+     * Buffer con tope de memoria por reproductor: el principal
+     * carga 60–120 s con tope de 8 MB; el de fundido solo
+     * necesita el colchón de la siguiente (máx 30 s, tope
+     * 4 MB). Sin tope, dos reproductores a 120 s con archivos
+     * pesados inflaban la RAM en teléfonos modestos.
+     */
+    private fun createLoadControl(fadePlayer: Boolean = false): DefaultLoadControl =
+        if (fadePlayer) {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    15_000,
+                    30_000,
+                    4_000,
+                    8_000
+                )
+                .setTargetBufferBytes(4 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        } else {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    60_000,
+                    120_000,
+                    4_000,
+                    8_000
+                )
+                .setTargetBufferBytes(8 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        }
 
+    /**
+     * Caché de disco del streaming (256 MB, disco no RAM). Se
+     * calienta en un hilo de fondo al arrancar el servicio
+     * para que su creación (IO de disco) no corra en el hilo
+     * principal; el doble chequeo hace seguro el primer uso
+     * desde cualquier hilo.
+     */
     private fun getStreamCache(): SimpleCache {
         streamCache?.let { return it }
-        val cache = SimpleCache(
-            File(cacheDir, "aural-stream-cache"),
-            LeastRecentlyUsedCacheEvictor(256L * 1024L * 1024L),
-            StandaloneDatabaseProvider(this)
-        )
-        streamCache = cache
-        return cache
+        return synchronized(streamCacheLock) {
+            streamCache ?: SimpleCache(
+                File(cacheDir, "aural-stream-cache"),
+                LeastRecentlyUsedCacheEvictor(256L * 1024L * 1024L),
+                StandaloneDatabaseProvider(this)
+            ).also { streamCache = it }
+        }
     }
 
     private fun createMediaSourceFactory(): DefaultMediaSourceFactory {
@@ -279,6 +309,10 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
+        // La caché de streaming nace en fondo: su IO no debe
+        // correr en el hilo principal al construir los players.
+        serviceScope.launch(Dispatchers.IO) { getStreamCache() }
+
         // Configuración del reproductor ExoPlayer
         val player = androidx.media3.exoplayer.ExoPlayer.Builder(this)
             .setAudioAttributes(
@@ -358,7 +392,7 @@ class MusicService : MediaSessionService() {
                 /* handleAudioFocus = */ false
             )
             .setMediaSourceFactory(createMediaSourceFactory())
-            .setLoadControl(createLoadControl())
+            .setLoadControl(createLoadControl(fadePlayer = true))
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(false)
             .build()
@@ -739,13 +773,26 @@ class MusicService : MediaSessionService() {
         val nextIndex = nextWindowIndex(main) ?: return
         val fadeMs = crossfadeSecondsCache * 1000L
         val remaining = duration - main.currentPosition
-        // Preparar la siguiente con margen (la cola + prepare no deben
-        // comerse el fundido). Si la cola cambió, el índice ya no vale.
+        // Preparar la siguiente con margen amplio: una canción
+        // online tarda en resolver y cargar su colchón, y con
+        // 5 s el fundido arrancaba en seco. Si la cola cambió,
+        // el índice ya no vale.
         if (fadePreparedForIndex != nextIndex) {
-            if (remaining <= fadeMs + 5000) prepareFadePlayer(nextIndex)
+            if (remaining <= fadeMs + 20_000) prepareFadePlayer(nextIndex)
             return
         }
-        if (remaining <= fadeMs + 250) startFade(nextIndex)
+        if (remaining <= fadeMs + 250) {
+            // Solo fundir con colchón real ya cargado en la
+            // siguiente; si no llegó, esperar al próximo tick
+            // (y si la canción termina antes, la transición
+            // normal la hace sonar sin fundido).
+            val fade = fadePlayer ?: return
+            val cushionNeeded = fadeMs + 2_000
+            val fadeDuration = fade.duration
+            val needed = if (fadeDuration > 0) minOf(cushionNeeded, fadeDuration)
+            else cushionNeeded
+            if (fade.bufferedPosition >= needed) startFade(nextIndex)
+        }
     }
 
     /**
