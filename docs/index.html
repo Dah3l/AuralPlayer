@@ -28,176 +28,85 @@
 }
 </script>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --teal: #2ED3B7; --bg: #121212; --card: #1c1c1c; --line: #2a2a2a; --txt: #f5f5f5; --mut: #9a9a9a; }
-  body { background: var(--bg); color: var(--txt); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
-  a { color: var(--teal); text-decoration: none; }
-  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 20px; }
-  html { scroll-behavior: smooth; }
-  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
-  .head-in { display: flex; align-items: center; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--txt); }
-  .brand img { width: 30px; height: 30px; border-radius: 8px; }
-  nav { display: flex; gap: 18px; margin-left: auto; }
-  nav a { color: var(--mut); font-size: 15px; }
-  nav a:hover { color: var(--txt); }
-  nav a.active { color: var(--teal); font-weight: 700; }
-  .head-cta { padding: 9px 18px; font-size: 14px; border-radius: 10px; flex: none; }
-  .menu-btn { display: none; }
-  .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: center; padding: 72px 0 88px; scroll-margin-top: 84px; position: relative; }
-  .hero::before { content: ""; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 680px; max-width: 100%; height: 480px; background: radial-gradient(closest-side, rgba(46,211,183,.20), transparent); pointer-events: none; }
-  .hero-logo { width: 96px; height: 96px; border-radius: 18px; margin-bottom: 0; }
-  .hero h1 { font-size: clamp(40px, 7vw, 56px); line-height: 1.08; margin-bottom: 12px; }
-  .tagline { font-size: clamp(18px, 2.5vw, 21px); color: var(--txt); font-weight: 700; margin-bottom: 12px; }
-  .sub { color: var(--mut); font-size: 17px; max-width: 520px; margin-bottom: 24px; }
-  .btns { display: flex; gap: 12px; flex-wrap: wrap; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 14px 26px; border-radius: 14px; font-size: 16px; font-weight: 700; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
-  .btn.primary { background: var(--teal); color: #06231d; }
-  .btn.primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 28px rgba(46,211,183,.35); }
-  .btn.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); }
-  .btn.ghost:hover { transform: translateY(-2px); border-color: var(--txt); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
-  .btn-arrow { position: relative; margin-left: 4px; width: 16px; height: 16px; overflow: hidden; flex: 0 0 auto; }
-  .btn-arrow-slide { position: absolute; left: 0; top: 0; transition: transform .2s ease; }
-  .btn-arrow-slide svg { display: block; width: 16px; height: 16px; }
-  .btn-arrow-slide svg + svg { transform: translateX(-16px); }
-  .btn:hover .btn-arrow-slide { transform: translate(16px, -16px); }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
-  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--txt); }
-  .proof { color: var(--mut); font-size: 14px; margin-top: 16px; }
-  .proof b { color: var(--txt); }
-  .proof .star { color: #F59E0B; }
-  .eyebrow { color: var(--mut); font-weight: 800; font-size: 14px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 12px; }
-  .island-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 48px 0; }
-  .island-stage::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; max-width: 100%; height: 300px; background: radial-gradient(closest-side, rgba(46,211,183,.22), transparent); pointer-events: none; }
-  section { padding: 72px 0; scroll-margin-top: 84px; }
-  h2 { font-size: clamp(24px, 3.5vw, 27px); margin-bottom: 8px; text-align: center; }
-  .sec-sub { color: var(--mut); text-align: center; margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .card { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 22px; transition: transform .2s ease, border-color .2s ease; }
-  .card:hover { transform: translateY(-3px); border-color: var(--teal); }
-  @keyframes zoom-in-scroll { from { opacity: 0; scale: .92; } to { opacity: 1; scale: 1; } }
-  .card, .shot { animation: zoom-in-scroll linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
-  .card .ico { width: 44px; height: 44px; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
-  .card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .card h3 { font-size: 18px; margin-bottom: 6px; }
-  .card p { color: var(--mut); font-size: 15px; }
-  .review-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .avatar { width: 44px; height: 44px; flex: none; border-radius: 50%; background: rgba(46,211,183,.12); color: var(--teal); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 15px; }
-  .who b { display: block; font-size: 16px; }
-  .who span { display: block; color: var(--mut); font-size: 13px; }
-  .stars { color: #F59E0B; font-size: 17px; letter-spacing: 2px; margin-bottom: 10px; }
-  .review p { color: var(--txt); }
-  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-  .shot { background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 18px; text-align: center; }
-  .shot .mini { height: 190px; background: #0a0a0a; border-radius: 14px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
-  .shot img { width: 100%; height: 190px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; display: block; }
-  .shot picture { display: block; }
-  .shot h3 { font-size: 16px; margin-bottom: 4px; }
-  .shot p { color: var(--mut); font-size: 14px; }
-  .dots { display: flex; gap: 10px; }
-  .dots i { width: 26px; height: 26px; border-radius: 50%; }
-  .faq { max-width: 680px; margin: 0 auto; }
-  .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 10px; }
-  .faq summary { font-weight: 700; font-size: 16px; cursor: pointer; }
-  .faq p { color: var(--mut); font-size: 15px; margin-top: 8px; }
-  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .contact-card { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,.04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.09); border-radius: 18px; padding: 18px 20px; color: var(--txt); min-height: 76px; transition: transform .2s ease, border-color .2s ease; }
-  .contact-card:hover { transform: translateY(-3px); border-color: var(--teal); }
-  .contact-card .ico { width: 44px; height: 44px; flex: none; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; }
-  .contact-card .ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .contact-card .ct b { display: block; font-size: 16px; }
-  .contact-card .ct span { display: block; color: var(--mut); font-size: 14px; overflow-wrap: anywhere; }
-  .ver { color: var(--mut); font-size: 14px; }
-  footer { border-top: 1px solid var(--line); padding: 28px 0 36px; text-align: center; color: var(--mut); font-size: 14px; }
-  footer p { margin-top: 12px; }
-  footer p:first-child { margin-top: 0; }
-  footer a { text-decoration: underline; text-underline-offset: 3px; }
-  .pro-hero { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; animation: float-y 4s ease-in-out infinite; }
-  .pro-hero img { width: 56px; height: 56px; border-radius: 14px; }
-  .pro-logo-badge { background: var(--teal); color: #06231d; font-weight: 800; font-size: 20px; letter-spacing: .12em; border-radius: 10px; padding: 6px 12px; }
-  .pro-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
-  .pro-card h3 { font-size: 24px; font-weight: 800; }
-  .pro-card.popular { position: relative; overflow: hidden; }
-  .pro-ribbon { position: absolute; top: 20px; right: -42px; transform: rotate(45deg); background: var(--teal); color: #06231d; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 42px; z-index: 1; }
-  .pro-badge-slot { display: flex; justify-content: center; min-height: 30px; margin-bottom: 12px; }
-  .pro-badge { display: inline-block; background: var(--teal); color: #06231d; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 5px 12px; }
-  .steps { list-style: none; margin: 0 auto 36px; padding: 0; max-width: 640px; }
-  .steps li { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
-  .steps li:last-child { padding-bottom: 0; }
-  .steps li:not(:last-child)::after { content: ""; position: absolute; left: 19px; top: 44px; bottom: 4px; width: 1px; background: linear-gradient(var(--teal), rgba(46,211,183,.08)); }
-  .steps .n { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: var(--teal); border: 1px solid rgba(46,211,183,.45); background: rgba(46,211,183,.08); }
-  .steps h3 { margin: 0 0 4px; font-size: 1rem; font-weight: 600; }
-  .steps h3 a { color: inherit; text-decoration: none; }
-  .steps h3 a:hover { color: var(--teal); text-decoration: underline; }
-  .steps p { margin: 0; font-size: .9rem; line-height: 1.4; color: var(--mut); }
-  @media (min-width: 768px) {
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; max-width: 640px; }
-    .steps li { flex-direction: column; gap: 14px; padding-bottom: 0; }
-    .steps li:not(:last-child)::after { left: 52px; right: -20px; top: 19px; bottom: auto; width: auto; height: 1px; background: linear-gradient(90deg, rgba(46,211,183,.45), rgba(46,211,183,.05)); }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --teal: #2ED3B7;
+    --bg: #121212;
+    --panel: #0d0d0d;
+    --card: #1c1c1c;
+    --line: #2a2a2a;
+    --txt: #f5f5f5;
+    --mut: #9a9a9a;
+    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  .pro-card .pro-price { font-size: 44px; font-weight: 800; color: var(--teal); line-height: 1; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
-  .pro-card .pro-price span { font-size: 16px; font-weight: 600; color: var(--mut); }
-  .pro-sub { color: var(--mut); font-size: 14px; margin: 2px 0 0; min-height: 40px; }
-  .pro-duration { width: 100%; margin: 16px 0 20px; padding: 16px 0 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; color: var(--mut); }
-  .pro-duration b { color: var(--txt); }
-  .pro-coming { text-align: center; margin: 0 0 14px; }
-  .pro-coming span { display: inline-block; border: 1px solid var(--teal); color: var(--teal); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border-radius: 999px; padding: 5px 14px; }
-  .pro-teaser { text-align: center; }
-  .pro-card .btn { margin-top: auto; width: 100%; text-align: center; }
-  .pro-table { width: 100%; max-width: 640px; margin: 0 auto 36px; border-collapse: collapse; font-size: 15px; }
-  .pro-table th, .pro-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: center; }
-  .pro-table th:first-child, .pro-table td:first-child { text-align: left; }
-  .pro-table th { font-size: 16px; }
-  .pro-table th.pro-col { color: var(--teal); }
-  .pro-table td.yes { color: var(--teal); font-weight: 700; }
-  .pro-table td.no { color: var(--mut); }
-  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
-  .reveal.visible { opacity: 1; transform: none; }
-  .sec-ico { width: 44px; height: 44px; border-radius: 12px; background: rgba(46,211,183,.12); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
-  .sec-ico svg { width: 24px; height: 24px; stroke: var(--teal); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .reveal.visible .sec-ico--note svg { animation: jelly 1s ease both; }
-  .reveal.visible .sec-ico--star svg { animation: rubber-band 1s ease both; }
-  .reveal.visible .sec-ico--faq svg { animation: rotational-wave 1.2s ease both; }
-  .reveal.visible .sec-ico--msg svg { animation: tada 1s ease both; }
-  .splash { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-  .splash-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(46,211,183,.18), rgba(46,211,183,0) 70%), #0d0d0d; transition: opacity .6s ease; }
-  .splash-word { display: inline-block; position: relative; font-size: clamp(52px, 14vw, 120px); font-weight: 800; letter-spacing: -.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
-  .splash-word span { color: var(--teal); }
-  .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; animation-delay: .35s; }
-  .splash-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-  .splash-logo { display: block; width: clamp(168px, 32vw, 224px); height: clamp(168px, 32vw, 224px); animation: splash-fade .7s ease both, rubber-band .9s ease both; }
-  @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
-  #heroWordmark { transition: opacity .35s ease; }
+  html { scroll-behavior: smooth; background: var(--bg); }
+  body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  img { display: block; max-width: 100%; }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 120px 0; border-top: 1px solid var(--line); scroll-margin-top: 80px; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 56px; }
+  h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(42px, 5.2vw, 64px); line-height: 1; letter-spacing: -0.01em; }
+  .sec-sub { color: var(--mut); margin-top: 18px; max-width: 34ch; }
+  h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+
+  /* Cabecera */
+  header { position: sticky; top: 0; z-index: 50; background: rgba(18,18,18,.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .head-in { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .brand img { width: 26px; height: 26px; border-radius: 7px; }
+  nav { display: flex; gap: 24px; margin-left: auto; }
+  nav a { color: var(--mut); font-size: 14px; transition: color .2s ease; }
+  nav a:hover { color: var(--txt); }
+  nav a.active { color: var(--txt); padding-bottom: 4px; background: linear-gradient(var(--teal), var(--teal)) 0 100% / 100% 1px no-repeat; }
+  .menu-btn { display: none; }
+
+  /* Botones */
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 48px; padding: 0 22px; border-radius: 12px; font-size: 15px; font-weight: 600; transition: background .2s ease, border-color .2s ease, color .2s ease; white-space: nowrap; }
+  .btn.primary { background: var(--teal); color: #06231d; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { border: 1px solid #3a3a3a; color: var(--txt); }
+  .btn.ghost:hover { border-color: var(--txt); }
+  .head-cta { height: 36px; padding: 0 16px; font-size: 14px; border-radius: 999px; flex: none; }
+
+  /* Portada */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 64px; align-items: center; padding: 104px 0 120px; }
+  .hero-logo { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 40px; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(64px, 11vw, 136px); line-height: .92; letter-spacing: -0.025em; }
   #heroWordmark span { color: var(--teal); }
   #heroLogo { transition: opacity .35s ease; }
-  body.splashing #heroWordmark { opacity: 0; }
-  body.splashing #heroLogo { opacity: 0; }
-  @keyframes fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-  @keyframes zoom-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
-  @keyframes rubber-band { 0% { transform: scale3d(1, 1, 1); } 30% { transform: scale3d(1.25, .75, 1); } 40% { transform: scale3d(.75, 1.25, 1); } 50% { transform: scale3d(1.15, .85, 1); } 65% { transform: scale3d(.95, 1.05, 1); } 75% { transform: scale3d(1.05, .95, 1); } 100% { transform: scale3d(1, 1, 1); } }
-  @keyframes tada { 0% { transform: scale(1); } 10%, 20% { transform: scale(.9) rotate(-3deg); } 30%, 50%, 70%, 90% { transform: scale(1.1) rotate(3deg); } 40%, 60%, 80% { transform: scale(1.1) rotate(-3deg); } 100% { transform: scale(1) rotate(0); } }
-  @keyframes jelly { 0%, 100% { transform: scale(1, 1) skew(0deg); } 25% { transform: scale(.92, 1.08) skew(-2deg); } 50% { transform: scale(1.08, .92) skew(2deg); } 75% { transform: scale(.96, 1.04) skew(-1deg); } }
-  @keyframes rotational-wave { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(10deg); } 50% { transform: rotate(-8deg); } 75% { transform: rotate(5deg); } }
-  @keyframes float-y { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-  .hero > div:first-child > * { animation: fade-in-up .7s ease both; }
-  .hero > div:first-child > :nth-child(3) { animation-delay: .1s; }
-  .hero > div:first-child > :nth-child(4) { animation-delay: .18s; }
-  .hero > div:first-child > :nth-child(5) { animation-delay: .26s; }
-  .hero > div:first-child > :nth-child(6) { animation-delay: .34s; }
-  .hero > div:first-child > :nth-child(7) { animation-delay: .42s; }
-  .hero > div:first-child > :nth-child(8) { animation-delay: .5s; }
-  .island-stage { animation: zoom-in .8s ease .15s both; }
-  .island { position: relative; display: flex; align-items: center; gap: 12px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 10px 18px 10px 11px; box-shadow: 0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(46,211,183,.20); cursor: pointer; transition: opacity .35s ease; }
-  .island-cover { width: 40px; height: 40px; border-radius: 50%; flex: none; background: #2a2a2a; display: flex; align-items: center; justify-content: center; }
-  .island-cover svg { width: 20px; height: 20px; stroke: var(--txt); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  body.splashing #heroWordmark, body.splashing #heroLogo { opacity: 0; }
+  #heroWordmark { transition: opacity .35s ease; }
+  .tagline { margin-top: 28px; font-size: clamp(20px, 2.4vw, 24px); font-weight: 500; letter-spacing: -0.01em; }
+  .sub { margin-top: 12px; color: var(--mut); font-size: 17px; max-width: 44ch; }
+  .btns { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 40px; }
+  .facts { list-style: none; display: flex; flex-wrap: wrap; margin-top: 40px; font-size: 15px; }
+  .facts li { padding: 0 20px; border-left: 1px solid var(--line); }
+  .facts li:first-child { padding-left: 0; border-left: 0; }
+  .proof { margin-top: 28px; color: var(--mut); font-size: 14px; }
+  .proof b { color: var(--txt); font-weight: 600; }
+  .proof .star { color: #F59E0B; }
+
+  /* Escenario de Dynamic Aural: el único elemento protagonista */
+  .stage { position: relative; width: 100%; aspect-ratio: 4 / 5; max-height: 560px; border: 1px solid var(--line); border-radius: 28px; background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; overflow: hidden; }
+  .stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 50% at 50% 45%, rgba(46,211,183,.16), transparent 70%); pointer-events: none; }
+  .island { position: relative; display: flex; align-items: center; gap: 14px; background: #101014; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 12px 22px 12px 12px; box-shadow: 0 16px 40px rgba(0,0,0,.6), 0 0 30px rgba(46,211,183,.18); cursor: pointer; transition: opacity .35s ease; }
+  .island-cover { width: 52px; height: 52px; border-radius: 50%; flex: none; background: #2a2a2a; display: flex; align-items: center; justify-content: center; }
+  .island-cover svg { width: 24px; height: 24px; stroke: var(--txt); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .island-text { display: flex; flex-direction: column; min-width: 0; }
-  .island-song { font-size: 16px; font-weight: 700; overflow: hidden; white-space: nowrap; max-width: 210px; }
+  .island-song { font-size: 18px; font-weight: 600; overflow: hidden; white-space: nowrap; max-width: 240px; }
   .island-song span { display: inline-block; will-change: transform; }
   .island-song.scroll span { animation: marquee 8s linear infinite; }
-  .island-artist { font-size: 13px; color: var(--mut); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 210px; }
+  .island-artist { font-size: 14px; color: var(--mut); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 240px; }
   .island-caption { position: relative; font-size: 14px; color: var(--mut); text-align: center; }
-  .island-caption b { color: var(--txt); }
+  .island-caption b { color: var(--txt); font-weight: 600; }
   @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .eq { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
   .eq i { width: 3px; border-radius: 2px; background: var(--txt); transform-origin: bottom; animation: eq 1s ease-in-out infinite; }
@@ -206,30 +115,138 @@
   .eq i:nth-child(3) { height: 45%; animation-delay: .36s; }
   .eq i:nth-child(4) { height: 80%; animation-delay: .54s; }
   @keyframes eq { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
-  .theme-dots { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-  .theme-dots button { width: 26px; height: 26px; border-radius: 50%; background: var(--c); border: 2px solid transparent; cursor: pointer; padding: 0; transition: transform .15s ease, box-shadow .15s ease; }
-  .theme-dots button:hover { transform: scale(1.18); }
-  .theme-dots button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
-  .theme-name { margin-top: 10px; font-size: 14px; color: var(--mut); }
-  .theme-name b { color: var(--txt); }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .eq i { animation: none; } .island-song.scroll span { animation: none; } .hero > div:first-child > *, .island-stage, .pro-hero, .card, .shot, .sec-ico svg { animation: none; } .splash { display: none; } }
-  @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; padding: 40px 0 48px; text-align: center; }
-    .hero-logo { margin-left: auto; margin-right: auto; }
-    .sub { margin-left: auto; margin-right: auto; }
-    .btns, .chips { justify-content: center; }
+
+  /* Funciones: filas con filetes, sin tarjetas */
+  .feats { border-top: 1px solid var(--line); }
+  .feat { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 32px; padding: 32px 0; border-bottom: 1px solid var(--line); }
+  .feat p { color: var(--mut); }
+  .feat p + p { margin-top: 0; }
+  .theme-dots { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+  .theme-dots button { width: 28px; height: 28px; border-radius: 50%; background: var(--c); border: 2px solid transparent; cursor: pointer; padding: 0; transition: transform .15s ease, box-shadow .15s ease; }
+  .theme-dots button:hover { transform: scale(1.12); }
+  .theme-dots button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
+  .theme-name { margin-top: 12px; font-size: 14px; color: var(--mut); }
+  .theme-name b { color: var(--txt); font-weight: 600; }
+
+  /* Capturas */
+  .shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .shot { display: flex; flex-direction: column; }
+  .frame { aspect-ratio: 4 / 3; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: var(--panel); margin-bottom: 18px; }
+  .frame img { width: 100%; height: 100%; object-fit: cover; }
+  .mini { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+  .mini p { color: var(--mut); font-size: 14px; }
+  .dots { display: flex; gap: 10px; }
+  .dots i { width: 24px; height: 24px; border-radius: 50%; }
+  .shot p { color: var(--mut); font-size: 14px; margin-top: 4px; }
+  .shot h3 { font-size: 16px; }
+
+  /* Pro */
+  .pro-hero { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .pro-hero img { width: 44px; height: 44px; border-radius: 12px; }
+  .pro-logo-badge { color: var(--teal); font-weight: 600; font-size: 13px; letter-spacing: .08em; border: 1px solid var(--teal); border-radius: 999px; padding: 3px 12px; }
+  .pro-coming { color: var(--teal); font-weight: 600; margin-bottom: 4px; }
+  .pro-teaser { margin-top: 36px; }
+  .pro-table { width: 100%; max-width: 640px; margin: 0 0 40px; border-collapse: collapse; font-size: 15px; }
+  .pro-table th, .pro-table td { padding: 12px; border-bottom: 1px solid var(--line); text-align: center; }
+  .pro-table th:first-child, .pro-table td:first-child { text-align: left; }
+  .pro-table th.pro-col { color: var(--teal); }
+  .pro-table td.yes { color: var(--teal); font-weight: 600; }
+  .pro-table td.no { color: var(--mut); }
+  .steps { list-style: none; margin: 0 0 40px; padding: 0; max-width: 640px; }
+  .steps li { display: flex; gap: 18px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .steps .n { flex: none; color: var(--teal); font-weight: 600; }
+  .steps h3 { font-size: 16px; margin-bottom: 4px; }
+  .steps h3 a { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+  .steps p { color: var(--mut); font-size: 15px; }
+  .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; }
+  .card.popular { border-color: var(--teal); }
+  .pro-card { text-align: left; }
+  .pro-card h3 { font-size: 22px; }
+  .pro-badge-slot { display: flex; min-height: 26px; margin-bottom: 10px; }
+  .pro-badge { color: var(--teal); font-size: 12px; font-weight: 600; border: 1px solid var(--teal); border-radius: 999px; padding: 3px 10px; }
+  .pro-sub { color: var(--mut); font-size: 14px; margin-top: 4px; min-height: 40px; }
+  .pro-price { font-size: 40px; font-weight: 600; color: var(--teal); line-height: 1; margin: 12px 0 8px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .pro-price span { font-size: 15px; color: var(--mut); font-weight: 500; }
+  .pro-duration { margin: 16px 0 24px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--mut); }
+  .pro-duration b { color: var(--txt); font-weight: 600; }
+  .pro-card .btn { margin-top: auto; }
+
+  /* Reseñas */
+  .quotes { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
+  .quote blockquote { font-family: var(--serif); font-size: clamp(26px, 3vw, 34px); line-height: 1.2; letter-spacing: -0.01em; }
+  .quote .stars { color: #F59E0B; letter-spacing: 3px; font-size: 15px; margin-bottom: 20px; }
+  .quote figcaption { margin-top: 20px; font-size: 14px; color: var(--mut); }
+  .quote figcaption b { color: var(--txt); font-weight: 600; }
+
+  /* FAQ */
+  .faq { border-top: 1px solid var(--line); }
+  .faq details { border-bottom: 1px solid var(--line); }
+  .faq summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 0; font-weight: 600; font-size: 17px; cursor: pointer; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; font-weight: 400; font-size: 24px; line-height: 1; color: var(--mut); transition: transform .25s ease, color .25s ease; }
+  .faq details[open] summary::after { transform: rotate(45deg); color: var(--teal); }
+  .faq p { color: var(--mut); padding: 0 0 24px; max-width: 60ch; }
+
+  /* Contacto */
+  .contact { list-style: none; border-top: 1px solid var(--line); }
+  .contact a { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; padding: 22px 0; border-bottom: 1px solid var(--line); transition: color .2s ease; }
+  .contact a:hover { color: var(--teal); }
+  .contact b { font-weight: 600; }
+  .contact span { color: var(--mut); text-align: right; overflow-wrap: anywhere; font-size: 15px; }
+  .contact a:hover span { color: var(--teal); }
+
+  /* Pie */
+  footer { border-top: 1px solid var(--line); padding: 40px 0 48px; color: var(--mut); font-size: 14px; }
+  footer p + p { margin-top: 8px; }
+  footer a { color: var(--txt); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Splash de arranque: el único movimiento orquestado de la página */
+  .splash { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .splash-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(46,211,183,.16), rgba(46,211,183,0) 70%), #0d0d0d; transition: opacity .6s ease; }
+  .splash-word { display: inline-block; position: relative; font-family: var(--serif); font-size: clamp(56px, 14vw, 132px); letter-spacing: -0.02em; color: var(--txt); white-space: nowrap; will-change: transform; }
+  .splash-word span { color: var(--teal); }
+  .splash-word-wrap { display: inline-block; animation: splash-fade .8s ease both, rubber-band 1s ease both; animation-delay: .35s; }
+  .splash-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .splash-logo { display: block; width: clamp(168px, 32vw, 224px); height: clamp(168px, 32vw, 224px); animation: splash-fade .7s ease both, rubber-band .9s ease both; }
+  @keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rubber-band { 0% { transform: scale3d(1, 1, 1); } 30% { transform: scale3d(1.25, .75, 1); } 40% { transform: scale3d(.75, 1.25, 1); } 50% { transform: scale3d(1.15, .85, 1); } 65% { transform: scale3d(.95, 1.05, 1); } 75% { transform: scale3d(1.05, .95, 1); } 100% { transform: scale3d(1, 1, 1); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .eq i, .island-song.scroll span { animation: none; }
+    .splash { display: none; }
   }
+
+  @media (max-width: 900px) {
+    section { padding: 88px 0; }
+    .hero { grid-template-columns: 1fr; gap: 48px; padding: 64px 0 80px; }
+    .stage { aspect-ratio: auto; height: 380px; max-height: none; }
+    .split { grid-template-columns: 1fr; gap: 36px; }
+    .feat { grid-template-columns: 1fr; gap: 12px; }
+    .shots { grid-template-columns: 1fr 1fr; }
+    .quotes { grid-template-columns: 1fr; gap: 40px; }
+    .plans { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 700px) {
-    section { padding: 52px 0; }
+    .wrap { padding: 0 20px; }
     section, .hero { scroll-margin-top: 120px; }
-    .menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--txt); font-size: 20px; cursor: pointer; }
+    .menu-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--txt); font-size: 18px; cursor: pointer; }
     .head-cta { margin-left: 0; }
     nav { display: none; }
-    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; width: auto; margin: 0; padding: 6px 20px 14px; background: rgba(18,18,18,.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-    header.menu-open nav a { width: 100%; padding: 12px 0; font-size: 16px; border-top: 1px solid var(--line); }
+    header.menu-open nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; position: absolute; top: 100%; left: 0; right: 0; margin: 0; padding: 4px 20px 16px; background: rgba(18,18,18,.97); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+    header.menu-open nav a { width: 100%; padding: 14px 0; font-size: 16px; border-top: 1px solid var(--line); }
     header.menu-open nav a:first-child { border-top: none; }
+    .facts { flex-direction: column; gap: 10px; }
+    .facts li { padding: 0; border-left: 0; }
     .btns { flex-direction: column; }
-    .btns .btn { text-align: center; }
+    .btns .btn { width: 100%; }
+    .shots { grid-template-columns: 1fr; }
+    .feats .feat h3 { font-size: 17px; }
+    .contact a { flex-direction: column; gap: 4px; }
+    .contact span { text-align: left; }
+    .foot { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -244,77 +261,121 @@
     <a class="btn primary head-cta" href="#inicio">Descargar</a>
   </div>
 </header>
-<div class="wrap">
 <main>
+  <div class="wrap">
 
-  <div class="hero" id="inicio">
-    <div>
-      <img class="hero-logo" id="heroLogo" src="favicon.svg" alt="">
-      <h1><span id="heroWordmark">Aural<span>Player</span></span></h1>
-      <p class="tagline">El sonido, sin ruido.</p>
-      <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
-      <p class="eyebrow">Para Android</p>
-      <div class="btns">
-        <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis<span class="btn-arrow"><span class="btn-arrow-slide"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg></span></span></a>
-        <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub<span class="btn-arrow"><span class="btn-arrow-slide"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.64645 11.3536C3.45118 11.1583 3.45118 10.8417 3.64645 10.6465L10.2929 4L6 4C5.72386 4 5.5 3.77614 5.5 3.5C5.5 3.22386 5.72386 3 6 3L11.5 3C11.6326 3 11.7598 3.05268 11.8536 3.14645C11.9473 3.24022 12 3.36739 12 3.5L12 9.00001C12 9.27615 11.7761 9.50001 11.5 9.50001C11.2239 9.50001 11 9.27615 11 9.00001V4.70711L4.35355 11.3536C4.15829 11.5488 3.84171 11.5488 3.64645 11.3536Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg></span></span></a>
-      </div>
-      <div class="chips"><span class="chip">Gratis</span><span class="chip">Sin anuncios</span><span class="chip">Sin cuentas</span></div>
-      <p class="proof"><span class="star">★ 5.0</span> en Apklis · <b>200+ usuarios</b> · v1.2.0 · Actualizada el 24 de noviembre de 2026</p>
-    </div>
-    <div class="island-stage">
-      <div class="island" id="heroIsland" title="Toca para cambiar de canción">
-        <span class="island-cover"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
-        <div class="island-text">
-          <div class="island-song"><span id="islandTitle" data-full="Lucid Dreams">Lucid Dreams</span></div>
-          <div class="island-artist" id="islandArtist">Juice WRLD</div>
+    <div class="hero" id="inicio">
+      <div>
+        <img class="hero-logo" id="heroLogo" src="favicon.svg" alt="">
+        <h1><span id="heroWordmark">Aural<span>Player</span></span></h1>
+        <p class="tagline">El sonido, sin ruido.</p>
+        <p class="sub">Tu biblioteca, tus playlists y tus colores. Gratis, sin anuncios y sin cuentas.</p>
+        <div class="btns">
+          <a class="btn primary" href="https://apklis.cu/application/com.aural.player">Descargar en Apklis</a>
+          <a class="btn ghost" href="https://github.com/Dah3l/AuralPlayer/releases/latest">Descargar en GitHub</a>
         </div>
-        <span class="eq"><i></i><i></i><i></i><i></i></span>
+        <ul class="facts">
+          <li>Gratis</li>
+          <li>Sin anuncios</li>
+          <li>Sin cuentas</li>
+        </ul>
+        <p class="proof"><span class="star">★ 5.0</span> en Apklis · <b>200+ usuarios</b> · v1.2.0, actualizada el 24 de noviembre de 2026</p>
       </div>
-      <p class="island-caption"><b>Dynamic Aural</b> · la isla que suena contigo</p>
+      <div class="stage">
+        <div class="island" id="heroIsland" title="Toca para cambiar de canción">
+          <span class="island-cover"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+          <div class="island-text">
+            <div class="island-song"><span id="islandTitle" data-full="Lucid Dreams">Lucid Dreams</span></div>
+            <div class="island-artist" id="islandArtist">Juice WRLD</div>
+          </div>
+          <span class="eq"><i></i><i></i><i></i><i></i></span>
+        </div>
+        <p class="island-caption"><b>Dynamic Aural:</b> la isla que suena contigo</p>
+      </div>
     </div>
+
   </div>
 
-  <section id="funciones" class="reveal">
-    <div class="sec-ico sec-ico--note"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-    <h2>Hecha para vivir la música</h2>
-    <p class="sec-sub">Todo lo que necesitas, nada de lo que sobra.</p>
-    <div class="grid">
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="4"/><circle cx="8" cy="12" r="1.6" fill="#2ED3B7" stroke="none"/><path d="M12.5 10.5v3l2.5-1.5z" fill="#2ED3B7" stroke="none"/></svg></div><h3>Dynamic Aural</h3><p>Tu música flota en una isla siempre a la vista: pausa, cambia y marca favoritas sin abrir la app.</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3.2"/><circle cx="16" cy="9" r="3.2"/><circle cx="12" cy="16" r="3.2"/></svg></div><h3>El color de tu música</h3><p>El reproductor se tiñe con los colores reales de cada portada, canción a canción.</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4"/><path d="M8 23h8"/></svg></div><h3>Letras en pantalla</h3><p>Canta con la letra de cada canción, con su ventana dedicada y desplazamiento suave.</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4" fill="#2ED3B7" stroke="none"/><circle cx="12" cy="12" r="2.4" fill="#FF4D8D" stroke="none"/><circle cx="18" cy="12" r="2.4" fill="#4DA6FF" stroke="none"/></svg></div><h3>18 temas</h3><p>Del Bosque a Sakura: cambia el color de toda la app con un toque. Hay uno para cada ánimo.</p><div class="theme-dots"><button style="--c:#2ED3B7" data-c="#2ED3B7" data-n="Bosque" class="on" aria-label="Bosque"></button><button style="--c:#FF4D8D" data-c="#FF4D8D" data-n="Sakura" aria-label="Sakura"></button><button style="--c:#4DA6FF" data-c="#4DA6FF" data-n="Océano" aria-label="Océano"></button><button style="--c:#FF8C42" data-c="#FF8C42" data-n="Atardecer" aria-label="Atardecer"></button><button style="--c:#9D7BFF" data-c="#9D7BFF" data-n="Medianoche" aria-label="Medianoche"></button><button style="--c:#00F0FF" data-c="#00F0FF" data-n="Neón" aria-label="Neón"></button><button style="--c:#E63946" data-c="#E63946" data-n="Navidad" aria-label="Navidad"></button><button style="--c:#7F011F" data-c="#7F011F" data-n="Vino" aria-label="Vino"></button></div><p class="theme-name">Tema: <b id="themeName">Bosque</b> · toca un color y prueba</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div><h3>Descargas</h3><p>Busca canciones y bájalas sin salir de la app, listas para escuchar sin conexión.</p></div>
-      <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div><h3>Aural link</h3><p>Comparte cualquier canción con un solo enlace: quien lo abre la tiene lista para descargar.</p></div>
+  <section id="funciones">
+    <div class="wrap split">
+      <div>
+        <h2>Hecha para vivir la música</h2>
+        <p class="sec-sub">Todo lo que necesitas, nada de lo que sobra.</p>
+      </div>
+      <div class="feats">
+        <div class="feat">
+          <h3>Dynamic Aural</h3>
+          <p>Tu música flota en una isla siempre a la vista: pausa, cambia y marca favoritas sin abrir la app.</p>
+        </div>
+        <div class="feat">
+          <h3>El color de tu música</h3>
+          <p>El reproductor se tiñe con los colores reales de cada portada, canción a canción.</p>
+        </div>
+        <div class="feat">
+          <h3>Letras en pantalla</h3>
+          <p>Canta con la letra de cada canción, con su ventana dedicada y desplazamiento suave.</p>
+        </div>
+        <div class="feat">
+          <h3>18 temas</h3>
+          <div>
+            <p>Del Bosque a Sakura: cambia el color de toda la app con un toque. Hay uno para cada ánimo.</p>
+            <div class="theme-dots"><button style="--c:#2ED3B7" data-c="#2ED3B7" data-n="Bosque" class="on" aria-label="Bosque"></button><button style="--c:#FF4D8D" data-c="#FF4D8D" data-n="Sakura" aria-label="Sakura"></button><button style="--c:#4DA6FF" data-c="#4DA6FF" data-n="Océano" aria-label="Océano"></button><button style="--c:#FF8C42" data-c="#FF8C42" data-n="Atardecer" aria-label="Atardecer"></button><button style="--c:#9D7BFF" data-c="#9D7BFF" data-n="Medianoche" aria-label="Medianoche"></button><button style="--c:#00F0FF" data-c="#00F0FF" data-n="Neón" aria-label="Neón"></button><button style="--c:#E63946" data-c="#E63946" data-n="Navidad" aria-label="Navidad"></button><button style="--c:#7F011F" data-c="#7F011F" data-n="Vino" aria-label="Vino"></button></div>
+            <p class="theme-name">Tema: <b id="themeName">Bosque</b>. Toca un color y prueba.</p>
+          </div>
+        </div>
+        <div class="feat">
+          <h3>Descargas</h3>
+          <p>Busca canciones y bájalas sin salir de la app, listas para escuchar sin conexión.</p>
+        </div>
+        <div class="feat">
+          <h3>Aural link</h3>
+          <p>Comparte cualquier canción con un solo enlace: quien lo abre la tiene lista para descargar.</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section id="se-ve" class="reveal">
-    <h2>Cómo se ve</h2>
-    <p class="sec-sub">Un vistazo a lo que hace diferente a AuralPlayer.</p>
-    <div class="shots">
-      <div class="shot">
-        <img src="isla.png" alt="Dynamic Aural flotando sobre otra app" style="object-position: top" loading="lazy" decoding="async" width="583" height="318">
-        <h3>La isla siempre contigo</h3><p>Dynamic Aural flota sobre todo, con tus controles a un toque.</p>
+  <section id="se-ve">
+    <div class="wrap">
+      <div style="max-width: 640px; margin-bottom: 56px;">
+        <h2>Cómo se ve</h2>
+        <p class="sec-sub">Un vistazo a lo que hace diferente a AuralPlayer.</p>
       </div>
-      <div class="shot">
-        <div class="mini"><div class="dots"><i style="background:#2ED3B7"></i><i style="background:#FF4D8D"></i><i style="background:#4DA6FF"></i><i style="background:#FF8C42"></i></div><p style="color:var(--mut);font-size:13px">18 temas para elegir</p></div>
-        <h3>18 temas</h3><p>Bosque, Sakura, Medianoche y más. La app cambia contigo.</p>
-      </div>
-      <div class="shot">
-        <img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center" loading="lazy" decoding="async" width="1220" height="694">
-        <h3>Letras en pantalla</h3><p>La letra te acompaña mientras suena la canción.</p>
+      <div class="shots">
+        <div class="shot">
+          <div class="frame"><img src="isla.png" alt="Dynamic Aural flotando sobre otra app" style="object-position: top" loading="lazy" decoding="async" width="583" height="318"></div>
+          <h3>La isla siempre contigo</h3>
+          <p>Dynamic Aural flota sobre todo, con tus controles a un toque.</p>
+        </div>
+        <div class="shot">
+          <div class="frame"><div class="mini"><div class="dots"><i style="background:#2ED3B7"></i><i style="background:#FF4D8D"></i><i style="background:#4DA6FF"></i><i style="background:#FF8C42"></i></div><p>18 temas para elegir</p></div></div>
+          <h3>18 temas</h3>
+          <p>Bosque, Sakura, Medianoche y más. La app cambia contigo.</p>
+        </div>
+        <div class="shot">
+          <div class="frame"><img src="letras.png" alt="Letras en pantalla mientras suena la canción" style="object-position: center" loading="lazy" decoding="async" width="1220" height="694"></div>
+          <h3>Letras en pantalla</h3>
+          <p>La letra te acompaña mientras suena la canción.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="reveal" id="pro">
-    <div class="pro-hero">
-      <img src="favicon.svg" alt="">
-      <span class="pro-logo-badge">PRO</span>
+  <section id="pro">
+    <div class="wrap split">
+      <div>
+        <div class="pro-hero">
+          <img src="favicon.svg" alt="">
+          <span class="pro-logo-badge">PRO</span>
+        </div>
+        <h2>Aural Pro</h2>
+      </div>
+      <div>
+        <p class="pro-coming">Próximamente</p>
+        <p class="sec-sub" style="margin-top: 8px; max-width: none;">Streaming, radio y playlists de YouTube. Se vienen cositas.</p>
+        <p class="pro-teaser"><a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20que%20me%20avises%20cuando%20salga%20Aural%20Pro">Avísame cuando salga</a></p>
+      </div>
     </div>
-    <h2>Aural Pro</h2>
-    <p class="pro-coming"><span>Próximamente</span></p>
-    <p class="sec-sub">Streaming, radio y playlists de YouTube. Se vienen cositas.</p>
     <!-- PRO COMPLETO: oculto hasta el lanzamiento de Aural Pro v1.1. Para activarlo, borra esta linea y la de cierre.
     <table class="pro-table">
       <tr><th></th><th>Gratis</th><th class="pro-col">Pro</th></tr>
@@ -331,7 +392,7 @@
       <li><span class="n">2</span><div><h3><a href="https://wa.me/5359648522">Escríbenos por WhatsApp</a></h3><p>Dinos qué plan quieres. Pagas por Transfermóvil (CUP) o QvaPay.</p></div></li>
       <li><span class="n">3</span><div><h3>Te activamos Pro</h3><p>Te enviamos tu código de activación y Pro queda activo en tu app. Sin cuentas ni contraseñas.</p></div></li>
     </ol>
-    <div class="grid">
+    <div class="plans">
       <div class="card pro-card">
         <span class="pro-badge-slot"></span>
         <h3>Mensual</h3>
@@ -341,8 +402,7 @@
         <a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20Aural%20Pro%20plan%20Mensual">Obtener plan</a>
       </div>
       <div class="card pro-card popular">
-        <span class="pro-ribbon">Popular</span>
-        <span class="pro-badge-slot"></span>
+        <span class="pro-badge-slot"><span class="pro-badge">Popular</span></span>
         <h3>Anual</h3>
         <p class="pro-sub">≈ 42 CUP al mes · ahorras 700 CUP.</p>
         <p class="pro-price">500 CUP <span>/ año</span></p>
@@ -359,79 +419,70 @@
       </div>
     </div>
     -->
-    <p class="pro-teaser"><a class="btn primary" href="https://wa.me/5359648522?text=Hola%2C%20quiero%20que%20me%20avises%20cuando%20salga%20Aural%20Pro">Avísame cuando salga</a></p>
   </section>
 
-  <section class="reveal">
-    <div class="sec-ico sec-ico--star"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-    <h2>Lo que dicen los usuarios</h2>
-    <p class="sec-sub">Reseñas reales de Apklis.</p>
-    <div class="grid">
-      <div class="card review">
-        <div class="review-head">
-          <span class="avatar">MB</span>
-          <span class="who"><b>Marlon Batista</b><span>2 nov 2026</span></span>
-        </div>
-        <div class="stars">★★★★★</div>
-        <p>Gratuita, Descarga música, y encima sin ADS, joyita🙌🏻</p>
+  <section>
+    <div class="wrap split">
+      <div>
+        <h2>Lo que dicen los usuarios</h2>
+        <p class="sec-sub">Reseñas reales de Apklis.</p>
       </div>
-      <div class="card review">
-        <div class="review-head">
-          <span class="avatar">DA</span>
-          <span class="who"><b>Daniel Acosta Vega</b><span>1 nov 2026</span></span>
-        </div>
-        <div class="stars">★★★★★</div>
-        <p>Durísimaaa, y permite descargas de YouTube, osea ¿puede mejorar?</p>
+      <div class="quotes">
+        <figure class="quote">
+          <div class="stars">★★★★★</div>
+          <blockquote>Gratuita, Descarga música, y encima sin ADS, joyita🙌🏻</blockquote>
+          <figcaption><b>Marlon Batista</b> · 2 nov 2026</figcaption>
+        </figure>
+        <figure class="quote">
+          <div class="stars">★★★★★</div>
+          <blockquote>Durísimaaa, y permite descargas de YouTube, osea ¿puede mejorar?</blockquote>
+          <figcaption><b>Daniel Acosta Vega</b> · 1 nov 2026</figcaption>
+        </figure>
       </div>
     </div>
   </section>
 
-  <section class="reveal" id="faq">
-    <div class="sec-ico sec-ico--faq"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-    <h2>Preguntas frecuentes</h2>
-    <p class="sec-sub">Lo que nos preguntan siempre.</p>
-    <div class="faq">
-      <details><summary>¿Qué permisos pide AuralPlayer?</summary><p>Solo los necesarios: acceso a tu música para leer tu biblioteca, notificaciones para los controles de reproducción, y la superposición de pantalla solo si activas Dynamic Aural. Nada más.</p></details>
-      <details><summary>¿De dónde salen las canciones?</summary><p>De tu teléfono: AuralPlayer lee los archivos de audio que ya tienes. Además puedes buscar y descargar canciones desde dentro de la app.</p></details>
-      <details><summary>¿Funciona sin conexión?</summary><p>Sí. Tu biblioteca y tus descargas suenan sin internet. Solo necesitas conexión para buscar y descargar canciones nuevas.</p></details>
-      <details><summary>¿Es seguro instalar el APK fuera de la tienda?</summary><p>Sí. El APK oficial sale de nuestro GitHub o de Apklis, la tienda cubana. Android te pedirá permiso para instalar desde el navegador: es el aviso normal para apps fuera de Google Play. Además el código es abierto: cualquiera puede revisarlo en GitHub.</p></details>
-      <details><summary>¿Cuánto cuesta?</summary><p>La app es gratis, sin anuncios y sin cuentas. Aural Pro todavía no está disponible: llegará próximamente con streaming, radio y playlists de YouTube.</p></details>
-      <details><summary>¿Qué pasa si no pago?</summary><p>Nada: sigues usando todo lo gratis — tu biblioteca, descargas, letras, temas y Dynamic Aural. Aural Pro es opcional y llegará próximamente.</p></details>
-      <details><summary>¿Cómo se activa Pro si no hay cuentas?</summary><p>Cuando Aural Pro salga, se activará por dispositivo con un código, sin cuentas ni contraseñas. Nos escribes por WhatsApp, pagas por Transfermóvil o QvaPay, y te enviamos tu código de activación.</p></details>
+  <section id="faq">
+    <div class="wrap split">
+      <div>
+        <h2>Preguntas frecuentes</h2>
+        <p class="sec-sub">Lo que nos preguntan siempre.</p>
+      </div>
+      <div class="faq">
+        <details><summary>¿Qué permisos pide AuralPlayer?</summary><p>Solo los necesarios: acceso a tu música para leer tu biblioteca, notificaciones para los controles de reproducción, y la superposición de pantalla solo si activas Dynamic Aural. Nada más.</p></details>
+        <details><summary>¿De dónde salen las canciones?</summary><p>De tu teléfono: AuralPlayer lee los archivos de audio que ya tienes. Además puedes buscar y descargar canciones desde dentro de la app.</p></details>
+        <details><summary>¿Funciona sin conexión?</summary><p>Sí. Tu biblioteca y tus descargas suenan sin internet. Solo necesitas conexión para buscar y descargar canciones nuevas.</p></details>
+        <details><summary>¿Es seguro instalar el APK fuera de la tienda?</summary><p>Sí. El APK oficial sale de nuestro GitHub o de Apklis, la tienda cubana. Android te pedirá permiso para instalar desde el navegador: es el aviso normal para apps fuera de Google Play. Además el código es abierto: cualquiera puede revisarlo en GitHub.</p></details>
+        <details><summary>¿Cuánto cuesta?</summary><p>La app es gratis, sin anuncios y sin cuentas. Aural Pro todavía no está disponible: llegará próximamente con streaming, radio y playlists de YouTube.</p></details>
+        <details><summary>¿Qué pasa si no pago?</summary><p>Nada: sigues usando todo lo gratis — tu biblioteca, descargas, letras, temas y Dynamic Aural. Aural Pro es opcional y llegará próximamente.</p></details>
+        <details><summary>¿Cómo se activa Pro si no hay cuentas?</summary><p>Cuando Aural Pro salga, se activará por dispositivo con un código, sin cuentas ni contraseñas. Nos escribes por WhatsApp, pagas por Transfermóvil o QvaPay, y te enviamos tu código de activación.</p></details>
+      </div>
     </div>
   </section>
 
-  <section class="reveal" id="contacto">
-    <div class="sec-ico sec-ico--msg"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
-    <h2>Contacto</h2>
-    <p class="sec-sub">¿Dudas, ideas o soporte? Escríbenos por donde prefieras.</p>
-    <div class="contact-grid">
-      <a class="contact-card" href="https://wa.me/5359648522">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
-        <span class="ct"><b>WhatsApp</b><span>+53 59648522</span></span>
-      </a>
-      <a class="contact-card" href="mailto:auralplayeroficial@gmail.com">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-        <span class="ct"><b>Correo</b><span>auralplayeroficial@gmail.com</span></span>
-      </a>
-      <a class="contact-card" href="https://instagram.com/auralplayer">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></span>
-        <span class="ct"><b>Instagram</b><span>@auralplayer</span></span>
-      </a>
-      <a class="contact-card" href="https://github.com/Dah3l/AuralPlayer">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></span>
-        <span class="ct"><b>GitHub</b><span>Dah3l / AuralPlayer</span></span>
-      </a>
+  <section id="contacto">
+    <div class="wrap split">
+      <div>
+        <h2>Contacto</h2>
+        <p class="sec-sub">¿Dudas, ideas o soporte? Escríbenos por donde prefieras.</p>
+      </div>
+      <ul class="contact">
+        <li><a href="https://wa.me/5359648522"><b>WhatsApp</b><span>+53 59648522</span></a></li>
+        <li><a href="mailto:auralplayeroficial@gmail.com"><b>Correo</b><span>auralplayeroficial@gmail.com</span></a></li>
+        <li><a href="https://instagram.com/auralplayer"><b>Instagram</b><span>@auralplayer</span></a></li>
+        <li><a href="https://github.com/Dah3l/AuralPlayer"><b>GitHub</b><span>Dah3l / AuralPlayer</span></a></li>
+      </ul>
     </div>
   </section>
 </main>
 
-  <footer>
-    <p class="ver">Versión actual v1.2.0 · Actualizada el 24 de noviembre de 2026 · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/CHANGELOG.md">Ver cambios</a></p>
+<footer>
+  <div class="wrap">
+    <p>Versión actual v1.2.0 · Actualizada el 24 de noviembre de 2026 · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/CHANGELOG.md">Ver cambios</a></p>
     <p>Hecho con cariño en Cuba 🇨🇺 · AuralPlayer es gratis y de código abierto.</p>
     <p><a href="privacidad.html">Privacidad</a> · <a href="https://github.com/Dah3l/AuralPlayer/blob/main/LICENSE">Licencia</a></p>
-  </footer>
-</div>
+  </div>
+</footer>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   // Splash: el logo entra primero, luego el nombre, y ambos vuelan juntos
@@ -488,12 +539,6 @@ document.addEventListener('DOMContentLoaded', function () {
       setTimeout(function () { clearTimeout(failsafe); done(); }, 1800);
     }, 1700);
   })();
-  var els = document.querySelectorAll('.reveal');
-  if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('visible'); }); return; }
-  var io = new IntersectionObserver(function (entries) {
-    entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('visible'); io.unobserve(en.target); } });
-  }, { threshold: 0.1 });
-  els.forEach(function (e) { io.observe(e); });
   // Scrollspy: ilumina en el header la sección que se está viendo.
   var navLinks = document.querySelectorAll('nav a[href^="#"]');
   var spy = new IntersectionObserver(function (entries) {
