@@ -100,7 +100,7 @@ class PlaybackManager(private val context: Context) {
     /** Peldaños de la escalera sin VPN ya intentados por video:
      *  1 NewPipe fresco, 2 InnerTube, 3 progresivo. Se limpia
      *  cuando la canción suena (READY). */
-    private val onlineLadderAttempts = mutableMapOf<String, Int>()
+    private val onlineRetryAttempts = mutableMapOf<String, Int>()
 
     private val _endlessDjActive = MutableStateFlow(false)
     /** Si la Sesión DJ infinita está activa (la lleva el servicio). */
@@ -253,33 +253,29 @@ class PlaybackManager(private val context: Context) {
             if (playbackState == Player.STATE_ENDED && _stopMode.value != null) {
                 _stopMode.value = null
             }
-            // La canción suena: la escalera de ese video se reinicia.
+            // La canción suena: el reintento de ese video se reinicia.
             if (playbackState == Player.STATE_READY) {
                 _state.value.currentSong?.onlineVideoId?.let { videoId ->
-                    onlineLadderAttempts.remove(videoId)
-                    com.aural.player.youtube.YouTubeStreamResolver.clearEscalation(videoId)
+                    onlineRetryAttempts.remove(videoId)
+                    com.aural.player.youtube.YouTubeStreamResolver.clearFailed(videoId)
                 }
             }
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // Escalera de respaldo de la MISMA canción: la
-            // resolución inicial ya prueba Opus secuencial; ante
-            // un error online —también si ni empieza— se escala
-            // conservando la posición: 1) M4A directo fresco
-            // excluyendo la URL fallida, 2) InnerTube directo,
-            // 3) progresivo M4A. Solo con la escalera agotada se
-            // avisa y se salta a la siguiente.
+            // Motor simple: ante un error online —también si ni
+            // empieza— un solo reintento con StreamInfo fresco
+            // excluyendo la URL fallida, conservando la
+            // posición. Si aun así falla, aviso corto y salto.
             val c = controller ?: return
             val current = _state.value.currentSong ?: return
             if (!current.isOnline) return
             val videoId = current.onlineVideoId
             if (videoId != null) {
-                val attempts = (onlineLadderAttempts[videoId] ?: 0) + 1
-                if (attempts <= 3) {
-                    onlineLadderAttempts[videoId] = attempts
-                    com.aural.player.youtube.YouTubeStreamResolver
-                        .prepareEscalation(videoId, attempts)
+                val attempts = (onlineRetryAttempts[videoId] ?: 0) + 1
+                if (attempts <= 1) {
+                    onlineRetryAttempts[videoId] = attempts
+                    com.aural.player.youtube.YouTubeStreamResolver.markFailed(videoId)
                     val curIdx = c.currentMediaItemIndex
                     val pos = c.currentPosition
                     if (curIdx >= 0) {
@@ -290,7 +286,7 @@ class PlaybackManager(private val context: Context) {
                         return
                     }
                 }
-                onlineLadderAttempts.remove(videoId)
+                onlineRetryAttempts.remove(videoId)
                 com.aural.player.youtube.YouTubeStreamResolver.invalidate(videoId)
             }
             val curIdx = c.currentMediaItemIndex
@@ -300,15 +296,13 @@ class PlaybackManager(private val context: Context) {
                     curIdx, Player.REPEAT_MODE_OFF, c.shuffleModeEnabled
                 )
             } else C.INDEX_UNSET
-            // Motivo técnico del player (playabilityStatus o
-            // formatos solo cifrados): va completo al modal de
-            // diagnóstico, que queda hasta cerrarlo. El aviso
-            // corto no lleva el detalle: el Toast lo truncaba.
-            val resolver = com.aural.player.youtube.YouTubeStreamResolver
-            resolver.playabilityDiagnosticReport()?.let { report ->
-                _diagnosticReport.value = report
-            }
-            resolver.clearPlayabilityDiagnostics()
+            // Motivo simple del fallo para el modal: sin detalle
+            // de clientes, solo la causa probable y la salida.
+            _diagnosticReport.value =
+                "No se pudo reproducir en línea.\n" +
+                    "La conexión o la región pueden estar bloqueando " +
+                    "el audio de YouTube. Con VPN la experiencia " +
+                    "suele ser mejor."
             if (nextIdx == C.INDEX_UNSET || nextIdx in failedOnlineIndices) {
                 _message.value = "No se pudo reproducir en línea"
                 publishState()
