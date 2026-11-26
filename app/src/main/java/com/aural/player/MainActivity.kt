@@ -660,7 +660,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     }
                     LaunchedEffect(s.collection.url) {
                         loading = true
-                        val fetched = youTubeManager.fetchCollectionSongs(s.collection)
+                        val fetched = youTubeManager?.fetchCollectionSongs(s.collection) ?: emptyList()
                         results = fetched
                         songs = fetched.map { viewModel.registerOnlineSong(it) }
                         loading = false
