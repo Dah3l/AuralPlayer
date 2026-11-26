@@ -75,6 +75,12 @@ class SettingsStore(private val context: Context) {
         // Calidad de descarga de YouTube: "data_saver" (48 Kbps) o
         // "quality" (128 Kbps). Ahorro por defecto.
         val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        // Streaming (1.3.0): calidad, solo Wi-Fi, aviso de datos ya
+        // mostrado y registro persistente de canciones online.
+        val KEY_STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
+        val KEY_STREAMING_WIFI_ONLY = booleanPreferencesKey("streaming_wifi_only")
+        val KEY_STREAMING_DATA_NOTICE_SEEN = booleanPreferencesKey("streaming_data_notice_seen")
+        val KEY_ONLINE_SONGS = stringPreferencesKey("online_songs_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
@@ -751,6 +757,135 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[KEY_DOWNLOAD_QUALITY] = quality
         }
+    }
+
+    /** Calidad de streaming: mismos valores que la de descarga. */
+    val streamingQuality: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_STREAMING_QUALITY] ?: "data_saver"
+    }
+
+    suspend fun setStreamingQuality(quality: String) {
+        if (quality != "quality" && quality != "data_saver") return
+        context.dataStore.edit { prefs ->
+            prefs[KEY_STREAMING_QUALITY] = quality
+        }
+    }
+
+    /** Streaming solo con Wi-Fi (apagado por defecto). */
+    val streamingWifiOnly: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_STREAMING_WIFI_ONLY] ?: false
+    }
+
+    suspend fun setStreamingWifiOnly(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_STREAMING_WIFI_ONLY] = enabled
+        }
+    }
+
+    /** Aviso de consumo de datos del primer streaming ya mostrado. */
+    val streamingDataNoticeSeen: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_STREAMING_DATA_NOTICE_SEEN] ?: false
+    }
+
+    suspend fun setStreamingDataNoticeSeen() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_STREAMING_DATA_NOTICE_SEEN] = true
+        }
+    }
+
+    /** Canciones online conocidas (id negativo -> registro). */
+    val onlineSongs: Flow<Map<Long, OnlineSongRecord>> = context.dataStore.data.map { prefs ->
+        decodeOnlineSongs(prefs[KEY_ONLINE_SONGS])
+    }
+
+    /**
+     * Registra una canción online y devuelve su [Song] con id estable.
+     * Si el video ya estaba registrado, actualiza su metadata y
+     * conserva el mismo id (favoritos/playlists no se rompen).
+     */
+    suspend fun registerOnlineSong(
+        videoId: String,
+        title: String,
+        artist: String,
+        album: String = "",
+        durationMs: Long = 0L,
+        thumbnailUrl: String? = null
+    ): Song {
+        var result: OnlineSongRecord? = null
+        context.dataStore.edit { prefs ->
+            val current = decodeOnlineSongs(prefs[KEY_ONLINE_SONGS]).toMutableMap()
+            val existing = current.values.firstOrNull { it.videoId == videoId }
+            val record = if (existing != null) {
+                existing.copy(
+                    title = title.ifBlank { existing.title },
+                    artist = artist.ifBlank { existing.artist },
+                    album = album.ifBlank { existing.album },
+                    durationMs = if (durationMs > 0L) durationMs else existing.durationMs,
+                    thumbnailUrl = thumbnailUrl ?: existing.thumbnailUrl
+                )
+            } else {
+                val nextId = (current.keys.minOrNull() ?: 0L) - 1L
+                OnlineSongRecord(
+                    id = nextId,
+                    videoId = videoId,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    durationMs = durationMs,
+                    thumbnailUrl = thumbnailUrl
+                )
+            }
+            current[record.id] = record
+            prefs[KEY_ONLINE_SONGS] = encodeOnlineSongs(current)
+            result = record
+        }
+        return (result ?: OnlineSongRecord(
+            id = -1L, videoId = videoId, title = title, artist = artist,
+            album = album, durationMs = durationMs, thumbnailUrl = thumbnailUrl
+        )).toSong()
+    }
+
+    private fun decodeOnlineSongs(json: String?): Map<Long, OnlineSongRecord> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val arr = JSONArray(json)
+            buildMap {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val id = obj.optLong("id", 0L)
+                    val videoId = obj.optString("videoId")
+                    if (id >= 0L || videoId.isBlank()) continue
+                    put(
+                        id,
+                        OnlineSongRecord(
+                            id = id,
+                            videoId = videoId,
+                            title = obj.optString("title"),
+                            artist = obj.optString("artist"),
+                            album = obj.optString("album"),
+                            durationMs = obj.optLong("durationMs", 0L),
+                            thumbnailUrl = obj.optString("thumbnailUrl").ifBlank { null }
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun encodeOnlineSongs(map: Map<Long, OnlineSongRecord>): String {
+        val arr = JSONArray()
+        map.values.sortedByDescending { it.id }.forEach { record ->
+            arr.put(JSONObject().apply {
+                put("id", record.id)
+                put("videoId", record.videoId)
+                put("title", record.title)
+                put("artist", record.artist)
+                put("album", record.album)
+                put("durationMs", record.durationMs)
+                record.thumbnailUrl?.let { put("thumbnailUrl", it) }
+            })
+        }
+        return arr.toString()
     }
 
     /** BPM por canción (songId -> BPM real, sin plegar): lo analiza la
