@@ -37,6 +37,9 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -294,6 +297,24 @@ class MusicService : MediaSessionService() {
         return if (uri.scheme == "aural-online") uri.lastPathSegment else null
     }
 
+    /** Mide la velocidad real de carga del stream online para
+     *  el indicador de conexión del Now Playing: cada carga
+     *  completada de googlevideo aporta bytes/tiempo al
+     *  medidor del resolver (sin gastar datos extra). */
+    private val connectionAnalyticsListener = object : AnalyticsListener {
+        override fun onLoadCompleted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData
+        ) {
+            val parts = loadEventInfo.dataSpec.key?.split(":") ?: return
+            if (parts.size < 2 || parts[0] != "yt") return
+            YouTubeStreamResolver.noteConnectionLoad(
+                parts[1], loadEventInfo.bytesLoaded, loadEventInfo.loadDurationMs
+            )
+        }
+    }
+
     private fun prefetchOnlineAround(player: Player) {
         onlineVideoId(player.currentMediaItem)?.let {
             YouTubeStreamResolver.prefetch(it, streamingQualityCache)
@@ -329,6 +350,7 @@ class MusicService : MediaSessionService() {
             // se pausa sola (Android avisa con AUDIO_BECOMING_NOISY).
             .setHandleAudioBecomingNoisy(true)
             .build()
+        player.addAnalyticsListener(connectionAnalyticsListener)
 
         // Ecualizador y normalización atados a la sesión de audio
         EqualizerManager.init(this, player.audioSessionId)
@@ -396,6 +418,7 @@ class MusicService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(false)
             .build()
+        fade.addAnalyticsListener(connectionAnalyticsListener)
         fade.volume = 0f
         fadePlayer = fade
         // Ecualizador del segundo reproductor (su propio juego de efectos).
