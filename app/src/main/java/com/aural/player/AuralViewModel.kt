@@ -812,10 +812,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Reproduce canciones online (cola mixta: la cola actual se reemplaza). */
-    fun playOnlineSongs(songs: List<Song>, index: Int = 0) {
+    fun playOnlineSongs(songs: List<Song>, index: Int = 0, shuffle: Boolean = false) {
         if (songs.isEmpty()) return
         withStreamingGate {
-            playback.playQueue(songs, index.coerceIn(0, songs.size - 1), false)
+            playback.playQueue(songs, index.coerceIn(0, songs.size - 1), shuffle)
         }
     }
 
