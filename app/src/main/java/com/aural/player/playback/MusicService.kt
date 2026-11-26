@@ -818,7 +818,12 @@ class MusicService : MediaSessionService() {
                     // (inaudible como salto) y los tirones desaparecen.
                     playedMs += 500
                     val t = (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
-                    val rate = fromRate + (toRate - fromRate) * t
+                    // Curva ease-in-out (coseno) en vez de rampa lineal
+                    // (issue #3): el cambio de velocidad es más lento al
+                    // principio y al final del glide — donde el oído caza
+                    // los pasos — y más rápido en el centro.
+                    val eased = (1f - kotlin.math.cos(t * kotlin.math.PI.toFloat())) / 2f
+                    val rate = fromRate + (toRate - fromRate) * eased
                     lastGlideSpeed = rate
                     main.setPlaybackSpeed(rate)
                     delay(500)
@@ -983,6 +988,11 @@ class MusicService : MediaSessionService() {
     private fun reorderDjTail() {
         if (!endlessDjSession || !djMixEnabledCache) return
         if (crossfadeActive) return
+        // Durante el glide de vuelta al tempo no se toca la cola
+        // (issue #3): los moveMediaItem compiten con el reproductor
+        // justo cuando Sonic está estirando el tiempo. El reorden se
+        // dispara otra vez con el próximo BPM o cambio de canción.
+        if (tempoRecoveryJob?.isActive == true) return
         val player = mediaSession?.player ?: return
         if (player.shuffleModeEnabled || player.repeatMode != Player.REPEAT_MODE_OFF) return
         val timeline = player.currentTimeline
@@ -1034,6 +1044,9 @@ class MusicService : MediaSessionService() {
      *  suena y la siguiente) y se reintenta: la sesión no se acaba nunca. */
     private fun refillEndlessQueueIfNeeded() {
         if (!endlessDjSession) return
+        // Igual que el reorden: durante el glide no se toca la cola
+        // (issue #3); el relleno se reintenta en la próxima transición.
+        if (tempoRecoveryJob?.isActive == true) return
         val player = mediaSession?.player ?: return
         val timeline = player.currentTimeline
         if (timeline.isEmpty) return
