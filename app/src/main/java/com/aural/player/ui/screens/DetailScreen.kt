@@ -619,6 +619,7 @@ fun DetailScreen(
                             coverUri = customCovers[song.id] ?: song.albumArtUri,
                             durationMs = song.durationMs,
                             isPlaying = song.id == playerState.currentSong?.id,
+                            onlineBadge = song.isOnline,
                             onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
                             modifier = Modifier.graphicsLayer {
                                 scaleX = if (isDragging) 1.03f else 1f
@@ -651,6 +652,7 @@ fun DetailScreen(
                         coverUri = customCovers[song.id] ?: song.albumArtUri,
                         durationMs = song.durationMs,
                         isPlaying = song.id == playerState.currentSong?.id,
+                        onlineBadge = song.isOnline,
                         onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
                         trailing = {
                             TextButton(onClick = { onSongMenu(song) }) {
