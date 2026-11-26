@@ -404,6 +404,15 @@ private fun AuralApp(viewModel: AuralViewModel,
         val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val playbackMessage by viewModel.playback.message.collectAsStateWithLifecycle()
+    val messageContext = LocalContext.current
+    LaunchedEffect(playbackMessage) {
+        val text = playbackMessage ?: return@LaunchedEffect
+        android.widget.Toast.makeText(
+            messageContext, text, android.widget.Toast.LENGTH_SHORT
+        ).show()
+        viewModel.playback.clearMessage()
+    }
 
     // ---- Aviso de nueva versión: una vez al día, en silencio si falla ----
     val updateContext = LocalContext.current
