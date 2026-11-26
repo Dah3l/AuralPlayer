@@ -288,12 +288,18 @@ class PlaybackManager(private val context: Context) {
                     curIdx, Player.REPEAT_MODE_OFF, c.shuffleModeEnabled
                 )
             } else C.INDEX_UNSET
+            // Motivo técnico del player (playabilityStatus o
+            // formatos solo cifrados): visible en el aviso para
+            // que la próxima prueba diga qué respondió YouTube.
+            val diagnostic =
+                com.aural.player.youtube.YouTubeStreamResolver.lastPlayabilityDiagnostic()
+            val detail = if (diagnostic != null) " ($diagnostic)" else ""
             if (nextIdx == C.INDEX_UNSET || nextIdx in failedOnlineIndices) {
-                _message.value = "No se pudo reproducir en línea"
+                _message.value = "No se pudo reproducir en línea$detail"
                 publishState()
                 return
             }
-            _message.value = "No se pudo reproducir en línea. Saltando…"
+            _message.value = "No se pudo reproducir en línea$detail. Saltando…"
             c.seekTo(nextIdx, 0L)
             c.prepare()
             c.playWhenReady = true
