@@ -14,6 +14,7 @@ en GitHub salen de aquí.
 - **Búsqueda y streaming sin VPN, segunda vuelta** — la búsqueda en línea usa el catálogo de YouTube Music para que las canciones oficiales y los álbumes salgan también sin VPN, y si una canción en línea falla, Aural reintenta esa misma canción por otras vías antes de saltar a la siguiente.
 - **Opus primero y álbumes sin VPN** — el streaming en línea arranca por la vía secuencial fluida (Opus en ahorro y calidad, con M4A de respaldo) para que las canciones oficiales suenen también sin VPN, y si YouTube Music no devuelve álbumes, la búsqueda los recoge del YouTube normal.
 - **Álbumes en línea y motivo al saltar** — los álbumes de la búsqueda en línea ya se leen en el formato en que YouTube Music los devuelve, y cuando una canción en línea no se puede reproducir, un modal muestra el motivo técnico completo que respondió el servidor, con botón para copiarlo.
+- **Streaming simple y fluido** — el motor en línea vuelve a lo directo: NewPipe resuelve y el audio suena en M4A con colchón, caché y la siguiente preparada; si una canción falla, se reintenta una vez con una dirección fresca antes de saltar. La primera búsqueda en línea avisa que el catálogo de YouTube puede variar por región y que con VPN los resultados y la reproducción suelen ser mejores, y los resultados vacíos en línea lo recuerdan.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
 
 ## v1.2.0 — 2026-11-24
