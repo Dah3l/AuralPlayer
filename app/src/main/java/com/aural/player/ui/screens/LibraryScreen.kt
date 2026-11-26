@@ -313,6 +313,14 @@ fun LibraryScreen(
     // nueva y obligaba a SongsTab a recomponer sus filas; derivedStateOf
     // solo recalcula cuando cambia la selección de verdad.
     val selectedIdsSet by remember { derivedStateOf { selectedIds.toSet() } }
+    // Cambiar de pestaña cancela la selección: no debe quedar activa
+    // sobre otra vista.
+    LaunchedEffect(selectedTab) {
+        if (selectionMode) {
+            selectionMode = false
+            selectedIds.clear()
+        }
+    }
     // v1.0.9: eliminar las canciones seleccionadas (borra los archivos).
     var showDeleteSongsConfirm by remember { mutableStateOf(false) }
     var pendingDeleteIds by remember { mutableStateOf<List<Long>>(emptyList()) }
@@ -1140,12 +1148,12 @@ fun LibraryScreen(
     } // v1.0.7: cierra Box de la barra de selección
 
     // ---- v1.0.7: barra de acciones inferior (zona del pulgar) ----
-    // 100dp de aire abajo: con el mini-reproductor flotante, sin esto la
-    // barra quedaba tapada por él como el botón de reconocimiento. 32dp por
-    // la derecha para librar la barra A-Z (la barra es de ancho completo
-    // y su extremo tapaba las letras de abajo).
+    // 100dp de aire abajo para quedar sobre el mini-reproductor. La
+    // barra va centrada con márgenes laterales iguales y acciones con
+    // el mismo ancho: sin el hueco asimétrico de la derecha, que
+    // apretaba la última acción y partía su texto.
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize().padding(bottom = 100.dp, end = 32.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, bottom = 100.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
     androidx.compose.animation.AnimatedVisibility(
@@ -1154,27 +1162,27 @@ fun LibraryScreen(
         exit = androidx.compose.animation.slideOutVertically { it }
     ) {
         androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
             shadowElevation = 8.dp,
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                topStart = 20.dp, topEnd = 20.dp
-            )
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SelectionActionButton(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.PlaylistAdd,
                     label = "Playlist",
                     enabled = selectedIds.isNotEmpty(),
                     onClick = { showPlaylistPicker = true }
                 )
                 SelectionActionButton(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.QueueMusic,
                     label = "A la cola",
                     enabled = selectedIds.isNotEmpty(),
@@ -1186,6 +1194,7 @@ fun LibraryScreen(
                     }
                 )
                 SelectionActionButton(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.Favorite,
                     label = "Favorita",
                     enabled = selectedIds.isNotEmpty(),
@@ -1197,6 +1206,7 @@ fun LibraryScreen(
                     }
                 )
                 SelectionActionButton(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.Delete,
                     label = "Eliminar",
                     enabled = selectedIds.isNotEmpty(),
@@ -2348,6 +2358,7 @@ private fun greetingForHour(userName: String?, birthday: String?): String {
  */
 @Composable
 private fun SelectionActionButton(
+    modifier: Modifier = Modifier,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     enabled: Boolean,
@@ -2356,10 +2367,10 @@ private fun SelectionActionButton(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
+        modifier = modifier
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .padding(horizontal = 4.dp, vertical = 8.dp)
             .alpha(if (enabled) 1f else 0.4f)
     ) {
         Icon(
@@ -2373,7 +2384,9 @@ private fun SelectionActionButton(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
