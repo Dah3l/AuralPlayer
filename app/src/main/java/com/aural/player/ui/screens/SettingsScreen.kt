@@ -449,6 +449,12 @@ fun SettingsScreen(
                 },
                 onClick = { viewModel.setStreamingWifiOnly(!streamingWifiOnly) }
             )
+            Text(
+                text = "El streaming de YouTube puede variar según la región; con VPN la experiencia suele ser mejor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
             SettingsSection("Interfaz")
             SettingsRow(
                 icon = Icons.Rounded.PhoneAndroid,
