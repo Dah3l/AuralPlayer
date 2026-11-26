@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -329,7 +330,11 @@ fun DetailScreen(
     isDownloadsPlaylist: Boolean = false,
     onGoToDownloadsTab: (() -> Unit)? = null,
     /** v1.0.9: muestra el selector de periodo (solo Agregadas recientemente). */
-    showPeriodFilter: Boolean = false
+    showPeriodFilter: Boolean = false,
+    /** Detalle online cargando sus canciones (mismo molde, sin lista aún). */
+    isLoading: Boolean = false,
+    /** Reproducción personalizada (online pasa por la puerta de streaming). */
+    onPlaySongs: ((songs: List<Song>, index: Int, shuffle: Boolean) -> Unit)? = null
 ) {
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -375,6 +380,13 @@ fun DetailScreen(
         val cutoff = recentPeriod.cutoffSeconds()
         if (cutoff == null) songs else songs.filter { it.dateAddedSec >= cutoff }
     } else songs
+    val playDetailSongs: (List<Song>, Int, Boolean) -> Unit = { list, index, shuffle ->
+        if (onPlaySongs != null) {
+            onPlaySongs(list, index, shuffle)
+        } else {
+            viewModel.playSongs(list, index, shuffle, fromPlaylistId = removableFromPlaylistId)
+        }
+    }
     // Confirmar el recorte: guarda el cuadrado y lo pone de portada
     val cropConfirm: (Bitmap) -> Unit = { cropped ->
         pendingCropUri = null
@@ -455,6 +467,15 @@ fun DetailScreen(
                     .padding(vertical = 48.dp, horizontal = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "Cargando…",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
                 Box(
                     modifier = Modifier
                         .size(120.dp)
@@ -490,6 +511,7 @@ fun DetailScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                }
                 if (removableFromPlaylistId != null && removableFromPlaylistId != FAVORITES_ID) {
                     Spacer(Modifier.height(24.dp))
                     Button(
@@ -594,8 +616,8 @@ fun DetailScreen(
                     coverUri = headerCoverUri,
                     title = title,
                     subtitle = "${visibleSongs.size} canciones · ${formatDuration(visibleSongs.sumOf { it.durationMs })}",
-                    onPlay = { viewModel.playSongs(visibleSongs, 0, fromPlaylistId = removableFromPlaylistId) },
-                    onShuffle = { viewModel.playSongs(visibleSongs.shuffled(), 0, shuffle = true, fromPlaylistId = removableFromPlaylistId) },
+                    onPlay = { playDetailSongs(visibleSongs, 0, false) },
+                    onShuffle = { playDetailSongs(visibleSongs.shuffled(), 0, true) },
                     // v1.0.8: agregar canciones a playlists de usuario existentes.
                     onAddSongs = if (removableFromPlaylistId != null &&
                         removableFromPlaylistId != FAVORITES_ID && !isDownloadsPlaylist
@@ -620,7 +642,7 @@ fun DetailScreen(
                             durationMs = song.durationMs,
                             isPlaying = song.id == playerState.currentSong?.id,
                             onlineBadge = song.isOnline,
-                            onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
+                            onClick = { playDetailSongs(listSongs, index, false) },
                             modifier = Modifier.graphicsLayer {
                                 scaleX = if (isDragging) 1.03f else 1f
                                 scaleY = if (isDragging) 1.03f else 1f
@@ -653,7 +675,7 @@ fun DetailScreen(
                         durationMs = song.durationMs,
                         isPlaying = song.id == playerState.currentSong?.id,
                         onlineBadge = song.isOnline,
-                        onClick = { viewModel.playSongs(listSongs, index, fromPlaylistId = removableFromPlaylistId) },
+                        onClick = { playDetailSongs(listSongs, index, false) },
                         trailing = {
                             TextButton(onClick = { onSongMenu(song) }) {
                                 Text("···", style = MaterialTheme.typography.titleMedium)
