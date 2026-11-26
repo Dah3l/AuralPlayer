@@ -573,7 +573,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             } ?: return@launch
             // Si el usuario ya puso algo a sonar mientras se leía, no pisarlo
             if (playback.state.value.currentSong != null) return@launch
-            val byId = songs.associateBy { it.id }
+            val onlineById = try {
+                settings.onlineSongs.first().values.associate { it.id to it.toSong() }
+            } catch (e: Exception) {
+                emptyMap()
+            }
+            val byId = songs.associateBy { it.id } + onlineById
             val song = byId[last.songId] ?: return@launch
             val queue = last.queueIds.mapNotNull { byId[it] }
             val index = queue.indexOf(song)
@@ -712,6 +717,115 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setDownloadQuality(quality) }
     }
 
+    /** Calidad de streaming ("data_saver" o "quality"). */
+    val streamingQuality: StateFlow<String> = settings.streamingQuality.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "data_saver"
+    )
+
+    fun setStreamingQuality(quality: String) {
+        viewModelScope.launch { settings.setStreamingQuality(quality) }
+    }
+
+    /** Streaming solo con Wi-Fi. */
+    val streamingWifiOnly: StateFlow<Boolean> = settings.streamingWifiOnly.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    fun setStreamingWifiOnly(enabled: Boolean) {
+        viewModelScope.launch { settings.setStreamingWifiOnly(enabled) }
+    }
+
+    /** Canciones online registradas (id negativo -> registro). */
+    val onlineSongs: StateFlow<Map<Long, com.aural.player.data.OnlineSongRecord>> =
+        settings.onlineSongs.stateIn(
+            viewModelScope, SharingStarted.Eagerly, emptyMap()
+        )
+
+    /** Registra un resultado online y devuelve su Song estable. */
+    suspend fun registerOnlineSong(result: YTResult): Song =
+        settings.registerOnlineSong(
+            videoId = result.videoId,
+            title = result.title,
+            artist = result.artist,
+            durationMs = result.durationSec * 1000L,
+            thumbnailUrl = result.thumbnailUrl
+        )
+
+    /** Aviso de datos del primer streaming esperando confirmación. */
+    private val _streamingNoticePending = MutableStateFlow(false)
+    val streamingNoticePending: StateFlow<Boolean> = _streamingNoticePending.asStateFlow()
+    private var pendingStreamingAction: (() -> Unit)? = null
+
+    fun confirmStreamingNotice() {
+        val action = pendingStreamingAction
+        pendingStreamingAction = null
+        _streamingNoticePending.value = false
+        viewModelScope.launch { settings.setStreamingDataNoticeSeen() }
+        action?.invoke()
+    }
+
+    fun cancelStreamingNotice() {
+        pendingStreamingAction = null
+        _streamingNoticePending.value = false
+    }
+
+    /** True si hay red con internet (para la búsqueda unificada). */
+    fun hasInternet(): Boolean {
+        val cm = getApplication<Application>()
+            .getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as? android.net.ConnectivityManager ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun isUnmeteredNetwork(): Boolean {
+        val cm = getApplication<Application>()
+            .getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as? android.net.ConnectivityManager ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) ||
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
+
+    /**
+     * Puerta del streaming: respeta "solo Wi-Fi" y muestra el aviso
+     * de consumo de datos una sola vez, al primer streaming con
+     * datos móviles.
+     */
+    private fun withStreamingGate(action: () -> Unit) {
+        viewModelScope.launch {
+            val wifiOnly = settings.streamingWifiOnly.first()
+            val unmetered = isUnmeteredNetwork()
+            if (wifiOnly && !unmetered) {
+                playback.showMessage("Streaming solo con Wi-Fi")
+                return@launch
+            }
+            val seen = settings.streamingDataNoticeSeen.first()
+            if (!unmetered && !seen) {
+                pendingStreamingAction = action
+                _streamingNoticePending.value = true
+                return@launch
+            }
+            action()
+        }
+    }
+
+    /** Reproduce canciones online (cola mixta: la cola actual se reemplaza). */
+    fun playOnlineSongs(songs: List<Song>, index: Int = 0) {
+        if (songs.isEmpty()) return
+        withStreamingGate {
+            playback.playQueue(songs, index.coerceIn(0, songs.size - 1), false)
+        }
+    }
+
+    /** Añade una online a la cola (al final o como siguiente). */
+    fun enqueueOnlineSong(song: Song, next: Boolean) {
+        withStreamingGate {
+            if (next) playback.enqueueNext(song) else playback.enqueue(song)
+        }
+    }
+
     /** BPM por canción (songId -> BPM real). */
     val bpmMap: StateFlow<Map<Long, Float>> = settings.bpmMap.stateIn(
         viewModelScope, SharingStarted.Eagerly, emptyMap()
@@ -760,20 +874,29 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     // llamada durante la composición de las pantallas de playlist).
     // Solo incluye canciones visibles: lo oculto no se resuelve nunca.
     private var libraryByIdCache: Triple<List<Song>, Set<String>, Map<Long, Song>>? = null
+    private var libraryByIdOnlineCache: Map<Long, com.aural.player.data.OnlineSongRecord>? = null
     private fun libraryById(): Map<Long, Song> {
         val songs = songsFlow.value
         val hidden = hiddenFolders.value
+        val online = onlineSongs.value
         val cached = libraryByIdCache
-        if (cached != null && cached.first === songs && cached.second === hidden) return cached.third
+        if (cached != null && cached.first === songs && cached.second === hidden &&
+            libraryByIdOnlineCache === online
+        ) return cached.third
         val visible = if (hidden.isEmpty()) songs else songs.filter { it.folderPath !in hidden }
-        return visible.associateBy { it.id }.also { libraryByIdCache = Triple(songs, hidden, it) }
+        // Locales visibles + online registradas: playlists y
+        // favoritos resuelven ambas sin mezclar espacios de id.
+        val merged = visible.associateBy { it.id } +
+            online.values.associate { it.id to it.toSong() }
+        libraryByIdOnlineCache = online
+        return merged.also { libraryByIdCache = Triple(songs, hidden, it) }
     }
 
     fun favoriteSongs(): List<Song> {
         val order = favoriteOrder.value.withIndex().associate { it.value to it.index }
         val songs = visibleSongs()
         val indexById = songs.withIndex().associate { it.value.id to it.index }
-        return songs
+        return libraryById().values
             .filter { favorites.value.contains(it.id) }
             .sortedWith(
                 compareBy<Song> { order[it.id] ?: Int.MAX_VALUE }
