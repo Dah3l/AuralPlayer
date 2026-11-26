@@ -12,6 +12,7 @@ en GitHub salen de aquí.
 - **Streaming más fluido** — las canciones en línea cargan con más colchón y por flujo continuo, con la siguiente preparada y una caché pequeña para repeticiones y saltos; si la red flaquea, la siguiente carga baja temporalmente a ahorro.
 - **Streaming sin VPN** — el audio en línea se pide con la misma conexión que las descargas y la dirección se prueba antes de sonar con rangos completos; si el servidor rechaza los rangos directos, suena por la vía secuencial de descarga desde la caché mientras baja, y la búsqueda de canciones y álbumes tiene respaldos cuando el filtro de música no devuelve nada.
 - **Búsqueda y streaming sin VPN, segunda vuelta** — la búsqueda en línea usa el catálogo de YouTube Music para que las canciones oficiales y los álbumes salgan también sin VPN, y si una canción en línea falla, Aural reintenta esa misma canción por otras vías antes de saltar a la siguiente.
+- **Álbumes en línea y motivo al saltar** — los álbumes de la búsqueda en línea ya se leen en el formato en que YouTube Music los devuelve, y cuando una canción en línea no se puede reproducir, el aviso incluye el motivo técnico que respondió el servidor.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
 
 ## v1.2.0 — 2026-11-24
