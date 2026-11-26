@@ -207,6 +207,7 @@ class MusicService : MediaSessionService() {
                 return dataSpec.buildUpon()
                     .setUri(android.net.Uri.parse(resolved.url))
                     .setKey(resolved.cacheKey)
+                    .setHttpRequestHeaders(resolved.requestHeaders)
                     .build()
             }
         }
@@ -238,11 +239,13 @@ class MusicService : MediaSessionService() {
             val refreshed = YouTubeStreamResolver.refreshStream(
                 videoId,
                 streamingQualityCache,
-                failedSpec.uri.toString()
+                failedSpec.uri.toString(),
+                failedSpec.key
             ) ?: return@ChunkedRangeDataSourceFactory null
             failedSpec.buildUpon()
                 .setUri(android.net.Uri.parse(refreshed.url))
                 .setKey(refreshed.cacheKey)
+                .setHttpRequestHeaders(refreshed.requestHeaders)
                 .build()
         }
         val cacheFactory = CacheDataSource.Factory()
@@ -1618,7 +1621,9 @@ private class ChunkedRangeDataSource(
     private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
         val base = spec ?: throw IOException("DataSource sin abrir")
         // En progresivo se pide abierto (bytes=posición-), como
-        // la descarga; en directo, rangos acotados de 1 MB.
+        // la descarga; en directo, rangos acotados de 512 KB
+        // exactos (rangos mayores se sirven un rato y luego se
+        // rechazan en clientes sin token).
         val chunkLength = if (chunked && !progressive && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
             minOf(CHUNK_BYTES, remainingAtChunk)
         } else {
@@ -1702,6 +1707,11 @@ private class ChunkedRangeDataSource(
         }
     }
 
+    /** Avanza al siguiente rango. Devuelve false SOLO al fin
+     *  real del archivo (o 416 pasado el último byte); un fallo
+     *  de red/403 se lanza como error para que el reproductor
+     *  reintente la misma canción en vez de darla por terminada
+     *  y saltar a la siguiente. */
     private fun advanceChunk(): Boolean {
         if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) return false
         current?.close()
@@ -1713,8 +1723,9 @@ private class ChunkedRangeDataSource(
         }
         val opened = prepared ?: try {
             openChunkWithRefresh(position, remaining)
-        } catch (_: IOException) {
-            return false
+        } catch (e: HttpDataSource.InvalidResponseCodeException) {
+            if (e.responseCode == 416) return false
+            throw e
         }
         current = opened.dataSource
         if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
@@ -1745,7 +1756,7 @@ private class ChunkedRangeDataSource(
                 if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
                     return read(buffer, offset, length)
                 }
-                return C.RESULT_END_OF_INPUT
+                throw e
             }
             if (read == C.RESULT_END_OF_INPUT) {
                 if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
@@ -1754,8 +1765,8 @@ private class ChunkedRangeDataSource(
                 // Corte de la conexión abierta: URL fresca y
                 // reabrir en la misma posición (acotado por los
                 // refrescos, para no girar en vacío).
-                return if (refreshSpec() && advanceChunk()) read(buffer, offset, length)
-                else C.RESULT_END_OF_INPUT
+                if (refreshSpec() && advanceChunk()) return read(buffer, offset, length)
+                throw IOException("Corte de streaming sin refresco disponible")
             }
             if (read > 0) {
                 position += read
@@ -1774,11 +1785,12 @@ private class ChunkedRangeDataSource(
             active.read(buffer, offset, minOf(length, chunkLeft))
         } catch (e: IOException) {
             // Corte a mitad de rango: URL fresca y seguir en la
-            // misma posición; si no se puede, fin limpio.
+            // misma posición; si no se puede, error (nunca fin
+            // fingido: eso hacía saltar la canción a mitad).
             if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
                 return read(buffer, offset, length)
             }
-            return C.RESULT_END_OF_INPUT
+            throw e
         }
         if (read == C.RESULT_END_OF_INPUT) {
             if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
@@ -1816,7 +1828,7 @@ private class ChunkedRangeDataSource(
     }
 
     private companion object {
-        const val CHUNK_BYTES = 1024L * 1024L
+        const val CHUNK_BYTES = 512L * 1024L
         const val PREFETCH_THRESHOLD_BYTES = 256L * 1024L
     }
 }
