@@ -723,7 +723,12 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     fun setStreamingQuality(quality: String) {
-        viewModelScope.launch { settings.setStreamingQuality(quality) }
+        viewModelScope.launch {
+            settings.setStreamingQuality(quality)
+            // La próxima resolución ya usa la calidad nueva;
+            // la canción que suena no se reinicia.
+            com.aural.player.youtube.YouTubeStreamResolver.clearAll()
+        }
     }
 
     /** Streaming solo con Wi-Fi. */
