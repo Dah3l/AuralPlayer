@@ -1405,6 +1405,10 @@ object YouTubeStreamResolver {
         val url: String,
         val expiresAtMs: Long,
         val diskKey: String,
+        /** Bitrate real de la candidata elegida (KBPS, unidades
+         *  de NewPipe): lo lee la pill de calidad del Now
+         *  Playing. */
+        val bitrateKbps: Int = 0,
         val requestHeaders: Map<String, String> = BROWSER_HEADERS
     )
 
@@ -1415,6 +1419,16 @@ object YouTubeStreamResolver {
     )
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedUrl>()
+
+    /** Bitrate real (KBPS) del stream resuelto por video: la
+     *  pill de calidad del Now Playing lo lee de aquí vía
+     *  PlaybackManager. Se actualiza al resolver y al
+     *  refrescar a otro formato; se olvida al invalidar. */
+    private val streamBitrates = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /** Bitrate del stream ya resuelto de ese video, o null si
+     *  aún no se resolvió. */
+    fun streamBitrateKbps(videoId: String): Int? = streamBitrates[videoId]
 
     /** Candado por video: principal, fundido y precarga solo se
      *  turnan cuando resuelven la MISMA canción; canciones
@@ -1501,6 +1515,9 @@ object YouTubeStreamResolver {
                     // 1 MB de red y serializaba la carga. Si la
                     // red cambió y la URL falla al sonar, el
                     // refresco 403/410 la invalida y re-resuelve.
+                    if (cached.bitrateKbps > 0) {
+                        streamBitrates[videoId] = cached.bitrateKbps
+                    }
                     return ResolvedStream(
                         cached.url,
                         diskKeyWithMode(cached.diskKey, false),
@@ -1525,20 +1542,31 @@ object YouTubeStreamResolver {
             // resuelve y Media3 reproduce directo en M4A. Sin
             // escalera InnerTube ni Opus primero: un reintento
             // fresco excluyendo la URL fallida lo hace
-            // PlaybackManager; aquí solo se entrega la primera
-            // candidata M4A que pasa la sonda de rangos.
+            // PlaybackManager. Arranque rápido (Dahel
+            // 2026-11-26): la primera candidata se entrega SIN
+            // sonda — sondearla bajaba 512 KB que se botaban y
+            // la primera canción tardaba 10–20 s en sonar; si
+            // googlevideo la rechaza (403/410/corte), el
+            // refresco existente la invalida y re-resuelve
+            // excluyéndola. La sonda corta queda solo para las
+            // candidatas de respaldo.
             val candidates = candidateStreams(streamInfo, effectiveQuality)
                 .sortedByDescending {
                     sameFormatKey != null &&
                         "${it.format}:${it.averageBitrate}" == sameFormatKey
                 }
+            var considered = 0
             for (audioStream in candidates.take(3)) {
                 val url = audioStream.content ?: continue
                 if (url == effectiveExclude) continue
-                if (!probeCandidate(url, BROWSER_HEADERS)) continue
+                considered++
+                if (considered > 1 && !probeCandidate(url, BROWSER_HEADERS)) continue
                 val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
                 val diskKey = diskKeyWithMode(baseDiskKey, false)
-                cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                cache[cacheKey] = CachedUrl(
+                    url, expiryMs(url, now), diskKey, audioStream.averageBitrate
+                )
+                streamBitrates[videoId] = audioStream.averageBitrate
                 lastFailedUrls.remove(videoId)
                 return ResolvedStream(url, diskKey, false)
             }
@@ -1561,23 +1589,23 @@ object YouTubeStreamResolver {
         return base + if (progressive) ":prog" else ":direct"
     }
 
-    /** Prueba una URL candidata con la misma identidad HTTP y
-     *  el primer rango que reproducirá Media3 (512 KB
-     *  completos): si llega entero, el directo puede sonar.
-     *  Solo el primer rango: la sonda intermedia duplicaba la
-     *  espera y la APK manda sobre el streaming. */
+    /** Prueba corta de una URL de respaldo: misma identidad
+     *  HTTP que reproducirá Media3 y solo los primeros bytes
+     *  del rango inicial. La primera candidata ya no se
+     *  sondea (arranque rápido); esto solo filtra respaldos
+     *  muertos sin pagar una descarga que se bota. */
     private fun probeCandidate(url: String, headers: Map<String, String>): Boolean =
         probeRange(url, 0L, headers).ok
 
     private data class ProbeRangeResult(val ok: Boolean, val totalLength: Long?)
 
-    /** Lee un rango completo de 512 KB (o hasta el fin del
-     *  archivo si es menor): ok solo si llegan todos los bytes
-     *  pedidos, igual que en reproducción. */
+    /** Lee como máximo [PROBE_BYTES] del rango pedido (o
+     *  hasta el fin del archivo si es menor): ok solo si
+     *  llegan todos los bytes pedidos. */
     private fun probeRange(url: String, start: Long, headers: Map<String, String>): ProbeRangeResult {
         var connection: java.net.HttpURLConnection? = null
         return try {
-            connection = openProbeConnection(url, "bytes=$start-${start + PROBE_CHUNK_BYTES - 1}", headers)
+            connection = openProbeConnection(url, "bytes=$start-${start + PROBE_BYTES - 1}", headers)
             val code = connection.responseCode
             if (code !in 200..299) {
                 ProbeRangeResult(false, null)
@@ -1586,9 +1614,9 @@ object YouTubeStreamResolver {
                     ?.substringAfterLast("/")
                     ?.toLongOrNull()
                 val expected = if (total != null) {
-                    minOf(PROBE_CHUNK_BYTES, (total - start).coerceAtLeast(0L))
+                    minOf(PROBE_BYTES, (total - start).coerceAtLeast(0L))
                 } else {
-                    PROBE_CHUNK_BYTES
+                    PROBE_BYTES
                 }
                 var readTotal = 0L
                 connection.inputStream.use { input ->
@@ -1625,6 +1653,7 @@ object YouTubeStreamResolver {
     fun invalidate(videoId: String) {
         synchronized(lockFor(videoId)) {
             cache.keys.removeAll { it.startsWith("yt:$videoId:") }
+            streamBitrates.remove(videoId)
         }
     }
 
@@ -1668,7 +1697,10 @@ object YouTubeStreamResolver {
         return ordered.distinctBy { it.content }
     }
 
-    private const val PROBE_CHUNK_BYTES = 512L * 1024L
+    /** Sonda corta de respaldos: 16 KB bastan para saber si
+     *  googlevideo acepta la URL; la sonda de 512 KB se
+     *  descargaba y se botaba en cada arranque. */
+    private const val PROBE_BYTES = 16L * 1024L
 
     private fun expiryMs(url: String, nowMs: Long): Long {
         val expireSec = Regex("[?&]expire=(\\d+)").find(url)
