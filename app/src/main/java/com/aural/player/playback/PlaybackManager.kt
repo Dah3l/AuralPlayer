@@ -36,6 +36,11 @@ enum class RepeatMode { OFF, ONE, ALL }
 /** Parada programada: al terminar la canción actual o la lista entera. */
 enum class StopMode { SONG, QUEUE }
 
+/** Nivel de conexión del stream online según la velocidad real
+ *  de carga medida (rangos pensados para Cuba): alimenta la
+ *  pill de conexión del Now Playing. */
+enum class ConnectionLevel { MUY_LENTA, LENTA, REGULAR, BUENA }
+
 /** Estado observable de la reproducción que consume la interfaz. */
 data class PlayerUiState(
     val currentSong: Song? = null,
@@ -48,6 +53,9 @@ data class PlayerUiState(
      *  si aún no se resolvió o la pista es local: alimenta la
      *  pill de calidad junto a «En línea». */
     val streamBitrateKbps: Int? = null,
+    /** Nivel de conexión del stream online actual, o null si
+     *  aún no hay medición de esa pista o es local. */
+    val connectionLevel: ConnectionLevel? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val queue: List<Song> = emptyList(),
@@ -829,6 +837,7 @@ class PlaybackManager(private val context: Context) {
             streamBitrateKbps = current?.onlineVideoId?.let { videoId ->
                 com.aural.player.youtube.YouTubeStreamResolver.streamBitrateKbps(videoId)
             },
+            connectionLevel = connectionLevelFor(c, current),
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
             queue = items,
             currentIndex = curIdx,
@@ -858,6 +867,25 @@ class PlaybackManager(private val context: Context) {
         }
     }
 
+    /** Nivel de conexión de la pista online actual desde la
+     *  velocidad medida por el resolver. Sin muestra de esa
+     *  pista: null (la pill no se muestra). Con rebuffer real
+     *  activo, el nivel cae a Lenta/Muy lenta. */
+    private fun connectionLevelFor(player: Player, current: Song?): ConnectionLevel? {
+        val videoId = current?.onlineVideoId ?: return null
+        val kbps = com.aural.player.youtube.YouTubeStreamResolver
+            .connectionKbps(videoId) ?: return null
+        val rebuffering = player.playbackState == Player.STATE_BUFFERING &&
+            player.currentPosition > 3_000L
+        return when {
+            rebuffering -> if (kbps < 80) ConnectionLevel.MUY_LENTA else ConnectionLevel.LENTA
+            kbps < 80 -> ConnectionLevel.MUY_LENTA
+            kbps <= 200 -> ConnectionLevel.LENTA
+            kbps <= 500 -> ConnectionLevel.REGULAR
+            else -> ConnectionLevel.BUENA
+        }
+    }
+
     /** Actualiza la posición cada 500 ms mientras suena. */
     private fun startTicker() {
         if (tickerJob?.isActive == true) return
@@ -867,7 +895,8 @@ class PlaybackManager(private val context: Context) {
                     _state.value = _state.value.copy(
                         positionMs = it.currentPosition.coerceAtLeast(0),
                         durationMs = if (_state.value.durationMs <= 0) it.duration.coerceAtLeast(0)
-                        else _state.value.durationMs
+                        else _state.value.durationMs,
+                        connectionLevel = connectionLevelFor(it, _state.value.currentSong)
                     )
                 }
                 // Registro de escucha: 500 ms más para la canción actual.
