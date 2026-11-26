@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Restore
@@ -120,6 +121,7 @@ fun SettingsScreen(
     var showAlarmDialog by remember { mutableStateOf(false) }
     var showProfileDialog by remember { mutableStateOf(false) }
     var showDownloadQuality by remember { mutableStateOf(false) }
+    var showStreamingQuality by remember { mutableStateOf(false) }
     var pendingImportJson by remember { mutableStateOf<String?>(null) }
 
     // Respaldo: exportar (crear archivo) e importar (elegir archivo).
@@ -178,6 +180,8 @@ fun SettingsScreen(
     val djMixEnabled by viewModel.djMixEnabled.collectAsStateWithLifecycle()
     val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
     val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val streamingQuality by viewModel.streamingQuality.collectAsStateWithLifecycle()
+    val streamingWifiOnly by viewModel.streamingWifiOnly.collectAsStateWithLifecycle()
     // Funciones nuevas ya vistas (sin puntito).
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val profileSubtitle = run {
@@ -393,6 +397,58 @@ fun SettingsScreen(
                     )
                 }
             }
+            SettingsRow(
+                icon = Icons.Rounded.PlayArrow,
+                title = "Calidad de streaming",
+                subtitle = if (streamingQuality == "quality") "Calidad · 128 Kbps" else "Ahorro de datos · 48 Kbps",
+                trailing = {
+                    Icon(
+                        Icons.Rounded.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { showStreamingQuality = !showStreamingQuality }
+            )
+            if (showStreamingQuality) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    DownloadQualityOption(
+                        title = "Ahorro de datos",
+                        subtitle = "48 Kbps · gasta menos datos al escuchar en línea.",
+                        selected = streamingQuality != "quality",
+                        onClick = { viewModel.setStreamingQuality("data_saver") }
+                    )
+                    DownloadQualityOption(
+                        title = "Calidad",
+                        subtitle = "128 Kbps · suena mejor y gasta más datos.",
+                        selected = streamingQuality == "quality",
+                        onClick = { viewModel.setStreamingQuality("quality") }
+                    )
+                }
+            }
+            SettingsRow(
+                icon = Icons.Rounded.PlayArrow,
+                title = "Streaming solo con Wi-Fi",
+                subtitle = "No reproduce en línea con datos móviles",
+                trailing = {
+                    Switch(
+                        checked = streamingWifiOnly,
+                        onCheckedChange = { viewModel.setStreamingWifiOnly(!streamingWifiOnly) }
+                    )
+                },
+                onClick = { viewModel.setStreamingWifiOnly(!streamingWifiOnly) }
+            )
             SettingsSection("Interfaz")
             SettingsRow(
                 icon = Icons.Rounded.PhoneAndroid,
