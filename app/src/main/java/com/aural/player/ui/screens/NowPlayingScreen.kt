@@ -102,6 +102,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aural.player.playback.ConnectionLevel
 import com.aural.player.playback.PlayerUiState
 import com.aural.player.playback.RepeatMode
 import com.aural.player.ui.components.CoverArt
@@ -143,6 +144,7 @@ import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -654,6 +656,51 @@ fun NowPlayingScreen(
                             )
                         }
                     }
+                    // Calidad de conexión real del stream: punto
+                    // de color + rango (medido de la carga, sin
+                    // gastar datos). Sin medición aún, no se
+                    // muestra; en locales tampoco.
+                    val connectionLevel = state.connectionLevel
+                    if (song.isOnline && connectionLevel != null) {
+                        val (connectionLabel, dotColor) = when (connectionLevel) {
+                            ConnectionLevel.MUY_LENTA ->
+                                "Muy lenta" to MaterialTheme.colorScheme.error
+                            ConnectionLevel.LENTA ->
+                                "Lenta" to Color(0xFFF59E0B)
+                            ConnectionLevel.REGULAR ->
+                                "Regular" to Color(0xFFA3E635)
+                            ConnectionLevel.BUENA ->
+                                "Buena" to MaterialTheme.colorScheme.primary
+                        }
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(dotColor)
+                                )
+                                Text(
+                                    connectionLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
                     if (songBpm != null) {
                         Box(
                             Modifier
@@ -698,15 +745,29 @@ fun NowPlayingScreen(
             }
             // Estado de espera online: con conexión mala el
             // reproductor carga (arranque o rebuffer) y sin esto
-            // el Now Playing parecía trabado. Solo pistas online;
-            // desaparece solo al volver a sonar.
-            if (song.isOnline && state.isBuffering) {
-                Text(
-                    text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
+            // el Now Playing parecía trabado. Solo pistas online.
+            // El espacio es fijo (26 dp, siempre presente en
+            // online): el texto entra y sale con fade sin mover
+            // ningún otro elemento.
+            if (song.isOnline) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .padding(top = 6.dp)
+                ) {
+                    AnimatedVisibility(
+                        visible = state.isBuffering,
+                        enter = fadeIn(tween(160)),
+                        exit = fadeOut(tween(160))
+                    ) {
+                        Text(
+                            text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
 
