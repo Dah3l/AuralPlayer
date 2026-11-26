@@ -50,6 +50,9 @@ import com.aural.player.ui.screens.FAVORITES_ID
 import com.aural.player.ui.screens.DAILY_PLAYLIST_ID
 import com.aural.player.ui.screens.RECENTLY_ADDED_ID
 import com.aural.player.ui.screens.LibraryScreen
+import com.aural.player.ui.screens.OnlineSongMenuSheet
+import com.aural.player.youtube.OnlineCollectionResult
+import com.aural.player.youtube.YTResult
 import com.aural.player.ui.screens.NowPlayingScreen
 import com.aural.player.ui.screens.ThemesScreen
 import com.aural.player.ui.theme.AuralTheme
@@ -81,6 +84,7 @@ private sealed class Screen {
     data class Folder(val path: String) : Screen()
     data class Artist(val name: String) : Screen()
     data class Playlist(val id: String) : Screen()
+    data class OnlineCollection(val collection: OnlineCollectionResult) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -479,6 +483,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenFolder = { screen = Screen.Folder(it.path) },
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
+                    onOpenOnlineCollection = { screen = Screen.OnlineCollection(it) },
                     onOpenThemes = { screen = Screen.Themes },
                     onOpenEqualizer = { showEqualizerScreen = true },
                     onToggleIsland = onToggleIsland,
@@ -640,6 +645,57 @@ private fun AuralApp(viewModel: AuralViewModel,
                             screen = Screen.Library
                         }
                     )
+                }
+
+                is Screen.OnlineCollection -> {
+                    var results by remember(s.collection.url) {
+                        mutableStateOf<List<YTResult>>(emptyList())
+                    }
+                    var songs by remember(s.collection.url) {
+                        mutableStateOf<List<Song>>(emptyList())
+                    }
+                    var loading by remember(s.collection.url) { mutableStateOf(true) }
+                    var menuTarget by remember(s.collection.url) {
+                        mutableStateOf<YTResult?>(null)
+                    }
+                    LaunchedEffect(s.collection.url) {
+                        loading = true
+                        val fetched = youTubeManager.fetchCollectionSongs(s.collection)
+                        results = fetched
+                        songs = fetched.map { viewModel.registerOnlineSong(it) }
+                        loading = false
+                        if (fetched.isEmpty()) {
+                            viewModel.playback.showMessage("No se pudo cargar")
+                        }
+                    }
+                    DetailScreen(
+                        viewModel = viewModel,
+                        title = s.collection.title,
+                        subtitle = s.collection.subtitle,
+                        songs = songs,
+                        coverUri = s.collection.thumbnailUrl
+                            ?: songs.firstOrNull()?.albumArtUri,
+                        listState = detailListState("online:${s.collection.url}"),
+                        onBack = { screen = Screen.Library },
+                        onSongMenu = { song ->
+                            menuTarget = results.firstOrNull {
+                                it.videoId == song.onlineVideoId
+                            }
+                        },
+                        isLoading = loading,
+                        onPlaySongs = { list, index, shuffle ->
+                            viewModel.playOnlineSongs(list, index, shuffle)
+                        }
+                    )
+                    menuTarget?.let { result ->
+                        OnlineSongMenuSheet(
+                            result = result,
+                            playlists = playlists,
+                            viewModel = viewModel,
+                            youTubeManager = youTubeManager,
+                            onDismiss = { menuTarget = null }
+                        )
+                    }
                 }
 
                 Screen.Themes -> {
