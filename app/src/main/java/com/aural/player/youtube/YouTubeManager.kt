@@ -192,10 +192,10 @@ class YouTubeManager(private val context: Context) {
                 // Cada sección se aísla: si un filtro falla sin VPN
                 // (p. ej. music_songs), las demás siguen saliendo.
                 val songsDeferred = async {
-                    runCatching { searchSongs(service, clean) }.getOrDefault(emptyList())
+                    runCatching { searchSongsHybrid(service, clean) }.getOrDefault(emptyList())
                 }
                 val albumsDeferred = async {
-                    runCatching { searchAlbums(service, clean) }.getOrDefault(emptyList())
+                    runCatching { searchAlbumsHybrid(service, clean) }.getOrDefault(emptyList())
                 }
                 val playlistsDeferred = async {
                     runCatching {
@@ -203,7 +203,7 @@ class YouTubeManager(private val context: Context) {
                     }.getOrDefault(emptyList())
                 }
                 val artistsDeferred = async {
-                    runCatching { searchArtists(service, clean) }.getOrDefault(emptyList())
+                    runCatching { searchArtistsHybrid(service, clean) }.getOrDefault(emptyList())
                 }
                 val results = OnlineSearchResults(
                     query = clean,
@@ -367,6 +367,31 @@ class YouTubeManager(private val context: Context) {
                 )
             }
 
+    /** Etapa 1 sin VPN: InnerTube WEB_REMIX es la fuente principal
+     *  de canciones/álbumes/artistas (ahí viven las oficiales y los
+     *  álbumes OLAK que NewPipe no devuelve sin VPN); NewPipe queda
+     *  de respaldo donde ya funciona. La UI no cambia. */
+    private fun searchSongsHybrid(service: StreamingService, query: String): List<YTResult> {
+        val inner = runCatching { InnerTubeSearch.searchSongs(query) }.getOrDefault(emptyList())
+        return inner.ifEmpty { searchSongs(service, query) }
+    }
+
+    private fun searchAlbumsHybrid(
+        service: StreamingService,
+        query: String
+    ): List<OnlineCollectionResult> {
+        val inner = runCatching { InnerTubeSearch.searchAlbums(query) }.getOrDefault(emptyList())
+        return inner.ifEmpty { searchAlbums(service, query) }
+    }
+
+    private fun searchArtistsHybrid(
+        service: StreamingService,
+        query: String
+    ): List<OnlineCollectionResult> {
+        val inner = runCatching { InnerTubeSearch.searchArtists(query) }.getOrDefault(emptyList())
+        return inner.ifEmpty { searchArtists(service, query) }
+    }
+
     /**
      * Canciones de un álbum/playlist online (para reproducirlo desde
      * la búsqueda). El detalle completo y guardar llegan en el
@@ -377,7 +402,20 @@ class YouTubeManager(private val context: Context) {
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
                 if (result.kind == OnlineCollectionKind.ARTIST) {
-                    searchSongs(service, result.title)
+                    searchSongsHybrid(service, result.title)
+                } else if (result.url.contains("/browse/MPREb")) {
+                    // Álbum InnerTube sin playlist OLAK: sus canciones
+                    // salen del browse de YouTube Music.
+                    val browseId = result.url.substringAfterLast("/")
+                    val songs = runCatching {
+                        InnerTubeSearch.browseAlbumSongs(browseId)
+                    }.getOrDefault(emptyList())
+                    songs.ifEmpty {
+                        val info = PlaylistInfo.getInfo(service, result.url)
+                        info.relatedItems
+                            .filterIsInstance<StreamInfoItem>()
+                            .mapNotNull { mapSongItem(it) }
+                    }
                 } else {
                     val info = PlaylistInfo.getInfo(service, result.url)
                     info.relatedItems
@@ -663,6 +701,427 @@ class YouTubeManager(private val context: Context) {
     }
 }
 
+
+/**
+ * Búsqueda InnerTube WEB_REMIX (Etapa 1 sin VPN, decisión de Dahel
+ * 2026-11-26): el backend de YouTube Music con visitorData
+ * bootstrapped desde la config web real de music.youtube.com
+ * (apiKey/clientVersion/visitorData), reintento de contexto limpio
+ * en/US ante un 400 y visitante refrescado desde responseContext.
+ * Es la fuente principal de canciones/álbumes/artistas online;
+ * NewPipe queda de respaldo y las descargas no se tocan. Sin
+ * PoToken/BotGuard ni descifrado de firmas (fuera de alcance).
+ */
+object InnerTubeSearch {
+
+    private const val MUSIC_ORIGIN = "https://music.youtube.com"
+    private const val MUSIC_API = "https://music.youtube.com/youtubei/v1"
+    private const val WEB_USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
+    private const val CONSENT_COOKIE =
+        "CONSENT=YES+cb.20210328-17-p0.en+FX+100; SOCS=CAISEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg"
+    private const val FALLBACK_WEB_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
+    private const val FALLBACK_WEB_VERSION = "1.20260707.12.00"
+    private const val SONG_SEARCH_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA=="
+    private const val ALBUM_SEARCH_FILTER = "EgWKAQIYAWoKEAkQBRAKEAMQBA=="
+    private const val ARTIST_SEARCH_FILTER = "EgWKAQIgAWoKEAkQBRAKEAMQBA=="
+    private const val CONFIG_RETRY_COOLDOWN_MS = 60_000L
+
+    private data class WebConfig(
+        val apiKey: String,
+        val clientVersion: String,
+        val visitorData: String?
+    )
+
+    @Volatile
+    private var webConfig: WebConfig? = null
+    @Volatile
+    private var lastConfigAttemptMs: Long = 0L
+
+    fun visitorData(): String? = webConfig().visitorData?.takeIf { isValidVisitorData(it) }
+
+    private fun isValidVisitorData(token: String?): Boolean {
+        if (token.isNullOrBlank() || token.length < 15) return false
+        return token.all { it.isLetterOrDigit() || it in "+/=-_%~" }
+    }
+
+    @Synchronized
+    private fun webConfig(): WebConfig {
+        webConfig?.takeIf { isValidVisitorData(it.visitorData) }?.let { return it }
+        val now = System.currentTimeMillis()
+        if (now - lastConfigAttemptMs >= CONFIG_RETRY_COOLDOWN_MS) {
+            lastConfigAttemptMs = now
+            runCatching { fetchWebConfig() }.getOrNull()?.let { fetched ->
+                if (fetched.apiKey.isNotBlank()) {
+                    webConfig = fetched
+                    return fetched
+                }
+            }
+        }
+        return webConfig ?: WebConfig(FALLBACK_WEB_KEY, FALLBACK_WEB_VERSION, null)
+            .also { webConfig = it }
+    }
+
+    private fun fetchWebConfig(): WebConfig {
+        var connection: java.net.HttpURLConnection? = null
+        try {
+            connection = java.net.URL("$MUSIC_ORIGIN/")
+                .openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("User-Agent", WEB_USER_AGENT)
+            connection.setRequestProperty("Cookie", CONSENT_COOKIE)
+            val html = connection.inputStream.bufferedReader().readText()
+            return WebConfig(
+                apiKey = findConfig(html, "INNERTUBE_API_KEY") ?: FALLBACK_WEB_KEY,
+                clientVersion = findConfig(html, "INNERTUBE_CONTEXT_CLIENT_VERSION")
+                    ?: FALLBACK_WEB_VERSION,
+                visitorData = (findConfig(html, "VISITOR_DATA")
+                    ?: findConfig(html, "EOM_VISITOR_DATA"))?.takeIf { isValidVisitorData(it) }
+            )
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun findConfig(html: String, key: String): String? {
+        val patterns = listOf(
+            Regex(""""$key"\s*:\s*"([^"]+)""""),
+            Regex("""'$key'\s*:\s*'([^']+)'"""),
+            Regex("""\\"$key\\"\s*:\s*\\"([^\\"]+)\\"""")
+        )
+        for (pattern in patterns) {
+            pattern.find(html)?.groupValues?.getOrNull(1)?.let { value ->
+                return value
+                    .replace("\\u003d", "=")
+                    .replace("\\x3d", "=")
+                    .replace("\\/", "/")
+            }
+        }
+        return null
+    }
+
+    /** Visitante fresco: endpoint visitor_id y, si no, scrape de la
+     *  config web. Actualiza la config cacheada si lo consigue. */
+    private fun fetchFreshVisitorData(): String? {
+        val config = webConfig()
+        val body = org.json.JSONObject()
+            .put(
+                "context",
+                org.json.JSONObject().put(
+                    "client",
+                    org.json.JSONObject()
+                        .put("clientName", "WEB_REMIX")
+                        .put("clientVersion", config.clientVersion)
+                        .put("hl", "en")
+                        .put("gl", "US")
+                )
+            )
+        val root = postJson("$MUSIC_API/visitor_id?key=${config.apiKey}&prettyPrint=false", body, config)
+        val token = root?.optJSONObject("responseContext")?.optString("visitorData")
+        if (isValidVisitorData(token)) {
+            webConfig = config.copy(visitorData = token)
+            return token
+        }
+        val scraped = runCatching { fetchWebConfig() }.getOrNull()
+        if (scraped != null && isValidVisitorData(scraped.visitorData)) {
+            webConfig = scraped
+            return scraped.visitorData
+        }
+        return null
+    }
+
+    private fun clientContext(config: WebConfig, clean: Boolean): org.json.JSONObject {
+        val client = org.json.JSONObject()
+            .put("clientName", "WEB_REMIX")
+            .put("clientVersion", config.clientVersion)
+            .put("hl", "en")
+            .put("gl", "US")
+        if (!clean && isValidVisitorData(config.visitorData)) {
+            client.put("visitorData", config.visitorData)
+        }
+        return org.json.JSONObject().put("client", client)
+    }
+
+    /** POST InnerTube con reintento de contexto limpio ante un 400
+     *  (hl/gl o visitante rechazados): se reenvía UNA vez sin
+     *  visitorData y con en/US, sin tocar la config compartida. */
+    private fun postJson(
+        url: String,
+        body: org.json.JSONObject,
+        config: WebConfig
+    ): org.json.JSONObject? {
+        var cleanRetry = false
+        while (true) {
+            var connection: java.net.HttpURLConnection? = null
+            try {
+                val requestBody = if (cleanRetry) {
+                    org.json.JSONObject(body.toString()).put("context", clientContext(config, clean = true))
+                } else {
+                    body
+                }
+                connection = java.net.URL(url)
+                    .openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 20_000
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setRequestProperty("User-Agent", WEB_USER_AGENT)
+                connection.setRequestProperty("Origin", MUSIC_ORIGIN)
+                connection.setRequestProperty("X-Origin", MUSIC_ORIGIN)
+                connection.setRequestProperty("Referer", "$MUSIC_ORIGIN/")
+                connection.setRequestProperty("X-Goog-Api-Format-Version", "1")
+                connection.setRequestProperty("X-YouTube-Client-Name", "67")
+                connection.setRequestProperty("X-YouTube-Client-Version", config.clientVersion)
+                connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                connection.setRequestProperty("Cookie", CONSENT_COOKIE)
+                if (!cleanRetry && isValidVisitorData(config.visitorData)) {
+                    connection.setRequestProperty("X-Goog-Visitor-Id", config.visitorData)
+                }
+                connection.outputStream.use { it.write(requestBody.toString().toByteArray()) }
+                val code = connection.responseCode
+                if (code == 400 && !cleanRetry) {
+                    cleanRetry = true
+                    continue
+                }
+                if (code !in 200..299) return null
+                val root = org.json.JSONObject(connection.inputStream.bufferedReader().readText())
+                val respVisitor = root.optJSONObject("responseContext")?.optString("visitorData")
+                if (isValidVisitorData(respVisitor) && !isValidVisitorData(webConfig?.visitorData)) {
+                    webConfig = config.copy(visitorData = respVisitor)
+                }
+                return root
+            } catch (_: Exception) {
+                return null
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    private fun searchRoot(query: String, params: String?): org.json.JSONObject? {
+        val config = webConfig()
+        val body = org.json.JSONObject()
+            .put("context", clientContext(config, clean = false))
+            .put("query", query)
+        if (params != null) body.put("params", params)
+        return postJson("$MUSIC_API/search?key=${config.apiKey}&prettyPrint=false", body, config)
+    }
+
+    fun searchSongs(query: String): List<YTResult> {
+        fun run(params: String?): List<YTResult> =
+            searchRoot(query, params)?.let { parseSongs(it) } ?: emptyList()
+        var results = run(SONG_SEARCH_FILTER)
+        if (results.isEmpty()) results = run(null)
+        if (results.isEmpty()) {
+            // Visitante fresco y reintento: un visitante malo deja la
+            // búsqueda oficial vacía aunque el catálogo exista.
+            if (fetchFreshVisitorData() != null) {
+                results = run(SONG_SEARCH_FILTER)
+                if (results.isEmpty()) results = run(null)
+            }
+        }
+        return results.distinctBy { it.videoId }.take(20)
+    }
+
+    fun searchAlbums(query: String): List<OnlineCollectionResult> {
+        fun run(q: String, params: String?): List<OnlineCollectionResult> =
+            searchRoot(q, params)?.let { parseAlbums(it) } ?: emptyList()
+        var results = run(query, ALBUM_SEARCH_FILTER)
+        if (results.isEmpty()) results = run(query, null)
+        if (results.isEmpty() && !query.lowercase().contains("album")) {
+            results = run("$query album", null)
+        }
+        return results.distinctBy { it.url }.take(12)
+    }
+
+    fun searchArtists(query: String): List<OnlineCollectionResult> {
+        fun run(params: String?): List<OnlineCollectionResult> =
+            searchRoot(query, params)?.let { parseArtists(it) } ?: emptyList()
+        var results = run(ARTIST_SEARCH_FILTER)
+        if (results.isEmpty()) results = run(null)
+        return results.distinctBy { it.url }.take(8)
+    }
+
+    fun browseAlbumSongs(browseId: String): List<YTResult> {
+        val config = webConfig()
+        val body = org.json.JSONObject()
+            .put("context", clientContext(config, clean = false))
+            .put("browseId", browseId)
+        val root = postJson("$MUSIC_API/browse?key=${config.apiKey}&prettyPrint=false", body, config)
+            ?: return emptyList()
+        return parseSongs(root).distinctBy { it.videoId }
+    }
+
+    // ---- Parseo de renderers de YouTube Music ----
+
+    private fun collectRenderers(node: Any?, out: MutableList<org.json.JSONObject>) {
+        when (node) {
+            is org.json.JSONObject -> {
+                node.optJSONObject("musicResponsiveListItemRenderer")?.let { out += it }
+                val keys = node.keys()
+                while (keys.hasNext()) collectRenderers(node.opt(keys.next()), out)
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until node.length()) collectRenderers(node.opt(i), out)
+            }
+        }
+    }
+
+    private fun renderers(root: org.json.JSONObject): List<org.json.JSONObject> {
+        val out = mutableListOf<org.json.JSONObject>()
+        collectRenderers(root, out)
+        return out
+    }
+
+    private fun flexRuns(item: org.json.JSONObject): List<List<String>> {
+        val columns = item.optJSONArray("flexColumns") ?: return emptyList()
+        val result = mutableListOf<List<String>>()
+        for (i in 0 until columns.length()) {
+            val runs = columns.optJSONObject(i)
+                ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.optJSONObject("text")
+                ?.optJSONArray("runs")
+            val texts = mutableListOf<String>()
+            if (runs != null) {
+                for (j in 0 until runs.length()) {
+                    runs.optJSONObject(j)?.optString("text")?.let { texts += it }
+                }
+            }
+            result += texts
+        }
+        return result
+    }
+
+    private fun findString(node: Any?, key: String): String? {
+        when (node) {
+            is org.json.JSONObject -> {
+                val direct = node.optString(key)
+                if (direct.isNotBlank()) return direct
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    findString(node.opt(keys.next()), key)?.let { return it }
+                }
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findString(node.opt(i), key)?.let { return it }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findThumbnail(item: org.json.JSONObject): String? {
+        fun walk(node: Any?): String? {
+            when (node) {
+                is org.json.JSONObject -> {
+                    val thumbs = node.optJSONArray("thumbnails")
+                    if (thumbs != null && thumbs.length() > 0) {
+                        val url = thumbs.optJSONObject(thumbs.length() - 1)?.optString("url")
+                        if (!url.isNullOrBlank()) return url
+                    }
+                    val keys = node.keys()
+                    while (keys.hasNext()) {
+                        walk(node.opt(keys.next()))?.let { return it }
+                    }
+                }
+                is org.json.JSONArray -> {
+                    for (i in 0 until node.length()) {
+                        walk(node.opt(i))?.let { return it }
+                    }
+                }
+            }
+            return null
+        }
+        return walk(item)
+    }
+
+    private fun parseDurationSec(runs: List<String>): Long {
+        val match = runs.firstOrNull { it.trim().matches(Regex("""^\d{1,2}:\d{2}(:\d{2})?$""")) }
+            ?: return 0L
+        val parts = match.trim().split(":").mapNotNull { it.toLongOrNull() }
+        return when (parts.size) {
+            2 -> parts[0] * 60 + parts[1]
+            3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+            else -> 0L
+        }
+    }
+
+    private val typeLabels = setOf(
+        "song", "video", "album", "single", "ep", "playlist", "artist",
+        "canción", "álbum", "artista", "sencillo"
+    )
+
+    private fun parseSongs(root: org.json.JSONObject): List<YTResult> =
+        renderers(root).mapNotNull { item ->
+            val videoId = item.optJSONObject("playlistItemData")?.optString("videoId")
+                ?.takeIf { it.isNotBlank() }
+                ?: findString(item, "videoId")
+                ?: return@mapNotNull null
+            val columns = flexRuns(item)
+            val title = columns.getOrNull(0)?.joinToString("")?.trim()
+                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val second = columns.getOrNull(1) ?: emptyList()
+            val artist = second.firstOrNull {
+                it.isNotBlank() && it.trim() != "•" && it.trim().lowercase() !in typeLabels
+            }?.trim() ?: "Artista misterioso"
+            YTResult(
+                videoId = videoId,
+                title = title,
+                artist = artist,
+                durationSec = parseDurationSec(second),
+                thumbnailUrl = findThumbnail(item)
+            )
+        }
+
+    private fun parseAlbums(root: org.json.JSONObject): List<OnlineCollectionResult> =
+        renderers(root).mapNotNull { item ->
+            val browseId = findString(item, "browseId")
+            val playlistId = findString(item, "playlistId")
+            val isAlbum = browseId?.startsWith("MPREb") == true ||
+                playlistId?.startsWith("OLAK") == true
+            if (!isAlbum) return@mapNotNull null
+            val columns = flexRuns(item)
+            val title = columns.getOrNull(0)?.joinToString("")?.trim()
+                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val subtitle = (columns.getOrNull(1) ?: emptyList())
+                .map { it.trim() }
+                .filter { it.isNotBlank() && it != "•" && it.lowercase() !in typeLabels }
+                .joinToString(" · ")
+            val url = when {
+                playlistId?.startsWith("OLAK") == true ->
+                    "https://music.youtube.com/playlist?list=$playlistId"
+                browseId != null -> "https://music.youtube.com/browse/$browseId"
+                else -> return@mapNotNull null
+            }
+            OnlineCollectionResult(
+                kind = OnlineCollectionKind.ALBUM,
+                url = url,
+                title = title,
+                subtitle = subtitle,
+                thumbnailUrl = findThumbnail(item)
+            )
+        }
+
+    private fun parseArtists(root: org.json.JSONObject): List<OnlineCollectionResult> =
+        renderers(root).mapNotNull { item ->
+            val browseId = findString(item, "browseId")
+                ?.takeIf { it.startsWith("UC") } ?: return@mapNotNull null
+            val columns = flexRuns(item)
+            val title = columns.getOrNull(0)?.joinToString("")?.trim()
+                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            OnlineCollectionResult(
+                kind = OnlineCollectionKind.ARTIST,
+                url = "https://music.youtube.com/channel/$browseId",
+                title = title,
+                subtitle = "Artista",
+                thumbnailUrl = findThumbnail(item)
+            )
+        }
+}
+
 /**
  * Resuelve la URL de audio de un video AL REPRODUCIR (1.3.0). La
  * cola guarda `aural-online://youtube/<videoId>` y el DataSource
@@ -736,11 +1195,13 @@ object YouTubeStreamResolver {
         preferQuality: Boolean,
         failedUrl: String?,
         failedKey: String? = null
-    ): ResolvedStream? =
-        resolveStreamInternal(
+    ): ResolvedStream? {
+        if (!failedUrl.isNullOrBlank()) lastFailedUrls[videoId] = failedUrl
+        return resolveStreamInternal(
             videoId, preferQuality, forceFresh = true,
             excludeUrl = failedUrl, sameFormatKey = formatKeyOf(failedKey)
         )
+    }
 
     /** Formato/bitrate (o cliente/itag InnerTube) de una clave de
      *  caché: el refresco busca primero el MISMO formato para que
@@ -765,9 +1226,20 @@ object YouTubeStreamResolver {
         val now = System.currentTimeMillis()
         val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
         val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
-        if (!forceFresh) {
+        val ladderMode = ladderModes[videoId] ?: LadderMode.FULL
+        // Peldaño 2: solo InnerTube (URLs directas, sin PoToken).
+        if (ladderMode == LadderMode.INNERTUBE) {
+            return tryInnerTubeDirect(
+                videoId, effectiveQuality, cacheKey,
+                excludeUrl ?: lastFailedUrls[videoId], sameFormatKey, now
+            )
+        }
+        val effectiveForceFresh = forceFresh || ladderMode != LadderMode.FULL
+        val effectiveExclude = excludeUrl
+            ?: if (ladderMode == LadderMode.NEWPIPE_FRESH) lastFailedUrls[videoId] else null
+        if (!effectiveForceFresh) {
             cache[cacheKey]?.let { cached ->
-                if (cached.expiresAtMs > now + 30_000L && cached.url != excludeUrl) {
+                if (cached.expiresAtMs > now + 30_000L && cached.url != effectiveExclude) {
                     // La URL cacheada se prueba igual: la red pudo
                     // cambiar (p. ej. VPN apagado) desde que se guardó.
                     val cachedMode = probeCandidate(cached.url, cached.requestHeaders)
@@ -811,8 +1283,17 @@ object YouTubeStreamResolver {
                 }
             for (audioStream in candidates.take(5)) {
                 val url = audioStream.content ?: continue
-                if (url == excludeUrl) continue
+                if (url == effectiveExclude) continue
                 val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
+                // Peldaño 3: solo lectura secuencial tipo descarga.
+                if (ladderMode == LadderMode.PROGRESSIVE) {
+                    if (probeOpenEnded(url, BROWSER_HEADERS)) {
+                        val diskKey = diskKeyWithMode(baseDiskKey, true)
+                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                        return ResolvedStream(url, diskKey, true)
+                    }
+                    continue
+                }
                 when (probeCandidate(url, BROWSER_HEADERS)) {
                     ProbeMode.DIRECT -> {
                         val diskKey = diskKeyWithMode(baseDiskKey, false)
@@ -827,10 +1308,13 @@ object YouTubeStreamResolver {
                     ProbeMode.FAIL -> Unit
                 }
             }
+            // Peldaño 1 agotado: NewPipe fresco no dio directo y la
+            // escalera sigue en el reproductor (peldaño 2).
+            if (ladderMode == LadderMode.NEWPIPE_FRESH) return null
             // NewPipe no dio directo: respaldo InnerTube directo
             // (clientes sin token tipo ANDROID_VR/VISIONOS/TVHTML5)
             // antes de caer al progresivo.
-            tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, excludeUrl, sameFormatKey, now)
+            tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, effectiveExclude, sameFormatKey, now)
                 ?.let { return it }
             progressiveFallback?.let { fallback ->
                 cache[cacheKey] = CachedUrl(
@@ -845,7 +1329,8 @@ object YouTubeStreamResolver {
             null
         } catch (e: Exception) {
             android.util.Log.e("YouTubeStreamResolver", "No se pudo resolver $videoId: ${e.message}")
-            tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, excludeUrl, sameFormatKey, now)
+            if (ladderMode == LadderMode.NEWPIPE_FRESH) null
+            else tryInnerTubeDirect(videoId, effectiveQuality, cacheKey, effectiveExclude, sameFormatKey, now)
         }
     }
 
@@ -959,6 +1444,30 @@ object YouTubeStreamResolver {
         cache.keys.removeAll { it.startsWith("yt:$videoId:") }
     }
 
+    /** Escalera de respaldo de la misma canción (Etapa 2): el
+     *  reproductor marca el peldaño tras cada error y la siguiente
+     *  resolución de ese video usa solo ese peldaño. Adaptativa:
+     *  no detecta VPN ni país. */
+    private enum class LadderMode { FULL, NEWPIPE_FRESH, INNERTUBE, PROGRESSIVE }
+
+    private val ladderModes = mutableMapOf<String, LadderMode>()
+    private val lastFailedUrls = mutableMapOf<String, String>()
+
+    @Synchronized
+    fun prepareEscalation(videoId: String, step: Int) {
+        ladderModes[videoId] = when (step) {
+            1 -> LadderMode.NEWPIPE_FRESH
+            2 -> LadderMode.INNERTUBE
+            else -> LadderMode.PROGRESSIVE
+        }
+        cache.keys.removeAll { it.startsWith("yt:$videoId:") }
+    }
+
+    @Synchronized
+    fun clearEscalation(videoId: String) {
+        ladderModes.remove(videoId)
+    }
+
     /** Candidatas ordenadas para streaming: primero la misma
      *  selección que la descarga (M4A, bitrate en KBPS: 48 ahorro /
      *  128 calidad) y después el resto de formatos/bitrates, para
@@ -1026,38 +1535,14 @@ object YouTubeStreamResolver {
         )
     )
 
+    private val innerTubeCooldownUntil = mutableMapOf<String, Long>()
     @Volatile
-    private var cachedVisitorData: String? = null
-    @Volatile
-    private var visitorFetchedAtMs: Long = 0L
+    private var lastInnerTubeClient: String? = null
+    private const val INNERTUBE_COOLDOWN_MS = 5 * 60_000L
 
-    private fun visitorData(): String? {
-        val now = System.currentTimeMillis()
-        cachedVisitorData?.let { if (now - visitorFetchedAtMs < 6 * 60 * 60_000L) return it }
-        var connection: java.net.HttpURLConnection? = null
-        return try {
-            connection = java.net.URL("https://music.youtube.com/")
-                .openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            connection.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            val body = connection.inputStream.bufferedReader().readText()
-            val visitor = Regex("\"visitorData\"\\s*:\\s*\"([^\"]+)\"")
-                .find(body)?.groupValues?.getOrNull(1)
-            if (!visitor.isNullOrBlank()) {
-                cachedVisitorData = visitor
-                visitorFetchedAtMs = now
-            }
-            visitor
-        } catch (_: Exception) {
-            cachedVisitorData
-        } finally {
-            connection?.disconnect()
-        }
-    }
+    /** Visitante de la config web real (Etapa 1): el mismo
+     *  bootstrap WEB_REMIX de la búsqueda, no el scrape parcial. */
+    private fun visitorData(): String? = InnerTubeSearch.visitorData()
 
     private fun tryInnerTubeDirect(
         videoId: String,
@@ -1068,11 +1553,20 @@ object YouTubeStreamResolver {
         now: Long
     ): ResolvedStream? {
         val visitor = visitorData()
-        for (client in innerTubeClients) {
+        // Enfriamiento por sesión: un cliente que falla no se
+        // reintenta en cadena; el último que funcionó va primero.
+        val ordered = innerTubeClients
+            .filter { now >= (innerTubeCooldownUntil[it.name] ?: 0L) }
+            .sortedByDescending { it.name == lastInnerTubeClient }
+        for (client in ordered) {
             val resolved = runCatching {
                 resolveWithInnerTubeClient(client, videoId, preferQuality, cacheKey, excludeUrl, sameFormatKey, visitor, now)
             }.getOrNull()
-            if (resolved != null) return resolved
+            if (resolved != null) {
+                lastInnerTubeClient = client.name
+                return resolved
+            }
+            innerTubeCooldownUntil[client.name] = now + INNERTUBE_COOLDOWN_MS
         }
         return null
     }
@@ -1157,13 +1651,33 @@ object YouTubeStreamResolver {
         )
         if (!visitor.isNullOrBlank()) headers["X-Goog-Visitor-Id"] = visitor
         val expiresSec = streaming.optLong("expiresInSeconds", 0L)
+        var progressiveCandidate: ResolvedStream? = null
         for (candidate in ordered.take(4)) {
-            if (probeCandidate(candidate.url, headers) != ProbeMode.DIRECT) continue
             val baseKey = "$cacheKey:IT:${client.name}:${candidate.itag}"
-            val diskKey = diskKeyWithMode(baseKey, false)
             val expiry = if (expiresSec > 0) now + expiresSec * 1000L else expiryMs(candidate.url, now)
-            cache[cacheKey] = CachedUrl(candidate.url, expiry, diskKey, headers)
-            return ResolvedStream(candidate.url, diskKey, false, headers)
+            when (probeCandidate(candidate.url, headers)) {
+                ProbeMode.DIRECT -> {
+                    val diskKey = diskKeyWithMode(baseKey, false)
+                    cache[cacheKey] = CachedUrl(candidate.url, expiry, diskKey, headers)
+                    return ResolvedStream(candidate.url, diskKey, false, headers)
+                }
+                // Sin rangos directos pero con lectura secuencial:
+                // peldaño progresivo también desde InnerTube.
+                ProbeMode.PROGRESSIVE -> if (progressiveCandidate == null) {
+                    progressiveCandidate = ResolvedStream(
+                        candidate.url, diskKeyWithMode(baseKey, true), true, headers
+                    )
+                }
+                ProbeMode.FAIL -> Unit
+            }
+        }
+        progressiveCandidate?.let { fallback ->
+            cache[cacheKey] = CachedUrl(
+                fallback.url,
+                if (expiresSec > 0) now + expiresSec * 1000L else expiryMs(fallback.url, now),
+                fallback.cacheKey, fallback.requestHeaders
+            )
+            return fallback
         }
         return null
     }
