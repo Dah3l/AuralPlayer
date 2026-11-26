@@ -1520,7 +1520,7 @@ object YouTubeStreamResolver {
     @Synchronized
     fun clearEscalation(videoId: String) {
         ladderModes.remove(videoId)
-        lastPlayabilityDiagnostic = null
+        clearPlayabilityDiagnostics()
     }
 
     /** Candidatas ordenadas para streaming: primero la misma
@@ -1595,21 +1595,34 @@ object YouTubeStreamResolver {
     private var lastInnerTubeClient: String? = null
     private const val INNERTUBE_COOLDOWN_MS = 5 * 60_000L
 
-    /** Motivo técnico del último fallo InnerTube (playabilityStatus
-     *  o formatos solo cifrados), visible en el aviso al saltar
-     *  para que la prueba de Dahel diga qué respondió el player. */
-    @Volatile
-    private var lastPlayabilityDiagnostic: String? = null
+    /** Motivos técnicos de los fallos InnerTube de la escalera
+     *  (playabilityStatus por cliente o formatos solo cifrados).
+     *  Se acumulan por cliente y se muestran completos en el
+     *  modal de diagnóstico al agotar la escalera. */
+    private val playabilityDiagnostics = mutableListOf<String>()
 
-    fun lastPlayabilityDiagnostic(): String? = lastPlayabilityDiagnostic
+    @Synchronized
+    fun playabilityDiagnosticReport(): String? =
+        playabilityDiagnostics.takeIf { it.isNotEmpty() }?.joinToString("\n")
+
+    @Synchronized
+    fun clearPlayabilityDiagnostics() {
+        playabilityDiagnostics.clear()
+    }
+
+    @Synchronized
+    private fun noteDiagnostic(line: String) {
+        if (line !in playabilityDiagnostics) playabilityDiagnostics += line
+    }
 
     private fun notePlayability(clientName: String, root: org.json.JSONObject) {
         val status = root.optJSONObject("playabilityStatus") ?: return
         val code = status.optString("status")
         if (code.isBlank() || code == "OK") return
-        val reason = status.optString("reason").trim().take(80)
-        lastPlayabilityDiagnostic =
-            if (reason.isNotBlank()) "$clientName: $code · $reason" else "$clientName: $code"
+        val reason = status.optString("reason").trim()
+        noteDiagnostic(
+            if (reason.isNotBlank()) "$clientName · $code · $reason" else "$clientName · $code"
+        )
     }
 
     /** Contexto del cliente InnerTube sin visitante web: cada
@@ -1771,12 +1784,11 @@ object YouTubeStreamResolver {
         }
         if (candidates.isEmpty()) {
             if (sawCipheredAudio) {
-                lastPlayabilityDiagnostic =
-                    "${client.name}: formatos solo cifrados (sin URL directa)"
+                noteDiagnostic("${client.name} · formatos solo cifrados")
             } else if (!sawAudioFormat &&
                 root.optJSONObject("playabilityStatus")?.optString("status") == "OK"
             ) {
-                lastPlayabilityDiagnostic = "${client.name}: sin formatos de audio"
+                noteDiagnostic("${client.name} · sin formatos de audio")
             }
             return null
         }
