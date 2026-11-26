@@ -205,12 +205,15 @@ class YouTubeManager(private val context: Context) {
                 val artistsDeferred = async {
                     runCatching { searchArtistsHybrid(service, clean) }.getOrDefault(emptyList())
                 }
+                // Sin duplicados: un mismo videoId dos veces se
+                // registra como el mismo Song (id negativo) y la
+                // LazyColumn crashea con «Key was already used».
                 val results = OnlineSearchResults(
                     query = clean,
-                    songs = songsDeferred.await(),
-                    albums = albumsDeferred.await(),
-                    playlists = playlistsDeferred.await(),
-                    artists = artistsDeferred.await()
+                    songs = songsDeferred.await().distinctBy { it.videoId },
+                    albums = albumsDeferred.await().distinctBy { it.url },
+                    playlists = playlistsDeferred.await().distinctBy { it.url },
+                    artists = artistsDeferred.await().distinctBy { it.url }
                 )
                 withContext(Dispatchers.Main) {
                     if (generation == onlineSearchGeneration) {
@@ -275,7 +278,7 @@ class YouTubeManager(private val context: Context) {
                 .take(20)
                 .mapNotNull { mapSongItem(it) }
         }.getOrDefault(emptyList())
-        if (musicSongs.isNotEmpty()) return musicSongs
+        if (musicSongs.isNotEmpty()) return musicSongs.distinctBy { it.videoId }
         // Respaldo sin VPN: el filtro music_songs puede volver
         // vacío o fallar aunque la búsqueda general sí devuelva
         // videos. Se mapean igual que las canciones, mismo diseño.
@@ -317,6 +320,7 @@ class YouTubeManager(private val context: Context) {
             .filterIsInstance<PlaylistInfoItem>()
             .take(12)
             .mapNotNull { mapCollectionItem(it, kind) }
+            .distinctBy { it.url }
 
     /** Álbumes con cadena de respaldo (adaptación LastWave): sin
      *  VPN el filtro music_albums puede volver vacío aunque el
@@ -366,6 +370,7 @@ class YouTubeManager(private val context: Context) {
                     thumbnailUrl = item.thumbnails.firstOrNull()?.url
                 )
             }
+            .distinctBy { it.url }
 
     /** Etapa 1 sin VPN: InnerTube WEB_REMIX es la fuente principal
      *  de canciones/álbumes/artistas (ahí viven las oficiales y los
@@ -426,7 +431,10 @@ class YouTubeManager(private val context: Context) {
                 android.util.Log.e("YouTubeManager", "Error cargando colección: ${e.message}")
                 emptyList()
             }
-        }
+            // Una playlist puede traer el mismo video dos veces:
+            // al registrarse sería el mismo Song y la lista del
+            // detalle crashearía por clave repetida.
+        }.distinctBy { it.videoId }
 
     private fun extractVideoId(url: String?): String {
         if (url == null) return ""
