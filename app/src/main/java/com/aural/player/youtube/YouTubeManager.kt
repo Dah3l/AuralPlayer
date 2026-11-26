@@ -1414,7 +1414,16 @@ object YouTubeStreamResolver {
         "Accept-Language" to "en-US,en;q=0.9"
     )
 
-    private val cache = mutableMapOf<String, CachedUrl>()
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedUrl>()
+
+    /** Candado por video: principal, fundido y precarga solo se
+     *  turnan cuando resuelven la MISMA canción; canciones
+     *  distintas resuelven en paralelo (el candado global
+     *  anterior serializaba todo y se sentía como lag/ANR). */
+    private val videoLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+    private fun lockFor(videoId: String): Any =
+        videoLocks.computeIfAbsent(videoId) { Any() }
     private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "aural-stream-prefetch").apply { isDaemon = true }
     }
@@ -1444,21 +1453,21 @@ object YouTubeStreamResolver {
     fun resolve(videoId: String, preferQuality: Boolean): String? =
         resolveStream(videoId, preferQuality)?.url
 
-    @Synchronized
     fun resolveStream(videoId: String, preferQuality: Boolean): ResolvedStream? =
-        resolveStreamInternal(videoId, preferQuality, forceFresh = false, excludeUrl = null)
+        synchronized(lockFor(videoId)) {
+            resolveStreamInternal(videoId, preferQuality, forceFresh = false, excludeUrl = null)
+        }
 
     /** Re-resuelve con StreamInfo fresco tras un 403/410 o corte de
      *  googlevideo, excluyendo la URL que falló. */
-    @Synchronized
     fun refreshStream(
         videoId: String,
         preferQuality: Boolean,
         failedUrl: String?,
         failedKey: String? = null
-    ): ResolvedStream? {
+    ): ResolvedStream? = synchronized(lockFor(videoId)) {
         if (!failedUrl.isNullOrBlank()) lastFailedUrls[videoId] = failedUrl
-        return resolveStreamInternal(
+        resolveStreamInternal(
             videoId, preferQuality, forceFresh = true,
             excludeUrl = failedUrl, sameFormatKey = formatKeyOf(failedKey)
         )
@@ -1487,17 +1496,17 @@ object YouTubeStreamResolver {
         if (!forceFresh) {
             cache[cacheKey]?.let { cached ->
                 if (cached.expiresAtMs > now + 30_000L && cached.url != effectiveExclude) {
-                    // La URL cacheada se prueba igual: la red pudo
-                    // cambiar (p. ej. VPN apagado) desde que se guardó.
-                    if (probeCandidate(cached.url, cached.requestHeaders)) {
-                        return ResolvedStream(
-                            cached.url,
-                            diskKeyWithMode(cached.diskKey, false),
-                            false,
-                            cached.requestHeaders
-                        )
-                    }
-                    cache.remove(cacheKey)
+                    // La URL cacheada se entrega directo, sin
+                    // re-sonda: sondearla en cada apertura leía
+                    // 1 MB de red y serializaba la carga. Si la
+                    // red cambió y la URL falla al sonar, el
+                    // refresco 403/410 la invalida y re-resuelve.
+                    return ResolvedStream(
+                        cached.url,
+                        diskKeyWithMode(cached.diskKey, false),
+                        false,
+                        cached.requestHeaders
+                    )
                 }
             }
         }
@@ -1523,7 +1532,7 @@ object YouTubeStreamResolver {
                     sameFormatKey != null &&
                         "${it.format}:${it.averageBitrate}" == sameFormatKey
                 }
-            for (audioStream in candidates.take(6)) {
+            for (audioStream in candidates.take(3)) {
                 val url = audioStream.content ?: continue
                 if (url == effectiveExclude) continue
                 if (!probeCandidate(url, BROWSER_HEADERS)) continue
@@ -1553,20 +1562,12 @@ object YouTubeStreamResolver {
     }
 
     /** Prueba una URL candidata con la misma identidad HTTP y
-     *  los mismos rangos que reproducirá Media3 (512 KB
-     *  completos, inicial e intermedio): si ambos llegan, el
-     *  directo puede sonar fluido. */
-    private fun probeCandidate(url: String, headers: Map<String, String>): Boolean {
-        val first = probeRange(url, 0L, headers)
-        if (!first.ok) return false
-        val total = first.totalLength
-        val mid = when {
-            total != null && total > PROBE_CHUNK_BYTES -> total / 2
-            total != null -> 0L
-            else -> PROBE_CHUNK_BYTES
-        }
-        return mid == 0L || probeRange(url, mid, headers).ok
-    }
+     *  el primer rango que reproducirá Media3 (512 KB
+     *  completos): si llega entero, el directo puede sonar.
+     *  Solo el primer rango: la sonda intermedia duplicaba la
+     *  espera y la APK manda sobre el streaming. */
+    private fun probeCandidate(url: String, headers: Map<String, String>): Boolean =
+        probeRange(url, 0L, headers).ok
 
     private data class ProbeRangeResult(val ok: Boolean, val totalLength: Long?)
 
@@ -1621,28 +1622,31 @@ object YouTubeStreamResolver {
         return connection
     }
 
-    @Synchronized
     fun invalidate(videoId: String) {
-        cache.keys.removeAll { it.startsWith("yt:$videoId:") }
+        synchronized(lockFor(videoId)) {
+            cache.keys.removeAll { it.startsWith("yt:$videoId:") }
+        }
     }
 
     /** Marca la URL cacheada de ese video como fallida: el
      *  reintento de PlaybackManager re-resuelve con StreamInfo
      *  fresco excluyéndola, conservando la posición. */
-    @Synchronized
     fun markFailed(videoId: String) {
-        val cached = cache.entries.firstOrNull { it.key.startsWith("yt:$videoId:") }?.value
-        if (cached != null) lastFailedUrls[videoId] = cached.url
-        invalidate(videoId)
+        synchronized(lockFor(videoId)) {
+            val cached = cache.entries.firstOrNull { it.key.startsWith("yt:$videoId:") }?.value
+            if (cached != null) lastFailedUrls[videoId] = cached.url
+            invalidate(videoId)
+        }
     }
 
     /** La canción suena: se olvida la URL fallida de ese video. */
-    @Synchronized
     fun clearFailed(videoId: String) {
-        lastFailedUrls.remove(videoId)
+        synchronized(lockFor(videoId)) {
+            lastFailedUrls.remove(videoId)
+        }
     }
 
-    private val lastFailedUrls = mutableMapOf<String, String>()
+    private val lastFailedUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** Candidatas M4A para streaming (bitrate NewPipe en KBPS:
      *  ahorro 48, calidad 128): primero la del objetivo y
