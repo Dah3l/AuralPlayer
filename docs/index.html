@@ -278,6 +278,17 @@
   footer p:first-child { margin-top: 0; }
   footer a { color: var(--txt); text-decoration: underline; text-underline-offset: 3px; }
 
+  /* Fondo ambiental: manchas suaves de color detrás del contenido */
+  .ambient { position: fixed; inset: -20%; z-index: -1; pointer-events: none; filter: blur(28px); background:
+    radial-gradient(38% 32% at 14% 12%, color-mix(in srgb, var(--teal) 17%, transparent), transparent 70%),
+    radial-gradient(34% 30% at 88% 38%, rgba(157,123,255,.13), transparent 70%),
+    radial-gradient(40% 34% at 40% 62%, color-mix(in srgb, var(--teal) 9%, transparent), transparent 70%),
+    radial-gradient(32% 28% at 86% 92%, rgba(255,77,141,.08), transparent 70%);
+    animation: ambient-drift 28s ease-in-out infinite alternate; }
+  @keyframes ambient-drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-3%, 2%, 0) scale(1.06); } }
+  #funciones, #descarga, #novedades { background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--teal) 4%, transparent) 50%, transparent); }
+  .hero::before { content: ""; position: absolute; top: -10%; left: 50%; transform: translateX(-50%); width: min(900px, 100%); height: 520px; background: radial-gradient(closest-side, color-mix(in srgb, var(--teal) 14%, transparent), transparent); pointer-events: none; z-index: -1; }
+
   /* Splash de arranque */
   .splash { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .splash-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(46,211,183,.16), rgba(46,211,183,0) 70%), #0d0d0d; transition: opacity .6s ease; }
@@ -308,7 +319,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .scroll-progress, .island-progress i, .pills-track, .eq i, .island-song.scroll span, .theme-dots button.on, .faq details[open] p, .pro-hero, .hero > div:first-child > *, .island-stage, .splash { animation: none; }
+    .ambient, .scroll-progress, .island-progress i, .pills-track, .eq i, .island-song.scroll span, .theme-dots button.on, .faq details[open] p, .pro-hero, .hero > div:first-child > *, .island-stage, .splash { animation: none; }
     .splash { display: none; }
     .btn.primary:hover, .card:hover, .contact-card:hover { transform: none; }
     .island, .island-stage, :root, header { transition: none; }
@@ -355,6 +366,7 @@
 </style>
 </head>
 <body>
+<div class="ambient" aria-hidden="true"></div>
 <div class="scroll-progress" aria-hidden="true"></div>
 <div class="splash" id="splash" aria-hidden="true"><div class="splash-bg"></div><div class="splash-inner"><img class="splash-logo" id="splashLogo" src="favicon.svg" alt="" fetchpriority="high"><span class="splash-word-wrap"><span class="splash-word" id="splashWord">Aural<span>Player</span></span></span></div></div>
 <noscript><style>.splash { display: none; }</style></noscript>
