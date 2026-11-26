@@ -1544,6 +1544,14 @@ object YouTubeStreamResolver {
         }
     }
 
+    /** Clave de caché con modo: el motor simple solo usa
+     *  directo; el sufijo se conserva para que las claves
+     *  viejas con :prog no se mezclen con las directas. */
+    private fun diskKeyWithMode(diskKey: String, progressive: Boolean): String {
+        val base = diskKey.removeSuffix(":direct").removeSuffix(":prog")
+        return base + if (progressive) ":prog" else ":direct"
+    }
+
     /** Prueba una URL candidata con la misma identidad HTTP y
      *  los mismos rangos que reproducirá Media3 (512 KB
      *  completos, inicial e intermedio): si ambos llegan, el
