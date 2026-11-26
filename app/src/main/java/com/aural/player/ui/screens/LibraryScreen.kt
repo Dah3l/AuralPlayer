@@ -342,6 +342,42 @@ fun LibraryScreen(
         selectionMode = false
         selectedIds.clear()
     }
+    // ---- Búsqueda unificada 1.3.0: local + online ----
+    val onlineResultsFlow = remember(youTubeManager) {
+        youTubeManager?.onlineResults
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                com.aural.player.youtube.OnlineSearchResults()
+            )
+    }
+    val onlineSearchingFlow = remember(youTubeManager) {
+        youTubeManager?.onlineSearching
+            ?: kotlinx.coroutines.flow.MutableStateFlow(false)
+    }
+    val onlineErrorFlow = remember(youTubeManager) {
+        youTubeManager?.onlineError
+            ?: kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    }
+    val onlineResults by onlineResultsFlow.collectAsStateWithLifecycle()
+    val onlineSearching by onlineSearchingFlow.collectAsStateWithLifecycle()
+    val onlineError by onlineErrorFlow.collectAsStateWithLifecycle()
+    val streamingNoticePending by viewModel.streamingNoticePending.collectAsStateWithLifecycle()
+    var onlineMenuTarget by remember {
+        mutableStateOf<com.aural.player.youtube.YTResult?>(null)
+    }
+    var loadingCollection by remember { mutableStateOf(false) }
+    LaunchedEffect(library.query) {
+        val query = library.query.trim()
+        if (query.isBlank()) {
+            youTubeManager?.clearOnlineResults()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(450)
+        if (viewModel.hasInternet()) {
+            youTubeManager?.searchUnified(query)
+        } else {
+            youTubeManager?.clearOnlineResults()
+        }
+    }
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
         val query = audioSearchRequest ?: return@LaunchedEffect
@@ -642,6 +678,48 @@ fun LibraryScreen(
                         pagerReady = true
                     }
                 }
+                if (library.query.isNotBlank()) {
+                    UnifiedSearchContent(
+                        localSongs = songs,
+                        onlineResults = onlineResults,
+                        onlineSearching = onlineSearching || loadingCollection,
+                        onlineError = onlineError,
+                        hasInternet = viewModel.hasInternet(),
+                        currentId = currentSongId,
+                        isPlaying = isPlaying,
+                        customCovers = customCovers,
+                        onPlayLocal = { song ->
+                            onPlayList(songs, songs.indexOfFirst { it.id == song.id }, null)
+                        },
+                        onLocalMenu = onSongMenu,
+                        onPlayOnline = { result, all ->
+                            refreshScope.launch {
+                                val registered = all.map { viewModel.registerOnlineSong(it) }
+                                val index = registered.indexOfFirst {
+                                    it.onlineVideoId == result.videoId
+                                }.coerceAtLeast(0)
+                                viewModel.playOnlineSongs(registered, index)
+                            }
+                        },
+                        onOnlineMenu = { result -> onlineMenuTarget = result },
+                        onPlayCollection = { collection ->
+                            refreshScope.launch {
+                                loadingCollection = true
+                                val results = youTubeManager?.fetchCollectionSongs(collection)
+                                    ?: emptyList()
+                                loadingCollection = false
+                                if (results.isEmpty()) {
+                                    viewModel.playback.showMessage("No se pudo cargar")
+                                } else {
+                                    val registered = results.map {
+                                        viewModel.registerOnlineSong(it)
+                                    }
+                                    viewModel.playOnlineSongs(registered, 0)
+                                }
+                            }
+                        }
+                    )
+                } else {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
@@ -803,6 +881,7 @@ fun LibraryScreen(
                         )
                     }
                 }
+                }
             }
         }
             androidx.compose.material.pullrefresh.PullRefreshIndicator(
@@ -814,6 +893,116 @@ fun LibraryScreen(
             )
         }
     }
+
+        // ---- Aviso de datos del primer streaming (una sola vez) ----
+        if (streamingNoticePending) {
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelStreamingNotice() },
+                title = { Text("Consumo de datos") },
+                text = {
+                    Text("Escuchar en línea usa datos móviles. Puedes cambiar la calidad o limitarlo a Wi-Fi en Ajustes → Sonido.")
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.confirmStreamingNotice() }) {
+                        Text("Escuchar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.cancelStreamingNotice() }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        // ---- Menú ⋮ de una canción online de la búsqueda ----
+        onlineMenuTarget?.let { result ->
+            androidx.compose.material3.ModalBottomSheet(
+                onDismissRequest = { onlineMenuTarget = null },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Text(
+                    text = result.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 4.dp),
+                    maxLines = 1
+                )
+                TextButton(
+                    onClick = {
+                        onlineMenuTarget = null
+                        refreshScope.launch {
+                            viewModel.enqueueOnlineSong(
+                                viewModel.registerOnlineSong(result), next = true
+                            )
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                ) { Text("Reproducir siguiente") }
+                TextButton(
+                    onClick = {
+                        onlineMenuTarget = null
+                        refreshScope.launch {
+                            viewModel.enqueueOnlineSong(
+                                viewModel.registerOnlineSong(result), next = false
+                            )
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                ) { Text("Añadir a la cola") }
+                TextButton(
+                    onClick = {
+                        onlineMenuTarget = null
+                        youTubeManager?.download(result) { fileName, mediaId, tagsEmbedded ->
+                            if (fileName != null) {
+                                viewModel.addDownloadToPlaylist(
+                                    fileName, mediaId, result, tagsEmbedded
+                                )
+                                if (!tagsEmbedded) {
+                                    viewModel.applyYouTubeMetadataFallback(
+                                        mediaId, result.title, result.artist,
+                                        result.thumbnailUrl
+                                    )
+                                }
+                                android.widget.Toast.makeText(
+                                    appContext,
+                                    "Canción descargada",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                ) { Text("Descargar") }
+                Text(
+                    "Guardar en playlist",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 24.dp, top = 12.dp)
+                )
+                if (playlists.isEmpty()) {
+                    Text(
+                        "No tienes playlists todavía",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp)
+                    )
+                } else {
+                    playlists.forEach { pl ->
+                        TextButton(
+                            onClick = {
+                                onlineMenuTarget = null
+                                refreshScope.launch {
+                                    val song = viewModel.registerOnlineSong(result)
+                                    viewModel.addToPlaylist(pl.id, song.id)
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+                        ) { Text(pl.name) }
+                    }
+                }
+                Box(Modifier.padding(bottom = 24.dp)) {}
+            }
+        }
 
         // ---- Menú general ⋮ fijo arriba a la derecha, como antes ----
         Box(
@@ -2134,148 +2323,6 @@ private fun QuickActionButton(
     }
 }
 
-// --------------------------- Pestaña: Canciones ---------------------------
-
-@Composable
-private fun SongsTab(
-    songs: List<Song>,
-    favorites: Set<Long>,
-    currentId: Long?,
-    isPlaying: Boolean,
-    onPlay: (Song) -> Unit,
-    onFavorite: (Long) -> Unit,
-    onMenu: (Song) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    customCovers: Map<Long, String> = emptyMap(),
-    customMetadata: Map<Long, Triple<String, String, String>> = emptyMap(),
-    // v1.0.7: selección múltiple.
-    selectionMode: Boolean = false,
-    selectedIds: Set<Long> = emptySet(),
-    onToggleSelect: (Song) -> Unit = {},
-    onEnterSelection: (Song) -> Unit = {}
-) {
-    if (songs.isEmpty()) {
-        EmptyState("Sin resultados para tu búsqueda")
-        return
-    }
-    val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp, end = 32.dp)
-        ) {
-            items(songs, key = { it.id }) { song ->
-                val meta = customMetadata[song.id]
-                SongRow(
-                    title = meta?.first?.ifBlank { song.title } ?: song.title,
-                    subtitle = "${meta?.second?.ifBlank { song.artist } ?: song.artist} · ${meta?.third?.ifBlank { song.album } ?: song.album}",
-                    coverUri = customCovers[song.id] ?: song.albumArtUri,
-                    durationMs = song.durationMs,
-                    isPlaying = song.id == currentId,
-                    onClick = {
-                        if (selectionMode) onToggleSelect(song) else onPlay(song)
-                    },
-                    onLongClick = { onEnterSelection(song) },
-                    selected = song.id in selectedIds,
-                    showCheckbox = selectionMode,
-                    trailing = {
-                        if (!selectionMode) {
-                            TextButton(onClick = { onMenu(song) }) {
-                                Text("···", style = MaterialTheme.typography.titleMedium)
-                            }
-                        }
-                    }
-                )
-            }
-        }
-        val songTitles = remember(songs) { songs.map { it.title } }
-        AlphabetFastScroller(
-            keys = songTitles,
-            onJumpToIndex = { index -> scope.launch { listState.scrollToItem(index) } },
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-// --------------------------- Pestaña: Artistas ---------------------------
-
-@Composable
-private fun ArtistsTab(
-    artists: List<com.aural.player.data.Artist>,
-    onOpen: (String) -> Unit,
-    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
-,
-    customCovers: Map<Long, String> = emptyMap()
-) {
-    if (artists.isEmpty()) {
-        EmptyState("Sin resultados"); return
-    }
-    val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Adaptive(minSize = 110.dp),
-            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(artists, key = { it.name }) { artist ->
-                MediaGridCard(
-                    coverUri = artist.representativeSong.albumArtUri,
-                    title = artist.name,
-                    subtitle = "${artist.songs.size} ${if (artist.songs.size == 1) "canción" else "canciones"}",
-                    onClick = { onOpen(artist.name) }
-                )
-            }
-        }
-        val artistNames = remember(artists) { artists.map { it.name } }
-        AlphabetFastScroller(
-            keys = artistNames,
-            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-// --------------------------- Pestaña: Álbumes ---------------------------
-
-@Composable
-private fun AlbumsTab(
-    albums: List<com.aural.player.data.Album>,
-    onOpen: (String) -> Unit,
-    gridState: androidx.compose.foundation.lazy.grid.LazyGridState
-,
-    customCovers: Map<Long, String> = emptyMap()
-) {
-    if (albums.isEmpty()) {
-        EmptyState("Sin resultados"); return
-    }
-    val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Adaptive(minSize = 150.dp),
-            contentPadding = PaddingValues(start = 10.dp, end = 36.dp, top = 10.dp, bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(albums, key = { it.id }) { album ->
-                MediaGridCard(
-                    coverUri = album.songs.firstOrNull()?.albumArtUri,
-                    title = album.title,
-                    subtitle = album.artist,
-                    onClick = { onOpen(album.title) }
-                )
-            }
-        }
-        val albumTitles = remember(albums) { albums.map { it.title } }
-        AlphabetFastScroller(
-            keys = albumTitles,
-            onJumpToIndex = { index -> scope.launch { gridState.scrollToItem(index) } },
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
 // --------------------------- Pestaña: Playlists ---------------------------
 
 @Composable
@@ -2619,166 +2666,6 @@ private fun PlaylistsTab(
             }
         }
     }
-}
-
-// --------------------------- Pestaña: Carpetas ---------------------------
-
-/**
- * Carpetas en lista (no cuadrícula): tocar abre la lista de canciones
- * (como álbum/playlist), el ojo oculta la carpeta con confirmación.
- */
-@Composable
-private fun FoldersTab(
-    folders: List<com.aural.player.data.Folder>,
-    onOpen: (com.aural.player.data.Folder) -> Unit,
-    onHideFolder: (com.aural.player.data.Folder) -> Unit = {}
-) {
-    if (folders.isEmpty()) {
-        EmptyState("Sin carpetas"); return
-    }
-    androidx.compose.foundation.lazy.LazyColumn(
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        items(folders, key = { it.path }) { folder ->
-            FolderRow(
-                folder = folder,
-                onClick = { onOpen(folder) },
-                onHide = { onHideFolder(folder) }
-            )
-        }
-    }
-}
-
-/** Fila de carpeta: icono, nombre, conteo y botón para ocultarla. */
-@Composable
-private fun FolderRow(
-    folder: com.aural.player.data.Folder,
-    onClick: () -> Unit,
-    onHide: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Folder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(40.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = folder.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${folder.songs.size} ${if (folder.songs.size == 1) "canción" else "canciones"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        IconButton(onClick = onHide) {
-            Icon(
-                imageVector = Icons.Rounded.VisibilityOff,
-                contentDescription = "Ocultar carpeta",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// --------------------------- Diálogo nueva playlist ---------------------------
-
-@Composable
-private fun RenamePlaylistDialog(
-    currentName: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var name by remember { mutableStateOf(currentName) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Renombrar playlist") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nombre") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (name.isNotBlank()) onConfirm(name.trim()) },
-                enabled = name.isNotBlank()
-            ) { Text("Guardar") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
-}
-
-@Composable
-private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Crear playlist") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = { Text("Nombre") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onCreate(name) }, enabled = name.isNotBlank()) {
-                Text("Crear", color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
-}
-
-/** Diálogo para guardar la Playlist del día como permanente (nombre editable). */
-@Composable
-private fun SaveDailyPlaylistDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var name by remember { mutableStateOf("Playlist del día") }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Guardar como permanente") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nombre") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) {
-                Text("Guardar", color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
 }
 
 /**
