@@ -289,7 +289,7 @@ object BpmAnalysis {
      * velocidad actual de la que sale, [speedOut]), volviendo después
      * a [baseSpeed] (la velocidad que el usuario tiene puesta).
      * Null = no se puede igualar (falta un BPM o la diferencia es
-     * mayor del 8% y no hay relación doble/mitad): fundido normal.
+     * mayor del 5% y no hay relación doble/mitad): fundido normal.
      */
     fun matchTempo(
         bpmOutRaw: Float?,
@@ -306,9 +306,10 @@ object BpmAnalysis {
         val foldedIn = foldBpm(bpmInRaw)
         val rate = effOut / foldedIn
         if (!rate.isFinite() || rate <= 0f) return null
-        val lo = baseSpeed * 0.92f
-        val hi = baseSpeed * 1.08f
-        // Directo: dentro del 8% de la velocidad del usuario.
+        val lo = baseSpeed * 0.95f
+        val hi = baseSpeed * 1.05f
+        // Directo: dentro del 5% de la velocidad del usuario (con
+        // varispeed el tono se mueve menos de un semitono).
         if (rate in lo..hi) return TempoMatch(rate, bassSwap = true)
         // Doble/mitad de tempo: los golpes coinciden cada dos tiempos,
         // la que entra suena a la velocidad del usuario.
