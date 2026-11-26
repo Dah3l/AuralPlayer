@@ -26,6 +26,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.database.StandaloneDatabaseProvider
@@ -208,7 +210,41 @@ class MusicService : MediaSessionService() {
                     .build()
             }
         }
-        val networkFactory = ChunkedRangeDataSourceFactory(DefaultDataSource.Factory(this))
+        // Misma petición HTTP que la descarga (headers de navegador):
+        // sin VPN, googlevideo puede rechazar la petición por defecto
+        // de Media3 aunque la URL resuelta sea válida.
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            )
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Accept" to "*/*",
+                    "Accept-Language" to "en-US,en;q=0.9"
+                )
+            )
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(true)
+        val networkFactory = ChunkedRangeDataSourceFactory(
+            DefaultDataSource.Factory(this, httpFactory)
+        ) { failedSpec ->
+            // 403/410 o corte: URL fresca de StreamInfo, sin la que falló.
+            val videoId = failedSpec.key
+                ?.split(":")
+                ?.takeIf { it.size >= 2 && it[0] == "yt" }
+                ?.get(1)
+                ?: return@ChunkedRangeDataSourceFactory null
+            val refreshed = YouTubeStreamResolver.refreshStream(
+                videoId,
+                streamingQualityCache,
+                failedSpec.uri.toString()
+            ) ?: return@ChunkedRangeDataSourceFactory null
+            failedSpec.buildUpon()
+                .setUri(android.net.Uri.parse(refreshed.url))
+                .setKey(refreshed.cacheKey)
+                .build()
+        }
         val cacheFactory = CacheDataSource.Factory()
             .setCache(getStreamCache())
             .setUpstreamDataSourceFactory(networkFactory)
@@ -1509,14 +1545,16 @@ private class OnlineAwareDataSource(
  * corte cerrando/abriendo en el momento crítico.
  */
 private class ChunkedRangeDataSourceFactory(
-    private val upstreamFactory: DataSource.Factory
+    private val upstreamFactory: DataSource.Factory,
+    private val urlRefresher: (DataSpec) -> DataSpec?
 ) : DataSource.Factory {
     override fun createDataSource(): DataSource =
-        ChunkedRangeDataSource(upstreamFactory)
+        ChunkedRangeDataSource(upstreamFactory, urlRefresher)
 }
 
 private class ChunkedRangeDataSource(
-    private val upstreamFactory: DataSource.Factory
+    private val upstreamFactory: DataSource.Factory,
+    private val urlRefresher: (DataSpec) -> DataSpec?
 ) : DataSource {
 
     private data class OpenChunk(val dataSource: DataSource, val length: Long)
@@ -1536,6 +1574,7 @@ private class ChunkedRangeDataSource(
     private var next: OpenChunk? = null
     private var prefetching = false
     private var generation = 0
+    private var refreshAttempts = 0
 
     override fun addTransferListener(transferListener: TransferListener) {
         listeners += transferListener
@@ -1551,7 +1590,8 @@ private class ChunkedRangeDataSource(
         position = dataSpec.position
         remaining = dataSpec.length
         chunkBytesRead = 0L
-        val opened = openChunkAt(position, remaining)
+        refreshAttempts = 0
+        val opened = openChunkWithRefresh(position, remaining)
         current = opened.dataSource
         if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
             remaining = opened.length
@@ -1584,6 +1624,45 @@ private class ChunkedRangeDataSource(
         val length = dataSource.open(chunkSpec)
         return OpenChunk(dataSource, length)
     }
+
+    private fun isRefreshable(e: IOException): Boolean =
+        e is HttpDataSource.InvalidResponseCodeException &&
+            (e.responseCode == 403 || e.responseCode == 410) ||
+            e is HttpDataSource.HttpDataSourceException
+
+    /** Sustituye la URL de googlevideo por una fresca (StreamInfo
+     *  nuevo, sin la que falló). Máximo 2 refrescos por apertura. */
+    private fun refreshSpec(): Boolean {
+        if (!chunked || refreshAttempts >= 2) return false
+        val base = spec ?: return false
+        val refreshed = try {
+            urlRefresher(base)
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        refreshAttempts++
+        spec = refreshed
+        // El rango preabierto usa la URL vieja: fuera.
+        synchronized(this) {
+            next?.dataSource?.close()
+            next = null
+        }
+        return true
+    }
+
+    private fun openChunkWithRefresh(
+        chunkPosition: Long,
+        remainingAtChunk: Long
+    ): OpenChunk =
+        try {
+            openChunkAt(chunkPosition, remainingAtChunk)
+        } catch (e: IOException) {
+            if (isRefreshable(e) && refreshSpec()) {
+                openChunkAt(chunkPosition, remainingAtChunk)
+            } else {
+                throw e
+            }
+        }
 
     private fun maybePrefetchNext() {
         if (!chunked || prefetching || next != null) return
@@ -1622,7 +1701,7 @@ private class ChunkedRangeDataSource(
             value
         }
         val opened = prepared ?: try {
-            openChunkAt(position, remaining)
+            openChunkWithRefresh(position, remaining)
         } catch (_: IOException) {
             return false
         }
@@ -1654,7 +1733,16 @@ private class ChunkedRangeDataSource(
         }
         maybePrefetchNext()
         val chunkLeft = (chunkSize - chunkBytesRead).toInt()
-        val read = active.read(buffer, offset, minOf(length, chunkLeft))
+        val read = try {
+            active.read(buffer, offset, minOf(length, chunkLeft))
+        } catch (e: IOException) {
+            // Corte a mitad de rango: URL fresca y seguir en la
+            // misma posición; si no se puede, fin limpio.
+            if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
+                return read(buffer, offset, length)
+            }
+            return C.RESULT_END_OF_INPUT
+        }
         if (read == C.RESULT_END_OF_INPUT) {
             if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
                 return C.RESULT_END_OF_INPUT
