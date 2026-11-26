@@ -7,6 +7,7 @@ en GitHub salen de aquí.
 ### En preparación
 - **Streaming** — busca canciones, álbumes, playlists y artistas en línea y escúchalos sin descargarlos: la dirección se resuelve al reproducir y la cola mezcla canciones del teléfono con canciones en línea (marcadas «En línea»). Si una no se puede cargar, aviso corto y salto automático a la siguiente.
 - **Búsqueda con tus pestañas** — el buscador filtra con las pestañas de siempre (Canciones, Artistas, Álbumes, Playlists) y un selector Locales/Online: en Locales ves tu biblioteca; en Online, los resultados en línea agrupados igual que los locales. Sin conexión, el lado Online avisa que no está disponible.
+- **Detalle en línea como el local** — al tocar un álbum, artista o playlist en línea se abre su vista detallada de siempre, con su portada grande, sus canciones y los botones de reproducir y aleatorio. El botón de reproducir de la fila sigue sonando directo.
 - **Streaming a tu manera** — en Ajustes → Sonido: calidad de streaming y opción de escuchar en línea solo con Wi-Fi. El aviso de consumo de datos sale una sola vez.
 
 ## v1.2.0 — 2026-11-24
