@@ -611,7 +611,7 @@ object YouTubeStreamResolver {
 
     data class ResolvedStream(val url: String, val cacheKey: String)
 
-    private data class CachedUrl(val url: String, val expiresAtMs: Long)
+    private data class CachedUrl(val url: String, val expiresAtMs: Long, val diskKey: String)
 
     private val cache = mutableMapOf<String, CachedUrl>()
     private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
@@ -644,14 +644,39 @@ object YouTubeStreamResolver {
         resolveStream(videoId, preferQuality)?.url
 
     @Synchronized
-    fun resolveStream(videoId: String, preferQuality: Boolean): ResolvedStream? {
+    fun resolveStream(videoId: String, preferQuality: Boolean): ResolvedStream? =
+        resolveStreamInternal(videoId, preferQuality, forceFresh = false, excludeUrl = null)
+
+    /** Re-resuelve con StreamInfo fresco tras un 403/410 o corte de
+     *  googlevideo, excluyendo la URL que falló. */
+    @Synchronized
+    fun refreshStream(
+        videoId: String,
+        preferQuality: Boolean,
+        failedUrl: String?
+    ): ResolvedStream? =
+        resolveStreamInternal(videoId, preferQuality, forceFresh = true, excludeUrl = failedUrl)
+
+    private fun resolveStreamInternal(
+        videoId: String,
+        preferQuality: Boolean,
+        forceFresh: Boolean,
+        excludeUrl: String?
+    ): ResolvedStream? {
         if (videoId.isBlank()) return null
         val now = System.currentTimeMillis()
         val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
         val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
-        cache[cacheKey]?.let { cached ->
-            if (cached.expiresAtMs > now + 30_000L) {
-                return ResolvedStream(cached.url, cacheKey)
+        if (!forceFresh) {
+            cache[cacheKey]?.let { cached ->
+                if (cached.expiresAtMs > now + 30_000L && cached.url != excludeUrl) {
+                    // La URL cacheada se prueba igual: la red pudo
+                    // cambiar (p. ej. VPN apagado) desde que se guardó.
+                    if (probeUrl(cached.url)) {
+                        return ResolvedStream(cached.url, cached.diskKey)
+                    }
+                    cache.remove(cacheKey)
+                }
             }
         }
         return try {
@@ -665,36 +690,87 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            val audioStream = selectAudioStream(streamInfo, effectiveQuality) ?: return null
-            val url = audioStream.content ?: return null
-            cache[cacheKey] = CachedUrl(url, expiryMs(url, now))
-            ResolvedStream(url, cacheKey)
+            // Candidatas en orden: la preferida (48/128) primero y
+            // luego otros formatos/bitrates. Se entrega la primera
+            // cuyos primeros bytes responden; si ninguna responde,
+            // se falla limpio y el reproductor avisa/salta.
+            for (audioStream in candidateStreams(streamInfo, effectiveQuality)) {
+                val url = audioStream.content ?: continue
+                if (url == excludeUrl) continue
+                if (!probeUrl(url)) continue
+                val diskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
+                cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                return ResolvedStream(url, diskKey)
+            }
+            android.util.Log.e(
+                "YouTubeStreamResolver",
+                "Ninguna URL respondió para $videoId"
+            )
+            null
         } catch (e: Exception) {
             android.util.Log.e("YouTubeStreamResolver", "No se pudo resolver $videoId: ${e.message}")
             null
         }
     }
 
-    @Synchronized
-    fun invalidate(videoId: String) {
-        cache.remove("yt:$videoId:quality")
-        cache.remove("yt:$videoId:saver")
+    /** Prueba los primeros bytes con la misma petición que usa la
+     *  descarga (headers de navegador): googlevideo puede rechazar
+     *  la petición de Media3 sin VPN aunque la URL sea válida. */
+    private fun probeUrl(url: String): Boolean {
+        var connection: java.net.HttpURLConnection? = null
+        return try {
+            connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            )
+            connection.setRequestProperty("Accept", "*/*")
+            connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+            connection.setRequestProperty("Range", "bytes=0-2047")
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                false
+            } else {
+                connection.inputStream.use { input -> input.read() >= 0 }
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection?.disconnect()
+        }
     }
 
-    private fun selectAudioStream(
+    @Synchronized
+    fun invalidate(videoId: String) {
+        cache.keys.removeAll { it.startsWith("yt:$videoId:") }
+    }
+
+    /** Candidatas ordenadas para streaming: primero la misma
+     *  selección que la descarga (M4A, bitrate en KBPS: 48 ahorro /
+     *  128 calidad) y después el resto de formatos/bitrates, para
+     *  poder reintentar con otra si googlevideo rechaza una. */
+    private fun candidateStreams(
         streamInfo: StreamInfo,
         preferQuality: Boolean
-    ): org.schabi.newpipe.extractor.stream.AudioStream? {
-        // Misma selección que la descarga: formato M4A primero y
-        // bitrate en KBPS (48 ahorro / 128 calidad).
+    ): List<org.schabi.newpipe.extractor.stream.AudioStream> {
         val minKbps = if (preferQuality) 128 else 48
         val mp4Streams = streamInfo.audioStreams
             .filter { it.format == MediaFormat.M4A }
-        return mp4Streams
             .sortedBy { it.averageBitrate }
-            .firstOrNull { it.averageBitrate >= minKbps }
+        val otherStreams = streamInfo.audioStreams
+            .filter { it.format != MediaFormat.M4A }
+            .sortedBy { it.averageBitrate }
+        val preferred = mp4Streams.firstOrNull { it.averageBitrate >= minKbps }
             ?: mp4Streams.maxByOrNull { it.averageBitrate }
-            ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
+            ?: otherStreams.maxByOrNull { it.averageBitrate }
+        val ordered = mutableListOf<org.schabi.newpipe.extractor.stream.AudioStream>()
+        preferred?.let { ordered += it }
+        ordered += mp4Streams
+        ordered += if (preferQuality) otherStreams.reversed() else otherStreams
+        return ordered.distinctBy { it.content }
     }
 
     private fun expiryMs(url: String, nowMs: Long): Long {
