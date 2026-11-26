@@ -40,6 +40,14 @@ enum class StopMode { SONG, QUEUE }
 data class PlayerUiState(
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
+    /** El reproductor está cargando (arranque o rebuffer): el
+     *  Now Playing lo muestra como estado de espera en pistas
+     *  online para que no parezca trabado. */
+    val isBuffering: Boolean = false,
+    /** Bitrate real (KBPS) del stream online actual, o null
+     *  si aún no se resolvió o la pista es local: alimenta la
+     *  pill de calidad junto a «En línea». */
+    val streamBitrateKbps: Int? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val queue: List<Song> = emptyList(),
@@ -817,6 +825,10 @@ class PlaybackManager(private val context: Context) {
         _state.value = _state.value.copy(
             currentSong = current,
             isPlaying = c.isPlaying,
+            isBuffering = c.playbackState == Player.STATE_BUFFERING,
+            streamBitrateKbps = current?.onlineVideoId?.let { videoId ->
+                com.aural.player.youtube.YouTubeStreamResolver.streamBitrateKbps(videoId)
+            },
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
             queue = items,
             currentIndex = curIdx,
