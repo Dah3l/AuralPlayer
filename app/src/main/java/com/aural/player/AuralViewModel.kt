@@ -735,6 +735,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setStreamingWifiOnly(enabled) }
     }
 
+    /** Aviso VPN de la primera búsqueda online ya descartado. */
+    val onlineVpnNoticeSeen: StateFlow<Boolean> = settings.onlineVpnNoticeSeen.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    fun dismissOnlineVpnNotice() {
+        viewModelScope.launch { settings.setOnlineVpnNoticeSeen() }
+    }
+
     /** Canciones online registradas (id negativo -> registro). */
     val onlineSongs: StateFlow<Map<Long, com.aural.player.data.OnlineSongRecord>> =
         settings.onlineSongs.stateIn(
