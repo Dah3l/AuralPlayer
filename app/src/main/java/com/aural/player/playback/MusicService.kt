@@ -28,6 +28,11 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
@@ -59,6 +64,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 import kotlin.math.PI
 import kotlin.math.abs
@@ -107,6 +113,9 @@ class MusicService : MediaSessionService() {
     /** Calidad de streaming en caché (true = 128 Kbps). */
     @Volatile
     private var streamingQualityCache = false
+
+    /** Caché de disco del streaming (una sola instancia por proceso). */
+    private var streamCache: SimpleCache? = null
 
     // ------------------------- Mezcla DJ -------------------------
     /** Mezcla DJ activada (implica fundido). */
@@ -160,6 +169,28 @@ class MusicService : MediaSessionService() {
      * real se resuelve aquí, en el hilo de carga, al reproducir.
      * Lo local pasa intacto por el DataSource por defecto.
      */
+    private fun createLoadControl(): DefaultLoadControl =
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                60_000,
+                120_000,
+                4_000,
+                8_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+    private fun getStreamCache(): SimpleCache {
+        streamCache?.let { return it }
+        val cache = SimpleCache(
+            File(cacheDir, "aural-stream-cache"),
+            LeastRecentlyUsedCacheEvictor(256L * 1024L * 1024L),
+            StandaloneDatabaseProvider(this)
+        )
+        streamCache = cache
+        return cache
+    }
+
     private fun createMediaSourceFactory(): DefaultMediaSourceFactory {
         val resolver = object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
@@ -167,16 +198,43 @@ class MusicService : MediaSessionService() {
                 if (uri.scheme != "aural-online") return dataSpec
                 val videoId = uri.lastPathSegment
                     ?: throw IOException("Streaming sin video")
-                val resolved = YouTubeStreamResolver.resolve(videoId, streamingQualityCache)
-                    ?: throw IOException("No se pudo resolver el streaming")
-                return dataSpec.withUri(android.net.Uri.parse(resolved))
+                val resolved = YouTubeStreamResolver.resolveStream(
+                    videoId,
+                    streamingQualityCache
+                ) ?: throw IOException("No se pudo resolver el streaming")
+                return dataSpec.buildUpon()
+                    .setUri(android.net.Uri.parse(resolved.url))
+                    .setKey(resolved.cacheKey)
+                    .build()
             }
         }
+        val networkFactory = ChunkedRangeDataSourceFactory(DefaultDataSource.Factory(this))
+        val cacheFactory = CacheDataSource.Factory()
+            .setCache(getStreamCache())
+            .setUpstreamDataSourceFactory(networkFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         val dataSourceFactory = ResolvingDataSource.Factory(
-            ChunkedRangeDataSourceFactory(DefaultDataSource.Factory(this)),
+            OnlineAwareDataSourceFactory(cacheFactory, DefaultDataSource.Factory(this)),
             resolver
         )
         return DefaultMediaSourceFactory(dataSourceFactory)
+    }
+
+    private fun onlineVideoId(item: MediaItem?): String? {
+        val uri = item?.localConfiguration?.uri ?: return null
+        return if (uri.scheme == "aural-online") uri.lastPathSegment else null
+    }
+
+    private fun prefetchOnlineAround(player: Player) {
+        onlineVideoId(player.currentMediaItem)?.let {
+            YouTubeStreamResolver.prefetch(it, streamingQualityCache)
+        }
+        val nextIndex = player.nextMediaItemIndex
+        if (nextIndex != C.INDEX_UNSET && nextIndex in 0 until player.mediaItemCount) {
+            onlineVideoId(player.getMediaItemAt(nextIndex))?.let {
+                YouTubeStreamResolver.prefetch(it, streamingQualityCache)
+            }
+        }
     }
 
     override fun onCreate() {
@@ -192,6 +250,7 @@ class MusicService : MediaSessionService() {
                 /* handleAudioFocus = */ true // gestiona automáticamente el foco de audio
             )
             .setMediaSourceFactory(createMediaSourceFactory())
+            .setLoadControl(createLoadControl())
             .setWakeMode(C.WAKE_MODE_NETWORK) // streaming 1.3.0: CPU + Wi-Fi despiertos con pantalla apagada
             // v1.0.9: al desconectar los audífonos (cable o Bluetooth) la música
             // se pausa sola (Android avisa con AUDIO_BECOMING_NOISY).
@@ -260,6 +319,7 @@ class MusicService : MediaSessionService() {
                 /* handleAudioFocus = */ false
             )
             .setMediaSourceFactory(createMediaSourceFactory())
+            .setLoadControl(createLoadControl())
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(false)
             .build()
@@ -349,7 +409,15 @@ class MusicService : MediaSessionService() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (owner !== mediaSession?.player || !crossfadeActive) return
+            if (owner !== mediaSession?.player) return
+            if (playbackState == Player.STATE_BUFFERING &&
+                owner.playWhenReady &&
+                owner.currentPosition > 3_000L &&
+                onlineVideoId(owner.currentMediaItem) != null
+            ) {
+                YouTubeStreamResolver.noteRebuffer()
+            }
+            if (!crossfadeActive) return
             // Parada total (botón parar) en pleno fundido: cancelar.
             if (playbackState == Player.STATE_IDLE) abortFade()
         }
@@ -395,6 +463,7 @@ class MusicService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (owner !== mediaSession?.player) return
+            prefetchOnlineAround(owner)
             if (crossfadeActive) return
             // La canción cambió sola sin fundido (o el usuario saltó
             // directo): se acabó el glide y la nueva suena a la
@@ -405,6 +474,7 @@ class MusicService : MediaSessionService() {
 
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             if (owner !== mediaSession?.player) return
+            prefetchOnlineAround(owner)
             // Cola nueva o reordenada: lo preparado ya no vale.
             fadePreparedForIndex = -1
             if (crossfadeActive) abortFade()
@@ -1370,6 +1440,8 @@ class MusicService : MediaSessionService() {
             release()
             mediaSession = null
         }
+        runCatching { streamCache?.release() }
+        streamCache = null
         super.onDestroy()
     }
 
@@ -1386,116 +1458,240 @@ class MusicService : MediaSessionService() {
 }
 
 /**
- * Lee googlevideo en rangos acotados (512 KB): las peticiones
- * abiertas largas reciben 403 a mitad de canción. Para cualquier
- * otra URI delega sin tocar nada.
+ * Solo las pistas online resueltas pasan por la caché de streaming;
+ * lo local sigue directo por el DataSource por defecto.
+ */
+private class OnlineAwareDataSourceFactory(
+    private val cacheFactory: DataSource.Factory,
+    private val defaultFactory: DataSource.Factory
+) : DataSource.Factory {
+    override fun createDataSource(): DataSource =
+        OnlineAwareDataSource(cacheFactory, defaultFactory)
+}
+
+private class OnlineAwareDataSource(
+    private val cacheFactory: DataSource.Factory,
+    private val defaultFactory: DataSource.Factory
+) : DataSource {
+    private var delegate: DataSource? = null
+    private val listeners = mutableListOf<TransferListener>()
+
+    override fun addTransferListener(transferListener: TransferListener) {
+        listeners += transferListener
+        delegate?.addTransferListener(transferListener)
+    }
+
+    override fun open(dataSpec: DataSpec): Long {
+        val useCache = dataSpec.key?.startsWith("yt:") == true ||
+            dataSpec.uri.host?.contains("googlevideo.com") == true
+        val created = if (useCache) cacheFactory.createDataSource()
+        else defaultFactory.createDataSource()
+        listeners.forEach { created.addTransferListener(it) }
+        delegate = created
+        return created.open(dataSpec)
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+        delegate?.read(buffer, offset, length) ?: C.RESULT_END_OF_INPUT
+
+    override fun getUri(): android.net.Uri? = delegate?.uri
+
+    override fun close() {
+        delegate?.close()
+        delegate = null
+    }
+}
+
+/**
+ * Lee googlevideo en rangos acotados: las peticiones abiertas largas
+ * reciben 403 a mitad de canción. El siguiente rango se abre en
+ * segundo plano antes de agotar el actual para que el flujo no se
+ * corte cerrando/abriendo en el momento crítico.
  */
 private class ChunkedRangeDataSourceFactory(
     private val upstreamFactory: DataSource.Factory
 ) : DataSource.Factory {
     override fun createDataSource(): DataSource =
-        ChunkedRangeDataSource(upstreamFactory.createDataSource())
+        ChunkedRangeDataSource(upstreamFactory)
 }
 
 private class ChunkedRangeDataSource(
-    private val upstream: DataSource
+    private val upstreamFactory: DataSource.Factory
 ) : DataSource {
+
+    private data class OpenChunk(val dataSource: DataSource, val length: Long)
+
+    private val listeners = mutableListOf<TransferListener>()
+    private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "aural-range-prefetch").apply { isDaemon = true }
+    }
 
     private var spec: DataSpec? = null
     private var chunked = false
     private var position = 0L
     private var remaining = C.LENGTH_UNSET.toLong()
     private var chunkBytesRead = 0L
-    private var upstreamOpen = false
+    private var chunkSize = CHUNK_BYTES
+    private var current: DataSource? = null
+    private var next: OpenChunk? = null
+    private var prefetching = false
+    private var generation = 0
 
     override fun addTransferListener(transferListener: TransferListener) {
-        upstream.addTransferListener(transferListener)
+        listeners += transferListener
+        current?.addTransferListener(transferListener)
+        next?.dataSource?.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        closeCurrent()
+        generation++
         spec = dataSpec
         chunked = dataSpec.uri.host?.contains("googlevideo.com") == true
         position = dataSpec.position
         remaining = dataSpec.length
         chunkBytesRead = 0L
-        val length = openUpstream()
-        return if (remaining != C.LENGTH_UNSET.toLong()) remaining else length
+        val opened = openChunkAt(position, remaining)
+        current = opened.dataSource
+        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
+            remaining = opened.length
+        }
+        chunkSize = chunkSizeFor(remaining)
+        maybePrefetchNext()
+        return if (remaining != C.LENGTH_UNSET.toLong()) remaining else opened.length
     }
 
-    private fun openUpstream(): Long {
-        val base = spec ?: throw IOException("DataSource sin abrir")
-        val chunkSpec = base.buildUpon()
-            .setPosition(position)
-            .setLength(remaining)
-            .build()
-        val length = upstream.open(chunkSpec)
-        upstreamOpen = true
-        chunkBytesRead = 0L
-        if (remaining == C.LENGTH_UNSET.toLong() && length != C.LENGTH_UNSET.toLong()) {
-            remaining = length
+    private fun chunkSizeFor(remainingAtChunk: Long): Long =
+        if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
+            minOf(CHUNK_BYTES, remainingAtChunk)
+        } else {
+            CHUNK_BYTES
         }
-        return length
+
+    private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
+        val base = spec ?: throw IOException("DataSource sin abrir")
+        val chunkLength = if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
+            minOf(CHUNK_BYTES, remainingAtChunk)
+        } else {
+            remainingAtChunk
+        }
+        val chunkSpec = base.buildUpon()
+            .setPosition(chunkPosition)
+            .setLength(chunkLength)
+            .build()
+        val dataSource = upstreamFactory.createDataSource()
+        listeners.forEach { dataSource.addTransferListener(it) }
+        val length = dataSource.open(chunkSpec)
+        return OpenChunk(dataSource, length)
+    }
+
+    private fun maybePrefetchNext() {
+        if (!chunked || prefetching || next != null) return
+        if (remaining == C.LENGTH_UNSET.toLong()) return
+        val chunkLeft = chunkSize - chunkBytesRead
+        if (chunkLeft <= 0L || chunkLeft > PREFETCH_THRESHOLD_BYTES) return
+        val remainingAtNext = remaining - chunkLeft
+        if (remainingAtNext <= 0L) return
+        val nextPosition = position + chunkLeft
+        val gen = generation
+        prefetching = true
+        prefetchExecutor.execute {
+            try {
+                val opened = openChunkAt(nextPosition, remainingAtNext)
+                synchronized(this) {
+                    if (gen == generation && next == null) {
+                        next = opened
+                    } else {
+                        opened.dataSource.close()
+                    }
+                    prefetching = false
+                }
+            } catch (_: IOException) {
+                synchronized(this) { prefetching = false }
+            }
+        }
+    }
+
+    private fun advanceChunk(): Boolean {
+        if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) return false
+        current?.close()
+        current = null
+        val prepared = synchronized(this) {
+            val value = next
+            next = null
+            value
+        }
+        val opened = prepared ?: try {
+            openChunkAt(position, remaining)
+        } catch (_: IOException) {
+            return false
+        }
+        current = opened.dataSource
+        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
+            remaining = opened.length
+        }
+        chunkBytesRead = 0L
+        chunkSize = chunkSizeFor(remaining)
+        maybePrefetchNext()
+        return true
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
+        val active = current ?: return C.RESULT_END_OF_INPUT
         if (!chunked) {
-            val read = upstream.read(buffer, offset, length)
+            val read = active.read(buffer, offset, length)
             if (read > 0) {
                 position += read
                 if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
             }
             return read
         }
-        if (!upstreamOpen) {
-            try {
-                openUpstream()
-            } catch (e: IOException) {
-                return C.RESULT_END_OF_INPUT
-            }
-        }
-        val chunkLeft = (CHUNK_BYTES - chunkBytesRead).toInt()
-        if (chunkLeft <= 0) {
-            closeUpstream()
+        if (chunkBytesRead >= chunkSize) {
+            if (!advanceChunk()) return C.RESULT_END_OF_INPUT
             return read(buffer, offset, length)
         }
-        val read = upstream.read(buffer, offset, minOf(length, chunkLeft))
+        maybePrefetchNext()
+        val chunkLeft = (chunkSize - chunkBytesRead).toInt()
+        val read = active.read(buffer, offset, minOf(length, chunkLeft))
         if (read == C.RESULT_END_OF_INPUT) {
-            closeUpstream()
-            if (remaining == 0L) return C.RESULT_END_OF_INPUT
-            // Fin del rango actual: reabrir en la posición siguiente.
-            return try {
-                openUpstream()
-                read(buffer, offset, length)
-            } catch (e: IOException) {
-                C.RESULT_END_OF_INPUT
+            if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
+                return C.RESULT_END_OF_INPUT
             }
+            return if (advanceChunk()) read(buffer, offset, length)
+            else C.RESULT_END_OF_INPUT
         }
         if (read > 0) {
             position += read
             chunkBytesRead += read
             if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
-            if (chunkBytesRead >= CHUNK_BYTES) closeUpstream()
+            maybePrefetchNext()
         }
         return read
     }
 
-    override fun getUri(): android.net.Uri? = upstream.uri
+    override fun getUri(): android.net.Uri? = current?.uri
 
     override fun close() {
-        closeUpstream()
+        generation++
+        closeCurrent()
         spec = null
+        prefetchExecutor.shutdownNow()
     }
 
-    private fun closeUpstream() {
-        if (upstreamOpen) {
-            upstreamOpen = false
-            upstream.close()
+    private fun closeCurrent() {
+        current?.close()
+        current = null
+        synchronized(this) {
+            next?.dataSource?.close()
+            next = null
+            prefetching = false
         }
     }
 
     private companion object {
-        const val CHUNK_BYTES = 512L * 1024L
+        const val CHUNK_BYTES = 1024L * 1024L
+        const val PREFETCH_THRESHOLD_BYTES = 256L * 1024L
     }
 }
