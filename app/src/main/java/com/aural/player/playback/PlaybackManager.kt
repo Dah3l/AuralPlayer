@@ -10,6 +10,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
@@ -69,6 +70,21 @@ class PlaybackManager(private val context: Context) {
     /** Parada programada activa (null = ninguna). La consume el diálogo del temporizador. */
     private val _stopMode = MutableStateFlow<StopMode?>(null)
     val stopMode: StateFlow<StopMode?> = _stopMode.asStateFlow()
+
+    /** Aviso corto para la UI (p. ej. un streaming que no resolvió). */
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun clearMessage() {
+        _message.value = null
+    }
+
+    fun showMessage(text: String) {
+        _message.value = text
+    }
+
+    /** Índices online que ya fallaron en esta cola (anti-bucle al saltar). */
+    private val failedOnlineIndices = mutableSetOf<Int>()
 
     private val _endlessDjActive = MutableStateFlow(false)
     /** Si la Sesión DJ infinita está activa (la lleva el servicio). */
@@ -223,6 +239,34 @@ class PlaybackManager(private val context: Context) {
             }
         }
 
+        override fun onPlayerError(error: PlaybackException) {
+            // Streaming que no resuelve o se corta: aviso corto y
+            // salto automático a la siguiente, sin parar la música.
+            val c = controller ?: return
+            val current = _state.value.currentSong ?: return
+            if (!current.isOnline) return
+            current.onlineVideoId?.let {
+                com.aural.player.youtube.YouTubeStreamResolver.invalidate(it)
+            }
+            val curIdx = c.currentMediaItemIndex
+            failedOnlineIndices += curIdx
+            val nextIdx = if (curIdx >= 0 && c.currentTimeline.windowCount > 0) {
+                c.currentTimeline.getNextWindowIndex(
+                    curIdx, Player.REPEAT_MODE_OFF, c.shuffleModeEnabled
+                )
+            } else C.INDEX_UNSET
+            if (nextIdx == C.INDEX_UNSET || nextIdx in failedOnlineIndices) {
+                _message.value = "No se pudo reproducir en línea"
+                publishState()
+                return
+            }
+            _message.value = "No se pudo reproducir en línea. Saltando…"
+            c.seekTo(nextIdx, 0L)
+            c.prepare()
+            c.playWhenReady = true
+            publishState()
+        }
+
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
@@ -313,10 +357,22 @@ class PlaybackManager(private val context: Context) {
         }
     }
 
-    /** Registra la biblioteca para poder mapear MediaItems a canciones. */
+    /**
+     * Registra la biblioteca para poder mapear MediaItems a canciones.
+     * Conserva las online ya conocidas (id negativo): la cola mixta
+     * debe seguir resolviéndose aunque la biblioteca local recargue.
+     */
     fun setLibrary(songs: List<Song>) {
-        libraryById = songs.associateBy { it.id }
+        val onlineKnown = libraryById.filterKeys { it < 0L }
+        libraryById = songs.associateBy { it.id } + onlineKnown
         publishState()
+    }
+
+    /** Registra canciones (locales u online) que entran a la cola. */
+    fun registerKnownSongs(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        libraryById = libraryById + songs.associateBy { it.id }
+        cachedQueueIds = emptyList()
     }
 
     /**
@@ -328,7 +384,7 @@ class PlaybackManager(private val context: Context) {
      * con la información vieja hasta cambiar de canción.
      */
     fun refreshSongMetadata(song: Song) {
-        libraryById = libraryById + (song.id to song)
+        registerKnownSongs(listOf(song))
         publishState()
     }
 
@@ -342,6 +398,8 @@ class PlaybackManager(private val context: Context) {
         // y se cancela la parada programada.
         setEndlessDj(false)
         _stopMode.value = null
+        failedOnlineIndices.clear()
+        registerKnownSongs(songs)
         val items = songs.map { it.toMediaItem() }
         c.setMediaItems(items, startIndex.coerceIn(0, items.size - 1), 0L)
         c.shuffleModeEnabled = shuffle
@@ -368,6 +426,7 @@ class PlaybackManager(private val context: Context) {
     private fun applyRestore(songs: List<Song>, startIndex: Int) {
         val c = controller ?: return
         if (c.mediaItemCount > 0) return
+        registerKnownSongs(songs)
         c.setMediaItems(songs.map { it.toMediaItem() }, startIndex, 0L)
         c.prepare()
         c.playWhenReady = false
@@ -377,6 +436,7 @@ class PlaybackManager(private val context: Context) {
     /** Añade una canción al final de la cola y la reproduce si nada suena. */
     fun enqueue(song: Song) {
         val c = controller ?: return
+        registerKnownSongs(listOf(song))
         c.addMediaItem(song.toMediaItem())
         if (c.mediaItemCount == 1) {
             c.prepare()
@@ -386,9 +446,24 @@ class PlaybackManager(private val context: Context) {
     }
 
     /** Añade varias canciones al final de la cola (selección múltiple). v1.0.7. */
+    /** Inserta una canción justo después de la actual ("reproducir siguiente"). */
+    fun enqueueNext(song: Song) {
+        val c = controller ?: return
+        registerKnownSongs(listOf(song))
+        if (c.mediaItemCount == 0) {
+            c.addMediaItem(song.toMediaItem())
+            c.prepare()
+            c.playWhenReady = true
+        } else {
+            c.addMediaItem(c.currentMediaItemIndex + 1, song.toMediaItem())
+        }
+        publishState()
+    }
+
     fun enqueueAll(songs: List<Song>) {
         if (songs.isEmpty()) return
         val c = controller ?: return
+        registerKnownSongs(songs)
         val wasEmpty = c.mediaItemCount == 0
         c.addMediaItems(songs.map { it.toMediaItem() })
         if (wasEmpty) {
@@ -490,6 +565,8 @@ class PlaybackManager(private val context: Context) {
     private fun applyDjQueue(songs: List<Song>) {
         val c = controller ?: return
         _stopMode.value = null
+        failedOnlineIndices.clear()
+        registerKnownSongs(songs)
         val items = songs.map { it.toMediaItem() }
         c.setMediaItems(items, 0, 0L)
         c.shuffleModeEnabled = false
