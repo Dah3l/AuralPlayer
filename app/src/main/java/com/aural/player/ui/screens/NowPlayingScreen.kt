@@ -607,11 +607,30 @@ fun NowPlayingScreen(
             // la información de la canción). El tempo es dato de DJ y
             // la calidad es dato del archivo: van juntos pero no
             // mezclados en una sola pill.
-            if (songBpm != null || qualityText != null) {
+            if (song.isOnline || songBpm != null || qualityText != null) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (song.isOnline) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "En línea",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     if (songBpm != null) {
                         Box(
                             Modifier
