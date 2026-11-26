@@ -28,8 +28,46 @@ data class Song(
     val albumArtUri: String?,
     val trackNumber: Int = 0,
     val folderPath: String = "",
-    val dateAddedSec: Long = 0
-)
+    val dateAddedSec: Long = 0,
+    /** Video de YouTube si la pista es online; null en canciones locales. */
+    val onlineVideoId: String? = null
+) {
+    /** True si la pista se reproduce en línea (streaming), no desde un archivo. */
+    val isOnline: Boolean get() = onlineVideoId != null
+}
+
+/**
+ * Registro persistente de una canción online. El [id] es negativo y
+ * estable (los MediaStore locales son positivos), así favoritos,
+ * historial y playlists pueden guardar la pista sin chocar con la
+ * biblioteca local. La URL de audio NO se guarda: caduca; se resuelve
+ * al reproducir desde [videoId].
+ */
+data class OnlineSongRecord(
+    val id: Long,
+    val videoId: String,
+    val title: String,
+    val artist: String,
+    val album: String = "",
+    val durationMs: Long = 0L,
+    val thumbnailUrl: String? = null
+) {
+    fun toSong(): Song = Song(
+        id = id,
+        title = title,
+        artist = artist,
+        album = album,
+        albumId = 0L,
+        durationMs = durationMs,
+        uri = onlineUri(videoId),
+        albumArtUri = thumbnailUrl,
+        onlineVideoId = videoId
+    )
+
+    companion object {
+        fun onlineUri(videoId: String): String = "aural-online://youtube/$videoId"
+    }
+}
 
 /**
  * Agrupación de canciones por carpeta del dispositivo.
