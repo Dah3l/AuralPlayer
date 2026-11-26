@@ -631,6 +631,29 @@ fun NowPlayingScreen(
                             )
                         }
                     }
+                    // Calidad real del stream (bitrate que resolvió
+                    // el motor): aparece en cuanto el stream está
+                    // resuelto; mientras resuelve no se muestra.
+                    val streamKbps = state.streamBitrateKbps
+                    if (song.isOnline && streamKbps != null) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "$streamKbps kbps",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     if (songBpm != null) {
                         Box(
                             Modifier
@@ -672,6 +695,18 @@ fun NowPlayingScreen(
                         }
                     }
                 }
+            }
+            // Estado de espera online: con conexión mala el
+            // reproductor carga (arranque o rebuffer) y sin esto
+            // el Now Playing parecía trabado. Solo pistas online;
+            // desaparece solo al volver a sonar.
+            if (song.isOnline && state.isBuffering) {
+                Text(
+                    text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
             Spacer(Modifier.height(8.dp))
 
@@ -797,6 +832,16 @@ fun NowPlayingScreen(
                             CircleShape
                         )
                 ) {
+                    Box(contentAlignment = Alignment.Center) {
+                    // Cargando online: anillo de espera sobre el
+                    // botón (sigue funcional para pausar).
+                    if (song.isOnline && state.isBuffering) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(56.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 3.dp
+                        )
+                    }
                     AnimatedContent(
                         targetState = state.isPlaying,
                         transitionSpec = {
@@ -812,6 +857,7 @@ fun NowPlayingScreen(
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(40.dp)
                         )
+                    }
                     }
                 }
                 // Siguiente
