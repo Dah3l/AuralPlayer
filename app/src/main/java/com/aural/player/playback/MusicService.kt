@@ -23,7 +23,13 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -39,6 +45,7 @@ import com.aural.player.ui.island.IslandOverlayContent
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.theme.AuralTheme
 import com.aural.player.ui.island.QuickAction
+import com.aural.player.youtube.YouTubeStreamResolver
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +59,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -96,6 +104,9 @@ class MusicService : MediaSessionService() {
     private var fadeEffectiveMs = 0L
     private var crossfadeEnabledCache = false
     private var crossfadeSecondsCache = 5
+    /** Calidad de streaming en caché (true = 128 Kbps). */
+    @Volatile
+    private var streamingQualityCache = false
 
     // ------------------------- Mezcla DJ -------------------------
     /** Mezcla DJ activada (implica fundido). */
@@ -143,6 +154,31 @@ class MusicService : MediaSessionService() {
         const val EXTRA_ALARM_SONG_IDS = "alarm_song_ids"
     }
 
+    /**
+     * Fábrica de fuentes con resolución de streaming: las pistas
+     * online viajan como `aural-online://youtube/<videoId>` y la URL
+     * real se resuelve aquí, en el hilo de carga, al reproducir.
+     * Lo local pasa intacto por el DataSource por defecto.
+     */
+    private fun createMediaSourceFactory(): DefaultMediaSourceFactory {
+        val resolver = object : ResolvingDataSource.Resolver {
+            override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+                val uri = dataSpec.uri
+                if (uri.scheme != "aural-online") return dataSpec
+                val videoId = uri.lastPathSegment
+                    ?: throw IOException("Streaming sin video")
+                val resolved = YouTubeStreamResolver.resolve(videoId, streamingQualityCache)
+                    ?: throw IOException("No se pudo resolver el streaming")
+                return dataSpec.withUri(android.net.Uri.parse(resolved))
+            }
+        }
+        val dataSourceFactory = ResolvingDataSource.Factory(
+            ChunkedRangeDataSourceFactory(DefaultDataSource.Factory(this)),
+            resolver
+        )
+        return DefaultMediaSourceFactory(dataSourceFactory)
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -155,7 +191,8 @@ class MusicService : MediaSessionService() {
                     .build(),
                 /* handleAudioFocus = */ true // gestiona automáticamente el foco de audio
             )
-            .setWakeMode(C.WAKE_MODE_LOCAL) // parcial: la CPU sigue despierta con pantalla apagada; el lock de Wi-Fi no hace falta (todo es local hasta que llegue el streaming Pro)
+            .setMediaSourceFactory(createMediaSourceFactory())
+            .setWakeMode(C.WAKE_MODE_NETWORK) // streaming 1.3.0: CPU + Wi-Fi despiertos con pantalla apagada
             // v1.0.9: al desconectar los audífonos (cable o Bluetooth) la música
             // se pausa sola (Android avisa con AUDIO_BECOMING_NOISY).
             .setHandleAudioBecomingNoisy(true)
@@ -222,7 +259,8 @@ class MusicService : MediaSessionService() {
                     .build(),
                 /* handleAudioFocus = */ false
             )
-            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setMediaSourceFactory(createMediaSourceFactory())
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(false)
             .build()
         fade.volume = 0f
@@ -247,6 +285,9 @@ class MusicService : MediaSessionService() {
         }
         serviceScope.launch {
             app.settings.crossfadeSeconds.collect { crossfadeSecondsCache = it }
+        }
+        serviceScope.launch {
+            app.settings.streamingQuality.collect { streamingQualityCache = it == "quality" }
         }
         // Ajustes y BPM de la Mezcla DJ en caché.
         serviceScope.launch {
@@ -912,7 +953,11 @@ class MusicService : MediaSessionService() {
         if (currentItem.mediaId.toLongOrNull() != currentSongId) return
         val wanted = ArrayList<Pair<Long, android.net.Uri>>()
         val currentUri = currentItem.localConfiguration?.uri
-        if (currentUri != null) wanted += currentSongId to currentUri
+        // Las online no se analizan: su URI es aural-online:// y el
+        // BPM saldría de decodificar el stream (gasto de datos/CPU).
+        if (currentUri != null && currentUri.scheme != "aural-online") {
+            wanted += currentSongId to currentUri
+        }
         var idx = currentIndex
         var steps = 0
         while (steps < 3) {
@@ -921,7 +966,7 @@ class MusicService : MediaSessionService() {
             val item = timeline.getWindow(next, window).mediaItem
             val id = item.mediaId.toLongOrNull()
             val uri = item.localConfiguration?.uri
-            if (id != null && uri != null) wanted += id to uri
+            if (id != null && uri != null && uri.scheme != "aural-online") wanted += id to uri
             idx = next
             steps++
         }
@@ -1337,5 +1382,120 @@ class MusicService : MediaSessionService() {
             stopSelf()
         }
         super.onTaskRemoved(rootIntent)
+    }
+}
+
+/**
+ * Lee googlevideo en rangos acotados (512 KB): las peticiones
+ * abiertas largas reciben 403 a mitad de canción. Para cualquier
+ * otra URI delega sin tocar nada.
+ */
+private class ChunkedRangeDataSourceFactory(
+    private val upstreamFactory: DataSource.Factory
+) : DataSource.Factory {
+    override fun createDataSource(): DataSource =
+        ChunkedRangeDataSource(upstreamFactory.createDataSource())
+}
+
+private class ChunkedRangeDataSource(
+    private val upstream: DataSource
+) : DataSource {
+
+    private var spec: DataSpec? = null
+    private var chunked = false
+    private var position = 0L
+    private var remaining = C.LENGTH_UNSET.toLong()
+    private var chunkBytesRead = 0L
+    private var upstreamOpen = false
+
+    override fun addTransferListener(transferListener: TransferListener) {
+        upstream.addTransferListener(transferListener)
+    }
+
+    override fun open(dataSpec: DataSpec): Long {
+        spec = dataSpec
+        chunked = dataSpec.uri.host?.contains("googlevideo.com") == true
+        position = dataSpec.position
+        remaining = dataSpec.length
+        chunkBytesRead = 0L
+        val length = openUpstream()
+        return if (remaining != C.LENGTH_UNSET.toLong()) remaining else length
+    }
+
+    private fun openUpstream(): Long {
+        val base = spec ?: throw IOException("DataSource sin abrir")
+        val chunkSpec = base.buildUpon()
+            .setPosition(position)
+            .setLength(remaining)
+            .build()
+        val length = upstream.open(chunkSpec)
+        upstreamOpen = true
+        chunkBytesRead = 0L
+        if (remaining == C.LENGTH_UNSET.toLong() && length != C.LENGTH_UNSET.toLong()) {
+            remaining = length
+        }
+        return length
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (length == 0) return 0
+        if (remaining == 0L) return C.RESULT_END_OF_INPUT
+        if (!chunked) {
+            val read = upstream.read(buffer, offset, length)
+            if (read > 0) {
+                position += read
+                if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+            }
+            return read
+        }
+        if (!upstreamOpen) {
+            try {
+                openUpstream()
+            } catch (e: IOException) {
+                return C.RESULT_END_OF_INPUT
+            }
+        }
+        val chunkLeft = (CHUNK_BYTES - chunkBytesRead).toInt()
+        if (chunkLeft <= 0) {
+            closeUpstream()
+            return read(buffer, offset, length)
+        }
+        val read = upstream.read(buffer, offset, minOf(length, chunkLeft))
+        if (read == C.RESULT_END_OF_INPUT) {
+            closeUpstream()
+            if (remaining == 0L) return C.RESULT_END_OF_INPUT
+            // Fin del rango actual: reabrir en la posición siguiente.
+            return try {
+                openUpstream()
+                read(buffer, offset, length)
+            } catch (e: IOException) {
+                C.RESULT_END_OF_INPUT
+            }
+        }
+        if (read > 0) {
+            position += read
+            chunkBytesRead += read
+            if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+            if (chunkBytesRead >= CHUNK_BYTES) closeUpstream()
+        }
+        return read
+    }
+
+    override fun getUri(): android.net.Uri? = upstream.uri
+
+    override fun close() {
+        closeUpstream()
+        spec = null
+    }
+
+    private fun closeUpstream() {
+        if (upstreamOpen) {
+            upstreamOpen = false
+            upstream.close()
+        }
+    }
+
+    private companion object {
+        const val CHUNK_BYTES = 512L * 1024L
     }
 }
