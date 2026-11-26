@@ -960,6 +960,10 @@ object InnerTubeSearch {
         when (node) {
             is org.json.JSONObject -> {
                 node.optJSONObject("musicResponsiveListItemRenderer")?.let { out += it }
+                // La búsqueda WEB_REMIX con filtro de álbumes/artistas
+                // devuelve tarjetas musicTwoRowItemRenderer (sin
+                // flexColumns): sin recolectarlas, Álbumes salía vacío.
+                node.optJSONObject("musicTwoRowItemRenderer")?.let { out += it }
                 val keys = node.keys()
                 while (keys.hasNext()) collectRenderers(node.opt(keys.next()), out)
             }
@@ -992,6 +996,48 @@ object InnerTubeSearch {
             result += texts
         }
         return result
+    }
+
+    /** Texto de un bloque runs de musicTwoRowItemRenderer
+     *  (title.runs / subtitle.runs); las flexColumns no aplican a
+     *  ese renderer. */
+    private fun runsText(block: org.json.JSONObject?): String {
+        if (block == null) return ""
+        val runs = block.optJSONArray("runs")
+        if (runs != null) {
+            val sb = StringBuilder()
+            for (i in 0 until runs.length()) {
+                sb.append(runs.optJSONObject(i)?.optString("text").orEmpty())
+            }
+            return sb.toString()
+        }
+        return block.optString("simpleText")
+    }
+
+    private fun runsList(block: org.json.JSONObject?): List<String> {
+        val runs = block?.optJSONArray("runs") ?: return emptyList()
+        val texts = mutableListOf<String>()
+        for (i in 0 until runs.length()) {
+            runs.optJSONObject(i)?.optString("text")?.let { texts += it }
+        }
+        return texts
+    }
+
+    /** browseId/playlistId desde el navigationEndpoint del item
+     *  (en two-row vive ahí, no en flexColumns). */
+    private fun navString(item: org.json.JSONObject, key: String): String? {
+        item.optJSONObject("navigationEndpoint")?.let { nav ->
+            findString(nav, key)?.let { return it }
+        }
+        val titleRuns = item.optJSONObject("title")?.optJSONArray("runs")
+        if (titleRuns != null) {
+            for (i in 0 until titleRuns.length()) {
+                titleRuns.optJSONObject(i)?.optJSONObject("navigationEndpoint")?.let { nav ->
+                    findString(nav, key)?.let { return it }
+                }
+            }
+        }
+        return findString(item, key)
     }
 
     private fun findString(node: Any?, key: String): String? {
@@ -1078,15 +1124,21 @@ object InnerTubeSearch {
 
     private fun parseAlbums(root: org.json.JSONObject): List<OnlineCollectionResult> =
         renderers(root).mapNotNull { item ->
-            val browseId = findString(item, "browseId")
-            val playlistId = findString(item, "playlistId")
+            val browseId = navString(item, "browseId")
+            val playlistId = navString(item, "playlistId")
             val isAlbum = browseId?.startsWith("MPREb") == true ||
                 playlistId?.startsWith("OLAK") == true
             if (!isAlbum) return@mapNotNull null
             val columns = flexRuns(item)
-            val title = columns.getOrNull(0)?.joinToString("")?.trim()
-                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val subtitle = (columns.getOrNull(1) ?: emptyList())
+            // musicTwoRowItemRenderer: título en title.runs y
+            // subtítulo en subtitle.runs (sin flexColumns).
+            val title = (columns.getOrNull(0)?.joinToString("")?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: runsText(item.optJSONObject("title")).trim().takeIf { it.isNotBlank() })
+                ?: return@mapNotNull null
+            val subtitleRuns = columns.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                ?: runsList(item.optJSONObject("subtitle"))
+            val subtitle = subtitleRuns
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it != "•" && it.lowercase() !in typeLabels }
                 .joinToString(" · ")
@@ -1107,11 +1159,13 @@ object InnerTubeSearch {
 
     private fun parseArtists(root: org.json.JSONObject): List<OnlineCollectionResult> =
         renderers(root).mapNotNull { item ->
-            val browseId = findString(item, "browseId")
+            val browseId = navString(item, "browseId")
                 ?.takeIf { it.startsWith("UC") } ?: return@mapNotNull null
             val columns = flexRuns(item)
-            val title = columns.getOrNull(0)?.joinToString("")?.trim()
-                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val title = (columns.getOrNull(0)?.joinToString("")?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: runsText(item.optJSONObject("title")).trim().takeIf { it.isNotBlank() })
+                ?: return@mapNotNull null
             OnlineCollectionResult(
                 kind = OnlineCollectionKind.ARTIST,
                 url = "https://music.youtube.com/channel/$browseId",
@@ -1466,6 +1520,7 @@ object YouTubeStreamResolver {
     @Synchronized
     fun clearEscalation(videoId: String) {
         ladderModes.remove(videoId)
+        lastPlayabilityDiagnostic = null
     }
 
     /** Candidatas ordenadas para streaming: primero la misma
@@ -1540,9 +1595,86 @@ object YouTubeStreamResolver {
     private var lastInnerTubeClient: String? = null
     private const val INNERTUBE_COOLDOWN_MS = 5 * 60_000L
 
-    /** Visitante de la config web real (Etapa 1): el mismo
-     *  bootstrap WEB_REMIX de la búsqueda, no el scrape parcial. */
-    private fun visitorData(): String? = InnerTubeSearch.visitorData()
+    /** Motivo técnico del último fallo InnerTube (playabilityStatus
+     *  o formatos solo cifrados), visible en el aviso al saltar
+     *  para que la prueba de Dahel diga qué respondió el player. */
+    @Volatile
+    private var lastPlayabilityDiagnostic: String? = null
+
+    fun lastPlayabilityDiagnostic(): String? = lastPlayabilityDiagnostic
+
+    private fun notePlayability(clientName: String, root: org.json.JSONObject) {
+        val status = root.optJSONObject("playabilityStatus") ?: return
+        val code = status.optString("status")
+        if (code.isBlank() || code == "OK") return
+        val reason = status.optString("reason").trim().take(80)
+        lastPlayabilityDiagnostic =
+            if (reason.isNotBlank()) "$clientName: $code · $reason" else "$clientName: $code"
+    }
+
+    /** Contexto del cliente InnerTube sin visitante web: cada
+     *  cliente no-web usa SU visitante (visitor_id con su propio
+     *  contexto) o ninguno; el visitorData WEB_REMIX es solo de
+     *  la búsqueda WEB_REMIX. */
+    private fun clientContextJson(
+        client: InnerTubeClient,
+        visitor: String?
+    ): org.json.JSONObject {
+        val clientJson = org.json.JSONObject()
+            .put("clientName", client.name)
+            .put("clientVersion", client.version)
+            .put("hl", "en")
+            .put("gl", "US")
+        if (!visitor.isNullOrBlank()) clientJson.put("visitorData", visitor)
+        if (client.osName.isNotBlank()) clientJson.put("osName", client.osName)
+        if (client.osVersion.isNotBlank()) clientJson.put("osVersion", client.osVersion)
+        if (client.deviceMake.isNotBlank()) clientJson.put("deviceMake", client.deviceMake)
+        if (client.deviceModel.isNotBlank()) clientJson.put("deviceModel", client.deviceModel)
+        if (client.androidSdkVersion.isNotBlank()) {
+            clientJson.put("androidSdkVersion", client.androidSdkVersion.toInt())
+        }
+        return clientJson
+    }
+
+    private val clientVisitors = mutableMapOf<String, String?>()
+
+    /** Visitante propio del cliente vía visitor_id con SU
+     *  contexto; cacheado por sesión. Si el endpoint no da
+     *  visitante, el cliente sigue sin visitante. */
+    @Synchronized
+    private fun clientVisitor(client: InnerTubeClient): String? {
+        if (clientVisitors.containsKey(client.name)) return clientVisitors[client.name]
+        var connection: java.net.HttpURLConnection? = null
+        val visitor = try {
+            val body = org.json.JSONObject()
+                .put("context", org.json.JSONObject().put("client", clientContextJson(client, null)))
+            connection = java.net.URL(
+                "https://www.youtube.com/youtubei/v1/visitor_id?key=${client.apiKey}&prettyPrint=false"
+            ).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.doOutput = true
+            connection.setRequestProperty("User-Agent", client.userAgent)
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Origin", "https://www.youtube.com")
+            connection.setRequestProperty("Referer", "https://www.youtube.com/")
+            connection.outputStream.use { it.write(body.toString().toByteArray()) }
+            if (connection.responseCode !in 200..299) {
+                null
+            } else {
+                org.json.JSONObject(connection.inputStream.bufferedReader().readText())
+                    .optJSONObject("responseContext")?.optString("visitorData")
+                    ?.takeIf { it.isNotBlank() }
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection?.disconnect()
+        }
+        clientVisitors[client.name] = visitor
+        return visitor
+    }
 
     private fun tryInnerTubeDirect(
         videoId: String,
@@ -1552,13 +1684,13 @@ object YouTubeStreamResolver {
         sameFormatKey: String?,
         now: Long
     ): ResolvedStream? {
-        val visitor = visitorData()
         // Enfriamiento por sesión: un cliente que falla no se
         // reintenta en cadena; el último que funcionó va primero.
         val ordered = innerTubeClients
             .filter { now >= (innerTubeCooldownUntil[it.name] ?: 0L) }
             .sortedByDescending { it.name == lastInnerTubeClient }
         for (client in ordered) {
+            val visitor = clientVisitor(client)
             val resolved = runCatching {
                 resolveWithInnerTubeClient(client, videoId, preferQuality, cacheKey, excludeUrl, sameFormatKey, visitor, now)
             }.getOrNull()
@@ -1581,19 +1713,7 @@ object YouTubeStreamResolver {
         visitor: String?,
         now: Long
     ): ResolvedStream? {
-        val clientJson = org.json.JSONObject()
-            .put("clientName", client.name)
-            .put("clientVersion", client.version)
-            .put("hl", "en")
-            .put("gl", "US")
-        if (!visitor.isNullOrBlank()) clientJson.put("visitorData", visitor)
-        if (client.osName.isNotBlank()) clientJson.put("osName", client.osName)
-        if (client.osVersion.isNotBlank()) clientJson.put("osVersion", client.osVersion)
-        if (client.deviceMake.isNotBlank()) clientJson.put("deviceMake", client.deviceMake)
-        if (client.deviceModel.isNotBlank()) clientJson.put("deviceModel", client.deviceModel)
-        if (client.androidSdkVersion.isNotBlank()) {
-            clientJson.put("androidSdkVersion", client.androidSdkVersion.toInt())
-        }
+        val clientJson = clientContextJson(client, visitor)
         val body = org.json.JSONObject()
             .put("context", org.json.JSONObject().put("client", clientJson))
             .put("videoId", videoId)
@@ -1624,20 +1744,42 @@ object YouTubeStreamResolver {
         } finally {
             connection?.disconnect()
         }
+        notePlayability(client.name, root)
         val streaming = root.optJSONObject("streamingData") ?: return null
         val formats = streaming.optJSONArray("adaptiveFormats") ?: return null
         data class Candidate(val url: String, val itag: Int, val kbps: Int)
         val candidates = mutableListOf<Candidate>()
+        var sawAudioFormat = false
+        var sawCipheredAudio = false
         for (i in 0 until formats.length()) {
             val format = formats.optJSONObject(i) ?: continue
             val mime = format.optString("mimeType")
             if (!mime.startsWith("audio/")) continue
+            sawAudioFormat = true
             val url = format.optString("url")
-            if (url.isBlank() || url == excludeUrl) continue
+            if (url.isBlank()) {
+                if (format.optString("signatureCipher").isNotBlank() ||
+                    format.optString("cipher").isNotBlank()
+                ) {
+                    sawCipheredAudio = true
+                }
+                continue
+            }
+            if (url == excludeUrl) continue
             val kbps = (format.optLong("averageBitrate", format.optLong("bitrate")) / 1000).toInt()
             candidates += Candidate(url, format.optInt("itag"), kbps)
         }
-        if (candidates.isEmpty()) return null
+        if (candidates.isEmpty()) {
+            if (sawCipheredAudio) {
+                lastPlayabilityDiagnostic =
+                    "${client.name}: formatos solo cifrados (sin URL directa)"
+            } else if (!sawAudioFormat &&
+                root.optJSONObject("playabilityStatus")?.optString("status") == "OK"
+            ) {
+                lastPlayabilityDiagnostic = "${client.name}: sin formatos de audio"
+            }
+            return null
+        }
         val target = if (preferQuality) 128 else 48
         val sorted = candidates.sortedBy { it.kbps }
         val preferred = sorted.firstOrNull { it.kbps >= target } ?: sorted.last()
