@@ -172,6 +172,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                 settings.createPlaylist("Descargas")
             }
         }
+        // Migración de portadas a archivo local (ver migrateRemoteCovers).
+        viewModelScope.launch { migrateRemoteCovers() }
         // Rotación de la Playlist del día: si la guardada no es de hoy,
         // se REGENERA con 30 aleatorias distintas (o las que haya si la
         // biblioteca tiene menos; vacía si no hay canciones) y la anterior
@@ -186,6 +188,38 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
                     val ids = songs.shuffled().take(30).map { it.id }
                     settings.setDailyPlaylist(today, ids)
                 }
+            }
+        }
+    }
+
+    /**
+     * Migración de portadas (1.3.0): las portadas personalizadas que
+     * quedaron guardadas como enlace (http/https, de antes de la
+     * 1.2.0 o de una copia local que falló) o como referencia de
+     * galería (content://) se descargan/copian al almacenamiento
+     * local y el mapa pasa a guardar la ruta local (file://).
+     * Sin esto, esas portadas solo se veían con internet: la app las
+     * cargaba del enlace en cada visita. Corre en cada arranque pero
+     * solo procesa las entradas que aún no son locales; la que falla
+     * (sin conexión, enlace muerto) queda como está y se reintenta
+     * en el próximo arranque — se cura solo.
+     */
+    private suspend fun migrateRemoteCovers() {
+        withContext(Dispatchers.IO) {
+            val covers = settings.customCovers.first()
+            if (covers.isEmpty()) return@withContext
+            val app = getApplication<Application>()
+            for ((songId, value) in covers) {
+                val local = when {
+                    value.startsWith("http://") || value.startsWith("https://") ->
+                        SongCoverStore.saveFromUrl(app, songId, value)
+                    value.startsWith("content://") ->
+                        SongCoverStore.saveFromContentUri(app, songId, Uri.parse(value))
+                    else -> null // file:// o ruta: ya es local
+                }
+                // Directo a SettingsStore (no al wrapper de esta clase,
+                // que trataría la ruta como un enlace más a descargar).
+                if (local != null) settings.setCustomCover(songId, local)
             }
         }
     }
