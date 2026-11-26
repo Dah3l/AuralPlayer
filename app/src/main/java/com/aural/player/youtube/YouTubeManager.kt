@@ -716,6 +716,10 @@ object InnerTubeSearch {
 
     private const val MUSIC_ORIGIN = "https://music.youtube.com"
     private const val MUSIC_API = "https://music.youtube.com/youtubei/v1"
+    private const val YOUTUBE_ORIGIN = "https://www.youtube.com"
+    private const val YOUTUBE_API = "https://www.youtube.com/youtubei/v1"
+    private const val WEB_CLIENT_VERSION = "2.20261011.05.00"
+    private const val WEB_PLAYLIST_SEARCH_PARAMS = "Eg-KAQwIABAAGAAgACgB"
     private const val WEB_USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
     private const val CONSENT_COOKIE =
@@ -930,10 +934,107 @@ object InnerTubeSearch {
             searchRoot(q, params)?.let { parseAlbums(it) } ?: emptyList()
         var results = run(query, ALBUM_SEARCH_FILTER)
         if (results.isEmpty()) results = run(query, null)
+        if (results.isEmpty()) {
+            // Respaldo WEB (youtube.com): desde redes donde
+            // YouTube Music devuelve vacío, el YouTube normal sí
+            // trae las listas de álbum (OLAK), como el
+            // searchEntitiesFallback de LastWave.
+            results = webSearchAlbums(query)
+        }
         if (results.isEmpty() && !query.lowercase().contains("album")) {
             results = run("$query album", null)
+            if (results.isEmpty()) results = webSearchAlbums("$query album")
         }
         return results.distinctBy { it.url }.take(12)
+    }
+
+    private fun webSearchAlbums(query: String): List<OnlineCollectionResult> {
+        fun run(params: String?): List<OnlineCollectionResult> =
+            webSearchRoot(query, params)?.let { parseWebAlbums(it) } ?: emptyList()
+        var results = run(WEB_PLAYLIST_SEARCH_PARAMS)
+        if (results.isEmpty()) results = run(null)
+        return results
+    }
+
+    /** Búsqueda en el YouTube normal con cliente WEB: mismo
+     *  catálogo que Music (los álbumes viven como listas OLAK),
+     *  sin la restricción regional de YouTube Music. */
+    private fun webSearchRoot(query: String, params: String?): org.json.JSONObject? {
+        val config = webConfig()
+        val client = org.json.JSONObject()
+            .put("clientName", "WEB")
+            .put("clientVersion", WEB_CLIENT_VERSION)
+            .put("hl", "en")
+            .put("gl", "US")
+        val body = org.json.JSONObject()
+            .put("context", org.json.JSONObject().put("client", client))
+            .put("query", query)
+        if (params != null) body.put("params", params)
+        var connection: java.net.HttpURLConnection? = null
+        return try {
+            connection = java.net.URL(
+                "$YOUTUBE_API/search?key=${config.apiKey}&prettyPrint=false"
+            ).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 20_000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("User-Agent", WEB_USER_AGENT)
+            connection.setRequestProperty("Origin", YOUTUBE_ORIGIN)
+            connection.setRequestProperty("Referer", "$YOUTUBE_ORIGIN/")
+            connection.setRequestProperty("X-Goog-Api-Format-Version", "1")
+            connection.setRequestProperty("X-YouTube-Client-Name", "1")
+            connection.setRequestProperty("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
+            connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+            connection.setRequestProperty("Cookie", CONSENT_COOKIE)
+            connection.outputStream.use { it.write(body.toString().toByteArray()) }
+            if (connection.responseCode !in 200..299) {
+                null
+            } else {
+                org.json.JSONObject(connection.inputStream.bufferedReader().readText())
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /** Álbumes desde la búsqueda WEB: listas playlistRenderer
+     *  con playlistId OLAK (título, byline artista/año y
+     *  miniatura), mismo molde OnlineCollectionResult. */
+    private fun parseWebAlbums(root: org.json.JSONObject): List<OnlineCollectionResult> {
+        val out = mutableListOf<org.json.JSONObject>()
+        collectWebPlaylists(root, out)
+        return out.mapNotNull { item ->
+            val playlistId = item.optString("playlistId")
+                .takeIf { it.startsWith("OLAK") } ?: return@mapNotNull null
+            val title = runsText(item.optJSONObject("title")).trim()
+                .takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val subtitle = runsText(item.optJSONObject("longBylineText")).trim()
+                .ifBlank { runsText(item.optJSONObject("shortBylineText")).trim() }
+            OnlineCollectionResult(
+                kind = OnlineCollectionKind.ALBUM,
+                url = "https://music.youtube.com/playlist?list=$playlistId",
+                title = title,
+                subtitle = subtitle,
+                thumbnailUrl = findThumbnail(item)
+            )
+        }
+    }
+
+    private fun collectWebPlaylists(node: Any?, out: MutableList<org.json.JSONObject>) {
+        when (node) {
+            is org.json.JSONObject -> {
+                node.optJSONObject("playlistRenderer")?.let { out += it }
+                val keys = node.keys()
+                while (keys.hasNext()) collectWebPlaylists(node.opt(keys.next()), out)
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until node.length()) collectWebPlaylists(node.opt(i), out)
+            }
+        }
     }
 
     fun searchArtists(query: String): List<OnlineCollectionResult> {
@@ -1296,7 +1397,17 @@ object YouTubeStreamResolver {
                 if (cached.expiresAtMs > now + 30_000L && cached.url != effectiveExclude) {
                     // La URL cacheada se prueba igual: la red pudo
                     // cambiar (p. ej. VPN apagado) desde que se guardó.
-                    val cachedMode = probeCandidate(cached.url, cached.requestHeaders)
+                    val cachedMode = if (isOpusDiskKey(cached.diskKey)) {
+                        // Opus cacheado: solo primeros bytes, sin
+                        // sondas de rango completo (fluidez).
+                        if (probeOpenEnded(cached.url, cached.requestHeaders)) {
+                            ProbeMode.PROGRESSIVE
+                        } else {
+                            ProbeMode.FAIL
+                        }
+                    } else {
+                        probeCandidate(cached.url, cached.requestHeaders)
+                    }
                     if (cachedMode != ProbeMode.FAIL) {
                         val progressive = cachedMode == ProbeMode.PROGRESSIVE
                         return ResolvedStream(
@@ -1321,13 +1432,12 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            // Candidatas en orden: la preferida (48/128) primero y
-            // luego otros formatos/bitrates. Se prefiere la que
-            // acepta rangos directos (inicio + rango intermedio);
-            // si ninguna los acepta pero alguna responde a la
-            // lectura secuencial tipo descarga, se entrega en modo
-            // progresivo. Si ninguna responde, se falla limpio y
-            // el reproductor avisa/salta.
+            // Escalera (aprobada 2026-11-26): Opus secuencial
+            // primero (suena mientras baja, como la descarga que
+            // sí funciona sin VPN; sin sondas de rango completo),
+            // luego M4A directo fresco, InnerTube directo y al
+            // final progresivo M4A. En Android <29 no hay
+            // decodificador Opus: se salta a M4A.
             var progressiveFallback: ResolvedStream? = null
             var progressiveFallbackExpiry = 0L
             val candidates = candidateStreams(streamInfo, effectiveQuality)
@@ -1335,12 +1445,27 @@ object YouTubeStreamResolver {
                     sameFormatKey != null &&
                         "${it.format}:${it.averageBitrate}" == sameFormatKey
                 }
-            for (audioStream in candidates.take(5)) {
+            for (audioStream in candidates.take(6)) {
                 val url = audioStream.content ?: continue
                 if (url == effectiveExclude) continue
                 val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
-                // Peldaño 3: solo lectura secuencial tipo descarga.
+                val isOpus = isOpusFormat(audioStream.format) && opusSupported()
+                // Peldaño 3: progresivo M4A (lectura secuencial).
                 if (ladderMode == LadderMode.PROGRESSIVE) {
+                    if (audioStream.format != MediaFormat.M4A) continue
+                    if (probeOpenEnded(url, BROWSER_HEADERS)) {
+                        val diskKey = diskKeyWithMode(baseDiskKey, true)
+                        cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
+                        return ResolvedStream(url, diskKey, true)
+                    }
+                    continue
+                }
+                // Peldaño 1: M4A directo fresco (sin progresivo).
+                if (ladderMode == LadderMode.NEWPIPE_FRESH && isOpus) continue
+                if (isOpus) {
+                    // Opus: solo primeros bytes y lectura
+                    // secuencial hacia la caché, sonando con
+                    // colchón pequeño. Nada de rangos completos.
                     if (probeOpenEnded(url, BROWSER_HEADERS)) {
                         val diskKey = diskKeyWithMode(baseDiskKey, true)
                         cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
@@ -1354,7 +1479,10 @@ object YouTubeStreamResolver {
                         cache[cacheKey] = CachedUrl(url, expiryMs(url, now), diskKey)
                         return ResolvedStream(url, diskKey, false)
                     }
-                    ProbeMode.PROGRESSIVE -> if (progressiveFallback == null) {
+                    ProbeMode.PROGRESSIVE -> if (
+                        progressiveFallback == null &&
+                        ladderMode != LadderMode.NEWPIPE_FRESH
+                    ) {
                         val diskKey = diskKeyWithMode(baseDiskKey, true)
                         progressiveFallback = ResolvedStream(url, diskKey, true)
                         progressiveFallbackExpiry = expiryMs(url, now)
@@ -1523,26 +1651,53 @@ object YouTubeStreamResolver {
         clearPlayabilityDiagnostics()
     }
 
-    /** Candidatas ordenadas para streaming: primero la misma
-     *  selección que la descarga (M4A, bitrate en KBPS: 48 ahorro /
-     *  128 calidad) y después el resto de formatos/bitrates, para
-     *  poder reintentar con otra si googlevideo rechaza una. */
+    /** Formatos Opus de NewPipe (audio WebM/Opus): el enum de
+     *  audio es WEBMA_OPUS, no WEBM (ese es de video). */
+    private fun isOpusFormat(format: MediaFormat?): Boolean =
+        format == MediaFormat.WEBMA_OPUS || format == MediaFormat.WEBMA ||
+            format == MediaFormat.OPUS
+
+    private fun isOpusDiskKey(diskKey: String): Boolean =
+        diskKey.contains(":WEBMA_OPUS:") || diskKey.contains(":WEBMA:") ||
+            diskKey.contains(":OPUS:")
+
+    /** Opus solo desde Android 10 (API 29): por debajo no hay
+     *  decodificador y el streaming va directo a M4A. */
+    private fun opusSupported(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+
+    /** Candidatas ordenadas para streaming: Opus/WebM primero
+     *  (bitrate NewPipe en KBPS: ahorro ~50, calidad 160) para
+     *  la lectura secuencial fluida; después M4A (48/128, el
+     *  respaldo directo y el formato de descarga, intacto) y
+     *  el resto de formatos. */
     private fun candidateStreams(
         streamInfo: StreamInfo,
         preferQuality: Boolean
     ): List<org.schabi.newpipe.extractor.stream.AudioStream> {
-        val minKbps = if (preferQuality) 128 else 48
+        val opusTarget = if (preferQuality) 160 else 50
+        val m4aTarget = if (preferQuality) 128 else 48
+        val opusStreams = if (opusSupported()) {
+            streamInfo.audioStreams
+                .filter { isOpusFormat(it.format) }
+                .sortedBy { it.averageBitrate }
+        } else {
+            emptyList()
+        }
         val mp4Streams = streamInfo.audioStreams
             .filter { it.format == MediaFormat.M4A }
             .sortedBy { it.averageBitrate }
         val otherStreams = streamInfo.audioStreams
-            .filter { it.format != MediaFormat.M4A }
+            .filter { it.format != MediaFormat.M4A && !isOpusFormat(it.format) }
             .sortedBy { it.averageBitrate }
-        val preferred = mp4Streams.firstOrNull { it.averageBitrate >= minKbps }
-            ?: mp4Streams.maxByOrNull { it.averageBitrate }
-            ?: otherStreams.maxByOrNull { it.averageBitrate }
         val ordered = mutableListOf<org.schabi.newpipe.extractor.stream.AudioStream>()
-        preferred?.let { ordered += it }
+        val preferredOpus = opusStreams.firstOrNull { it.averageBitrate >= opusTarget }
+            ?: opusStreams.maxByOrNull { it.averageBitrate }
+        preferredOpus?.let { ordered += it }
+        ordered += if (preferQuality) opusStreams.reversed() else opusStreams
+        val preferredM4a = mp4Streams.firstOrNull { it.averageBitrate >= m4aTarget }
+            ?: mp4Streams.maxByOrNull { it.averageBitrate }
+        preferredM4a?.let { ordered += it }
         ordered += mp4Streams
         ordered += if (preferQuality) otherStreams.reversed() else otherStreams
         return ordered.distinctBy { it.content }
@@ -1557,6 +1712,7 @@ object YouTubeStreamResolver {
 
     private data class InnerTubeClient(
         val name: String,
+        val clientId: String,
         val version: String,
         val apiKey: String,
         val userAgent: String,
@@ -1569,22 +1725,22 @@ object YouTubeStreamResolver {
 
     private val innerTubeClients = listOf(
         InnerTubeClient(
-            "ANDROID_VR", "1.60.19", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
+            "ANDROID_VR", "28", "1.60.19", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
             "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1) gzip",
             "Android", "12", "Oculus", "Quest 3", "32"
         ),
         InnerTubeClient(
-            "VISIONOS", "0.1", "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
+            "VISIONOS", "101", "0.1", "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
             "visionOS", "1.3.21O771", "Apple", "RealityDevice14,1"
         ),
         InnerTubeClient(
-            "TVHTML5", "7.20260308.08.00", "AIzaSyAO_FJ2SlqAz8GlBg1fA54p0wDE7Xk80mU",
+            "TVHTML5", "7", "7.20260308.08.00", "AIzaSyAO_FJ2SlqAz8GlBg1fA54p0wDE7Xk80mU",
             "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36",
             "", ""
         ),
         InnerTubeClient(
-            "ANDROID_TESTSUITE", "1.9", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
+            "ANDROID_TESTSUITE", "30", "1.9", "AIzaSyD-p045F_WzU-vA_YgX20SCx4KAo",
             "com.google.android.youtube/1.9 (Linux; U; Android 12) gzip",
             "Android", "12"
         )
@@ -1625,10 +1781,10 @@ object YouTubeStreamResolver {
         )
     }
 
-    /** Contexto del cliente InnerTube sin visitante web: cada
-     *  cliente no-web usa SU visitante (visitor_id con su propio
-     *  contexto) o ninguno; el visitorData WEB_REMIX es solo de
-     *  la búsqueda WEB_REMIX. */
+    /** Contexto del cliente InnerTube con el visitante web en
+     *  el contexto (estilo LastWave): sin visitante, los
+     *  clientes directos responden UNPLAYABLE sin formatos
+     *  para las oficiales (modal de Dahel 2026-11-26). */
     private fun clientContextJson(
         client: InnerTubeClient,
         visitor: String?
@@ -1649,46 +1805,6 @@ object YouTubeStreamResolver {
         return clientJson
     }
 
-    private val clientVisitors = mutableMapOf<String, String?>()
-
-    /** Visitante propio del cliente vía visitor_id con SU
-     *  contexto; cacheado por sesión. Si el endpoint no da
-     *  visitante, el cliente sigue sin visitante. */
-    @Synchronized
-    private fun clientVisitor(client: InnerTubeClient): String? {
-        if (clientVisitors.containsKey(client.name)) return clientVisitors[client.name]
-        var connection: java.net.HttpURLConnection? = null
-        val visitor = try {
-            val body = org.json.JSONObject()
-                .put("context", org.json.JSONObject().put("client", clientContextJson(client, null)))
-            connection = java.net.URL(
-                "https://www.youtube.com/youtubei/v1/visitor_id?key=${client.apiKey}&prettyPrint=false"
-            ).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            connection.doOutput = true
-            connection.setRequestProperty("User-Agent", client.userAgent)
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Origin", "https://www.youtube.com")
-            connection.setRequestProperty("Referer", "https://www.youtube.com/")
-            connection.outputStream.use { it.write(body.toString().toByteArray()) }
-            if (connection.responseCode !in 200..299) {
-                null
-            } else {
-                org.json.JSONObject(connection.inputStream.bufferedReader().readText())
-                    .optJSONObject("responseContext")?.optString("visitorData")
-                    ?.takeIf { it.isNotBlank() }
-            }
-        } catch (_: Exception) {
-            null
-        } finally {
-            connection?.disconnect()
-        }
-        clientVisitors[client.name] = visitor
-        return visitor
-    }
-
     private fun tryInnerTubeDirect(
         videoId: String,
         preferQuality: Boolean,
@@ -1702,8 +1818,8 @@ object YouTubeStreamResolver {
         val ordered = innerTubeClients
             .filter { now >= (innerTubeCooldownUntil[it.name] ?: 0L) }
             .sortedByDescending { it.name == lastInnerTubeClient }
+        val visitor = InnerTubeSearch.visitorData()
         for (client in ordered) {
-            val visitor = clientVisitor(client)
             val resolved = runCatching {
                 resolveWithInnerTubeClient(client, videoId, preferQuality, cacheKey, excludeUrl, sameFormatKey, visitor, now)
             }.getOrNull()
@@ -1750,6 +1866,8 @@ object YouTubeStreamResolver {
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Origin", "https://www.youtube.com")
             connection.setRequestProperty("Referer", "https://www.youtube.com/")
+            connection.setRequestProperty("X-YouTube-Client-Name", client.clientId)
+            connection.setRequestProperty("X-YouTube-Client-Version", client.version)
             if (!visitor.isNullOrBlank()) connection.setRequestProperty("X-Goog-Visitor-Id", visitor)
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             if (connection.responseCode !in 200..299) return null
@@ -1760,7 +1878,7 @@ object YouTubeStreamResolver {
         notePlayability(client.name, root)
         val streaming = root.optJSONObject("streamingData") ?: return null
         val formats = streaming.optJSONArray("adaptiveFormats") ?: return null
-        data class Candidate(val url: String, val itag: Int, val kbps: Int)
+        data class Candidate(val url: String, val itag: Int, val kbps: Int, val isOpus: Boolean)
         val candidates = mutableListOf<Candidate>()
         var sawAudioFormat = false
         var sawCipheredAudio = false
@@ -1780,7 +1898,11 @@ object YouTubeStreamResolver {
             }
             if (url == excludeUrl) continue
             val kbps = (format.optLong("averageBitrate", format.optLong("bitrate")) / 1000).toInt()
-            candidates += Candidate(url, format.optInt("itag"), kbps)
+            val itag = format.optInt("itag")
+            candidates += Candidate(
+                url, itag, kbps,
+                mime.contains("opus") || itag == 249 || itag == 250 || itag == 251
+            )
         }
         if (candidates.isEmpty()) {
             if (sawCipheredAudio) {
@@ -1792,16 +1914,24 @@ object YouTubeStreamResolver {
             }
             return null
         }
-        val target = if (preferQuality) 128 else 48
+        val opusTarget = if (preferQuality) 160 else 50
+        val m4aTarget = if (preferQuality) 128 else 48
         val sorted = candidates.sortedBy { it.kbps }
-        val preferred = sorted.firstOrNull { it.kbps >= target } ?: sorted.last()
+        val opusSorted = sorted.filter { it.isOpus }
+        val preferred = if (opusSupported() && opusSorted.isNotEmpty()) {
+            opusSorted.firstOrNull { it.kbps >= opusTarget } ?: opusSorted.last()
+        } else {
+            sorted.firstOrNull { it.kbps >= m4aTarget } ?: sorted.last()
+        }
         val ordered = (listOf(preferred) + sorted).distinctBy { it.url }
             .sortedByDescending { sameFormatKey == "IT:${client.name}:${it.itag}" }
         val headers = mutableMapOf(
             "User-Agent" to client.userAgent,
             "Origin" to "https://www.youtube.com",
             "Referer" to "https://www.youtube.com/",
-            "Accept" to "*/*"
+            "Accept" to "*/*",
+            "X-YouTube-Client-Name" to client.clientId,
+            "X-YouTube-Client-Version" to client.version
         )
         if (!visitor.isNullOrBlank()) headers["X-Goog-Visitor-Id"] = visitor
         val expiresSec = streaming.optLong("expiresInSeconds", 0L)
@@ -1809,6 +1939,14 @@ object YouTubeStreamResolver {
         for (candidate in ordered.take(4)) {
             val baseKey = "$cacheKey:IT:${client.name}:${candidate.itag}"
             val expiry = if (expiresSec > 0) now + expiresSec * 1000L else expiryMs(candidate.url, now)
+            if (candidate.isOpus && opusSupported()) {
+                if (probeOpenEnded(candidate.url, headers)) {
+                    val diskKey = diskKeyWithMode(baseKey, true)
+                    cache[cacheKey] = CachedUrl(candidate.url, expiry, diskKey, headers)
+                    return ResolvedStream(candidate.url, diskKey, true, headers)
+                }
+                continue
+            }
             when (probeCandidate(candidate.url, headers)) {
                 ProbeMode.DIRECT -> {
                     val diskKey = diskKeyWithMode(baseKey, false)
