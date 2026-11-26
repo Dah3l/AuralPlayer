@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.aural.player.data.SettingsStore
@@ -20,6 +21,9 @@ import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.StreamingService
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.io.File
@@ -36,6 +40,27 @@ data class YTResult(
     val thumbnailUrl: String?
 )
 
+/** Tipo de colección online en la búsqueda unificada. */
+enum class OnlineCollectionKind { ALBUM, PLAYLIST, ARTIST }
+
+/** Álbum, playlist o artista online encontrado en la búsqueda. */
+data class OnlineCollectionResult(
+    val kind: OnlineCollectionKind,
+    val url: String,
+    val title: String,
+    val subtitle: String,
+    val thumbnailUrl: String?
+)
+
+/** Resultados online agrupados para la búsqueda unificada (1.3.0). */
+data class OnlineSearchResults(
+    val query: String = "",
+    val songs: List<YTResult> = emptyList(),
+    val albums: List<OnlineCollectionResult> = emptyList(),
+    val playlists: List<OnlineCollectionResult> = emptyList(),
+    val artists: List<OnlineCollectionResult> = emptyList()
+)
+
 /**
  * Busca y descarga audio de YouTube sin necesidad de API key.
  */
@@ -49,6 +74,18 @@ class YouTubeManager(private val context: Context) {
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    private val _onlineResults = MutableStateFlow(OnlineSearchResults())
+    val onlineResults: StateFlow<OnlineSearchResults> = _onlineResults.asStateFlow()
+
+    private val _onlineSearching = MutableStateFlow(false)
+    val onlineSearching: StateFlow<Boolean> = _onlineSearching.asStateFlow()
+
+    private val _onlineError = MutableStateFlow<String?>(null)
+    val onlineError: StateFlow<String?> = _onlineError.asStateFlow()
+
+    @Volatile
+    private var onlineSearchGeneration = 0
 
     private val _downloading = MutableStateFlow<Set<String>>(emptySet())
     val downloading: StateFlow<Set<String>> = _downloading.asStateFlow()
@@ -132,6 +169,164 @@ class YouTubeManager(private val context: Context) {
             }
         }
     }
+
+    /**
+     * Búsqueda unificada 1.3.0: canciones, álbumes, playlists y
+     * artistas en paralelo. Una generación descarta respuestas
+     * viejas si el texto cambió mientras buscaba.
+     */
+    fun searchUnified(query: String) {
+        val clean = query.trim()
+        val generation = ++onlineSearchGeneration
+        if (clean.isBlank()) {
+            _onlineResults.value = OnlineSearchResults()
+            _onlineSearching.value = false
+            _onlineError.value = null
+            return
+        }
+        _onlineSearching.value = true
+        _onlineError.value = null
+        scope.launch {
+            try {
+                val service: StreamingService = NewPipe.getService("YouTube")
+                val songsDeferred = async { searchSongs(service, clean) }
+                val albumsDeferred = async {
+                    searchCollections(service, clean, "music_albums", OnlineCollectionKind.ALBUM)
+                }
+                val playlistsDeferred = async {
+                    searchCollections(service, clean, "music_playlists", OnlineCollectionKind.PLAYLIST)
+                }
+                val artistsDeferred = async { searchArtists(service, clean) }
+                val results = OnlineSearchResults(
+                    query = clean,
+                    songs = songsDeferred.await(),
+                    albums = albumsDeferred.await(),
+                    playlists = playlistsDeferred.await(),
+                    artists = artistsDeferred.await()
+                )
+                withContext(Dispatchers.Main) {
+                    if (generation == onlineSearchGeneration) {
+                        _onlineResults.value = results
+                        _onlineSearching.value = false
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("YouTubeManager", "Error en búsqueda unificada: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    if (generation == onlineSearchGeneration) {
+                        _onlineResults.value = OnlineSearchResults(query = clean)
+                        _onlineError.value = "online_search_failed"
+                        _onlineSearching.value = false
+                    }
+                }
+            }
+        }
+    }
+
+    fun clearOnlineResults() {
+        onlineSearchGeneration++
+        _onlineResults.value = OnlineSearchResults()
+        _onlineSearching.value = false
+        _onlineError.value = null
+    }
+
+    private fun searchItems(
+        service: StreamingService,
+        query: String,
+        filter: String
+    ): List<org.schabi.newpipe.extractor.InfoItem> {
+        val searchInfo: SearchInfo = SearchInfo.getInfo(
+            service,
+            service.searchQHFactory.fromQuery(query, listOf(filter), "")
+        )
+        return searchInfo.relatedItems
+    }
+
+    private fun mapSongItem(item: StreamInfoItem): YTResult? = try {
+        val parsed = YoutubeTitleParser.parse(
+            item.name ?: "Sin título",
+            item.uploaderName ?: "Artista misterioso"
+        )
+        YTResult(
+            videoId = extractVideoId(item.url),
+            title = parsed.title,
+            artist = parsed.artist,
+            durationSec = item.duration,
+            thumbnailUrl = item.thumbnails.firstOrNull()?.url
+        ).takeIf { it.videoId.isNotBlank() }
+    } catch (_: Exception) { null }
+
+    private fun searchSongs(service: StreamingService, query: String): List<YTResult> =
+        searchItems(service, query, "music_songs")
+            .filterIsInstance<StreamInfoItem>()
+            .take(20)
+            .mapNotNull { mapSongItem(it) }
+
+    private fun searchCollections(
+        service: StreamingService,
+        query: String,
+        filter: String,
+        kind: OnlineCollectionKind
+    ): List<OnlineCollectionResult> =
+        searchItems(service, query, filter)
+            .filterIsInstance<PlaylistInfoItem>()
+            .take(12)
+            .mapNotNull { item ->
+                val url = item.url ?: return@mapNotNull null
+                val count = runCatching { item.streamCount }.getOrDefault(0L)
+                val subtitle = listOfNotNull(
+                    item.uploaderName?.takeIf { it.isNotBlank() },
+                    if (count > 0L) "$count canciones" else null
+                ).joinToString(" · ")
+                OnlineCollectionResult(
+                    kind = kind,
+                    url = url,
+                    title = item.name ?: "Sin título",
+                    subtitle = subtitle,
+                    thumbnailUrl = item.thumbnails.firstOrNull()?.url
+                )
+            }
+
+    private fun searchArtists(
+        service: StreamingService,
+        query: String
+    ): List<OnlineCollectionResult> =
+        searchItems(service, query, "channels")
+            .filterIsInstance<ChannelInfoItem>()
+            .take(8)
+            .mapNotNull { item ->
+                val url = item.url ?: return@mapNotNull null
+                OnlineCollectionResult(
+                    kind = OnlineCollectionKind.ARTIST,
+                    url = url,
+                    title = item.name ?: "Artista misterioso",
+                    subtitle = "Artista",
+                    thumbnailUrl = item.thumbnails.firstOrNull()?.url
+                )
+            }
+
+    /**
+     * Canciones de un álbum/playlist online (para reproducirlo desde
+     * la búsqueda). El detalle completo y guardar llegan en el
+     * bloque de playlists; aquí solo suena la colección.
+     */
+    suspend fun fetchCollectionSongs(result: OnlineCollectionResult): List<YTResult> =
+        withContext(Dispatchers.IO) {
+            try {
+                val service: StreamingService = NewPipe.getService("YouTube")
+                if (result.kind == OnlineCollectionKind.ARTIST) {
+                    searchSongs(service, result.title)
+                } else {
+                    val info = PlaylistInfo.getInfo(service, result.url)
+                    info.relatedItems
+                        .filterIsInstance<StreamInfoItem>()
+                        .mapNotNull { mapSongItem(it) }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("YouTubeManager", "Error cargando colección: ${e.message}")
+                emptyList()
+            }
+        }
 
     private fun extractVideoId(url: String?): String {
         if (url == null) return ""
@@ -403,5 +598,74 @@ class YouTubeManager(private val context: Context) {
 
     fun clearResults() {
         _results.value = emptyList()
+    }
+}
+
+/**
+ * Resuelve la URL de audio de un video AL REPRODUCIR (1.3.0). La
+ * cola guarda `aural-online://youtube/<videoId>` y el DataSource
+ * del servicio llama aquí en el hilo de carga; la URL resuelta se
+ * cachea hasta su caducidad para no resolver en cada rango.
+ */
+object YouTubeStreamResolver {
+
+    private data class CachedUrl(val url: String, val expiresAtMs: Long)
+
+    private val cache = mutableMapOf<String, CachedUrl>()
+
+    @Synchronized
+    fun resolve(videoId: String, preferQuality: Boolean): String? {
+        if (videoId.isBlank()) return null
+        val now = System.currentTimeMillis()
+        cache[videoId]?.let { cached ->
+            if (cached.expiresAtMs > now + 30_000L) return cached.url
+        }
+        return try {
+            try {
+                NewPipe.init(NewPipeDownloaderImpl())
+            } catch (_: Exception) {
+                // Ya inicializado
+            }
+            val service: StreamingService = NewPipe.getService("YouTube")
+            val streamInfo = StreamInfo.getInfo(
+                service,
+                "https://www.youtube.com/watch?v=$videoId"
+            )
+            val audioStream = selectAudioStream(streamInfo, preferQuality) ?: return null
+            val url = audioStream.content ?: return null
+            cache[videoId] = CachedUrl(url, expiryMs(url, now))
+            url
+        } catch (e: Exception) {
+            android.util.Log.e("YouTubeStreamResolver", "No se pudo resolver $videoId: ${e.message}")
+            null
+        }
+    }
+
+    @Synchronized
+    fun invalidate(videoId: String) {
+        cache.remove(videoId)
+    }
+
+    private fun selectAudioStream(
+        streamInfo: StreamInfo,
+        preferQuality: Boolean
+    ): org.schabi.newpipe.extractor.stream.AudioStream? {
+        // Misma selección que la descarga: formato M4A primero y
+        // bitrate en KBPS (48 ahorro / 128 calidad).
+        val minKbps = if (preferQuality) 128 else 48
+        val mp4Streams = streamInfo.audioStreams
+            .filter { it.format == MediaFormat.M4A }
+        return mp4Streams
+            .sortedBy { it.averageBitrate }
+            .firstOrNull { it.averageBitrate >= minKbps }
+            ?: mp4Streams.maxByOrNull { it.averageBitrate }
+            ?: streamInfo.audioStreams.maxByOrNull { it.averageBitrate }
+    }
+
+    private fun expiryMs(url: String, nowMs: Long): Long {
+        val expireSec = Regex("[?&]expire=(\\d+)").find(url)
+            ?.groupValues?.getOrNull(1)?.toLongOrNull()
+        return if (expireSec != null && expireSec > 0L) expireSec * 1000L
+        else nowMs + 5 * 60_000L
     }
 }
