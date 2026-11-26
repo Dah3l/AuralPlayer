@@ -1398,7 +1398,7 @@ fun LibraryScreen(
                             )
                         }
                     }
-                    items(playlists, key = { it.id }) { pl ->
+                    items(playlists.distinctBy { it.id }, key = { it.id }) { pl ->
                         TextButton(
                             onClick = {
                                 viewModel.addAllToPlaylist(pl.id, selectedIds.toList())
