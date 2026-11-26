@@ -168,6 +168,7 @@ fun LibraryScreen(
     onOpenFolder: (folder: com.aural.player.data.Folder) -> Unit = {},
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
+    onOpenOnlineCollection: (com.aural.player.youtube.OnlineCollectionResult) -> Unit = {},
     onOpenThemes: () -> Unit,
     onSongMenu: (song: Song) -> Unit,
     onOpenEqualizer: () -> Unit = {},
@@ -833,7 +834,7 @@ fun LibraryScreen(
                                 } else {
                                     OnlineArtistsTab(
                                         artists = onlineResults.artists,
-                                        onOpen = playOnlineCollection,
+                                        onOpen = onOpenOnlineCollection,
                                         gridState = artistsGridState
                                     )
                                 }
@@ -857,7 +858,7 @@ fun LibraryScreen(
                                 } else {
                                     OnlineAlbumsTab(
                                         albums = onlineResults.albums,
-                                        onOpen = playOnlineCollection,
+                                        onOpen = onOpenOnlineCollection,
                                         gridState = albumsGridState
                                     )
                                 }
@@ -881,6 +882,7 @@ fun LibraryScreen(
                                 } else {
                                     OnlinePlaylistsTab(
                                         playlists = onlineResults.playlists,
+                                        onOpen = onOpenOnlineCollection,
                                         onPlay = playOnlineCollection,
                                         listState = playlistsListState
                                     )
@@ -992,114 +994,17 @@ fun LibraryScreen(
         }
     }
 
-        // ---- Aviso de datos del primer streaming (una sola vez) ----
-        if (streamingNoticePending) {
-            AlertDialog(
-                onDismissRequest = { viewModel.cancelStreamingNotice() },
-                title = { Text("Consumo de datos") },
-                text = {
-                    Text("Escuchar en línea usa datos móviles. Puedes cambiar la calidad o limitarlo a Wi-Fi en Ajustes → Sonido.")
-                },
-                confirmButton = {
-                    TextButton(onClick = { viewModel.confirmStreamingNotice() }) {
-                        Text("Escuchar")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.cancelStreamingNotice() }) {
-                        Text("Cancelar")
-                    }
-                }
-            )
-        }
+        StreamingNoticeDialog(viewModel)
 
         // ---- Menú ⋮ de una canción online de la búsqueda ----
         onlineMenuTarget?.let { result ->
-            androidx.compose.material3.ModalBottomSheet(
-                onDismissRequest = { onlineMenuTarget = null },
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                Text(
-                    text = result.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 4.dp),
-                    maxLines = 1
-                )
-                TextButton(
-                    onClick = {
-                        onlineMenuTarget = null
-                        refreshScope.launch {
-                            viewModel.enqueueOnlineSong(
-                                viewModel.registerOnlineSong(result), next = true
-                            )
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
-                ) { Text("Reproducir siguiente") }
-                TextButton(
-                    onClick = {
-                        onlineMenuTarget = null
-                        refreshScope.launch {
-                            viewModel.enqueueOnlineSong(
-                                viewModel.registerOnlineSong(result), next = false
-                            )
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
-                ) { Text("Añadir a la cola") }
-                TextButton(
-                    onClick = {
-                        onlineMenuTarget = null
-                        youTubeManager?.download(result) { fileName, mediaId, tagsEmbedded ->
-                            if (fileName != null) {
-                                viewModel.addDownloadToPlaylist(
-                                    fileName, mediaId, result, tagsEmbedded
-                                )
-                                if (!tagsEmbedded) {
-                                    viewModel.applyYouTubeMetadataFallback(
-                                        mediaId, result.title, result.artist,
-                                        result.thumbnailUrl
-                                    )
-                                }
-                                android.widget.Toast.makeText(
-                                    appContext,
-                                    "Canción descargada",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
-                ) { Text("Descargar") }
-                Text(
-                    "Guardar en playlist",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 24.dp, top = 12.dp)
-                )
-                if (playlists.isEmpty()) {
-                    Text(
-                        "No tienes playlists todavía",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(24.dp)
-                    )
-                } else {
-                    playlists.forEach { pl ->
-                        TextButton(
-                            onClick = {
-                                onlineMenuTarget = null
-                                refreshScope.launch {
-                                    val song = viewModel.registerOnlineSong(result)
-                                    viewModel.addToPlaylist(pl.id, song.id)
-                                }
-                            },
-                            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
-                        ) { Text(pl.name) }
-                    }
-                }
-                Box(Modifier.padding(bottom = 24.dp)) {}
-            }
+            OnlineSongMenuSheet(
+                result = result,
+                playlists = playlists,
+                viewModel = viewModel,
+                youTubeManager = youTubeManager,
+                onDismiss = { onlineMenuTarget = null }
+            )
         }
 
         // ---- Menú general ⋮ fijo arriba a la derecha, como antes ----
