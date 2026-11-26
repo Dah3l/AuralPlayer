@@ -418,6 +418,41 @@ private fun AuralApp(viewModel: AuralViewModel,
         viewModel.playback.clearMessage()
     }
 
+    // Diagnóstico de la escalera agotada: modal con el detalle
+    // completo por cliente y botón de copiar. Queda hasta que
+    // el usuario lo cierra; no se pierde al saltar de canción.
+    val diagnosticReport by viewModel.playback.diagnosticReport.collectAsStateWithLifecycle()
+    diagnosticReport?.let { report ->
+        val clipboard = LocalClipboardManager.current
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Diagnóstico de reproducción") },
+            text = {
+                Text(
+                    report,
+                    Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(report))
+                    android.widget.Toast.makeText(
+                        messageContext,
+                        "Diagnóstico copiado",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }) { Text("Copiar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.playback.clearDiagnosticReport() }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+
     // ---- Aviso de nueva versión: una vez al día, en silencio si falla ----
     val updateContext = LocalContext.current
     val updateScope = rememberCoroutineScope()
