@@ -154,6 +154,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
+    implementation("androidx.media3:media3-datasource:1.11.1")
+    implementation("androidx.media3:media3-database:1.11.1")
 
     // ---- Coil (carga de carátulas desde MediaStore) ----
     implementation("io.coil-kt:coil-compose:2.7.0")
