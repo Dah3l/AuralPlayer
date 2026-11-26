@@ -12,6 +12,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import io.github.dlepaux.realtimebpmanalyzer.BpmAnalyzer
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -58,6 +60,9 @@ object BpmAnalysis {
         if (pcm.size <= minSamples) return null
         val end = minOf(pcm.size, skip + WINDOW_SECONDS * sampleRate)
         val window = pcm.copyOfRange(skip, end)
+        // Si el trabajo se canceló mientras decodificaba, no gastar
+        // CPU en el análisis espectral: la reproducción manda.
+        if (!currentCoroutineContext().isActive) return null
         return try {
             val reading = BpmAnalyzer.analyzeChannelData(window, sampleRate.toDouble())
             val bpm = reading?.bpm()?.toFloat() ?: return null
@@ -73,7 +78,7 @@ object BpmAnalysis {
      * pudo decodificar. El búfer crece según lo decodificado (sin
      * listas de Float que exploten la RAM en una tostadora).
      */
-    private fun decodeMonoPcm(context: Context, uri: Uri, maxSeconds: Int): Pair<FloatArray, Int>? {
+    private suspend fun decodeMonoPcm(context: Context, uri: Uri, maxSeconds: Int): Pair<FloatArray, Int>? {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
@@ -116,6 +121,15 @@ object BpmAnalysis {
                 // para siempre en segundo plano.
                 var guard = 0
                 while (!outputEos && count < maxSamples && ++guard <= 50_000) {
+                    // Cancelación cooperativa (issue #3): este bucle es
+                    // bloqueante y nunca suspende, así que ni el timeout
+                    // ni cancel() podían interrumpirlo — un análisis
+                    // cancelado seguía decodificando segundos (zombie)
+                    // y su CPU competía con el glide de tempo. Chequeo
+                    // barato cada 32 vueltas y salida limpia.
+                    if (guard % 32 == 0 && !currentCoroutineContext().isActive) {
+                        return null
+                    }
                     if (!inputEos) {
                         val inIndex = codec.dequeueInputBuffer(10_000)
                         if (inIndex >= 0) {
