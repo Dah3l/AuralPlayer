@@ -377,6 +377,18 @@ fun LibraryScreen(
     // Selector de fuente de búsqueda: Locales por defecto, Online opcional.
     var searchOnline by remember { mutableStateOf(false) }
     var onlineSongsUi by remember { mutableStateOf<List<Song>>(emptyList()) }
+    // La búsqueda online está "pendiente" hasta que los
+    // resultados correspondan a la consulta actual y la
+    // búsqueda haya terminado: en ese tramo se muestran
+    // skeletons, nunca el estado vacío (antes el aviso de
+    // "sin resultados" salía y luego aparecía el contenido).
+    val onlineQuery = library.query.trim()
+    val onlinePending = searchOnline && onlineQuery.isNotBlank() &&
+        viewModel.hasInternet() &&
+        (onlineSearching || onlineResults.query != onlineQuery)
+    val onlineSongsPending = onlinePending ||
+        (onlineResults.query == onlineQuery &&
+            onlineResults.songs.isNotEmpty() && onlineSongsUi.isEmpty())
     LaunchedEffect(onlineResults.songs) {
         onlineSongsUi = onlineResults.songs.map { viewModel.registerOnlineSong(it) }
     }
@@ -657,8 +669,13 @@ fun LibraryScreen(
         }
         } // Cierra la tira de pestañas agrupada
 
-        // Selector Locales/Online: solo durante la búsqueda.
-        if (library.query.isNotBlank()) {
+        // Selector Locales/Online: solo durante la búsqueda y
+        // solo en las pestañas que lo usan (Inicio, Descargas
+        // y Carpetas no lo muestran).
+        val currentTabKey = tabOrder.getOrNull(selectedTab)
+        if (library.query.isNotBlank() &&
+            currentTabKey in setOf("songs", "artists", "albums", "playlists")
+        ) {
             SearchSourceSelector(
                 online = searchOnline,
                 onChange = { searchOnline = it }
@@ -774,10 +791,12 @@ fun LibraryScreen(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlineSearching || loadingCollection) &&
+                                if ((onlineSongsPending || loadingCollection) &&
                                     onlineSongsUi.isEmpty()
                                 ) {
                                     OnlineSkeletonList()
+                                } else if (onlineSongsUi.isEmpty()) {
+                                    OnlineEmptyState()
                                 } else {
                                     SongsTab(
                                         songs = onlineSongsUi,
@@ -839,10 +858,10 @@ fun LibraryScreen(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlineSearching || loadingCollection) &&
+                                if ((onlinePending || loadingCollection) &&
                                     onlineResults.artists.isEmpty()
                                 ) {
-                                    OnlineSkeletonList()
+                                    OnlineSkeletonGrid(110.dp)
                                 } else {
                                     OnlineArtistsTab(
                                         artists = onlineResults.artists,
@@ -863,10 +882,10 @@ fun LibraryScreen(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlineSearching || loadingCollection) &&
+                                if ((onlinePending || loadingCollection) &&
                                     onlineResults.albums.isEmpty()
                                 ) {
-                                    OnlineSkeletonList()
+                                    OnlineSkeletonGrid(150.dp)
                                 } else {
                                     OnlineAlbumsTab(
                                         albums = onlineResults.albums,
@@ -887,7 +906,7 @@ fun LibraryScreen(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlineSearching || loadingCollection) &&
+                                if ((onlinePending || loadingCollection) &&
                                     onlineResults.playlists.isEmpty()
                                 ) {
                                     OnlineSkeletonList()
