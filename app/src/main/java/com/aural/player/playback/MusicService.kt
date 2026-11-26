@@ -632,7 +632,11 @@ class MusicService : MediaSessionService() {
             } else null
             fadeTargetRate = match?.rate ?: main.playbackParameters.speed
             fadeBassSwap = match?.bassSwap ?: false
-            fade.setPlaybackSpeed(fadeTargetRate)
+            if (match != null) {
+                setDjRate(fade, fadeTargetRate)
+            } else {
+                fade.setPlaybackParameters(main.playbackParameters)
+            }
             fade.prepare()
             fade.playWhenReady = false
             fadePreparedForIndex = targetIndex
@@ -685,11 +689,13 @@ class MusicService : MediaSessionService() {
                     val inBass = (minBassDb + (savedBassDb - minBassDb) * t).roundToInt()
                     EqualizerManager.setBandLevelTransient(false, 0, outBass)
                     EqualizerManager.setBandLevelTransient(true, 0, inBass)
-                } else if (main.playbackParameters.speed != fade.playbackParameters.speed) {
+                } else if (main.playbackParameters.speed != fade.playbackParameters.speed ||
+                    main.playbackParameters.pitch != fade.playbackParameters.pitch
+                ) {
                     // Sin mezcla, la segunda voz sigue a la principal si
                     // el usuario cambia la velocidad en pleno fundido.
                     // Con mezcla no: su velocidad es el tempo igualado.
-                    fade.setPlaybackSpeed(main.playbackParameters.speed)
+                    fade.setPlaybackParameters(main.playbackParameters)
                 }
                 if (t >= 1f) {
                     finishFade()
@@ -732,7 +738,7 @@ class MusicService : MediaSessionService() {
         }
         fadeBassSwap = false
         // La que entra venía al tempo de la que sale: vuelve sola a la
-        // velocidad del usuario en ~20 s (si no era ya esa).
+        // velocidad del usuario en ~30 s (si no era ya esa).
         if (fadeTargetRate != userSpeed) {
             startTempoRecovery(fromRate = fadeTargetRate, toRate = userSpeed)
         }
@@ -784,6 +790,20 @@ class MusicService : MediaSessionService() {
         tempoRecoveryJob = null
     }
 
+    /**
+     * Velocidad DJ en modo varispeed: el tono sigue al ajuste de tempo
+     * (pitch = rate / userSpeed), como un pitch fader. Así el ajuste
+     * DJ no pasa por el estiramiento de tiempo de Sonic, que era la
+     * fuente de los artifacts del glide (issue #3). Al volver a
+     * [userSpeed], el pitch queda en 1 (tono normal).
+     */
+    private fun setDjRate(player: Player, rate: Float) {
+        val pitch = if (userSpeed > 0f) rate / userSpeed else 1f
+        player.setPlaybackParameters(
+            androidx.media3.common.PlaybackParameters(rate, pitch)
+        )
+    }
+
     /** Deja la velocidad en la que el usuario tiene puesta. */
     private fun resetSpeedToUser() {
         val main = mediaSession?.player ?: return
@@ -794,12 +814,12 @@ class MusicService : MediaSessionService() {
 
     /**
      * Vuelta al tempo: la velocidad vuelve sola de [fromRate] a [toRate]
-     * en ~20 s. Se congela en pausa (solo avanza lo que suena) y se
+     * en ~30 s. Se congela en pausa (solo avanza lo que suena) y se
      * cancela al saltar, cambiar de canción o tocar la velocidad a mano.
      */
     private fun startTempoRecovery(fromRate: Float, toRate: Float) {
         tempoRecoveryJob?.cancel()
-        val totalMs = 20_000L
+        val totalMs = 30_000L
         tempoRecoveryJob = serviceScope.launch {
             val songId = mediaSession?.player?.currentMediaItem?.mediaId
                 ?: return@launch
@@ -811,12 +831,11 @@ class MusicService : MediaSessionService() {
                     main.playbackState == Player.STATE_ENDED
                 ) break
                 if (main.isPlaying) {
-                    // Pasos de 500 ms, NO de 100 ms: cada setPlaybackSpeed
-                    // hace que Sonic reajuste el estiramiento de tiempo
-                    // en pleno stream y eso se oye como tirones. Con 40
-                    // pasos en 20 s cada salto es ~0,2% de tono
-                    // (inaudible como salto) y los tirones desaparecen.
-                    playedMs += 500
+                    // Pasos de 200 ms en modo varispeed (setDjRate): el
+                    // tono sigue al tempo y no hay estiramiento Sonic
+                    // que reajustar, así que los pasos pueden ser finos
+                    // sin producir los artifacts del glide anterior.
+                    playedMs += 200
                     val t = (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
                     // Curva ease-in-out (coseno) en vez de rampa lineal
                     // (issue #3): el cambio de velocidad es más lento al
@@ -825,10 +844,10 @@ class MusicService : MediaSessionService() {
                     val eased = (1f - kotlin.math.cos(t * kotlin.math.PI.toFloat())) / 2f
                     val rate = fromRate + (toRate - fromRate) * eased
                     lastGlideSpeed = rate
-                    main.setPlaybackSpeed(rate)
-                    delay(500)
+                    setDjRate(main, rate)
+                    delay(200)
                 } else {
-                    delay(500)
+                    delay(200)
                 }
             }
             // Cierre: velocidad exacta del usuario (sin decimales a
@@ -839,7 +858,7 @@ class MusicService : MediaSessionService() {
                     main.playbackParameters.speed != toRate
                 ) {
                     lastGlideSpeed = toRate
-                    main.setPlaybackSpeed(toRate)
+                    setDjRate(main, toRate)
                 }
             }
             tempoRecoveryJob = null
@@ -918,7 +937,7 @@ class MusicService : MediaSessionService() {
                 // El análisis NO corre mientras el glide está activo:
                 // decodificar 75 s + analizar (autocorrelación) a la vez
                 // que Sonic estira el tiempo satura la CPU y se oye el
-                // tirón al volver al tempo. El glide dura 20 s como
+                // tirón al volver al tempo. El glide dura 30 s como
                 // mucho y el BPM no corre prisa (la siguiente transición
                 // está a minutos). La espera va ANTES de marcar el id
                 // como analizando: si cancelan el trabajo esperando,
