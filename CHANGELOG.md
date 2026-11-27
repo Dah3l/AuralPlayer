@@ -38,6 +38,10 @@ en GitHub salen de aquí.
 - **Toque en línea casi instantáneo** — las primeras canciones de los resultados se preparan en segundo plano y el arranque necesita menos colchón, así que tocar una canción en línea suena casi al momento.
 - **Slider sin bajón de calidad** — buscar con la barra de progreso ya no degrada el audio medio segundo: la búsqueda se hace una sola vez al soltar y la velocidad no se reaplica si ya es la tuya.
 - **Buscador de Descargas estable** — la barra de búsqueda de Descargas ya no crece con textos largos ni con la fuente del sistema enorme: una sola línea y altura fija.
+- **Streaming fluido también con VPN** — las canciones en línea ya no bajan pedazo a pedazo por una sola conexión: varios pedazos bajan en paralelo por delante de lo que suena y su tamaño se adapta a la velocidad real, así que con VPN la reproducción se siente como sin VPN.
+- **Favoritos sin importar el origen** — el menú de una canción en línea suma «Agregar a Favoritas»: lo que marques favorito, sea del teléfono o en línea, vive en la playlist Favoritas y suena desde ahí.
+- **«Sigue escuchando» por programa** — la lista de episodios empezados se puede filtrar por el podcast al que pertenece cada episodio, con «Todos» para verlos todos.
+- **Portadas con mejor calidad** — las canciones en línea cargan la mejor portada que ofrece la fuente en vez de la miniatura más pequeña: se ven nítidas en las listas, en el detalle y en el reproductor.
 
 ## v1.2.0 — 2026-11-24
 
