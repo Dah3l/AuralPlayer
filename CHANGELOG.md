@@ -43,6 +43,7 @@ en GitHub salen de aquí.
 - **«Sigue escuchando» por programa** — la lista de episodios empezados se puede filtrar por el podcast al que pertenece cada episodio, con «Todos» para verlos todos.
 - **Portadas con mejor calidad** — las canciones en línea cargan la mejor portada que ofrece la fuente en vez de la miniatura más pequeña: se ven nítidas en las listas, en el detalle y en el reproductor.
 - **Streaming con VPN más rápido** — los pedazos del audio en línea ahora bajan en paralelo por varias conexiones, siempre en rangos fijos de 512 KB: si una conexión viene limitada, las demás suman velocidad y la canción carga por delante sin cambiar la calidad que elegiste.
+- **Menos trabas y saltos en línea** — un pedazo que se queda sin bajar se descarta y se sigue por la vía segura en el mismo punto; si la conexión viene lenta, la siguiente canción ya arranca con todas las conexiones abiertas; si la velocidad no sostiene la calidad elegida, la canción baja a ahorro en el mismo punto en vez de trabarse una y otra vez; y un error pegado al final reintenta una vez antes de pasar a la siguiente.
 
 ## v1.2.0 — 2026-11-24
 
