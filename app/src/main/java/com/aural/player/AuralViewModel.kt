@@ -214,19 +214,35 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     val podcastSearchQuery: StateFlow<String> = _podcastSearchQuery.asStateFlow()
     private var podcastSearchJob: Job? = null
 
+    /** Caché de navegación de Emisoras/Podcasts: resultados
+     *  por consulta en memoria de sesión. Cambiar de pestaña
+     *  o subpestaña no vuelve a buscar; solo un texto nuevo. */
+    private val radioSearchCache = mutableMapOf<String, List<RadioStation>>()
+    private val podcastSearchCache = mutableMapOf<String, List<PodcastShow>>()
+
     fun searchRadio(query: String) {
         val term = query.trim()
-        radioSearchJob?.cancel()
         if (term.isBlank()) {
-            _radioSearchResults.value = emptyList()
             _radioSearchQuery.value = ""
             _radioSearching.value = false
             return
         }
+        val key = term.lowercase()
+        radioSearchCache[key]?.let { cached ->
+            radioSearchJob?.cancel()
+            _radioSearchResults.value = cached
+            _radioSearchQuery.value = term
+            _radioSearching.value = false
+            return
+        }
+        if (_radioSearching.value && _radioSearchQuery.value == term) return
+        radioSearchJob?.cancel()
         _radioSearching.value = true
         radioSearchJob = viewModelScope.launch {
             val results = RadioBrowserClient.search(term)
-            _radioSearchResults.value = results.distinctBy { it.id }
+                .distinctBy { it.id }
+            radioSearchCache[key] = results
+            _radioSearchResults.value = results
             _radioSearchQuery.value = term
             _radioSearching.value = false
         }
@@ -234,25 +250,40 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun searchPodcasts(query: String) {
         val term = query.trim()
-        podcastSearchJob?.cancel()
         if (term.isBlank()) {
-            _podcastSearchResults.value = emptyList()
             _podcastSearchQuery.value = ""
             _podcastSearching.value = false
             return
         }
+        val key = term.lowercase()
+        podcastSearchCache[key]?.let { cached ->
+            podcastSearchJob?.cancel()
+            _podcastSearchResults.value = cached
+            _podcastSearchQuery.value = term
+            _podcastSearching.value = false
+            return
+        }
+        if (_podcastSearching.value && _podcastSearchQuery.value == term) return
+        podcastSearchJob?.cancel()
         _podcastSearching.value = true
         podcastSearchJob = viewModelScope.launch {
             val results = PodcastClient.searchPodcasts(term)
-            _podcastSearchResults.value = results.distinctBy { it.feedUrl }
+                .distinctBy { it.feedUrl }
+            podcastSearchCache[key] = results
+            _podcastSearchResults.value = results
             _podcastSearchQuery.value = term
             _podcastSearching.value = false
         }
     }
 
     fun clearCollectionSearch() {
-        searchRadio("")
-        searchPodcasts("")
+        // Ya no borra resultados: salir de Emisoras/Podcasts
+        // o pasar a Locales no obliga a buscar de nuevo al
+        // volver. Solo se limpia la consulta activa.
+        _radioSearchQuery.value = ""
+        _podcastSearchQuery.value = ""
+        _radioSearching.value = false
+        _podcastSearching.value = false
     }
 
     /** Sugerencias online sin texto: emisoras cubanas y de los
@@ -274,9 +305,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         _podcastSuggestionsLoading.asStateFlow()
     private var podcastSuggestionsJob: Job? = null
 
+    /** Las sugerencias se cargan una vez por sesión y quedan:
+     *  cambiar de pestaña no las recarga. */
+    private var radioSuggestionsAttempted = false
+    private var podcastSuggestionsAttempted = false
+
     fun loadRadioSuggestions() {
         if (radioSuggestionsJob?.isActive == true) return
-        if (_radioSuggestions.value.isNotEmpty()) return
+        if (radioSuggestionsAttempted) return
+        radioSuggestionsAttempted = true
         _radioSuggestionsLoading.value = true
         radioSuggestionsJob = viewModelScope.launch {
             try {
@@ -313,7 +350,8 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadPodcastSuggestions() {
         if (podcastSuggestionsJob?.isActive == true) return
-        if (_podcastSuggestions.value.isNotEmpty()) return
+        if (podcastSuggestionsAttempted) return
+        podcastSuggestionsAttempted = true
         _podcastSuggestionsLoading.value = true
         podcastSuggestionsJob = viewModelScope.launch {
             try {
@@ -342,10 +380,131 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Episodios de un podcast para su ficha. */
-    suspend fun podcastEpisodes(show: PodcastShow): List<PodcastEpisode> =
-        PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
+    /** Sugerencias musicales Online (Canciones/Artistas/
+     *  Álbumes/Playlists y tarjetas del Inicio): viven en el
+     *  ViewModel para sobrevivir a la navegación. Se cargan
+     *  una vez por sesión y solo se refrescan si cambian las
+     *  semillas de escucha (Top/recientes/favoritos). */
+    private val _musicSuggestions =
+        MutableStateFlow<com.aural.player.youtube.OnlineSearchResults?>(null)
+    val musicSuggestions: StateFlow<com.aural.player.youtube.OnlineSearchResults?> =
+        _musicSuggestions.asStateFlow()
+    private val _musicSuggestionsSongsUi = MutableStateFlow<List<Song>>(emptyList())
+    val musicSuggestionsSongsUi: StateFlow<List<Song>> =
+        _musicSuggestionsSongsUi.asStateFlow()
+    private val _musicSuggestionsLoading = MutableStateFlow(false)
+    val musicSuggestionsLoading: StateFlow<Boolean> =
+        _musicSuggestionsLoading.asStateFlow()
+    private var musicSuggestionsJob: Job? = null
+    private var musicSuggestionsSeedKey: String? = null
+
+    fun loadMusicSuggestions(
+        youTubeManager: com.aural.player.youtube.YouTubeManager?,
+        seeds: List<String>
+    ) {
+        val cleanSeeds = seeds.map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+        val seedKey = cleanSeeds.joinToString("|")
+        if (musicSuggestionsSeedKey == seedKey &&
+            _musicSuggestions.value != null
+        ) return
+        if (musicSuggestionsJob?.isActive == true &&
+            musicSuggestionsSeedKey == seedKey
+        ) return
+        // Semillas nuevas: la carga anterior ya no vale.
+        musicSuggestionsJob?.cancel()
+        musicSuggestionsSeedKey = seedKey
+        if (cleanSeeds.isEmpty() || youTubeManager == null) {
+            _musicSuggestions.value =
+                com.aural.player.youtube.OnlineSearchResults()
+            _musicSuggestionsSongsUi.value = emptyList()
+            _musicSuggestionsLoading.value = false
+            return
+        }
+        _musicSuggestionsLoading.value = true
+        musicSuggestionsJob = viewModelScope.launch {
+            try {
+                val loaded = withTimeoutOrNull(30_000L) {
+                    youTubeManager.searchSuggestions(cleanSeeds)
+                } ?: com.aural.player.youtube.OnlineSearchResults()
+                _musicSuggestions.value = loaded
+                _musicSuggestionsSongsUi.value =
+                    registerOnlineSongs(loaded.songs)
+                youTubeManager.prefetchVisibleSongs(loaded.songs)
+            } finally {
+                _musicSuggestionsLoading.value = false
+            }
+        }
+    }
+
+    /** Caché de detalles de podcast/emisora: una vez cargados
+     *  quedan en memoria; salir y volver no los recarga. El
+     *  progreso y las descargas se leen de sus flujos, así
+     *  que la ficha sigue al día sin recargar la lista. */
+    private val podcastEpisodesCache =
+        mutableMapOf<String, List<PodcastEpisode>>()
+    private val radioVersionsCache =
+        mutableMapOf<String, List<RadioStation>>()
+
+    fun cachedPodcastEpisodes(show: PodcastShow): List<PodcastEpisode>? =
+        podcastEpisodesCache[show.feedUrl]
+
+    fun cachedRadioStationVersions(station: RadioStation): List<RadioStation>? =
+        radioVersionsCache[station.id]
+
+    /** Episodios nuevos en los podcasts guardados (para el
+     *  badge del Inicio): episodios publicados después del
+     *  más reciente con progreso de ese programa y aún no
+     *  escuchados; sin progreso, cuenta el último episodio. */
+    private val _podcastNewEpisodeCount = MutableStateFlow(0)
+    val podcastNewEpisodeCount: StateFlow<Int> =
+        _podcastNewEpisodeCount.asStateFlow()
+    private var podcastNewCountJob: Job? = null
+    private var podcastNewCountSignature: String? = null
+
+    fun refreshPodcastNewEpisodes() {
+        val shows = podcastShows.value
+        val progress = podcastProgress.value
+        val signature = shows.map { it.feedUrl }.sorted().joinToString("|") +
+            "#" + progress.values.maxOfOrNull { it.updatedAtMs }
+        if (podcastNewCountSignature == signature) return
+        if (podcastNewCountJob?.isActive == true) return
+        podcastNewCountSignature = signature
+        podcastNewCountJob = viewModelScope.launch {
+            var total = 0
+            for (show in shows) {
+                val episodes = podcastEpisodes(show)
+                if (episodes.isEmpty()) continue
+                val threshold = progress.values
+                    .filter { it.feedUrl == show.feedUrl }
+                    .maxOfOrNull { it.publishedMs } ?: 0L
+                total += if (threshold <= 0L) {
+                    1
+                } else {
+                    episodes.count { episode ->
+                        episode.publishedMs > threshold &&
+                            progress[PodcastEpisode.progressKey(
+                                show.feedUrl, episode.guid
+                            )]?.listened != true
+                    }
+                }
+            }
+            _podcastNewEpisodeCount.value = total
+        }
+    }
+
+    /** Episodios de un podcast para su ficha (cacheados). */
+    suspend fun podcastEpisodes(show: PodcastShow): List<PodcastEpisode> {
+        podcastEpisodesCache[show.feedUrl]?.let { return it }
+        val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
             .distinctBy { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
+        if (episodes.isNotEmpty()) {
+            podcastEpisodesCache[show.feedUrl] = episodes
+        }
+        return episodes
+    }
 
     /** «Sonando ahora» (ICY) de una emisora, si lo ofrece. */
     suspend fun radioNowPlaying(station: RadioStation): String? =
@@ -354,6 +513,15 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Versiones de la misma emisora en Radio Browser (mismo
      *  nombre normalizado), de mayor a menor bitrate. */
     suspend fun radioStationVersions(station: RadioStation): List<RadioStation> {
+        radioVersionsCache[station.id]?.let { return it }
+        val versions = radioStationVersionsFresh(station)
+        if (versions.isNotEmpty()) {
+            radioVersionsCache[station.id] = versions
+        }
+        return versions
+    }
+
+    private suspend fun radioStationVersionsFresh(station: RadioStation): List<RadioStation> {
         fun normalized(name: String): String = name.lowercase()
             .replace(Regex("[^a-z0-9áéíóúñ ]"), "")
             .replace(Regex("\\s+"), " ")
@@ -381,7 +549,31 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      *  podcasts agregados como «míos». Los datos salen del
      *  propio registro de progreso; los registros viejos sin
      *  metadatos se resuelven contra los podcasts guardados. */
-    suspend fun continueListeningEpisodes(): List<PodcastContinueItem> =
+    private var continueCache: List<PodcastContinueItem>? = null
+    private var continueCacheSignature: String? = null
+
+    private fun continueSignature(): String =
+        podcastProgress.value.entries
+            .sortedBy { it.key }
+            .joinToString("|") {
+                "${it.key}:${it.value.updatedAtMs}:${it.value.positionMs}:${it.value.listened}"
+            } + "#" + podcastShows.value.map { it.feedUrl }.sorted().joinToString("|")
+
+    /** «Sigue escuchando» ya calculado, si el progreso no
+     *  cambió desde la última vez (sin recargar al volver). */
+    fun cachedContinueListening(): List<PodcastContinueItem>? =
+        if (continueCacheSignature == continueSignature()) continueCache else null
+
+    suspend fun continueListeningEpisodes(): List<PodcastContinueItem> {
+        cachedContinueListening()?.let { return it }
+        val signature = continueSignature()
+        val items = continueListeningFresh()
+        continueCache = items
+        continueCacheSignature = signature
+        return items
+    }
+
+    private suspend fun continueListeningFresh(): List<PodcastContinueItem> =
         coroutineScope {
             val progress = podcastProgress.value
             val started = progress.filterValues {
@@ -1224,14 +1416,34 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         )
 
     /** Registra un resultado online y devuelve su Song estable. */
-    suspend fun registerOnlineSong(result: YTResult): Song =
-        settings.registerOnlineSong(
+    /** Canciones online ya registradas en esta sesión: al
+     *  volver a unos resultados cacheados se pintan al
+     *  instante, sin pasar por DataStore ni por esqueletos. */
+    private val registeredOnlineSongs = mutableMapOf<String, Song>()
+
+    suspend fun registerOnlineSong(result: YTResult): Song {
+        registeredOnlineSongs[result.videoId]?.let { return it }
+        val song = settings.registerOnlineSong(
             videoId = result.videoId,
             title = result.title,
             artist = result.artist,
             durationMs = result.durationSec * 1000L,
             thumbnailUrl = result.thumbnailUrl
         )
+        registeredOnlineSongs[result.videoId] = song
+        return song
+    }
+
+    suspend fun registerOnlineSongs(results: List<YTResult>): List<Song> =
+        results.map { registerOnlineSong(it) }
+
+    /** Lista ya registrada de esos resultados, o null si
+     *  falta alguna por registrar. */
+    fun peekOnlineSongs(results: List<YTResult>): List<Song>? {
+        if (results.isEmpty()) return emptyList()
+        val songs = results.map { registeredOnlineSongs[it.videoId] }
+        return if (songs.all { it != null }) songs.filterNotNull() else null
+    }
 
     /** Aviso de datos del primer streaming esperando confirmación. */
     private val _streamingNoticePending = MutableStateFlow(false)
