@@ -117,6 +117,7 @@ import com.aural.player.ui.theme.HalloweenPumpkin
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -192,6 +193,7 @@ fun NowPlayingScreen(
     onRemoveFromQueue: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
     onOpenEqualizer: () -> Unit = {},
+    youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showSongInfo by remember { mutableStateOf(false) }
@@ -201,11 +203,33 @@ fun NowPlayingScreen(
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
     val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
+    val podcastDownloadProgress by viewModel.podcastDownloadProgress
+        .collectAsStateWithLifecycle()
+    val ytProgressFlow = remember(youTubeManager) {
+        youTubeManager?.progress
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, Float>())
+    }
+    val ytDownloadProgress by ytProgressFlow.collectAsStateWithLifecycle()
     // Decoración Halloween: solo si el tema activo es Halloween (tema real del menú).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
     val isHalloweenTheme = themeName == AppTheme.HALLOWEEN.name
     val song = state.currentSong
     val songBpm = song?.let { bpmMap[it.id] }
+    val isOnlineStream = song?.isOnlineStream == true
+    val podcastDownloadKey = song?.let { s ->
+        val feedUrl = s.podcastFeedUrl
+        val guid = s.podcastGuid
+        if (feedUrl != null && guid != null) {
+            com.aural.player.data.PodcastEpisode.progressKey(feedUrl, guid)
+        } else {
+            null
+        }
+    }
+    val currentDownloadProgress: Float? = when {
+        song?.onlineVideoId != null -> ytDownloadProgress[song.onlineVideoId]
+        podcastDownloadKey != null -> podcastDownloadProgress[podcastDownloadKey]
+        else -> null
+    }
     // Info de archivo de la canción actual (bitrate, canales) para la
     // pill de calidad: solo se lee la cabecera, sin decodificar.
     var songFileInfo by remember {
@@ -361,7 +385,8 @@ fun NowPlayingScreen(
                         onRemoveFromQueue = onRemoveFromQueue,
                         onShowLyrics = { showLyrics = true },
                         onOpenEqualizer = onOpenEqualizer,
-                        onShowSongInfo = { showSongInfo = true }
+                        onShowSongInfo = { showSongInfo = true },
+                        youTubeManager = youTubeManager
                     )
                     if (showSongInfo && song != null) {
                         SongInfoDialog(
@@ -611,12 +636,14 @@ fun NowPlayingScreen(
             // la información de la canción). El tempo es dato de DJ y
             // la calidad es dato del archivo: van juntos pero no
             // mezclados en una sola pill.
-            if (song.isOnline || songBpm != null || qualityText != null) {
+            if (isOnlineStream || song.isPodcastEpisode ||
+                songBpm != null || qualityText != null
+            ) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (song.isOnline) {
+                    if (isOnlineStream) {
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
@@ -639,7 +666,9 @@ fun NowPlayingScreen(
                     // el motor): aparece en cuanto el stream está
                     // resuelto; mientras resuelve no se muestra.
                     val streamKbps = state.streamBitrateKbps
-                    if (song.isOnline && streamKbps != null) {
+                    if ((isOnlineStream || song.isPodcastEpisode) &&
+                        streamKbps != null
+                    ) {
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
@@ -723,7 +752,9 @@ fun NowPlayingScreen(
                             )
                         }
                     }
-                    if (qualityText != null) {
+                    if (qualityText != null &&
+                        !(song.isPodcastEpisode && streamKbps != null)
+                    ) {
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
@@ -809,7 +840,15 @@ fun NowPlayingScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.CenterStart))
-                if (song.isOnline) {
+                if (currentDownloadProgress != null) {
+                    Text(
+                        text = "Descargando ${(currentDownloadProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                } else if (isOnlineStream) {
                     val waitingAlpha by animateFloatAsState(
                         targetValue = if (state.isBuffering) 1f else 0f,
                         animationSpec = tween(160),
@@ -872,14 +911,33 @@ fun NowPlayingScreen(
                         }
                     }
                 }
-                // Anterior (en podcast: −15 s)
+                // Anterior (en podcast: −15 s, con los segundos visibles)
                 IconButton(onClick = onPrevious) {
-                    Icon(
-                        if (state.isPodcastEpisode) Icons.Rounded.FastRewind
-                        else Icons.Rounded.SkipPrevious,
-                        if (state.isPodcastEpisode) "Retroceder 15 segundos" else "Anterior",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(38.dp))
+                    if (state.isPodcastEpisode) {
+                        Box(Modifier.size(48.dp)) {
+                            Icon(
+                                Icons.Rounded.FastRewind,
+                                "Retroceder 15 segundos",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .size(32.dp)
+                            )
+                            Text(
+                                "−15",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            Icons.Rounded.SkipPrevious,
+                            "Anterior",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
                 }
                 // Play/Pausa (botón principal grande)
                 IconButton(
@@ -894,7 +952,7 @@ fun NowPlayingScreen(
                     Box(contentAlignment = Alignment.Center) {
                     // Cargando online: anillo de espera sobre el
                     // botón (sigue funcional para pausar).
-                    if (song.isOnline && state.isBuffering) {
+                    if (isOnlineStream && state.isBuffering) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(56.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
@@ -919,14 +977,33 @@ fun NowPlayingScreen(
                     }
                     }
                 }
-                // Siguiente (en podcast: +30 s)
+                // Siguiente (en podcast: +30 s, con los segundos visibles)
                 IconButton(onClick = onNext) {
-                    Icon(
-                        if (state.isPodcastEpisode) Icons.Rounded.FastForward
-                        else Icons.Rounded.SkipNext,
-                        if (state.isPodcastEpisode) "Adelantar 30 segundos" else "Siguiente",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(38.dp))
+                    if (state.isPodcastEpisode) {
+                        Box(Modifier.size(48.dp)) {
+                            Icon(
+                                Icons.Rounded.FastForward,
+                                "Adelantar 30 segundos",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .size(32.dp)
+                            )
+                            Text(
+                                "+30",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            Icons.Rounded.SkipNext,
+                            "Siguiente",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
                 }
                 // Cola
                 IconButton(onClick = { showQueue = true }) {
@@ -1119,7 +1196,8 @@ private fun NowPlayingMenu(
     onRemoveFromQueue: (Int) -> Unit,
     onShowLyrics: () -> Unit,
     onOpenEqualizer: () -> Unit = {},
-    onShowSongInfo: () -> Unit = {}
+    onShowSongInfo: () -> Unit = {},
+    youTubeManager: com.aural.player.youtube.YouTubeManager? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -1127,6 +1205,19 @@ private fun NowPlayingMenu(
     val stopMode by viewModel.stopMode.collectAsStateWithLifecycle()
     val customCovers by viewModel.customCovers.collectAsStateWithLifecycle()
     val customMetadata by viewModel.customMetadata.collectAsStateWithLifecycle()
+    val podcastDownloads by viewModel.podcastDownloads.collectAsStateWithLifecycle()
+    val podcastDownloadProgress by viewModel.podcastDownloadProgress
+        .collectAsStateWithLifecycle()
+    val ytProgressFlow = remember(youTubeManager) {
+        youTubeManager?.progress
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, Float>())
+    }
+    val ytDownloadProgress by ytProgressFlow.collectAsStateWithLifecycle()
+    val ytDownloadingFlow = remember(youTubeManager) {
+        youTubeManager?.downloading
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet<String>())
+    }
+    val ytDownloading by ytDownloadingFlow.collectAsStateWithLifecycle()
 
     // Funciones nuevas ya vistas (sin puntito).
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
@@ -1287,6 +1378,91 @@ private fun NowPlayingMenu(
             leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) },
             onClick = { onDismiss(); showPlaylists = true }
         )
+        if (song != null && song.isOnline && youTubeManager != null) {
+            val videoId = song.onlineVideoId
+            val downloading = videoId != null && videoId in ytDownloading
+            val progress = videoId?.let { ytDownloadProgress[it] }
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (downloading) {
+                            "Descargando ${((progress ?: 0f) * 100).toInt()}%"
+                        } else {
+                            "Descargar"
+                        }
+                    )
+                },
+                leadingIcon = { Icon(Icons.Rounded.Download, null) },
+                enabled = !downloading,
+                onClick = {
+                    onDismiss()
+                    val result = com.aural.player.youtube.YTResult(
+                        videoId = song.onlineVideoId ?: return@DropdownMenuItem,
+                        title = song.title,
+                        artist = song.artist,
+                        durationSec = (song.durationMs / 1000L).coerceAtLeast(0L),
+                        thumbnailUrl = song.albumArtUri
+                    )
+                    youTubeManager.download(result) { fileName, mediaId, tagsEmbedded ->
+                        if (fileName != null) {
+                            viewModel.addDownloadToPlaylist(
+                                fileName, mediaId, result, tagsEmbedded
+                            )
+                            if (!tagsEmbedded) {
+                                viewModel.applyYouTubeMetadataFallback(
+                                    mediaId, result.title, result.artist,
+                                    result.thumbnailUrl
+                                )
+                            }
+                            android.widget.Toast.makeText(
+                                context,
+                                "Canción descargada",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            )
+        }
+        if (song != null && song.isPodcastEpisode) {
+            val feedUrl = song.podcastFeedUrl
+            val guid = song.podcastGuid
+            val key = if (feedUrl != null && guid != null) {
+                com.aural.player.data.PodcastEpisode.progressKey(feedUrl, guid)
+            } else {
+                null
+            }
+            val downloadingProgress = key?.let { podcastDownloadProgress[it] }
+            val downloaded = key != null && podcastDownloads.containsKey(key)
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        when {
+                            downloadingProgress != null ->
+                                "Descargando ${(downloadingProgress * 100).toInt()}%"
+                            downloaded -> "Eliminar descarga"
+                            else -> "Descargar"
+                        }
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        if (downloaded) Icons.Rounded.Delete
+                        else Icons.Rounded.Download,
+                        null
+                    )
+                },
+                enabled = downloadingProgress == null,
+                onClick = {
+                    onDismiss()
+                    if (downloaded) {
+                        viewModel.deletePodcastDownloadForSong(song)
+                    } else {
+                        viewModel.downloadPodcastForSong(song)
+                    }
+                }
+            )
+        }
         DropdownMenuItem(
             text = {
                 Text(
