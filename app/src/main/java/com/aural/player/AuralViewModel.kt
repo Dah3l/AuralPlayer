@@ -13,6 +13,7 @@ import com.aural.player.data.PodcastClient
 import com.aural.player.data.PodcastEpisode
 import com.aural.player.data.PodcastProgress
 import com.aural.player.data.PodcastShow
+import com.aural.player.data.RadioBrowserClient
 import com.aural.player.data.RadioStation
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
@@ -51,6 +52,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -126,6 +128,77 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         settings.podcastProgress.stateIn(
             viewModelScope, SharingStarted.Eagerly, emptyMap()
         )
+
+    /** Descubrimiento en búsqueda: resultados y estado por
+     *  chip, con la consulta que los produjo para no mostrar
+     *  un vacío adelantado mientras la búsqueda corre. */
+    private val _radioSearchResults = MutableStateFlow<List<RadioStation>>(emptyList())
+    val radioSearchResults: StateFlow<List<RadioStation>> =
+        _radioSearchResults.asStateFlow()
+    private val _radioSearching = MutableStateFlow(false)
+    val radioSearching: StateFlow<Boolean> = _radioSearching.asStateFlow()
+    private val _radioSearchQuery = MutableStateFlow("")
+    val radioSearchQuery: StateFlow<String> = _radioSearchQuery.asStateFlow()
+    private var radioSearchJob: Job? = null
+
+    private val _podcastSearchResults = MutableStateFlow<List<PodcastShow>>(emptyList())
+    val podcastSearchResults: StateFlow<List<PodcastShow>> =
+        _podcastSearchResults.asStateFlow()
+    private val _podcastSearching = MutableStateFlow(false)
+    val podcastSearching: StateFlow<Boolean> = _podcastSearching.asStateFlow()
+    private val _podcastSearchQuery = MutableStateFlow("")
+    val podcastSearchQuery: StateFlow<String> = _podcastSearchQuery.asStateFlow()
+    private var podcastSearchJob: Job? = null
+
+    fun searchRadio(query: String) {
+        val term = query.trim()
+        radioSearchJob?.cancel()
+        if (term.isBlank()) {
+            _radioSearchResults.value = emptyList()
+            _radioSearchQuery.value = ""
+            _radioSearching.value = false
+            return
+        }
+        _radioSearching.value = true
+        radioSearchJob = viewModelScope.launch {
+            val results = RadioBrowserClient.search(term)
+            _radioSearchResults.value = results.distinctBy { it.id }
+            _radioSearchQuery.value = term
+            _radioSearching.value = false
+        }
+    }
+
+    fun searchPodcasts(query: String) {
+        val term = query.trim()
+        podcastSearchJob?.cancel()
+        if (term.isBlank()) {
+            _podcastSearchResults.value = emptyList()
+            _podcastSearchQuery.value = ""
+            _podcastSearching.value = false
+            return
+        }
+        _podcastSearching.value = true
+        podcastSearchJob = viewModelScope.launch {
+            val results = PodcastClient.searchPodcasts(term)
+            _podcastSearchResults.value = results.distinctBy { it.feedUrl }
+            _podcastSearchQuery.value = term
+            _podcastSearching.value = false
+        }
+    }
+
+    fun clearCollectionSearch() {
+        searchRadio("")
+        searchPodcasts("")
+    }
+
+    /** Episodios de un podcast para su ficha. */
+    suspend fun podcastEpisodes(show: PodcastShow): List<PodcastEpisode> =
+        PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
+            .distinctBy { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
+
+    /** «Sonando ahora» (ICY) de una emisora, si lo ofrece. */
+    suspend fun radioNowPlaying(station: RadioStation): String? =
+        RadioBrowserClient.fetchNowPlaying(station.streamUrl)
 
     /** Episodio en reproducción (songId -> feedUrl|guid) para
      *  guardar su progreso al pausar y cada pocos segundos. */
@@ -885,6 +958,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun addRadioStation(station: RadioStation) {
+        viewModelScope.launch { settings.addRadioStation(station) }
+    }
+
     fun removeRadioStation(station: RadioStation) {
         viewModelScope.launch { settings.removeRadioStation(station.id) }
     }
@@ -898,12 +975,18 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 20)
                 val episode = episodes.firstOrNull() ?: return@launch
-                playPodcastEpisode(show, episode)
+                startPodcastEpisode(show, episode)
             }
         }
     }
 
+    /** Reproduce un episodio desde su ficha, con la puerta
+     *  de streaming (solo Wi-Fi / aviso de datos). */
     fun playPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
+        withStreamingGate { startPodcastEpisode(show, episode) }
+    }
+
+    private fun startPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
         val song = episode.toSong(show)
         podcastEpisodeKeys[song.id] = show.feedUrl to episode.guid
         val saved = podcastProgress.value[
@@ -911,6 +994,10 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         ]
         val resumeMs = if (saved != null && !saved.listened) saved.positionMs else 0L
         playback.playQueue(listOf(song), 0, false, startPositionMs = resumeMs)
+    }
+
+    fun addPodcastShow(show: PodcastShow) {
+        viewModelScope.launch { settings.addPodcastShow(show) }
     }
 
     fun removePodcastShow(show: PodcastShow) {
