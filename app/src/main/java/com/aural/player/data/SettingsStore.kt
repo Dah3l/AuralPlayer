@@ -91,6 +91,7 @@ class SettingsStore(private val context: Context) {
         val KEY_PODCAST_SHOWS = stringPreferencesKey("podcast_shows_json")
         val KEY_PODCAST_PROGRESS = stringPreferencesKey("podcast_progress_json")
         val KEY_PODCAST_DOWNLOADS = stringPreferencesKey("podcast_downloads_json")
+        val KEY_SAVED_ONLINE_PLAYLISTS = stringPreferencesKey("saved_online_playlists_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
@@ -1057,16 +1058,41 @@ class SettingsStore(private val context: Context) {
         feedUrl: String,
         guid: String,
         positionMs: Long,
-        listened: Boolean = false
+        listened: Boolean = false,
+        showTitle: String = "",
+        showAuthor: String = "",
+        showImageUrl: String? = null,
+        episodeTitle: String = "",
+        episodeImageUrl: String? = null,
+        audioUrl: String = "",
+        durationMs: Long = 0L,
+        audioBytes: Long = 0L,
+        audioMimeType: String = "",
+        publishedMs: Long = 0L
     ) {
         context.dataStore.edit { prefs ->
             val current = decodePodcastProgress(prefs[KEY_PODCAST_PROGRESS]).toMutableMap()
-            current[PodcastEpisode.progressKey(feedUrl, guid)] =
-                PodcastProgress(
-                    positionMs.coerceAtLeast(0L),
-                    listened,
-                    System.currentTimeMillis()
-                )
+            val key = PodcastEpisode.progressKey(feedUrl, guid)
+            val old = current[key]
+            // Los metadatos nuevos pisan solo si traen dato: un
+            // guardado sin metadatos no borra los ya conocidos.
+            current[key] = PodcastProgress(
+                positionMs = positionMs.coerceAtLeast(0L),
+                listened = listened,
+                updatedAtMs = System.currentTimeMillis(),
+                feedUrl = feedUrl,
+                guid = guid,
+                showTitle = showTitle.ifBlank { old?.showTitle ?: "" },
+                showAuthor = showAuthor.ifBlank { old?.showAuthor ?: "" },
+                showImageUrl = showImageUrl ?: old?.showImageUrl,
+                episodeTitle = episodeTitle.ifBlank { old?.episodeTitle ?: "" },
+                episodeImageUrl = episodeImageUrl ?: old?.episodeImageUrl,
+                audioUrl = audioUrl.ifBlank { old?.audioUrl ?: "" },
+                durationMs = if (durationMs > 0L) durationMs else old?.durationMs ?: 0L,
+                audioBytes = if (audioBytes > 0L) audioBytes else old?.audioBytes ?: 0L,
+                audioMimeType = audioMimeType.ifBlank { old?.audioMimeType ?: "" },
+                publishedMs = if (publishedMs > 0L) publishedMs else old?.publishedMs ?: 0L
+            )
             prefs[KEY_PODCAST_PROGRESS] = encodePodcastProgress(current)
         }
     }
@@ -1085,7 +1111,21 @@ class SettingsStore(private val context: Context) {
                         PodcastProgress(
                             positionMs = value.optLong("positionMs", 0L),
                             listened = value.optBoolean("listened", false),
-                            updatedAtMs = value.optLong("updatedAtMs", 0L)
+                            updatedAtMs = value.optLong("updatedAtMs", 0L),
+                            feedUrl = value.optString("feedUrl"),
+                            guid = value.optString("guid"),
+                            showTitle = value.optString("showTitle"),
+                            showAuthor = value.optString("showAuthor"),
+                            showImageUrl = value.optString("showImageUrl")
+                                .takeIf { it.isNotBlank() },
+                            episodeTitle = value.optString("episodeTitle"),
+                            episodeImageUrl = value.optString("episodeImageUrl")
+                                .takeIf { it.isNotBlank() },
+                            audioUrl = value.optString("audioUrl"),
+                            durationMs = value.optLong("durationMs", 0L),
+                            audioBytes = value.optLong("audioBytes", 0L),
+                            audioMimeType = value.optString("audioMimeType"),
+                            publishedMs = value.optLong("publishedMs", 0L)
                         )
                     )
                 }
@@ -1100,6 +1140,18 @@ class SettingsStore(private val context: Context) {
                 put("positionMs", value.positionMs)
                 put("listened", value.listened)
                 put("updatedAtMs", value.updatedAtMs)
+                put("feedUrl", value.feedUrl)
+                put("guid", value.guid)
+                put("showTitle", value.showTitle)
+                put("showAuthor", value.showAuthor)
+                value.showImageUrl?.let { put("showImageUrl", it) }
+                put("episodeTitle", value.episodeTitle)
+                value.episodeImageUrl?.let { put("episodeImageUrl", it) }
+                put("audioUrl", value.audioUrl)
+                put("durationMs", value.durationMs)
+                put("audioBytes", value.audioBytes)
+                put("audioMimeType", value.audioMimeType)
+                put("publishedMs", value.publishedMs)
             })
         }
         return obj.toString()
@@ -1166,6 +1218,73 @@ class SettingsStore(private val context: Context) {
             })
         }
         return obj.toString()
+    }
+
+    /** Playlists online guardadas como referencia (grupo
+     *  «De YouTube» en Playlists). */
+    val savedOnlinePlaylists: Flow<List<SavedOnlinePlaylist>> =
+        context.dataStore.data.map { prefs ->
+            decodeSavedOnlinePlaylists(prefs[KEY_SAVED_ONLINE_PLAYLISTS])
+        }
+
+    suspend fun addSavedOnlinePlaylist(playlist: SavedOnlinePlaylist) {
+        context.dataStore.edit { prefs ->
+            val current = decodeSavedOnlinePlaylists(
+                prefs[KEY_SAVED_ONLINE_PLAYLISTS]
+            ).filter { it.url != playlist.url }
+            prefs[KEY_SAVED_ONLINE_PLAYLISTS] =
+                encodeSavedOnlinePlaylists(current + playlist)
+        }
+    }
+
+    suspend fun removeSavedOnlinePlaylist(url: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodeSavedOnlinePlaylists(
+                prefs[KEY_SAVED_ONLINE_PLAYLISTS]
+            ).filter { it.url != url }
+            prefs[KEY_SAVED_ONLINE_PLAYLISTS] =
+                encodeSavedOnlinePlaylists(current)
+        }
+    }
+
+    private fun decodeSavedOnlinePlaylists(
+        json: String?
+    ): List<SavedOnlinePlaylist> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = org.json.JSONArray(json)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val url = obj.optString("url")
+                    if (url.isBlank()) continue
+                    add(
+                        SavedOnlinePlaylist(
+                            url = url,
+                            title = obj.optString("title"),
+                            subtitle = obj.optString("subtitle"),
+                            thumbnailUrl = obj.optString("thumbnailUrl")
+                                .takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }.distinctBy { it.url }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    private fun encodeSavedOnlinePlaylists(
+        playlists: List<SavedOnlinePlaylist>
+    ): String {
+        val arr = org.json.JSONArray()
+        playlists.forEach { playlist ->
+            arr.put(JSONObject().apply {
+                put("url", playlist.url)
+                put("title", playlist.title)
+                put("subtitle", playlist.subtitle)
+                playlist.thumbnailUrl?.let { put("thumbnailUrl", it) }
+            })
+        }
+        return arr.toString()
     }
 
     /** BPM por canción (songId -> BPM real, sin plegar): lo analiza la
