@@ -26,7 +26,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
@@ -245,10 +245,13 @@ class MusicService : MediaSessionService() {
                     .build()
             }
         }
-        // Misma petición HTTP que la descarga (headers de navegador):
-        // sin VPN, googlevideo puede rechazar la petición por defecto
-        // de Media3 aunque la URL resuelta sea válida.
-        val httpFactory = DefaultHttpDataSource.Factory()
+        // Misma petición HTTP que la descarga (headers de navegador)
+        // y el mismo cliente OkHttp compartido del resolver: el
+        // pool con keep-alive reutiliza la conexión entre rangos
+        // de 512 KB en vez de abrir una nueva por pedazo.
+        val httpFactory = OkHttpDataSource.Factory(
+            YouTubeStreamResolver.sharedHttpClient
+        )
             .setUserAgent(
                 "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             )
@@ -258,9 +261,6 @@ class MusicService : MediaSessionService() {
                     "Accept-Language" to "en-US,en;q=0.9"
                 )
             )
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .setAllowCrossProtocolRedirects(true)
         val networkFactory = ChunkedRangeDataSourceFactory(
             DefaultDataSource.Factory(this, httpFactory)
         ) { failedSpec ->
@@ -325,14 +325,34 @@ class MusicService : MediaSessionService() {
     }
 
     private fun prefetchOnlineAround(player: Player) {
-        onlineVideoId(player.currentMediaItem)?.let {
-            YouTubeStreamResolver.prefetch(it, streamingQualityCache)
-        }
-        val nextIndex = player.nextMediaItemIndex
-        if (nextIndex != C.INDEX_UNSET && nextIndex in 0 until player.mediaItemCount) {
-            onlineVideoId(player.getMediaItemAt(nextIndex))?.let {
-                YouTubeStreamResolver.prefetch(it, streamingQualityCache)
+        // Actual + las tres siguientes de la cola (respetando
+        // aleatorio y repetición): resolver solo la siguiente
+        // dejaba la tercera en frío si el usuario saltaba.
+        val seen = mutableSetOf<String>()
+        fun prefetchItem(item: MediaItem?) {
+            onlineVideoId(item)?.let { videoId ->
+                if (seen.add(videoId)) {
+                    YouTubeStreamResolver.prefetch(
+                        videoId, streamingQualityCache
+                    )
+                }
             }
+        }
+        prefetchItem(player.currentMediaItem)
+        val timeline = player.currentTimeline
+        if (timeline.windowCount == 0) return
+        var index = player.currentMediaItemIndex
+        repeat(3) {
+            index = timeline.getNextWindowIndex(
+                index, player.repeatMode, player.shuffleModeEnabled
+            )
+            if (index == C.INDEX_UNSET ||
+                index == player.currentMediaItemIndex ||
+                index !in 0 until player.mediaItemCount
+            ) {
+                return
+            }
+            prefetchItem(player.getMediaItemAt(index))
         }
     }
 
@@ -523,6 +543,12 @@ class MusicService : MediaSessionService() {
                 YouTubeStreamResolver.noteRebuffer()
             }
             if (!crossfadeActive) return
+            // La principal terminó en pleno fundido: cerrar ya
+            // para que no avance sola y choque con la que entra.
+            if (playbackState == Player.STATE_ENDED) {
+                finishFade()
+                return
+            }
             // Parada total (botón parar) en pleno fundido: cancelar.
             if (playbackState == Player.STATE_IDLE) abortFade()
         }
