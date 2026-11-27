@@ -286,6 +286,25 @@ class PlaybackManager(private val context: Context) {
             val c = controller ?: return
             val current = _state.value.currentSong ?: return
             if (!current.isOnline) return
+            // Error en los últimos 5 s: es el final de la
+            // canción, no un fallo. Avanza a la siguiente sin
+            // modal ni mensaje, como una transición normal.
+            val endDuration = c.duration
+            if (endDuration > 0L && c.currentPosition >= endDuration - 5_000L) {
+                val endIdx = c.currentMediaItemIndex
+                val afterIdx = if (endIdx >= 0 && c.currentTimeline.windowCount > 0) {
+                    c.currentTimeline.getNextWindowIndex(
+                        endIdx, c.repeatMode, c.shuffleModeEnabled
+                    )
+                } else C.INDEX_UNSET
+                if (afterIdx != C.INDEX_UNSET && afterIdx != endIdx) {
+                    c.seekTo(afterIdx, 0L)
+                    c.prepare()
+                    c.playWhenReady = true
+                }
+                publishState()
+                return
+            }
             val videoId = current.onlineVideoId
             if (videoId != null) {
                 val attempts = (onlineRetryAttempts[videoId] ?: 0) + 1
@@ -455,7 +474,12 @@ class PlaybackManager(private val context: Context) {
     // ----------------------------- Acciones -----------------------------
 
     /** Reemplaza la cola con las canciones dadas e inicia en [startIndex]. */
-    fun playQueue(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
+    fun playQueue(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        shuffle: Boolean = false,
+        startPositionMs: Long = 0L
+    ) {
         val c = controller ?: return
         if (songs.isEmpty()) return
         // Cola nueva = intención nueva: se apaga la sesión DJ infinita
@@ -465,7 +489,11 @@ class PlaybackManager(private val context: Context) {
         failedOnlineIndices.clear()
         registerKnownSongs(songs)
         val items = songs.map { it.toMediaItem() }
-        c.setMediaItems(items, startIndex.coerceIn(0, items.size - 1), 0L)
+        c.setMediaItems(
+            items,
+            startIndex.coerceIn(0, items.size - 1),
+            startPositionMs.coerceAtLeast(0L)
+        )
         c.shuffleModeEnabled = shuffle
         c.prepare()
         c.playWhenReady = true
