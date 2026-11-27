@@ -1798,15 +1798,31 @@ object YouTubeStreamResolver {
         noteConnectionSample(videoId, bytesLoaded, windowMs)
     }
 
+    /** Última muestra suavizada global (de cualquier video):
+     *  le dice a la siguiente canción si la red viene lenta
+     *  para arrancar con la ventana paralela caliente. */
+    @Volatile
+    private var lastGlobalKbps: Double? = null
+
     private fun noteConnectionSample(videoId: String, bytesLoaded: Long, durationMs: Long) {
         val sampleKbps = bytesLoaded * 8.0 / durationMs
         synchronized(connectionLock) {
             val previous = connectionSamples[videoId]
-            connectionSamples[videoId] =
+            val smoothed =
                 if (previous == null) sampleKbps
                 else previous * 0.7 + sampleKbps * 0.3
+            connectionSamples[videoId] = smoothed
+            lastGlobalKbps = smoothed
         }
     }
+
+    /** La red viene lenta según el medidor: ahorro temporal
+     *  activo o última muestra global por debajo de 400 kbps.
+     *  La siguiente canción arranca con la ventana paralela
+     *  en 5 en vez de esperar al primer rango lento. */
+    fun networkSlowHint(): Boolean =
+        System.currentTimeMillis() < temporarySaverUntilMs ||
+            (lastGlobalKbps?.let { it < 400.0 } == true)
 
     /** Velocidad suavizada (kbps) del stream de ese video, o
      *  null si aún no hay muestra de ese video. */
@@ -1838,6 +1854,13 @@ object YouTubeStreamResolver {
     fun noteRebuffer() {
         temporarySaverUntilMs = System.currentTimeMillis() + 10 * 60_000L
     }
+
+    /** El ahorro temporal está activo (rebuffer real o regla
+     *  ABR): la bajada a 48 dentro de la canción en curso se
+     *  hace por vía de tiempo en PlaybackManager, nunca en el
+     *  refresco a nivel byte. */
+    fun isSaverForced(): Boolean =
+        System.currentTimeMillis() < temporarySaverUntilMs
 
     fun prefetch(videoId: String, preferQuality: Boolean) {
         if (videoId.isBlank()) return
@@ -1948,9 +1971,16 @@ object YouTubeStreamResolver {
                 if (url == effectiveExclude) continue
                 considered++
                 if (considered > 1 && !probeCandidate(url, BROWSER_HEADERS)) continue
-                val baseDiskKey = "$cacheKey:${audioStream.format}:${audioStream.averageBitrate}"
+                // La clave es la del modo REAL del stream elegido:
+                // un refresco sameFormat puede entregar 128 con
+                // effectiveQuality en ahorro, y guardarlo bajo
+                // "saver" envenenaría el próximo resolve().
+                val realMode =
+                    if (audioStream.averageBitrate >= 128) "quality" else "saver"
+                val realCacheKey = "yt:$videoId:$realMode"
+                val baseDiskKey = "$realCacheKey:${audioStream.format}:${audioStream.averageBitrate}"
                 val diskKey = diskKeyWithMode(baseDiskKey, false)
-                cache[cacheKey] = CachedUrl(
+                cache[realCacheKey] = CachedUrl(
                     url, expiryMs(url, now), diskKey, audioStream.averageBitrate
                 )
                 streamBitrates[videoId] = audioStream.averageBitrate
