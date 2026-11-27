@@ -30,7 +30,9 @@ data class Song(
     val folderPath: String = "",
     val dateAddedSec: Long = 0,
     /** Video de YouTube si la pista es online; null en canciones locales. */
-    val onlineVideoId: String? = null
+    val onlineVideoId: String? = null,
+    /** True si la pista es un episodio de podcast. */
+    val isPodcastEpisode: Boolean = false
 ) {
     /** True si la pista se reproduce en línea (streaming), no desde un archivo. */
     val isOnline: Boolean get() = onlineVideoId != null
@@ -173,7 +175,8 @@ data class PodcastEpisode(
         albumId = 0L,
         durationMs = durationMs,
         uri = audioUrl,
-        albumArtUri = imageUrl ?: show.imageUrl
+        albumArtUri = imageUrl ?: show.imageUrl,
+        isPodcastEpisode = true
     )
 
     companion object {
