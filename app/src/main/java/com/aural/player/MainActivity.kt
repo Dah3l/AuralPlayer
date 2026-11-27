@@ -367,8 +367,13 @@ private fun AuralApp(viewModel: AuralViewModel,
     val albumsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val artistsGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    // El pager vive aquí para que al volver de un detalle siga en la misma pestaña
-    val libraryPagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 7 })
+    // El pager vive aquí para que al volver de un detalle siga en la misma pestaña.
+    // Su número de páginas sigue el orden real de pestañas (con Emisoras y
+    // Podcasts son 9): un número fijo dejaba fuera las últimas pestañas.
+    val libraryTabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
+    val libraryPagerState = androidx.compose.foundation.pager.rememberPagerState(
+        pageCount = { libraryTabOrder.size.coerceAtLeast(1) }
+    )
     val themesGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // Estados de scroll de cada detalle, por destino: al volver atrás la
     // lista queda donde estaba (cada álbum, artista y playlist por separado)
@@ -378,6 +383,11 @@ private fun AuralApp(viewModel: AuralViewModel,
     fun detailListState(key: String) =
         detailListStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     var libraryTab by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // La pestaña activa siempre dentro del rango válido del orden actual:
+    // pills y pager quedan alineados aunque el orden cambie de tamaño.
+    androidx.compose.runtime.LaunchedEffect(libraryTabOrder.size) {
+        libraryTab = libraryTab.coerceIn(0, libraryTabOrder.lastIndex.coerceAtLeast(0))
+    }
     // v1.0.7: la isla dinámica puede pedir abrir la pestaña de Descargas.
     androidx.compose.runtime.LaunchedEffect(pendingIslandTab) {
         pendingIslandTab?.let {
@@ -553,7 +563,11 @@ private fun AuralApp(viewModel: AuralViewModel,
                     playlistsListState = playlistsListState,
                     pagerState = libraryPagerState,
                     selectedTab = libraryTab,
-                    onTabSelected = { libraryTab = it },
+                    onTabSelected = {
+                        libraryTab = it.coerceIn(
+                            0, libraryTabOrder.lastIndex.coerceAtLeast(0)
+                        )
+                    },
                         youTubeManager = youTubeManager,
                         settingsStore = settingsStore,
                         isAmbientVisible = !showNowPlaying
