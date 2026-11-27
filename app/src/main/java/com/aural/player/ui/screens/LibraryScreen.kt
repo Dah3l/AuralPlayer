@@ -47,6 +47,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -169,6 +171,8 @@ fun LibraryScreen(
     onOpenArtist: (artistName: String) -> Unit,
     onOpenPlaylist: (playlistId: String) -> Unit,
     onOpenOnlineCollection: (com.aural.player.youtube.OnlineCollectionResult) -> Unit = {},
+    onOpenRadioStation: (com.aural.player.data.RadioStation) -> Unit = {},
+    onOpenPodcastShow: (com.aural.player.data.PodcastShow) -> Unit = {},
     onOpenThemes: () -> Unit,
     onSongMenu: (song: Song) -> Unit,
     onOpenEqualizer: () -> Unit = {},
@@ -261,6 +265,13 @@ fun LibraryScreen(
     val radioStations by viewModel.radioStations.collectAsStateWithLifecycle()
     val podcastShows by viewModel.podcastShows.collectAsStateWithLifecycle()
     val podcastProgress by viewModel.podcastProgress.collectAsStateWithLifecycle()
+    val radioSearchResults by viewModel.radioSearchResults.collectAsStateWithLifecycle()
+    val radioSearching by viewModel.radioSearching.collectAsStateWithLifecycle()
+    val radioSearchQuery by viewModel.radioSearchQuery.collectAsStateWithLifecycle()
+    val podcastSearchResults by viewModel.podcastSearchResults.collectAsStateWithLifecycle()
+    val podcastSearching by viewModel.podcastSearching.collectAsStateWithLifecycle()
+    val podcastSearchQuery by viewModel.podcastSearchQuery.collectAsStateWithLifecycle()
+    val searchFocusRequester = remember { FocusRequester() }
     val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
     val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
@@ -414,6 +425,24 @@ fun LibraryScreen(
         } else {
             youTubeManager?.clearOnlineResults()
         }
+    }
+    // Descubrimiento de Emisoras/Podcasts: con texto y su chip
+    // activo, la búsqueda corre contra Radio Browser / el
+    // directorio; sin texto se ve la colección guardada.
+    LaunchedEffect(library.query, selectedTab, tabOrder) {
+        val query = library.query.trim()
+        val tabKey = tabOrder.getOrNull(selectedTab)
+        if (query.isBlank() || (tabKey != "radio" && tabKey != "podcasts")) {
+            viewModel.clearCollectionSearch()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(450)
+        if (!viewModel.hasInternet()) {
+            viewModel.clearCollectionSearch()
+            return@LaunchedEffect
+        }
+        if (tabKey == "radio") viewModel.searchRadio(query)
+        else viewModel.searchPodcasts(query)
     }
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
@@ -614,6 +643,7 @@ fun LibraryScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(searchFocusRequester)
                     .onFocusChanged { searchFocused = it.isFocused }
             )
         }
@@ -978,20 +1008,63 @@ fun LibraryScreen(
                             )
                             }
                         }
-                    "radio" -> RadioTab(
+                    "radio" -> if (library.query.isNotBlank()) {
+                            RadioSearchTab(
+                                stations = radioSearchResults,
+                                savedIds = radioStations.map { it.id }.toSet(),
+                                searching = radioSearching,
+                                pending = radioSearchQuery != library.query.trim(),
+                                hasInternet = viewModel.hasInternet(),
+                                onPlay = { viewModel.playRadioStation(it) },
+                                onToggleSaved = { station ->
+                                    if (radioStations.any { it.id == station.id }) {
+                                        viewModel.removeRadioStation(station)
+                                    } else {
+                                        viewModel.addRadioStation(station)
+                                    }
+                                },
+                                listState = radioListState
+                            )
+                        } else RadioTab(
                             stations = radioStations,
                             onPlay = { viewModel.playRadioStation(it) },
                             onRemove = { viewModel.removeRadioStation(it) },
-                            onSearch = { onTabSelected(tabOrder.indexOf("songs")) },
-                            listState = radioListState
+                            onSearch = {
+                                onTabSelected(tabOrder.indexOf("radio"))
+                                searchFocusRequester.requestFocus()
+                            },
+                            listState = radioListState,
+                            onOpenDetail = onOpenRadioStation
                         )
-                    "podcasts" -> PodcastsTab(
+                    "podcasts" -> if (library.query.isNotBlank()) {
+                            PodcastSearchTab(
+                                shows = podcastSearchResults,
+                                savedFeedUrls = podcastShows.map { it.feedUrl }.toSet(),
+                                searching = podcastSearching,
+                                pending = podcastSearchQuery != library.query.trim(),
+                                hasInternet = viewModel.hasInternet(),
+                                onOpen = onOpenPodcastShow,
+                                onPlay = { viewModel.playPodcastShow(it) },
+                                onToggleSaved = { show ->
+                                    if (podcastShows.any { it.feedUrl == show.feedUrl }) {
+                                        viewModel.removePodcastShow(show)
+                                    } else {
+                                        viewModel.addPodcastShow(show)
+                                    }
+                                },
+                                listState = podcastsListState
+                            )
+                        } else PodcastsTab(
                             shows = podcastShows,
                             progress = podcastProgress,
                             onPlay = { viewModel.playPodcastShow(it) },
                             onRemove = { viewModel.removePodcastShow(it) },
-                            onSearch = { onTabSelected(tabOrder.indexOf("songs")) },
-                            listState = podcastsListState
+                            onSearch = {
+                                onTabSelected(tabOrder.indexOf("podcasts"))
+                                searchFocusRequester.requestFocus()
+                            },
+                            listState = podcastsListState,
+                            onOpenDetail = onOpenPodcastShow
                         )
                     "downloads" -> {
                             val ytm = youTubeManager
