@@ -205,11 +205,20 @@ fun NowPlayingScreen(
     val bpmMap by viewModel.bpmMap.collectAsStateWithLifecycle()
     val podcastDownloadProgress by viewModel.podcastDownloadProgress
         .collectAsStateWithLifecycle()
+    val podcastDownloadDetails by viewModel.podcastDownloadDetails
+        .collectAsStateWithLifecycle()
     val ytProgressFlow = remember(youTubeManager) {
         youTubeManager?.progress
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, Float>())
     }
     val ytDownloadProgress by ytProgressFlow.collectAsStateWithLifecycle()
+    val ytDetailsFlow = remember(youTubeManager) {
+        youTubeManager?.details
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                emptyMap<String, com.aural.player.data.ActiveDownload>()
+            )
+    }
+    val ytDownloadDetails by ytDetailsFlow.collectAsStateWithLifecycle()
     // Decoración Halloween: solo si el tema activo es Halloween (tema real del menú).
     val themeName by viewModel.appTheme.collectAsStateWithLifecycle()
     val isHalloweenTheme = themeName == AppTheme.HALLOWEEN.name
@@ -228,6 +237,11 @@ fun NowPlayingScreen(
     val currentDownloadProgress: Float? = when {
         song?.onlineVideoId != null -> ytDownloadProgress[song.onlineVideoId]
         podcastDownloadKey != null -> podcastDownloadProgress[podcastDownloadKey]
+        else -> null
+    }
+    val currentDownloadDetail = when {
+        song?.onlineVideoId != null -> ytDownloadDetails[song.onlineVideoId]
+        podcastDownloadKey != null -> podcastDownloadDetails[podcastDownloadKey]
         else -> null
     }
     // Info de archivo de la canción actual (bitrate, canales) para la
@@ -842,7 +856,9 @@ fun NowPlayingScreen(
                     modifier = Modifier.align(Alignment.CenterStart))
                 if (currentDownloadProgress != null) {
                     Text(
-                        text = "Descargando ${(currentDownloadProgress * 100).toInt()}%",
+                        text = currentDownloadDetail?.let {
+                            downloadDetailLine(it)
+                        } ?: "Descargando ${(currentDownloadProgress * 100).toInt()}%",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
@@ -1218,6 +1234,15 @@ private fun NowPlayingMenu(
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet<String>())
     }
     val ytDownloading by ytDownloadingFlow.collectAsStateWithLifecycle()
+    val ytDetailsFlow = remember(youTubeManager) {
+        youTubeManager?.details
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                emptyMap<String, com.aural.player.data.ActiveDownload>()
+            )
+    }
+    val ytDownloadDetails by ytDetailsFlow.collectAsStateWithLifecycle()
+    val podcastDownloadDetails by viewModel.podcastDownloadDetails
+        .collectAsStateWithLifecycle()
 
     // Funciones nuevas ya vistas (sin puntito).
     val seenFeatures by viewModel.seenFeatures.collectAsStateWithLifecycle()
@@ -1382,20 +1407,33 @@ private fun NowPlayingMenu(
             val videoId = song.onlineVideoId
             val downloading = videoId != null && videoId in ytDownloading
             val progress = videoId?.let { ytDownloadProgress[it] }
+            val detail = videoId?.let { ytDownloadDetails[it] }
             DropdownMenuItem(
                 text = {
                     Text(
                         if (downloading) {
-                            "Descargando ${((progress ?: 0f) * 100).toInt()}%"
+                            "Cancelar descarga · " + (detail?.let {
+                                downloadDetailLine(it)
+                            } ?: "${((progress ?: 0f) * 100).toInt()}%")
                         } else {
                             "Descargar"
                         }
                     )
                 },
-                leadingIcon = { Icon(Icons.Rounded.Download, null) },
-                enabled = !downloading,
+                leadingIcon = {
+                    Icon(
+                        if (downloading) Icons.Rounded.Close
+                        else Icons.Rounded.Download,
+                        null
+                    )
+                },
+                enabled = true,
                 onClick = {
                     onDismiss()
+                    if (downloading && videoId != null) {
+                        youTubeManager.cancelDownload(videoId)
+                        return@DropdownMenuItem
+                    }
                     val result = com.aural.player.youtube.YTResult(
                         videoId = song.onlineVideoId ?: return@DropdownMenuItem,
                         title = song.title,
@@ -1433,13 +1471,16 @@ private fun NowPlayingMenu(
                 null
             }
             val downloadingProgress = key?.let { podcastDownloadProgress[it] }
+            val detail = key?.let { podcastDownloadDetails[it] }
             val downloaded = key != null && podcastDownloads.containsKey(key)
             DropdownMenuItem(
                 text = {
                     Text(
                         when {
                             downloadingProgress != null ->
-                                "Descargando ${(downloadingProgress * 100).toInt()}%"
+                                "Cancelar descarga · " + (detail?.let {
+                                    downloadDetailLine(it)
+                                } ?: "${(downloadingProgress * 100).toInt()}%")
                             downloaded -> "Eliminar descarga"
                             else -> "Descargar"
                         }
@@ -1447,18 +1488,23 @@ private fun NowPlayingMenu(
                 },
                 leadingIcon = {
                     Icon(
-                        if (downloaded) Icons.Rounded.Delete
-                        else Icons.Rounded.Download,
+                        when {
+                            downloadingProgress != null -> Icons.Rounded.Close
+                            downloaded -> Icons.Rounded.Delete
+                            else -> Icons.Rounded.Download
+                        },
                         null
                     )
                 },
-                enabled = downloadingProgress == null,
+                enabled = true,
                 onClick = {
                     onDismiss()
-                    if (downloaded) {
-                        viewModel.deletePodcastDownloadForSong(song)
-                    } else {
-                        viewModel.downloadPodcastForSong(song)
+                    when {
+                        downloadingProgress != null ->
+                            viewModel.cancelPodcastDownloadForSong(song)
+                        downloaded ->
+                            viewModel.deletePodcastDownloadForSong(song)
+                        else -> viewModel.downloadPodcastForSong(song)
                     }
                 }
             )
@@ -2624,5 +2670,24 @@ private fun CarouselTitleText(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/** Línea de particulares de una descarga activa para la
+ *  fila de tiempos: tamaño y porcentaje. */
+private fun downloadDetailLine(
+    detail: com.aural.player.data.ActiveDownload
+): String {
+    fun fmt(bytes: Long): String = when {
+        bytes >= 1024L * 1024L ->
+            String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
+        bytes >= 1024L ->
+            String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
+    }
+    return if (detail.totalBytes > 0L) {
+        "${fmt(detail.downloadedBytes)}/${fmt(detail.totalBytes)} · ${detail.percent}%"
+    } else {
+        "Descargando ${detail.percent}%"
     }
 }
