@@ -114,3 +114,78 @@ data class Playlist(
     val name: String,
     val songIds: List<Long>
 )
+
+/** Emisora guardada por el usuario (Radio Browser). */
+data class RadioStation(
+    val id: String,
+    val name: String,
+    val streamUrl: String,
+    val country: String = "",
+    val genre: String = "",
+    val bitrateKbps: Int = 0,
+    val logoUrl: String? = null
+) {
+    /** Song reproducible con la URL directa del stream en vivo. */
+    fun toSong(): Song = Song(
+        id = songIdFor(id),
+        title = name,
+        artist = listOf(country, genre).filter { it.isNotBlank() }
+            .joinToString(" · ").ifBlank { "Emisora" },
+        album = "",
+        albumId = 0L,
+        durationMs = 0L,
+        uri = streamUrl,
+        albumArtUri = logoUrl
+    )
+
+    companion object {
+        /** Id estable en un rango negativo propio, lejos de los
+         *  ids online secuenciales y de los MediaStore locales. */
+        fun songIdFor(stationId: String): Long =
+            -2_000_000_000L - (stationId.hashCode().toLong() and 0x7fffffffL)
+    }
+}
+
+/** Podcast guardado por el usuario (directorio RSS). */
+data class PodcastShow(
+    val id: String,
+    val title: String,
+    val feedUrl: String,
+    val imageUrl: String? = null,
+    val author: String = ""
+)
+
+/** Episodio de un feed RSS. */
+data class PodcastEpisode(
+    val guid: String,
+    val title: String,
+    val publishedMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val audioUrl: String,
+    val imageUrl: String? = null
+) {
+    /** Song reproducible con la URL directa del episodio. */
+    fun toSong(show: PodcastShow): Song = Song(
+        id = songIdFor(show.feedUrl, guid),
+        title = title,
+        artist = show.title,
+        album = show.author,
+        albumId = 0L,
+        durationMs = durationMs,
+        uri = audioUrl,
+        albumArtUri = imageUrl ?: show.imageUrl
+    )
+
+    companion object {
+        fun songIdFor(feedUrl: String, guid: String): Long =
+            -3_000_000_000L - ((feedUrl + "|" + guid).hashCode().toLong() and 0x7fffffffL)
+
+        fun progressKey(feedUrl: String, guid: String): String = "$feedUrl|$guid"
+    }
+}
+
+/** Progreso guardado de un episodio. */
+data class PodcastProgress(
+    val positionMs: Long = 0L,
+    val listened: Boolean = false
+)
