@@ -1716,6 +1716,10 @@ object YouTubeStreamResolver {
          *  de NewPipe): lo lee la pill de calidad del Now
          *  Playing. */
         val bitrateKbps: Int = 0,
+        /** El stream salió del ahorro temporal (ajuste en
+         *  Calidad, ahorro activo, había M4A >= 128 y se eligió
+         *  menor): la pill va naranja solo por esta causa. */
+        val saverForced: Boolean = false,
         val requestHeaders: Map<String, String> = BROWSER_HEADERS
     )
 
@@ -1762,12 +1766,26 @@ object YouTubeStreamResolver {
      *  aún no se resolvió. */
     fun streamBitrateKbps(videoId: String): Int? = streamBitrates[videoId]
 
+    /** Videos cuyo stream vigente salió del ahorro temporal
+     *  (ajuste en Calidad pero el ahorro forzó un bitrate
+     *  menor habiendo M4A mayor): la pill del Now Playing va
+     *  naranja solo en ese caso. Se olvida al invalidar. */
+    private val streamSaverForced =
+        java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /** Si el stream vigente de ese video salió del ahorro
+     *  temporal (false si responde al ajuste del usuario o si
+     *  el video no ofrece un M4A mayor). */
+    fun streamSaverForced(videoId: String): Boolean =
+        streamSaverForced[videoId] == true
+
     /** Limpia URLs y bitrates cacheados: al cambiar la calidad
      *  en Ajustes, la próxima resolución ya usa la calidad
      *  nueva. La canción que suena no se reinicia. */
     fun clearAll() {
         cache.clear()
         streamBitrates.clear()
+        streamSaverForced.clear()
     }
 
     // Medición de conexión para el indicador del Now Playing:
@@ -1853,6 +1871,14 @@ object YouTubeStreamResolver {
 
     fun noteRebuffer() {
         temporarySaverUntilMs = System.currentTimeMillis() + 10 * 60_000L
+    }
+
+    /** Libertad condicional del ahorro temporal: se levanta
+     *  antes de los 10 min cuando la red muestra salud
+     *  sostenida (rama sana de la regla ABR) o una canción
+     *  suena limpia de principio a fin. */
+    fun clearTemporarySaver() {
+        temporarySaverUntilMs = 0L
     }
 
     /** El ahorro temporal está activo (rebuffer real o regla
@@ -1944,6 +1970,7 @@ object YouTubeStreamResolver {
                     if (cached.bitrateKbps > 0) {
                         streamBitrates[videoId] = cached.bitrateKbps
                     }
+                    streamSaverForced[videoId] = cached.saverForced
                     return ResolvedStream(
                         cached.url,
                         diskKeyWithMode(cached.diskKey, false),
@@ -1996,10 +2023,19 @@ object YouTubeStreamResolver {
                 val realCacheKey = "yt:$videoId:$realMode"
                 val baseDiskKey = "$realCacheKey:${audioStream.format}:${audioStream.averageBitrate}"
                 val diskKey = diskKeyWithMode(baseDiskKey, false)
+                // Forzado solo si el ajuste es Calidad, el ahorro
+                // temporal está activo, el video ofrece M4A >= 128
+                // y aun así se eligió un bitrate menor: si no hay
+                // M4A mayor, es lo mejor disponible (verde).
+                val saverForced = preferQuality && !effectiveQuality &&
+                    candidates.any { it.averageBitrate >= 128 } &&
+                    audioStream.averageBitrate < 128
                 cache[realCacheKey] = CachedUrl(
-                    url, expiryMs(url, now), diskKey, audioStream.averageBitrate
+                    url, expiryMs(url, now), diskKey, audioStream.averageBitrate,
+                    saverForced = saverForced
                 )
                 streamBitrates[videoId] = audioStream.averageBitrate
+                streamSaverForced[videoId] = saverForced
                 lastFailedUrls.remove(videoId)
                 return ResolvedStream(url, diskKey, false)
             }
@@ -2085,6 +2121,7 @@ object YouTubeStreamResolver {
         synchronized(lockFor(videoId)) {
             cache.keys.removeAll { it.startsWith("yt:$videoId:") }
             streamBitrates.remove(videoId)
+            streamSaverForced.remove(videoId)
         }
     }
 
