@@ -626,6 +626,136 @@ internal fun homeContinueItemOf(
                 )
             }
 
+/**
+ * Tarjeta hero de la Sesión DJ: degradado del color del tema, pill
+ * superior, título grande y botón pastilla. Cuando la sesión está
+ * activa lo muestra y ofrece detenerla; el botón principal siempre
+ * arranca una lista NUEVA (cada toque = lista distinta).
+ */
+@Composable
+internal fun DjSessionCard(
+    isActive: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        primary.copy(alpha = 0.32f),
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                )
+            )
+            .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        // Decoración: círculo de color arriba a la derecha, como el mesh.
+        Box(
+            Modifier
+                .size(140.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 48.dp, y = (-48).dp)
+                .background(primary.copy(alpha = 0.18f), CircleShape)
+        )
+        Column {
+            // Pill superior.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(primary.copy(alpha = 0.16f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "SESIÓN INFINITA",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = primary
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Sesión DJ",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Que la música no pare",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (isActive) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(primary, CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Sesión activa",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = primary
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            // Solo el botón arranca o para: la tarjeta ya no es un botón
+            // entero. Inactiva: "Nueva sesión". Activa: SOLO "Detener",
+            // que para la música por completo (Stop).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(primary)
+                    .clickable { if (isActive) onStop() else onStart() }
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                if (isActive) {
+                    // Cuadrito de stop dibujado (sin depender de un icono).
+                    Box(
+                        Modifier
+                            .size(12.dp)
+                            .background(onPrimary, RoundedCornerShape(2.dp))
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (isActive) "Detener" else "Nueva sesión",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = onPrimary
+                )
+            }
+        }
+    }
+}
+
 /** Tarjeta online del Inicio («Para ti» expandido): mismo
  *  lenguaje de tarjeta definida del Inicio (fondo propio,
  *  borde 1dp, radio 16dp, portada con título y ▶ dentro). */
