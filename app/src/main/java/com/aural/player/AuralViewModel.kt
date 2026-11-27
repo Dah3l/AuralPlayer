@@ -9,6 +9,11 @@ import com.aural.player.data.Artist
 import com.aural.player.data.Folder
 import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Playlist
+import com.aural.player.data.PodcastClient
+import com.aural.player.data.PodcastEpisode
+import com.aural.player.data.PodcastProgress
+import com.aural.player.data.PodcastShow
+import com.aural.player.data.RadioStation
 import com.aural.player.data.Song
 import com.aural.player.data.SettingsStore
 import com.aural.player.data.SongCoverStore
@@ -106,6 +111,27 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
     )
 
+    /** Emisoras guardadas por el usuario. */
+    val radioStations: StateFlow<List<RadioStation>> = settings.radioStations.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyList()
+    )
+
+    /** Podcasts guardados por el usuario. */
+    val podcastShows: StateFlow<List<PodcastShow>> = settings.podcastShows.stateIn(
+        viewModelScope, SharingStarted.Eagerly, emptyList()
+    )
+
+    /** Progreso por episodio (feedUrl|guid -> progreso). */
+    val podcastProgress: StateFlow<Map<String, PodcastProgress>> =
+        settings.podcastProgress.stateIn(
+            viewModelScope, SharingStarted.Eagerly, emptyMap()
+        )
+
+    /** Episodio en reproducción (songId -> feedUrl|guid) para
+     *  guardar su progreso al pausar y cada pocos segundos. */
+    private val podcastEpisodeKeys = mutableMapOf<Long, Pair<String, String>>()
+    private val podcastProgressSavedAt = mutableMapOf<Long, Long>()
+
     /** Despertador configurado (null = sin alarma). */
     val alarm: StateFlow<AlarmConfig?> = settings.alarm.stateIn(
         viewModelScope, SharingStarted.Eagerly, null
@@ -165,6 +191,25 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     init {
+        // Progreso de podcast: se guarda al pausar y cada 5 s
+        // de avance mientras el episodio suena.
+        viewModelScope.launch {
+            playerState.collect { state ->
+                val song = state.currentSong ?: return@collect
+                val (feedUrl, guid) = podcastEpisodeKeys[song.id] ?: return@collect
+                val position = state.positionMs
+                val lastSaved = podcastProgressSavedAt[song.id] ?: -1L
+                val shouldSave = !state.isPlaying ||
+                    lastSaved < 0L ||
+                    kotlin.math.abs(position - lastSaved) >= 5_000L
+                if (shouldSave && position > 0L) {
+                    podcastProgressSavedAt[song.id] = position
+                    val listened = state.durationMs > 0L &&
+                        position >= state.durationMs - 10_000L
+                    settings.setPodcastProgress(feedUrl, guid, position, listened)
+                }
+            }
+        }
         // Crear la playlist "Descargas" si no existe (como Favoritas, desde la instalación)
         viewModelScope.launch {
             kotlinx.coroutines.delay(1000) // esperar a que cargue settings
@@ -831,6 +876,45 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         withStreamingGate {
             playback.playQueue(songs, index.coerceIn(0, songs.size - 1), shuffle)
         }
+    }
+
+    /** Reproduce una emisora guardada con su URL directa. */
+    fun playRadioStation(station: RadioStation) {
+        withStreamingGate {
+            playback.playQueue(listOf(station.toSong()), 0, false)
+        }
+    }
+
+    fun removeRadioStation(station: RadioStation) {
+        viewModelScope.launch { settings.removeRadioStation(station.id) }
+    }
+
+    /**
+     * Reproduce el episodio más reciente de un podcast guardado,
+     * reanudando en el progreso guardado si lo hay.
+     */
+    fun playPodcastShow(show: PodcastShow) {
+        withStreamingGate {
+            viewModelScope.launch {
+                val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 20)
+                val episode = episodes.firstOrNull() ?: return@launch
+                playPodcastEpisode(show, episode)
+            }
+        }
+    }
+
+    fun playPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
+        val song = episode.toSong(show)
+        podcastEpisodeKeys[song.id] = show.feedUrl to episode.guid
+        val saved = podcastProgress.value[
+            PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+        ]
+        val resumeMs = if (saved != null && !saved.listened) saved.positionMs else 0L
+        playback.playQueue(listOf(song), 0, false, startPositionMs = resumeMs)
+    }
+
+    fun removePodcastShow(show: PodcastShow) {
+        viewModelScope.launch { settings.removePodcastShow(show.feedUrl) }
     }
 
     /** Añade una online a la cola (al final o como siguiente). */
