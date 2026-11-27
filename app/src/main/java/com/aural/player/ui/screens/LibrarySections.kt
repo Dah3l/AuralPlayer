@@ -89,6 +89,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
+import com.aural.player.data.PodcastContinueItem
+import com.aural.player.data.PodcastDownload
 import com.aural.player.data.PodcastEpisode
 import com.aural.player.data.PodcastProgress
 import com.aural.player.data.PodcastShow
@@ -1459,6 +1461,7 @@ internal fun CollectionRow(
     onPlay: () -> Unit,
     onRemove: () -> Unit,
     showMenu: Boolean = true,
+    showPlayButton: Boolean = true,
     onClick: () -> Unit = onPlay,
     menuLabel: String = "Quitar",
     onMenuAction: () -> Unit = onRemove
@@ -1491,11 +1494,13 @@ internal fun CollectionRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = onPlay) {
-            Icon(
-                Icons.Rounded.PlayArrow, "Reproducir",
-                tint = MaterialTheme.colorScheme.primary
-            )
+        if (showPlayButton) {
+            IconButton(onClick = onPlay) {
+                Icon(
+                    Icons.Rounded.PlayArrow, "Reproducir",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
         if (showMenu) Box {
             IconButton(onClick = { menuOpen = true }) {
@@ -1567,7 +1572,8 @@ internal fun PodcastsTab(
     onRemove: (PodcastShow) -> Unit,
     onSearch: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onOpenDetail: (PodcastShow) -> Unit = onPlay
+    onOpenDetail: (PodcastShow) -> Unit = onPlay,
+    onOpenContinue: () -> Unit = {}
 ) {
     if (shows.isEmpty()) {
         CollectionGuideEmptyState(
@@ -1588,17 +1594,11 @@ internal fun PodcastsTab(
                     title = "Sigue escuchando",
                     subtitle = "$inProgressCount ${if (inProgressCount == 1) "episodio" else "episodios"} a medias",
                     coverUri = null,
-                    onPlay = {
-                        val inProgressShow = shows.firstOrNull { show ->
-                            progress.any { (key, value) ->
-                                key.startsWith(show.feedUrl + "|") &&
-                                    !value.listened && value.positionMs > 0L
-                            }
-                        }
-                        inProgressShow?.let(onPlay)
-                    },
+                    onPlay = onOpenContinue,
                     onRemove = {},
-                    showMenu = false
+                    showMenu = false,
+                    showPlayButton = false,
+                    onClick = onOpenContinue
                 )
             }
         }
@@ -1871,7 +1871,9 @@ internal fun RadioStationDetailScreen(
     nowPlaying: String?,
     onBack: () -> Unit,
     onPlay: () -> Unit,
-    onToggleSaved: () -> Unit
+    onToggleSaved: () -> Unit,
+    versions: List<RadioStation> = emptyList(),
+    onSelectVersion: (RadioStation) -> Unit = {}
 ) {
     Column(
         Modifier
@@ -1922,6 +1924,61 @@ internal fun RadioStationDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        if (versions.size > 1) {
+            Spacer(Modifier.height(24.dp))
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    text = "Versiones",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "La misma emisora en otra calidad. La elegida se guarda en tu colección.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            versions.forEach { version ->
+                val selected = version.id == station.id ||
+                    version.streamUrl == station.streamUrl
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectVersion(version) }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = if (version.bitrateKbps > 0) {
+                                "${version.bitrateKbps} kbps"
+                            } else {
+                                "Calidad no indicada"
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = listOf(version.codec, version.country, version.genre)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (selected) {
+                        Text(
+                            text = "Elegida",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1947,7 +2004,11 @@ internal fun PodcastDetailScreen(
     onPlayShow: () -> Unit,
     onPlayEpisode: (PodcastEpisode) -> Unit,
     onToggleSaved: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    downloads: Map<String, PodcastDownload> = emptyMap(),
+    downloadProgress: Map<String, Float> = emptyMap(),
+    onDownloadEpisode: (PodcastEpisode) -> Unit = {},
+    onDeleteDownload: (PodcastEpisode) -> Unit = {}
 ) {
     val subtitle = listOf(
         show.author,
@@ -2025,9 +2086,10 @@ internal fun PodcastDetailScreen(
             },
             key = { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
         ) { episode ->
-            val savedProgress = progress[
-                PodcastEpisode.progressKey(show.feedUrl, episode.guid)
-            ]
+            val episodeKey = PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+            val savedProgress = progress[episodeKey]
+            val downloaded = downloads.containsKey(episodeKey)
+            val downloadingProgress = downloadProgress[episodeKey]
             val metaParts = mutableListOf<String>()
             formatPodcastDate(episode.publishedMs)
                 .takeIf { it.isNotBlank() }?.let { metaParts += it }
@@ -2038,6 +2100,11 @@ internal fun PodcastDetailScreen(
                 savedProgress?.listened == true -> metaParts += "Escuchado"
                 savedProgress != null && savedProgress.positionMs > 0L ->
                     metaParts += "Vas en ${formatDuration(savedProgress.positionMs)}"
+            }
+            when {
+                downloadingProgress != null ->
+                    metaParts += "Descargando ${(downloadingProgress * 100).toInt()}%"
+                downloaded -> metaParts += "Descargado"
             }
             Column {
                 Row(
@@ -2077,6 +2144,44 @@ internal fun PodcastDetailScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    var episodeMenuOpen by remember(episodeKey) {
+                        mutableStateOf(false)
+                    }
+                    Box {
+                        IconButton(onClick = { episodeMenuOpen = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones del episodio")
+                        }
+                        DropdownMenu(
+                            expanded = episodeMenuOpen,
+                            onDismissRequest = { episodeMenuOpen = false }
+                        ) {
+                            when {
+                                downloadingProgress != null -> DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Descargando ${(downloadingProgress * 100).toInt()}%"
+                                        )
+                                    },
+                                    onClick = { episodeMenuOpen = false },
+                                    enabled = false
+                                )
+                                downloaded -> DropdownMenuItem(
+                                    text = { Text("Eliminar descarga") },
+                                    onClick = {
+                                        episodeMenuOpen = false
+                                        onDeleteDownload(episode)
+                                    }
+                                )
+                                else -> DropdownMenuItem(
+                                    text = { Text("Descargar") },
+                                    onClick = {
+                                        episodeMenuOpen = false
+                                        onDownloadEpisode(episode)
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
                 if (savedProgress != null &&
                     !savedProgress.listened &&
@@ -2086,6 +2191,145 @@ internal fun PodcastDetailScreen(
                     LinearProgressIndicator(
                         progress = {
                             (savedProgress.positionMs.toFloat() /
+                                episode.durationMs.toFloat()).coerceIn(0f, 1f)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .height(3.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Detalle de «Sigue escuchando»: todos los episodios
+ *  empezados, del más reciente al más viejo. */
+@Composable
+internal fun PodcastContinueScreen(
+    items: List<PodcastContinueItem>,
+    loading: Boolean,
+    onBack: () -> Unit,
+    onPlayEpisode: (PodcastShow, PodcastEpisode) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        item {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 8.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, "Volver")
+                }
+                Text(
+                    text = "Sigue escuchando",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        if (loading && items.isEmpty()) {
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        } else if (items.isEmpty()) {
+            item {
+                Text(
+                    text = "No tienes episodios a medias",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                )
+            }
+        }
+        items(
+            items.distinctBy {
+                PodcastEpisode.progressKey(it.show.feedUrl, it.episode.guid)
+            },
+            key = {
+                PodcastEpisode.progressKey(it.show.feedUrl, it.episode.guid)
+            }
+        ) { item ->
+            val episode = item.episode
+            val progress = item.progress
+            val remainingMs = if (episode.durationMs > 0L) {
+                (episode.durationMs - progress.positionMs).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPlayEpisode(item.show, episode) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CoverArt(
+                        uri = episode.imageUrl ?: item.show.imageUrl,
+                        size = 48.dp
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            item.show.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            episode.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (episode.durationMs > 0L) {
+                                "Quedan ${formatDuration(remainingMs)}"
+                            } else {
+                                "Vas en ${formatDuration(progress.positionMs)}"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = { onPlayEpisode(item.show, episode) }) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            "Reanudar episodio",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                if (episode.durationMs > 0L) {
+                    LinearProgressIndicator(
+                        progress = {
+                            (progress.positionMs.toFloat() /
                                 episode.durationMs.toFloat()).coerceIn(0f, 1f)
                         },
                         modifier = Modifier
