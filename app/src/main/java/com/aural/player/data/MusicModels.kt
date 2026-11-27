@@ -32,10 +32,26 @@ data class Song(
     /** Video de YouTube si la pista es online; null en canciones locales. */
     val onlineVideoId: String? = null,
     /** True si la pista es un episodio de podcast. */
-    val isPodcastEpisode: Boolean = false
+    val isPodcastEpisode: Boolean = false,
+    /** Bitrate real o estimado del stream (kbps), si se conoce. */
+    val streamBitrateKbps: Int? = null,
+    /** True si la pista es una emisora en vivo. */
+    val isRadioStation: Boolean = false,
+    /** Feed del podcast si la pista es un episodio. */
+    val podcastFeedUrl: String? = null,
+    /** GUID del episodio si la pista es un episodio. */
+    val podcastGuid: String? = null,
+    /** URL remota del episodio (para descargar aunque suene local). */
+    val podcastAudioUrl: String? = null
 ) {
     /** True si la pista se reproduce en línea (streaming), no desde un archivo. */
     val isOnline: Boolean get() = onlineVideoId != null
+
+    /** True si el audio viene de la red (YouTube, emisora o
+     *  episodio aún no descargado). */
+    val isOnlineStream: Boolean
+        get() = isOnline || isRadioStation ||
+            (isPodcastEpisode && uri.startsWith("http", ignoreCase = true))
 }
 
 /**
@@ -125,7 +141,8 @@ data class RadioStation(
     val country: String = "",
     val genre: String = "",
     val bitrateKbps: Int = 0,
-    val logoUrl: String? = null
+    val logoUrl: String? = null,
+    val codec: String = ""
 ) {
     /** Song reproducible con la URL directa del stream en vivo. */
     fun toSong(): Song = Song(
@@ -137,7 +154,9 @@ data class RadioStation(
         albumId = 0L,
         durationMs = 0L,
         uri = streamUrl,
-        albumArtUri = logoUrl
+        albumArtUri = logoUrl,
+        streamBitrateKbps = bitrateKbps.takeIf { it > 0 },
+        isRadioStation = true
     )
 
     companion object {
@@ -164,19 +183,35 @@ data class PodcastEpisode(
     val publishedMs: Long = 0L,
     val durationMs: Long = 0L,
     val audioUrl: String,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    /** Tamaño del enclosure en bytes (0 si el RSS no lo da). */
+    val audioBytes: Long = 0L,
+    /** Tipo MIME del enclosure, si el RSS lo da. */
+    val audioMimeType: String = ""
 ) {
-    /** Song reproducible con la URL directa del episodio. */
-    fun toSong(show: PodcastShow): Song = Song(
+    /** Bitrate estimado (kbps) desde tamaño y duración del
+     *  RSS; null si falta alguno de los dos datos. */
+    fun estimatedBitrateKbps(): Int? {
+        if (audioBytes <= 0L || durationMs <= 0L) return null
+        return ((audioBytes * 8L) / durationMs).toInt().takeIf { it > 0 }
+    }
+
+    /** Song reproducible del episodio: desde [localUri] si
+     *  está descargado, o con la URL directa del feed. */
+    fun toSong(show: PodcastShow, localUri: String? = null): Song = Song(
         id = songIdFor(show.feedUrl, guid),
         title = title,
         artist = show.title,
         album = show.author,
         albumId = 0L,
         durationMs = durationMs,
-        uri = audioUrl,
+        uri = localUri ?: audioUrl,
         albumArtUri = imageUrl ?: show.imageUrl,
-        isPodcastEpisode = true
+        isPodcastEpisode = true,
+        streamBitrateKbps = estimatedBitrateKbps(),
+        podcastFeedUrl = show.feedUrl,
+        podcastGuid = guid,
+        podcastAudioUrl = audioUrl
     )
 
     companion object {
@@ -190,5 +225,22 @@ data class PodcastEpisode(
 /** Progreso guardado de un episodio. */
 data class PodcastProgress(
     val positionMs: Long = 0L,
-    val listened: Boolean = false
+    val listened: Boolean = false,
+    /** Última vez que se escuchó (ordena «Sigue escuchando»). */
+    val updatedAtMs: Long = 0L
+)
+
+/** Episodio descargado en el teléfono. */
+data class PodcastDownload(
+    val uri: String,
+    val mediaId: Long = -1L,
+    val fileName: String = "",
+    val downloadedAtMs: Long = 0L
+)
+
+/** Episodio empezado para la vista «Sigue escuchando». */
+data class PodcastContinueItem(
+    val show: PodcastShow,
+    val episode: PodcastEpisode,
+    val progress: PodcastProgress
 )
