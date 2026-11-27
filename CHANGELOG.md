@@ -28,6 +28,7 @@ en GitHub salen de aquí.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
 - **Emisoras y podcasts más completos** — en el reproductor, una emisora o un episodio muestran «En línea» y su calidad real; si una emisora existe en varias calidades, su ficha deja escoger la versión. «Sigue escuchando» abre la lista de episodios empezados con su progreso y lo que queda por escuchar, y los botones de podcast enseñan los segundos (−15 y +30).
 - **Descarga episodios y canciones en línea** — descarga un episodio desde su ficha o desde el menú del reproductor y escúchalo sin conexión; la canción en línea que suena también se puede descargar desde ese menú. El progreso se ve en el reproductor y en una notificación mientras baja.
+- **Todas las pestañas a la vista** — Descargas y Carpetas vuelven a mostrarse: el deslizador de pestañas ahora sigue el número real de pestañas en vez de quedarse en siete.
 
 ## v1.2.0 — 2026-11-24
 
