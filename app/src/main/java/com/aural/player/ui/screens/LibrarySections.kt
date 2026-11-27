@@ -455,6 +455,177 @@ internal fun rememberOnlineSuggestions(
     return OnlineSuggestionsUiState(suggestions, loading, songsUi)
 }
 
+/** Datos de una playlist para la sección "Para ti". */
+internal data class TopPlaylist(
+    val id: String,
+    val name: String,
+    val coverUri: String?,
+    val songCount: Int
+)
+
+/** Sección "Para ti": las 2 playlists que más suenan, con "Ver todas" y título + ▶ dentro de la portada. */
+@Composable
+internal fun MostPlayedSection(
+    topPlaylists: List<TopPlaylist>,
+    onOpenPlaylist: (String) -> Unit,
+    onPlayPlaylist: (String) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Para ti",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onSeeAll) { Text("Ver todas") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            topPlaylists.forEach { tp ->
+                // Tarjeta definida: fondo propio + borde 1dp + radio 16dp,
+                // título y ▶ dentro de la portada (como la referencia)
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .aspectRatio(1f)
+                        .shadow(4.dp, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .clickable { onOpenPlaylist(tp.id) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Nota musical si no hay imagen
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    if (!tp.coverUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = android.net.Uri.parse(tp.coverUri),
+                            contentDescription = "Portada",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    // Degradado oscuro abajo para que el título blanco se lea siempre
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0f to Color.Transparent,
+                                        0.55f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.8f)
+                                    )
+                                )
+                            )
+                    )
+                    // Título + ▶ dentro de la portada, abajo
+                    Row(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = tp.name,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                        // Separación para que el texto no se pegue al botón
+                        Spacer(Modifier.width(8.dp))
+                        if (tp.songCount > 0) {
+                            IconButton(
+                                onClick = { onPlayPlaylist(tp.id) },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    Icons.Rounded.PlayArrow,
+                                    "Reproducir",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+                    // Borde 1dp por encima de la portada: la tarjeta no se
+                    // confunde con el fondo ni cuando la foto la llena entera
+                    // (un borde en la cadena de modifiers quedaría tapado
+                    // por la imagen, que se dibuja encima).
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp)
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+/** «Sigue tu episodio» del Inicio: el episodio empezado
+ *  más reciente, desde la caché de «Sigue escuchando» o
+ *  desde el registro de progreso. */
+internal fun homeContinueItemOf(
+    podcastProgress: Map<String, PodcastProgress>,
+    cached: List<PodcastContinueItem>?
+): PodcastContinueItem? =
+    cached?.firstOrNull()
+        ?: podcastProgress.values
+            .filter {
+                !it.listened && it.positionMs > 0L &&
+                    it.audioUrl.isNotBlank() && it.episodeTitle.isNotBlank()
+            }
+            .maxByOrNull { it.updatedAtMs }
+            ?.let { saved ->
+                PodcastContinueItem(
+                    show = PodcastShow(
+                        id = saved.feedUrl,
+                        title = saved.showTitle.ifBlank { "Podcast" },
+                        feedUrl = saved.feedUrl,
+                        imageUrl = saved.showImageUrl,
+                        author = saved.showAuthor
+                    ),
+                    episode = PodcastEpisode(
+                        guid = saved.guid,
+                        title = saved.episodeTitle,
+                        publishedMs = saved.publishedMs,
+                        durationMs = saved.durationMs,
+                        audioUrl = saved.audioUrl,
+                        imageUrl = saved.episodeImageUrl,
+                        audioBytes = saved.audioBytes,
+                        audioMimeType = saved.audioMimeType
+                    ),
+                    progress = saved
+                )
+            }
+
 /** Tarjeta online del Inicio («Para ti» expandido): mismo
  *  lenguaje de tarjeta definida del Inicio (fondo propio,
  *  borde 1dp, radio 16dp, portada con título y ▶ dentro). */
