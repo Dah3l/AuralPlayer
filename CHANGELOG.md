@@ -33,6 +33,11 @@ en GitHub salen de aquí.
 - **Descargas ordenadas** — el botón de buscar en YouTube queda como icono junto al buscador y la pestaña se divide en Búsqueda y Completadas: lo terminado (canciones y podcasts) se agrupa de más reciente a más antigua con las mismas tarjetas de siempre. La notificación de descarga muestra el nombre y, en orden, tamaño total, descargado, porcentaje y velocidad, y al terminar pasa a completada sin quedarse en 100%.
 - **Streaming con la conexión reutilizada** — los pedazos del audio en línea comparten la misma conexión en vez de abrir una nueva por pedazo y Aural prepara más canciones de la cola por adelantado: se siente menos como si la conexión fuera lenta cuando no lo es.
 - **Finales y sugerencias que terminan** — una canción en línea que termina en pleno fundido cierra limpio y su final se reconoce también por la duración conocida, sin avisos de fallo; las sugerencias del lado Online cargan con tiempo límite y siempre salen del esqueleto, con contenido relacionado o con su estado guía.
+- **Inicio con todo integrado** — el Inicio suma las tarjetas en línea de «Para ti» («Tu mood actual» y «Porque escuchas a…», desde tu escucha real), «Emisoras para ti» con tus emisoras y sugerencias, y «Podcasts» con «Sigue tu episodio», su progreso y el aviso de episodios nuevos. Todo lleva a su detalle o suena directo, y sin conexión las tarjetas en línea se ocultan y el Inicio local queda completo.
+- **Navegación sin recargas** — los resultados de búsqueda en línea, las sugerencias y los detalles ya cargados quedan en memoria: cambiar de pestaña o de lado, o entrar y salir de un detalle, ya no vuelve a cargar ni muestra esqueletos. Solo un texto nuevo busca de nuevo.
+- **Toque en línea casi instantáneo** — las primeras canciones de los resultados se preparan en segundo plano y el arranque necesita menos colchón, así que tocar una canción en línea suena casi al momento.
+- **Slider sin bajón de calidad** — buscar con la barra de progreso ya no degrada el audio medio segundo: la búsqueda se hace una sola vez al soltar y la velocidad no se reaplica si ya es la tuya.
+- **Buscador de Descargas estable** — la barra de búsqueda de Descargas ya no crece con textos largos ni con la fuente del sistema enorme: una sola línea y altura fija.
 
 ## v1.2.0 — 2026-11-24
 
