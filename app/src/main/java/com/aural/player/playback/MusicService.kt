@@ -178,10 +178,11 @@ class MusicService : MediaSessionService() {
      */
     /**
      * Buffer con tope de memoria por reproductor: el principal
-     * carga 60–120 s con tope de 8 MB; el de fundido solo
-     * necesita el colchón de la siguiente (máx 30 s, tope
-     * 4 MB). Sin tope, dos reproductores a 120 s con archivos
-     * pesados inflaban la RAM en teléfonos modestos.
+     * carga la canción online de forma continua hasta tenerla
+     * completa (ventana amplia de 900 s), acotado por bytes
+     * (16 MB) para no disparar la RAM en teléfonos modestos;
+     * el de fundido solo necesita el colchón de la siguiente
+     * (máx 30 s, tope 4 MB).
      */
     private fun createLoadControl(fadePlayer: Boolean = false): DefaultLoadControl =
         if (fadePlayer) {
@@ -199,12 +200,12 @@ class MusicService : MediaSessionService() {
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
                     60_000,
-                    120_000,
+                    900_000,
                     4_000,
                     8_000
                 )
-                .setTargetBufferBytes(8 * 1024 * 1024)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setTargetBufferBytes(16 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
         }
 
@@ -1666,6 +1667,12 @@ private class ChunkedRangeDataSource(
     private var prefetching = false
     private var generation = 0
     private var refreshAttempts = 0
+    /** Medición de internet durante la lectura: bytes de red
+     *  por ventana (~1 s o >=256 KB) para el indicador del
+     *  Now Playing, sin esperar a que una carga «complete». */
+    private var connectionVideoId: String? = null
+    private var connectionWindowBytes = 0L
+    private var connectionWindowStartNs = 0L
 
     override fun addTransferListener(transferListener: TransferListener) {
         listeners += transferListener
@@ -1683,6 +1690,9 @@ private class ChunkedRangeDataSource(
         remaining = dataSpec.length
         chunkBytesRead = 0L
         refreshAttempts = 0
+        connectionVideoId = videoIdFromKey(dataSpec.key)
+        connectionWindowBytes = 0L
+        connectionWindowStartNs = 0L
         val opened = openChunkWithRefresh(position, remaining)
         current = opened.dataSource
         if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
@@ -1701,6 +1711,43 @@ private class ChunkedRangeDataSource(
         } else {
             CHUNK_BYTES
         }
+
+    private fun videoIdFromKey(key: String?): String? {
+        val parts = key?.split(":") ?: return null
+        return if (parts.size >= 2 && parts[0] == "yt") parts[1] else null
+    }
+
+    /** Anota bytes leídos de red y reporta la ventana al
+     *  medidor cuando llega a ~1 s o a 256 KB. */
+    private fun noteNetworkBytes(read: Int) {
+        if (!chunked || read <= 0) return
+        val videoId = connectionVideoId ?: return
+        val now = System.nanoTime()
+        if (connectionWindowStartNs == 0L) connectionWindowStartNs = now
+        connectionWindowBytes += read
+        val elapsedMs = (now - connectionWindowStartNs) / 1_000_000L
+        if (connectionWindowBytes >= 256L * 1024L || elapsedMs >= 1_000L) {
+            YouTubeStreamResolver.noteConnectionWindow(
+                videoId,
+                connectionWindowBytes,
+                elapsedMs.coerceAtLeast(50L)
+            )
+            connectionWindowBytes = 0L
+            connectionWindowStartNs = now
+        }
+    }
+
+    private fun flushConnectionWindow() {
+        val videoId = connectionVideoId ?: return
+        if (connectionWindowBytes < 16L * 1024L || connectionWindowStartNs == 0L) return
+        val elapsedMs = ((System.nanoTime() - connectionWindowStartNs) / 1_000_000L)
+            .coerceAtLeast(50L)
+        YouTubeStreamResolver.noteConnectionWindow(
+            videoId, connectionWindowBytes, elapsedMs
+        )
+        connectionWindowBytes = 0L
+        connectionWindowStartNs = 0L
+    }
 
     private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
         val base = spec ?: throw IOException("DataSource sin abrir")
@@ -1741,6 +1788,7 @@ private class ChunkedRangeDataSource(
         } ?: return false
         refreshAttempts++
         spec = refreshed
+        connectionVideoId = videoIdFromKey(refreshed.key) ?: connectionVideoId
         progressive = refreshed.key?.endsWith(":prog") == true
         chunkSize = chunkSizeFor(remaining)
         // El rango preabierto usa la URL vieja: fuera.
@@ -1754,16 +1802,23 @@ private class ChunkedRangeDataSource(
     private fun openChunkWithRefresh(
         chunkPosition: Long,
         remainingAtChunk: Long
-    ): OpenChunk =
-        try {
-            openChunkAt(chunkPosition, remainingAtChunk)
-        } catch (e: IOException) {
-            if (isRefreshable(e) && refreshSpec()) {
-                openChunkAt(chunkPosition, remainingAtChunk)
-            } else {
-                throw e
+    ): OpenChunk {
+        while (true) {
+            try {
+                return openChunkAt(chunkPosition, remainingAtChunk)
+            } catch (e: IOException) {
+                if (!isRefreshable(e) || !refreshSpec()) throw e
+                // Espera corta entre reintentos: un corte de red
+                // momentáneo no debe martillar el servidor.
+                try {
+                    Thread.sleep(if (refreshAttempts <= 1) 500L else 1_000L)
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw e
+                }
             }
         }
+    }
 
     private fun maybePrefetchNext() {
         if (!chunked || progressive || prefetching || next != null) return
@@ -1825,6 +1880,32 @@ private class ChunkedRangeDataSource(
         return true
     }
 
+    /** Reabre en la misma posición con URL fresca tras un
+     *  corte sin error HTTP (END_OF_INPUT prematuro). False
+     *  solo ante el fin real (416); sin refresco disponible
+     *  lanza error para que el reproductor reintente. */
+    private fun reopenAfterRefresh(): Boolean {
+        if (!refreshSpec()) {
+            throw IOException("Corte de streaming sin refresco disponible")
+        }
+        current?.close()
+        current = null
+        val opened = try {
+            openChunkWithRefresh(position, remaining)
+        } catch (e: HttpDataSource.InvalidResponseCodeException) {
+            if (e.responseCode == 416) return false
+            throw e
+        }
+        current = opened.dataSource
+        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
+            remaining = opened.length
+        }
+        chunkBytesRead = 0L
+        chunkSize = chunkSizeFor(remaining)
+        maybePrefetchNext()
+        return true
+    }
+
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
@@ -1860,6 +1941,7 @@ private class ChunkedRangeDataSource(
                 position += read
                 chunkBytesRead += read
                 if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+                noteNetworkBytes(read)
             }
             return read
         }
@@ -1884,13 +1966,19 @@ private class ChunkedRangeDataSource(
             if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
                 return C.RESULT_END_OF_INPUT
             }
-            return if (advanceChunk()) read(buffer, offset, length)
+            if (remaining == C.LENGTH_UNSET.toLong()) {
+                return C.RESULT_END_OF_INPUT
+            }
+            // Corte sin error HTTP con audio por leer: URL
+            // fresca y reabrir en la misma posición.
+            return if (reopenAfterRefresh()) read(buffer, offset, length)
             else C.RESULT_END_OF_INPUT
         }
         if (read > 0) {
             position += read
             chunkBytesRead += read
             if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+            noteNetworkBytes(read)
             maybePrefetchNext()
         }
         return read
@@ -1899,6 +1987,7 @@ private class ChunkedRangeDataSource(
     override fun getUri(): android.net.Uri? = current?.uri
 
     override fun close() {
+        flushConnectionWindow()
         generation++
         closeCurrent()
         spec = null
