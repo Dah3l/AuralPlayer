@@ -33,8 +33,10 @@ import androidx.media3.datasource.TransferListener
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -122,6 +124,7 @@ class MusicService : MediaSessionService() {
     /** Caché de disco del streaming (una sola instancia por proceso). */
     @Volatile
     private var streamCache: SimpleCache? = null
+    private var mainLoadControl: AdaptiveLoadControl? = null
     private val streamCacheLock = Any()
 
     // ------------------------- Mezcla DJ -------------------------
@@ -184,7 +187,7 @@ class MusicService : MediaSessionService() {
      * el de fundido solo necesita el colchón de la siguiente
      * (máx 30 s, tope 4 MB).
      */
-    private fun createLoadControl(fadePlayer: Boolean = false): DefaultLoadControl =
+    private fun createLoadControl(fadePlayer: Boolean = false): LoadControl =
         if (fadePlayer) {
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
@@ -197,20 +200,38 @@ class MusicService : MediaSessionService() {
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         } else {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    60_000,
-                    900_000,
-                    // Arranque casi instantáneo: con la URL ya
-                    // pre-resuelta, 1.8 s de colchón bastan para
-                    // sonar; la carga completa sigue detrás y el
-                    // rebuffer conserva su colchón de 8 s.
-                    1_800,
-                    8_000
-                )
-                .setTargetBufferBytes(16 * 1024 * 1024)
-                .setPrioritizeTimeOverSizeThresholds(false)
-                .build()
+            // Arranque: 1.8 s de colchón (misma cifra con y sin
+            // VPN). Tras una traba, colchón adaptativo según el
+            // medidor: red lenta reanuda con 28 s acumulados
+            // para cortar las trabas en cadena; red regular
+            // 15 s; red buena los 8 s de siempre.
+            AdaptiveLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        60_000,
+                        900_000,
+                        1_800,
+                        8_000
+                    )
+                    .setTargetBufferBytes(16 * 1024 * 1024)
+                    .setPrioritizeTimeOverSizeThresholds(false)
+                    .build()
+            ) {
+                val player = mediaSession?.player
+                val videoId = onlineVideoId(player?.currentMediaItem)
+                val kbps = videoId?.let {
+                    YouTubeStreamResolver.connectionKbps(it)
+                }
+                val duration = player?.duration ?: 0L
+                val fullyBuffered = duration > 0L &&
+                    (player?.bufferedPosition ?: 0L) >= duration - 1_000L
+                when {
+                    fullyBuffered -> 0L
+                    kbps != null && kbps < 200 -> 28_000L
+                    kbps != null && kbps < 500 -> 15_000L
+                    else -> 8_000L
+                }
+            }.also { mainLoadControl = it }
         }
 
     /**
@@ -231,6 +252,25 @@ class MusicService : MediaSessionService() {
         }
     }
 
+    /** Preferencias con la clave de caché de streaming por
+     *  video y calidad: permiten re-escuchar sin red tras
+     *  reiniciar la app si la canción sigue entera en caché. */
+    private fun streamKeyPrefs() =
+        getSharedPreferences("aural_stream_keys", MODE_PRIVATE)
+
+    private fun streamKeySlot(videoId: String): String =
+        "$videoId:${if (streamingQualityCache) "quality" else "saver"}"
+
+    /** ¿La caché guarda el archivo completo de esa clave?
+     *  Solo con la longitud total conocida y todos los bytes
+     *  presentes: cualquier hueco obliga a resolver normal. */
+    private fun isFullyCached(cacheKey: String): Boolean {
+        val cache = getStreamCache()
+        val contentLength = cache.getContentMetadata(cacheKey)
+            .get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
+        return contentLength > 0L && cache.isCached(cacheKey, 0L, contentLength)
+    }
+
     private fun createMediaSourceFactory(): DefaultMediaSourceFactory {
         val resolver = object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
@@ -238,10 +278,31 @@ class MusicService : MediaSessionService() {
                 if (uri.scheme != "aural-online") return dataSpec
                 val videoId = uri.lastPathSegment
                     ?: throw IOException("Streaming sin video")
+                // Re-escucha sin gastar datos: si la canción ya
+                // está entera en la caché de streaming, se sirve
+                // de ahí sin resolver la URL (ni tocar la red).
+                // La clave conocida sale de la sesión o de las
+                // preferencias; con una URL marcada fallida no
+                // se usa el atajo y se re-resuelve fresco.
+                if (!YouTubeStreamResolver.hasFailedUrl(videoId)) {
+                    val knownKey = YouTubeStreamResolver.knownDiskKey(
+                        videoId, streamingQualityCache
+                    ) ?: streamKeyPrefs().getString(
+                        streamKeySlot(videoId), null
+                    )
+                    if (knownKey != null && isFullyCached(knownKey)) {
+                        return dataSpec.buildUpon()
+                            .setKey(knownKey)
+                            .build()
+                    }
+                }
                 val resolved = YouTubeStreamResolver.resolveStream(
                     videoId,
                     streamingQualityCache
                 ) ?: throw IOException("No se pudo resolver el streaming")
+                streamKeyPrefs().edit()
+                    .putString(streamKeySlot(videoId), resolved.cacheKey)
+                    .apply()
                 return dataSpec.buildUpon()
                     .setUri(android.net.Uri.parse(resolved.url))
                     .setKey(resolved.cacheKey)
@@ -251,8 +312,8 @@ class MusicService : MediaSessionService() {
         }
         // Misma petición HTTP que la descarga (headers de navegador)
         // y el mismo cliente OkHttp compartido del resolver: el
-        // pool con keep-alive reutiliza la conexión entre rangos
-        // de 512 KB en vez de abrir una nueva por pedazo.
+        // flujo continuo baja por una sola conexión abierta y
+        // el pool evita pagar el handshake en cada reapertura.
         val httpFactory = OkHttpDataSource.Factory(
             YouTubeStreamResolver.sharedHttpClient
         )
@@ -265,7 +326,7 @@ class MusicService : MediaSessionService() {
                     "Accept-Language" to "en-US,en;q=0.9"
                 )
             )
-        val networkFactory = ChunkedRangeDataSourceFactory(
+        val networkFactory = ContinuousFlowDataSourceFactory(
             DefaultDataSource.Factory(this, httpFactory)
         ) { failedSpec ->
             // 403/410 o corte: URL fresca de StreamInfo, sin la que falló.
@@ -273,13 +334,13 @@ class MusicService : MediaSessionService() {
                 ?.split(":")
                 ?.takeIf { it.size >= 2 && it[0] == "yt" }
                 ?.get(1)
-                ?: return@ChunkedRangeDataSourceFactory null
+                ?: return@ContinuousFlowDataSourceFactory null
             val refreshed = YouTubeStreamResolver.refreshStream(
                 videoId,
                 streamingQualityCache,
                 failedSpec.uri.toString(),
                 failedSpec.key
-            ) ?: return@ChunkedRangeDataSourceFactory null
+            ) ?: return@ContinuousFlowDataSourceFactory null
             failedSpec.buildUpon()
                 .setUri(android.net.Uri.parse(refreshed.url))
                 .setKey(refreshed.cacheKey)
@@ -598,6 +659,7 @@ class MusicService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (owner !== mediaSession?.player) return
+            mainLoadControl?.onNewItem()
             prefetchOnlineAround(owner)
             if (crossfadeActive) return
             // La canción cambió sola sin fundido (o el usuario saltó
@@ -1676,72 +1738,55 @@ private class OnlineAwareDataSource(
  * segundo plano antes de agotar el actual para que el flujo no se
  * corte cerrando/abriendo en el momento crítico.
  */
-private class ChunkedRangeDataSourceFactory(
+private class ContinuousFlowDataSourceFactory(
     private val upstreamFactory: DataSource.Factory,
     private val urlRefresher: (DataSpec) -> DataSpec?
 ) : DataSource.Factory {
     override fun createDataSource(): DataSource =
-        ChunkedRangeDataSource(upstreamFactory, urlRefresher)
+        ContinuousFlowDataSource(upstreamFactory, urlRefresher)
 }
 
-private class ChunkedRangeDataSource(
+/**
+ * Flujo continuo de streaming (Dahel 2026-11-27): una sola
+ * conexión abierta (rango abierto bytes=posición-, como las
+ * descargas) que baja el Opus/WebM escribiendo en la caché
+ * de 256 MB mientras suena. Sustituye al DataSource de
+ * pedazos paralelos como vía de reproducción, con y sin VPN.
+ *
+ * Seek: dentro de lo ya bajado sirve la caché (instantáneo);
+ * más allá de la frontera, el extractor reabre en el destino
+ * y esta fuente abre una conexión nueva desde ese offset —
+ * jamás espera a que la bajada secuencial llegue hasta ahí.
+ *
+ * Errores: ante 403/410 o corte se refresca la URL y se
+ * reabre en la misma posición (máx. 2 refrescos por tramo,
+ * el presupuesto se renueva tras leer bytes con éxito). Un
+ * fallo sin refresco se lanza como error visible para que el
+ * reproductor reintente la misma canción; solo el fin real
+ * (416 o EOF con todo el audio entregado) devuelve
+ * END_OF_INPUT.
+ */
+private class ContinuousFlowDataSource(
     private val upstreamFactory: DataSource.Factory,
     private val urlRefresher: (DataSpec) -> DataSpec?
 ) : DataSource {
 
-    private data class OpenChunk(val dataSource: DataSource, val length: Long)
-
-    /** Rango bajado en paralelo: bytes completos y si el
-     *  servidor cerró ahí (fin real del archivo). */
-    private data class ChunkFetch(val bytes: ByteArray, val eof: Boolean)
-
-    private data class BufferedChunk(
-        val start: Long,
-        val future: java.util.concurrent.Future<ChunkFetch?>
-    )
-
     private val listeners = mutableListOf<TransferListener>()
 
-    /** Pool de rangos paralelos: 3 hilos bajan los rangos
-     *  siguientes mientras el reproductor consume el actual.
-     *  Con VPN googlevideo limita por conexión: una sola
-     *  conexión secuencial se arrastra aunque el enlace dé
-     *  4 Mbps; varias conexiones en paralelo suman velocidad
-     *  y la reproducción se siente como sin VPN. Se crea en
-     *  open() y se apaga en close() (una instancia por carga). */
-    private var prefetchPool: java.util.concurrent.ExecutorService? = null
-
     private var spec: DataSpec? = null
-    private var chunked = false
-    /** Respaldo progresivo: la URL solo acepta la lectura
-     *  secuencial abierta tipo descarga; se lee en una sola
-     *  conexión abierta y la caché se llena mientras suena. */
-    private var progressive = false
+    private var current: DataSource? = null
+    /** Solo googlevideo refresca URL; el resto pasa directo. */
+    private var refreshableHost = false
     private var position = 0L
     private var remaining = C.LENGTH_UNSET.toLong()
-    private var chunkBytesRead = 0L
-    private var chunkSize = CHUNK_BYTES
-    /** Tamaño de rango adaptativo: crece si el throughput
-     *  real responde y se reduce si los rangos salen lentos
-     *  o cortados. Base y mínimo 512 KB (rangos exactos que
-     *  googlevideo sirve sin rechazar), máximo 2 MB. */
-    private var adaptiveChunkBytes = CHUNK_BYTES
-    private var current: DataSource? = null
-    /** Ventana de rangos en paralelo ya programados, en
-     *  orden de posición. Guardada con synchronized(this). */
-    private val window = ArrayDeque<BufferedChunk>()
-    /** Rango en memoria que se está sirviendo ahora. */
-    private var servingBuffer: ByteArray? = null
-    private var servingOffset = 0
-    /** Próxima posición a programar en la ventana paralela. */
-    private var nextFetchPosition = 0L
-    private var generation = 0
     private var refreshAttempts = 0
+    /** Bytes leídos desde la última apertura: al superar el
+     *  umbral, el presupuesto de refresco se renueva. */
+    private var bytesSinceOpen = 0L
+
     /** Medición de internet durante la lectura: bytes de red
      *  por ventana (~1 s o >=256 KB) para el indicador del
-     *  Now Playing, sin esperar a que una carga «complete».
-     *  Se anota desde los hilos paralelos: candado propio. */
-    private val connectionLock = Any()
+     *  Now Playing, sin esperar a que una carga «complete». */
     private var connectionVideoId: String? = null
     private var connectionWindowBytes = 0L
     private var connectionWindowStartNs = 0L
@@ -1753,154 +1798,52 @@ private class ChunkedRangeDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         closeCurrent()
-        generation++
         spec = dataSpec
-        chunked = dataSpec.uri.host?.contains("googlevideo.com") == true
-        progressive = chunked && dataSpec.key?.endsWith(":prog") == true
+        refreshableHost = dataSpec.uri.host?.contains("googlevideo.com") == true
         position = dataSpec.position
         remaining = dataSpec.length
-        chunkBytesRead = 0L
         refreshAttempts = 0
-        adaptiveChunkBytes = CHUNK_BYTES
-        servingBuffer = null
-        servingOffset = 0
+        bytesSinceOpen = 0L
         connectionVideoId = videoIdFromKey(dataSpec.key)
-        synchronized(connectionLock) {
-            connectionWindowBytes = 0L
-            connectionWindowStartNs = 0L
-        }
-        if (chunked && !progressive) ensurePool()
-        // El primer rango se abre en streaming (arranque sin
-        // esperar a bajarlo entero); los siguientes se bajan
-        // en paralelo por delante del playhead.
-        val opened = openChunkWithRefresh(position, remaining)
-        current = opened.dataSource
-        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
-            remaining = opened.length
-        }
-        chunkSize = chunkSizeFor(remaining)
-        nextFetchPosition = position + chunkSize
-        schedulePrefetch()
-        return if (remaining != C.LENGTH_UNSET.toLong()) remaining else opened.length
+        connectionWindowBytes = 0L
+        connectionWindowStartNs = 0L
+        return openWithRefresh(position, remaining)
     }
 
-    private fun ensurePool(): java.util.concurrent.ExecutorService {
-        val existing = prefetchPool
-        if (existing != null && !existing.isShutdown) return existing
-        return java.util.concurrent.Executors.newFixedThreadPool(PARALLEL_THREADS) { runnable ->
-            Thread(runnable, "aural-range-parallel").apply { isDaemon = true }
-        }.also { prefetchPool = it }
-    }
-
-    private fun chunkSizeFor(remainingAtChunk: Long): Long =
-        if (progressive) {
-            Long.MAX_VALUE
-        } else if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
-            minOf(adaptiveChunkBytes, remainingAtChunk)
-        } else {
-            adaptiveChunkBytes
-        }
-
-    private fun videoIdFromKey(key: String?): String? {
-        val parts = key?.split(":") ?: return null
-        return if (parts.size >= 2 && parts[0] == "yt") parts[1] else null
-    }
-
-    /** Anota bytes leídos de red y reporta la ventana al
-     *  medidor cuando llega a ~1 s o a 256 KB. */
-    private fun noteNetworkBytes(read: Int) {
-        if (!chunked || read <= 0) return
-        synchronized(connectionLock) {
-            val videoId = connectionVideoId ?: return
-            val now = System.nanoTime()
-            if (connectionWindowStartNs == 0L) connectionWindowStartNs = now
-            connectionWindowBytes += read
-            val elapsedMs = (now - connectionWindowStartNs) / 1_000_000L
-            if (connectionWindowBytes >= 256L * 1024L || elapsedMs >= 1_000L) {
-                YouTubeStreamResolver.noteConnectionWindow(
-                    videoId,
-                    connectionWindowBytes,
-                    elapsedMs.coerceAtLeast(50L)
-                )
-                connectionWindowBytes = 0L
-                connectionWindowStartNs = now
-            }
-        }
-    }
-
-    private fun flushConnectionWindow() {
-        synchronized(connectionLock) {
-            val videoId = connectionVideoId ?: return
-            if (connectionWindowBytes < 16L * 1024L || connectionWindowStartNs == 0L) return
-            val elapsedMs = ((System.nanoTime() - connectionWindowStartNs) / 1_000_000L)
-                .coerceAtLeast(50L)
-            YouTubeStreamResolver.noteConnectionWindow(
-                videoId, connectionWindowBytes, elapsedMs
-            )
-            connectionWindowBytes = 0L
-            connectionWindowStartNs = 0L
-        }
-    }
-
-    private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
+    /** Abre el flujo en [openPosition] con rango abierto (o
+     *  acotado si el extractor pidió una longitud concreta,
+     *  p. ej. al husmear el formato). Devuelve la longitud
+     *  restante según el servidor. */
+    private fun openUpstream(openPosition: Long, openLength: Long): Long {
         val base = spec ?: throw IOException("DataSource sin abrir")
-        // En progresivo se pide abierto (bytes=posición-), como
-        // la descarga; en directo, rangos acotados adaptativos
-        // (512 KB base: rangos mayores se sirven un rato y
-        // luego se rechazan en clientes sin token; el tamaño
-        // solo crece cuando el throughput real lo sostiene).
-        val chunkLength = if (chunked && !progressive && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
-            minOf(adaptiveChunkBytes, remainingAtChunk)
-        } else {
-            remainingAtChunk
-        }
-        val chunkSpec = base.buildUpon()
-            .setPosition(chunkPosition)
-            .setLength(chunkLength)
+        val flowSpec = base.buildUpon()
+            .setPosition(openPosition)
+            .setLength(openLength)
             .build()
         val dataSource = upstreamFactory.createDataSource()
         listeners.forEach { dataSource.addTransferListener(it) }
-        val length = dataSource.open(chunkSpec)
-        return OpenChunk(dataSource, length)
+        val length = dataSource.open(flowSpec)
+        current = dataSource
+        if (remaining == C.LENGTH_UNSET.toLong() && length != C.LENGTH_UNSET.toLong()) {
+            remaining = length
+        }
+        bytesSinceOpen = 0L
+        return length
     }
 
-    private fun isRefreshable(e: IOException): Boolean =
-        e is HttpDataSource.InvalidResponseCodeException &&
-            (e.responseCode == 403 || e.responseCode == 410) ||
-            e is HttpDataSource.HttpDataSourceException
-
-    /** Sustituye la URL de googlevideo por una fresca (StreamInfo
-     *  nuevo, sin la que falló). Máximo 2 refrescos por rango:
-     *  el presupuesto se reinicia tras cada avance exitoso. */
-    private fun refreshSpec(): Boolean {
-        if (!chunked || refreshAttempts >= 2) return false
-        val base = spec ?: return false
-        val refreshed = try {
-            urlRefresher(base)
-        } catch (_: Exception) {
-            null
-        } ?: return false
-        refreshAttempts++
-        spec = refreshed
-        connectionVideoId = videoIdFromKey(refreshed.key) ?: connectionVideoId
-        progressive = refreshed.key?.endsWith(":prog") == true
-        chunkSize = chunkSizeFor(remaining)
-        // La ventana paralela usa la URL vieja: fuera.
-        clearWindow()
-        return true
-    }
-
-    private fun openChunkWithRefresh(
-        chunkPosition: Long,
-        remainingAtChunk: Long
-    ): OpenChunk {
+    private fun openWithRefresh(openPosition: Long, openLength: Long): Long {
         while (true) {
             try {
-                return openChunkAt(chunkPosition, remainingAtChunk)
+                return openUpstream(openPosition, openLength)
             } catch (e: IOException) {
+                if (e is HttpDataSource.InvalidResponseCodeException &&
+                    e.responseCode == 416
+                ) {
+                    // Pasado el último byte: fin real del archivo.
+                    remaining = 0L
+                    return 0L
+                }
                 if (!isRefreshable(e) || !refreshSpec()) throw e
-                // Espera corta entre reintentos: un corte de red
-                // momentáneo no debe martillar el servidor.
                 try {
                     Thread.sleep(if (refreshAttempts <= 1) 500L else 1_000L)
                 } catch (interrupted: InterruptedException) {
@@ -1911,283 +1854,57 @@ private class ChunkedRangeDataSource(
         }
     }
 
-    /** Programa rangos en paralelo hasta llenar la ventana
-     *  (PARALLEL_WINDOW rangos por delante del playhead). El
-     *  relleno se detiene solo al llegar al fin conocido. */
-    private fun schedulePrefetch() {
-        if (!chunked || progressive) return
-        val base = spec ?: return
-        val pool = ensurePool()
-        synchronized(this) {
-            while (window.size < PARALLEL_WINDOW) {
-                val remainingAtNext = if (remaining == C.LENGTH_UNSET.toLong()) {
-                    C.LENGTH_UNSET.toLong()
-                } else {
-                    remaining - (nextFetchPosition - position)
-                }
-                if (remainingAtNext != C.LENGTH_UNSET.toLong() && remainingAtNext <= 0L) break
-                val size = if (remainingAtNext == C.LENGTH_UNSET.toLong()) {
-                    adaptiveChunkBytes
-                } else {
-                    minOf(adaptiveChunkBytes, remainingAtNext)
-                }
-                if (size <= 0L) break
-                val start = nextFetchPosition
-                nextFetchPosition += size
-                val gen = generation
-                val future = pool.submit(
-                    java.util.concurrent.Callable<ChunkFetch?> {
-                        fetchChunkBytes(base, start, size, remainingAtNext, gen)
-                    }
-                )
-                window.addLast(BufferedChunk(start, future))
-            }
-        }
-    }
+    private fun isRefreshable(e: IOException): Boolean =
+        refreshableHost && (
+            e is HttpDataSource.InvalidResponseCodeException &&
+                (e.responseCode == 403 || e.responseCode == 410) ||
+                e is HttpDataSource.HttpDataSourceException
+            )
 
-    /** Baja un rango completo en su propia conexión. Devuelve
-     *  null ante fallo/corte (el avance cae al camino
-     *  secuencial con refresco) y marca eof solo en el fin
-     *  real del archivo. Ajusta el tamaño adaptativo según
-     *  el throughput medido de este rango. */
-    private fun fetchChunkBytes(
-        base: DataSpec,
-        start: Long,
-        size: Long,
-        remainingAtStart: Long,
-        gen: Int
-    ): ChunkFetch? {
-        val dataSource = upstreamFactory.createDataSource()
-        listeners.forEach { dataSource.addTransferListener(it) }
-        val startedNs = System.nanoTime()
-        return try {
-            val chunkSpec = base.buildUpon()
-                .setPosition(start)
-                .setLength(size)
-                .build()
-            dataSource.open(chunkSpec)
-            val buffer = ByteArray(size.toInt())
-            var total = 0
-            var ended = false
-            while (total < buffer.size) {
-                val read = dataSource.read(buffer, total, buffer.size - total)
-                if (read == C.RESULT_END_OF_INPUT) {
-                    ended = true
-                    break
-                }
-                if (read > 0) {
-                    total += read
-                    noteNetworkBytes(read)
-                }
-            }
-            val elapsedMs = ((System.nanoTime() - startedNs) / 1_000_000L)
-                .coerceAtLeast(1L)
-            if (gen == generation) adaptChunkSize(total.toLong(), elapsedMs)
-            when {
-                !ended -> ChunkFetch(buffer, eof = false)
-                total == 0 -> ChunkFetch(ByteArray(0), eof = true)
-                remainingAtStart == C.LENGTH_UNSET.toLong() ||
-                    size >= remainingAtStart ->
-                    ChunkFetch(buffer.copyOf(total), eof = true)
-                else -> null // corte sin error HTTP con audio por leer
-            }
-        } catch (e: HttpDataSource.InvalidResponseCodeException) {
-            if (e.responseCode == 416) ChunkFetch(ByteArray(0), eof = true) else null
-        } catch (_: IOException) {
+    /** Sustituye la URL de googlevideo por una fresca
+     *  (StreamInfo nuevo, sin la que falló). Máximo 2
+     *  refrescos por tramo de lectura. */
+    private fun refreshSpec(): Boolean {
+        if (!refreshableHost || refreshAttempts >= 2) return false
+        val base = spec ?: return false
+        val refreshed = try {
+            urlRefresher(base)
+        } catch (_: Exception) {
             null
-        } finally {
-            try {
-                dataSource.close()
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    /** Throughput real del rango: si responde rápido el rango
-     *  crece (menos peticiones); si sale lento se reduce al
-     *  mínimo seguro. Con VPN el límite por conexión mantiene
-     *  el tamaño en 512 KB y el paralelismo suma velocidad. */
-    private fun adaptChunkSize(bytes: Long, elapsedMs: Long) {
-        if (bytes <= 0L) return
-        val bitsPerSecond = bytes * 8_000L / elapsedMs
-        synchronized(this) {
-            adaptiveChunkBytes = when {
-                bitsPerSecond > 2_000_000L ->
-                    minOf(adaptiveChunkBytes * 2, MAX_CHUNK_BYTES)
-                bitsPerSecond < 500_000L ->
-                    maxOf(adaptiveChunkBytes / 2, CHUNK_BYTES)
-                else -> adaptiveChunkBytes
-            }
-        }
-    }
-
-    private fun clearWindow() {
-        synchronized(this) {
-            window.forEach { it.future.cancel(true) }
-            window.clear()
-        }
-    }
-
-    /** Avanza al siguiente rango: primero el bajado en
-     *  paralelo; si la ventana está vacía o ese rango falló,
-     *  camino secuencial con refresco en la misma posición.
-     *  Devuelve false SOLO al fin real del archivo (o 416
-     *  pasado el último byte); un fallo de red/403 se lanza
-     *  como error para que el reproductor reintente la misma
-     *  canción en vez de darla por terminada y saltar. */
-    private fun advanceChunk(): Boolean {
-        if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) return false
-        current?.close()
-        current = null
-        servingBuffer = null
-        servingOffset = 0
-        val buffered = synchronized(this) {
-            if (window.isEmpty()) null else window.removeFirst()
-        }
-        if (buffered != null) {
-            val fetched = try {
-                buffered.future.get()
-            } catch (interrupted: InterruptedException) {
-                Thread.currentThread().interrupt()
-                null
-            } catch (_: Exception) {
-                null
-            }
-            if (fetched != null) {
-                if (fetched.bytes.isEmpty() && fetched.eof) return false
-                if (fetched.bytes.isNotEmpty()) {
-                    servingBuffer = fetched.bytes
-                    servingOffset = 0
-                    chunkBytesRead = 0L
-                    chunkSize = fetched.bytes.size.toLong()
-                    // Rango nuevo listo: el presupuesto de
-                    // refresco vuelve a 2 para este rango.
-                    refreshAttempts = 0
-                    schedulePrefetch()
-                    return true
-                }
-            }
-            // Rango paralelo fallido: fuera la ventana (puede
-            // venir de la misma URL mala) y camino secuencial.
-            clearWindow()
-        }
-        val opened = try {
-            openChunkWithRefresh(position, remaining)
-        } catch (e: HttpDataSource.InvalidResponseCodeException) {
-            if (e.responseCode == 416) return false
-            throw e
-        }
-        current = opened.dataSource
-        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
-            remaining = opened.length
-        }
-        chunkBytesRead = 0L
-        chunkSize = chunkSizeFor(remaining)
-        // Rango nuevo abierto: el presupuesto de refresco
-        // vuelve a 2 para este rango.
-        refreshAttempts = 0
-        nextFetchPosition = position + chunkSize
-        schedulePrefetch()
+        } ?: return false
+        refreshAttempts++
+        spec = refreshed
+        connectionVideoId = videoIdFromKey(refreshed.key) ?: connectionVideoId
         return true
     }
 
-    /** Reabre en la misma posición con URL fresca tras un
-     *  corte sin error HTTP (END_OF_INPUT prematuro). False
-     *  solo ante el fin real (416); sin refresco disponible
-     *  lanza error para que el reproductor reintente. */
+    /** Reabre el flujo en la posición actual tras refrescar
+     *  la URL. False solo ante el fin real (416). */
     private fun reopenAfterRefresh(): Boolean {
         if (!refreshSpec()) {
             throw IOException("Corte de streaming sin refresco disponible")
         }
-        current?.close()
-        current = null
-        servingBuffer = null
-        servingOffset = 0
-        val opened = try {
-            openChunkWithRefresh(position, remaining)
+        closeCurrent()
+        val length = try {
+            openWithRefresh(position, remaining)
         } catch (e: HttpDataSource.InvalidResponseCodeException) {
             if (e.responseCode == 416) return false
             throw e
         }
-        current = opened.dataSource
-        if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
-            remaining = opened.length
-        }
-        chunkBytesRead = 0L
-        chunkSize = chunkSizeFor(remaining)
-        nextFetchPosition = position + chunkSize
-        schedulePrefetch()
-        return true
+        return length != 0L || remaining != 0L
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
-        if (!chunked) {
-            val active = current ?: return C.RESULT_END_OF_INPUT
-            val read = active.read(buffer, offset, length)
-            if (read > 0) {
-                position += read
-                if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
-            }
-            return read
-        }
-        if (progressive) {
-            val active = current ?: return C.RESULT_END_OF_INPUT
-            val read = try {
-                active.read(buffer, offset, length)
-            } catch (e: IOException) {
-                if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
-                    return read(buffer, offset, length)
-                }
-                throw e
-            }
-            if (read == C.RESULT_END_OF_INPUT) {
-                if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) {
-                    return C.RESULT_END_OF_INPUT
-                }
-                // Corte de la conexión abierta: URL fresca y
-                // reabrir en la misma posición (acotado por los
-                // refrescos, para no girar en vacío).
-                if (refreshSpec() && advanceChunk()) return read(buffer, offset, length)
-                throw IOException("Corte de streaming sin refresco disponible")
-            }
-            if (read > 0) {
-                position += read
-                chunkBytesRead += read
-                if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
-                noteNetworkBytes(read)
-            }
-            return read
-        }
-        if (chunkBytesRead >= chunkSize) {
-            if (!advanceChunk()) return C.RESULT_END_OF_INPUT
-            return read(buffer, offset, length)
-        }
-        val serving = servingBuffer
-        if (serving != null) {
-            val available = serving.size - servingOffset
-            if (available <= 0) {
-                if (!advanceChunk()) return C.RESULT_END_OF_INPUT
-                return read(buffer, offset, length)
-            }
-            val toCopy = minOf(length, available)
-            System.arraycopy(serving, servingOffset, buffer, offset, toCopy)
-            servingOffset += toCopy
-            position += toCopy
-            chunkBytesRead += toCopy
-            if (remaining != C.LENGTH_UNSET.toLong()) remaining -= toCopy
-            return toCopy
-        }
         val active = current ?: return C.RESULT_END_OF_INPUT
-        val chunkLeft = (chunkSize - chunkBytesRead).toInt()
         val read = try {
-            active.read(buffer, offset, minOf(length, chunkLeft))
+            active.read(buffer, offset, length)
         } catch (e: IOException) {
-            // Corte a mitad de rango: URL fresca y seguir en la
-            // misma posición; si no se puede, error (nunca fin
-            // fingido: eso hacía saltar la canción a mitad).
-            if (isRefreshable(e) && refreshSpec() && advanceChunk()) {
+            // Corte a mitad del flujo: URL fresca y seguir en
+            // la misma posición; si no se puede, error visible
+            // (nunca fin fingido: eso saltaba la canción).
+            if (isRefreshable(e) && reopenAfterRefresh()) {
                 return read(buffer, offset, length)
             }
             throw e
@@ -2206,36 +1923,136 @@ private class ChunkedRangeDataSource(
         }
         if (read > 0) {
             position += read
-            chunkBytesRead += read
+            bytesSinceOpen += read
             if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+            // Tramo sano: el presupuesto de refresco se renueva.
+            if (bytesSinceOpen >= REFRESH_BUDGET_RENEW_BYTES) {
+                refreshAttempts = 0
+            }
             noteNetworkBytes(read)
         }
         return read
+    }
+
+    private fun videoIdFromKey(key: String?): String? {
+        val parts = key?.split(":") ?: return null
+        return if (parts.size >= 2 && parts[0] == "yt") parts[1] else null
+    }
+
+    /** Anota bytes leídos de red y reporta la ventana al
+     *  medidor cuando llega a ~1 s o a 256 KB. */
+    private fun noteNetworkBytes(read: Int) {
+        if (!refreshableHost || read <= 0) return
+        val videoId = connectionVideoId ?: return
+        val now = System.nanoTime()
+        if (connectionWindowStartNs == 0L) connectionWindowStartNs = now
+        connectionWindowBytes += read
+        val elapsedMs = (now - connectionWindowStartNs) / 1_000_000L
+        if (connectionWindowBytes >= 256L * 1024L || elapsedMs >= 1_000L) {
+            YouTubeStreamResolver.noteConnectionWindow(
+                videoId,
+                connectionWindowBytes,
+                elapsedMs.coerceAtLeast(50L)
+            )
+            connectionWindowBytes = 0L
+            connectionWindowStartNs = now
+        }
+    }
+
+    private fun flushConnectionWindow() {
+        val videoId = connectionVideoId ?: return
+        if (connectionWindowBytes < 16L * 1024L || connectionWindowStartNs == 0L) return
+        val elapsedMs = ((System.nanoTime() - connectionWindowStartNs) / 1_000_000L)
+            .coerceAtLeast(50L)
+        YouTubeStreamResolver.noteConnectionWindow(
+            videoId, connectionWindowBytes, elapsedMs
+        )
+        connectionWindowBytes = 0L
+        connectionWindowStartNs = 0L
     }
 
     override fun getUri(): android.net.Uri? = current?.uri ?: spec?.uri
 
     override fun close() {
         flushConnectionWindow()
-        generation++
         closeCurrent()
         spec = null
-        prefetchPool?.shutdownNow()
-        prefetchPool = null
     }
 
     private fun closeCurrent() {
-        current?.close()
+        try {
+            current?.close()
+        } catch (_: Exception) {
+        }
         current = null
-        servingBuffer = null
-        servingOffset = 0
-        clearWindow()
     }
 
     private companion object {
-        const val CHUNK_BYTES = 512L * 1024L
-        const val MAX_CHUNK_BYTES = 2L * 1024L * 1024L
-        const val PARALLEL_THREADS = 3
-        const val PARALLEL_WINDOW = 3
+        /** Tras leer este tramo sin fallos, el presupuesto de
+         *  refresco vuelve a 2 para el siguiente corte. */
+        const val REFRESH_BUDGET_RENEW_BYTES = 256L * 1024L
+    }
+}
+
+/**
+ * Colchón de rebuffer adaptativo sobre DefaultLoadControl:
+ * el arranque usa 1.8 s; tras una traba, el colchón para
+ * reanudar lo dicta [rebufferCushionMs] según el medidor de
+ * throughput (red lenta: más audio acumulado para cortar
+ * las trabas en cadena). El resto de decisiones (cuánto
+ * cargar, topes de memoria) sigue en el delegado.
+ */
+private class AdaptiveLoadControl(
+    private val delegate: DefaultLoadControl,
+    private val rebufferCushionMs: () -> Long
+) : LoadControl {
+
+    @Volatile
+    private var started = false
+
+    /** Canción nueva: el próximo arranque vuelve al colchón
+     *  corto de inicio. */
+    fun onNewItem() {
+        started = false
+    }
+
+    override fun onPrepared() = delegate.onPrepared()
+
+    override fun onTracksSelected(
+        tracksSelectionResult: LoadControl.TracksSelectionResult
+    ) = delegate.onTracksSelected(tracksSelectionResult)
+
+    override fun onStopped() {
+        started = false
+        delegate.onStopped()
+    }
+
+    override fun onReleased() = delegate.onReleased()
+
+    override fun getAllocator() = delegate.allocator
+
+    override fun shouldContinueLoading(
+        parameters: LoadControl.Parameters
+    ): Boolean = delegate.shouldContinueLoading(parameters)
+
+    override fun shouldStartPlayback(
+        parameters: LoadControl.Parameters
+    ): Boolean {
+        if (!parameters.playWhenReady) return false
+        val requiredMs = if (started) rebufferCushionMs() else START_CUSHION_MS
+        val ok = parameters.bufferedDurationUs >=
+            (requiredMs * 1_000L * parameters.playbackSpeed).toLong()
+        if (ok) started = true
+        return ok
+    }
+
+    override fun getBackBufferDurationUs(): Long =
+        delegate.backBufferDurationUs
+
+    override fun retainBackBufferFromKeyframe(): Boolean =
+        delegate.retainBackBufferFromKeyframe()
+
+    private companion object {
+        const val START_CUSHION_MS = 1_800L
     }
 }
