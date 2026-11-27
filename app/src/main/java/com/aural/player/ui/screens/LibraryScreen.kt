@@ -173,6 +173,7 @@ fun LibraryScreen(
     onOpenOnlineCollection: (com.aural.player.youtube.OnlineCollectionResult) -> Unit = {},
     onOpenRadioStation: (com.aural.player.data.RadioStation) -> Unit = {},
     onOpenPodcastShow: (com.aural.player.data.PodcastShow) -> Unit = {},
+    onOpenPodcastContinue: () -> Unit = {},
     onOpenThemes: () -> Unit,
     onSongMenu: (song: Song) -> Unit,
     onOpenEqualizer: () -> Unit = {},
@@ -1064,7 +1065,8 @@ fun LibraryScreen(
                                 searchFocusRequester.requestFocus()
                             },
                             listState = podcastsListState,
-                            onOpenDetail = onOpenPodcastShow
+                            onOpenDetail = onOpenPodcastShow,
+                            onOpenContinue = onOpenPodcastContinue
                         )
                     "downloads" -> {
                             val ytm = youTubeManager
