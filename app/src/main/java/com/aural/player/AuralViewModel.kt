@@ -62,6 +62,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /** Estado de la interfaz de la biblioteca. */
@@ -278,20 +279,35 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         if (_radioSuggestions.value.isNotEmpty()) return
         _radioSuggestionsLoading.value = true
         radioSuggestionsJob = viewModelScope.launch {
-            val genres = radioStations.value
-                .flatMap { it.genre.split(",") }
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .take(2)
-            val cuban = RadioBrowserClient.searchByCountry("Cuba", limit = 30)
-            val byGenre = genres.flatMap { genre ->
-                RadioBrowserClient.searchByTag(genre, limit = 20)
+            try {
+                val genres = radioStations.value
+                    .flatMap { it.genre.split(",") }
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .take(2)
+                // En paralelo y con techo: la carga siempre
+                // termina y el esqueleto sale al estado guía
+                // si no llega contenido.
+                val results = withTimeoutOrNull(25_000L) {
+                    coroutineScope {
+                        val cuban = async {
+                            RadioBrowserClient.searchByCountry("Cuba", limit = 30)
+                        }
+                        val byGenre = genres.map { genre ->
+                            async {
+                                RadioBrowserClient.searchByTag(genre, limit = 20)
+                            }
+                        }.awaitAll().flatten()
+                        (cuban.await() + byGenre)
+                            .distinctBy { it.id }
+                            .take(50)
+                    }
+                } ?: emptyList()
+                _radioSuggestions.value = results
+            } finally {
+                _radioSuggestionsLoading.value = false
             }
-            _radioSuggestions.value = (cuban + byGenre)
-                .distinctBy { it.id }
-                .take(50)
-            _radioSuggestionsLoading.value = false
         }
     }
 
@@ -300,20 +316,29 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         if (_podcastSuggestions.value.isNotEmpty()) return
         _podcastSuggestionsLoading.value = true
         podcastSuggestionsJob = viewModelScope.launch {
-            val savedTerms = podcastShows.value
-                .map { it.title }
-                .filter { it.isNotBlank() }
-                .take(2)
-            val terms = (savedTerms + listOf("noticias", "comedia", "deporte"))
-                .distinct()
-                .take(4)
-            val results = terms.flatMap { term ->
-                PodcastClient.searchPodcasts(term, limit = 15)
+            try {
+                val savedTerms = podcastShows.value
+                    .map { it.title }
+                    .filter { it.isNotBlank() }
+                    .take(2)
+                val terms = (savedTerms + listOf("noticias", "comedia", "deporte"))
+                    .distinct()
+                    .take(4)
+                val results = withTimeoutOrNull(25_000L) {
+                    coroutineScope {
+                        terms.map { term ->
+                            async {
+                                PodcastClient.searchPodcasts(term, limit = 15)
+                            }
+                        }.awaitAll().flatten()
+                    }
+                } ?: emptyList()
+                _podcastSuggestions.value = results
+                    .distinctBy { it.feedUrl }
+                    .take(40)
+            } finally {
+                _podcastSuggestionsLoading.value = false
             }
-            _podcastSuggestions.value = results
-                .distinctBy { it.feedUrl }
-                .take(40)
-            _podcastSuggestionsLoading.value = false
         }
     }
 
