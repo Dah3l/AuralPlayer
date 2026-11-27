@@ -39,6 +39,16 @@ import com.aural.player.youtube.YouTubeManager
 private val YouTubeRed = Color(0xFFE5484D)
 private val YouTubeRedDark = Color(0xFFC93A3E)
 
+/** Descarga terminada para la subpestaña Completadas:
+ *  canciones y podcasts en una sola lista por fecha. */
+private data class CompletedDownloadTile(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val thumbnailUrl: String?,
+    val timestampMs: Long
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -74,6 +84,40 @@ fun DownloadsScreen(
         } else {
             emptyList()
         }
+    }
+    // Subpestañas de Descargas: 0 = Búsqueda, 1 = Completadas.
+    var downloadsTab by remember { mutableStateOf(0) }
+    val completedDownloads = remember(
+        downloadedSongs, podcastDownloads, podcastProgress
+    ) {
+        val podcasts = podcastDownloads.entries.map { (key, download) ->
+            val meta = podcastProgress[key]
+            CompletedDownloadTile(
+                key = "done-pod-$key",
+                title = meta?.episodeTitle?.ifBlank { download.fileName }
+                    ?: download.fileName,
+                subtitle = listOfNotNull(
+                    meta?.showTitle?.takeIf { it.isNotBlank() },
+                    meta?.durationMs?.takeIf { it > 0L }
+                        ?.let { formatDuration(it / 1000L) }
+                        ?: meta?.audioBytes?.takeIf { it > 0L }
+                            ?.let { formatBytes(it) }
+                ).joinToString(" · ").ifBlank { "Podcast descargado" },
+                thumbnailUrl = meta?.episodeImageUrl ?: meta?.showImageUrl,
+                timestampMs = download.downloadedAtMs
+            )
+        }
+        val songs = downloadedSongs.distinctBy { it.id }.map { song ->
+            CompletedDownloadTile(
+                key = "done-song-${song.id}",
+                title = song.title,
+                subtitle = "${song.artist} · " +
+                    formatDuration(song.durationMs / 1000L),
+                thumbnailUrl = song.albumArtUri,
+                timestampMs = song.dateAddedSec * 1000L
+            )
+        }
+        (podcasts + songs).sortedByDescending { it.timestampMs }
     }
 
     Column(
@@ -123,65 +167,96 @@ fun DownloadsScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Buscador elegante
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("¿Qué quieres escuchar hoy?") },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ),
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null)
-            },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(28.dp),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        // Botón protagonista
+        // Buscador con el botón de YouTube como icono al lado.
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
         val scale by animateFloatAsState(
             targetValue = if (isPressed) 0.96f else 1f,
             label = "search_scale"
         )
-        Button(
-            onClick = { youTubeManager.search(query) },
-            enabled = query.isNotBlank() && !isSearching,
-            interactionSource = interactionSource,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = YouTubeRed,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .scale(scale)
-        ) {
-            if (isSearching) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = Color.White,
-                    strokeWidth = 2.dp
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Buscando...", fontWeight = FontWeight.SemiBold)
-            } else {
-                Icon(Icons.Default.Search, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Buscar en YouTube", fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("¿Qué quieres escuchar hoy?") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    downloadsTab = 0
+                    youTubeManager.search(query)
+                },
+                enabled = query.isNotBlank() && !isSearching,
+                interactionSource = interactionSource,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = YouTubeRed,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier
+                    .size(56.dp)
+                    .scale(scale)
+            ) {
+                if (isSearching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Buscar en YouTube"
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Subpestañas: lo buscado y lo ya descargado.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Búsqueda", "Completadas").forEachIndexed { index, label ->
+                val selected = downloadsTab == index
+                Button(
+                    onClick = { downloadsTab = index },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selected) {
+                            YouTubeRed
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        contentColor = if (selected) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text(label, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
 
@@ -291,70 +366,24 @@ fun DownloadsScreen(
                     }
                 }
             }
-            // Descargas completadas: episodios y canciones.
-            val completedPodcasts = podcastDownloads.entries
-                .sortedByDescending { it.value.downloadedAtMs }
-            if (completedPodcasts.isNotEmpty() || downloadedSongs.isNotEmpty()) {
-                item {
-                    Text(
-                        "Descargadas",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
-                items(
-                    completedPodcasts,
-                    key = { "pod-done-" + it.key }
-                ) { (key, download) ->
-                    val meta = podcastProgress[key]
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        border = BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    meta?.episodeTitle?.ifBlank { download.fileName }
-                                        ?: download.fileName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    listOfNotNull(
-                                        meta?.showTitle?.takeIf { it.isNotBlank() },
-                                        meta?.audioBytes?.takeIf { it > 0L }
-                                            ?.let { formatBytes(it) }
-                                    ).joinToString(" · ")
-                                        .ifBlank { "Podcast descargado" },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = "Descargado",
-                                tint = Color(0xFF4CAF50)
-                            )
-                        }
+            // Completadas: canciones y podcasts terminados,
+            // de más reciente a más antigua, con el mismo
+            // tile de las búsquedas.
+            if (downloadsTab == 1) {
+                if (completedDownloads.isEmpty()) {
+                    item {
+                        Text(
+                            "Todavía no hay descargas completadas",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
                     }
                 }
                 items(
-                    downloadedSongs.distinctBy { it.id },
-                    key = { "song-done-" + it.id }
-                ) { song ->
+                    completedDownloads,
+                    key = { it.key }
+                ) { completed ->
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
@@ -367,33 +396,65 @@ fun DownloadsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            Modifier.padding(12.dp),
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                if (completed.thumbnailUrl != null) {
+                                    AsyncImage(
+                                        model = completed.thumbnailUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.align(Alignment.Center),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    song.title,
+                                    completed.title,
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                Spacer(Modifier.height(4.dp))
                                 Text(
-                                    song.artist,
+                                    completed.subtitle,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = "Descargada",
-                                tint = Color(0xFF4CAF50)
-                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.width(64.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Descargada",
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
-            items(results.distinctBy { it.videoId }, key = { it.videoId }) { result ->
+            if (downloadsTab == 0) items(results.distinctBy { it.videoId }, key = { it.videoId }) { result ->
                 val isDl = result.videoId in downloading
                 val pct = progress[result.videoId] ?: 0f
 
