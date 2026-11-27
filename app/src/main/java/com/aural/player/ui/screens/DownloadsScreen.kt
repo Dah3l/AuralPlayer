@@ -43,6 +43,7 @@ private val YouTubeRedDark = Color(0xFFC93A3E)
 @Composable
 fun DownloadsScreen(
     youTubeManager: YouTubeManager,
+    viewModel: com.aural.player.AuralViewModel? = null,
     onDownloadComplete: (String?, Long, YTResult, Boolean) -> Unit = { _, _, _, _ -> },
     listState: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState(),
@@ -57,6 +58,23 @@ fun DownloadsScreen(
     // v1.0.7: indicador de descarga exitosa por videoId -> nombre de archivo.
     // v1.0.7: el indicador vive en el manager para no perderse en el rescan.
     val downloadedOk by youTubeManager.downloaded.collectAsStateWithLifecycle()
+    val ytDetails by youTubeManager.details.collectAsStateWithLifecycle()
+    val podcastDetails = viewModel?.podcastDownloadDetails
+        ?.collectAsStateWithLifecycle()?.value ?: emptyMap()
+    val podcastDownloads = viewModel?.podcastDownloads
+        ?.collectAsStateWithLifecycle()?.value ?: emptyMap()
+    val podcastProgress = viewModel?.podcastProgress
+        ?.collectAsStateWithLifecycle()?.value ?: emptyMap()
+    val playlists = viewModel?.playlists
+        ?.collectAsStateWithLifecycle()?.value ?: emptyList()
+    val downloadedSongs = remember(playlists, downloadedOk) {
+        val pl = playlists.firstOrNull { it.name == "Descargas" }
+        if (pl != null && viewModel != null) {
+            viewModel.songsOfPlaylist(pl)
+        } else {
+            emptyList()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -202,6 +220,179 @@ fun DownloadsScreen(
             contentPadding = PaddingValues(bottom = 100.dp, top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Descargas activas: canciones y podcasts con su
+            // progreso, tamaño y cancelar aquí mismo.
+            val activeDownloads = ytDetails.values.map { it to true } +
+                podcastDetails.values.map { it to false }
+            if (activeDownloads.isNotEmpty()) {
+                item {
+                    Text(
+                        "Descargando",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                items(
+                    activeDownloads,
+                    key = { (detail, isSong) ->
+                        (if (isSong) "yt-" else "pod-") + detail.key
+                    }
+                ) { (detail, isSong) ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        detail.title.ifBlank { "Descarga" },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        downloadDetailLine(detail),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (isSong) {
+                                            youTubeManager.cancelDownload(detail.key)
+                                        } else {
+                                            viewModel?.cancelPodcastDownload(detail.key)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Cancelar descarga"
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { detail.fraction },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = YouTubeRed
+                            )
+                        }
+                    }
+                }
+            }
+            // Descargas completadas: episodios y canciones.
+            val completedPodcasts = podcastDownloads.entries
+                .sortedByDescending { it.value.downloadedAtMs }
+            if (completedPodcasts.isNotEmpty() || downloadedSongs.isNotEmpty()) {
+                item {
+                    Text(
+                        "Descargadas",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                items(
+                    completedPodcasts,
+                    key = { "pod-done-" + it.key }
+                ) { (key, download) ->
+                    val meta = podcastProgress[key]
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    meta?.episodeTitle?.ifBlank { download.fileName }
+                                        ?: download.fileName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    listOfNotNull(
+                                        meta?.showTitle?.takeIf { it.isNotBlank() },
+                                        meta?.audioBytes?.takeIf { it > 0L }
+                                            ?.let { formatBytes(it) }
+                                    ).joinToString(" · ")
+                                        .ifBlank { "Podcast descargado" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Descargado",
+                                tint = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+                items(
+                    downloadedSongs.distinctBy { it.id },
+                    key = { "song-done-" + it.id }
+                ) { song ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    song.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    song.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Descargada",
+                                tint = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+            }
             items(results.distinctBy { it.videoId }, key = { it.videoId }) { result ->
                 val isDl = result.videoId in downloading
                 val pct = progress[result.videoId] ?: 0f
@@ -342,6 +533,31 @@ fun DownloadsScreen(
             }
         }
     }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L ->
+        String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
+    bytes >= 1024L ->
+        String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+    else -> "$bytes B"
+}
+
+private fun downloadDetailLine(
+    detail: com.aural.player.data.ActiveDownload
+): String {
+    val parts = mutableListOf<String>()
+    if (detail.totalBytes > 0L) {
+        parts += "${formatBytes(detail.downloadedBytes)} de " +
+            formatBytes(detail.totalBytes)
+    } else if (detail.downloadedBytes > 0L) {
+        parts += formatBytes(detail.downloadedBytes)
+    }
+    parts += "${detail.percent}%"
+    if (detail.speedBytesPerSec > 0L) {
+        parts += "${formatBytes(detail.speedBytesPerSec)}/s"
+    }
+    return parts.joinToString(" · ")
 }
 
 private fun formatDuration(seconds: Long): String {
