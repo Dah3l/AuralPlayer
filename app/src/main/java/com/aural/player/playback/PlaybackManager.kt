@@ -892,7 +892,7 @@ class PlaybackManager(private val context: Context) {
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
             streamBitrateKbps = current?.onlineVideoId?.let { videoId ->
                 com.aural.player.youtube.YouTubeStreamResolver.streamBitrateKbps(videoId)
-            },
+            } ?: current?.streamBitrateKbps,
             connectionLevel = connectionLevelFor(c, current),
             isPodcastEpisode = current?.isPodcastEpisode == true,
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
