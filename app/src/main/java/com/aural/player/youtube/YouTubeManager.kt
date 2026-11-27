@@ -1727,20 +1727,14 @@ object YouTubeStreamResolver {
 
     /** Cliente HTTP compartido del streaming: un solo pool
      *  con keep-alive para las sondas del resolver y para
-     *  Media3 (OkHttpDataSource). Así los rangos de 512 KB
-     *  reutilizan la conexión en vez de abrir una nueva por
-     *  pedazo, que con la latencia de aquí se sentía como
-     *  conexión súper lenta aunque hubiera ancho de banda. */
+     *  Media3 (OkHttpDataSource). El flujo continuo usa una
+     *  sola conexión por canción; el pool evita pagar el
+     *  handshake en cada reapertura (seek/refresco). */
     val sharedHttpClient: okhttp3.OkHttpClient =
         okhttp3.OkHttpClient.Builder()
-            // HTTP/1.1 a propósito: con HTTP/2 OkHttp multiplexa
-            // todas las peticiones a googlevideo sobre UNA sola
-            // conexión TCP, y el límite de velocidad por conexión
-            // (marcado con VPN) frena todo el streaming. En 1.1
-            // cada rango paralelo usa su propia conexión del pool
-            // y las velocidades se suman; además se evita el
-            // bloqueo de cabecera de HTTP/2 con pérdida de
-            // paquetes en túneles VPN.
+            // HTTP/1.1 a propósito: evita el bloqueo de cabecera
+            // de HTTP/2 con pérdida de paquetes en túneles VPN
+            // y mantiene cada flujo en su propia conexión TCP.
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .connectionPool(
                 okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES)
@@ -1898,7 +1892,16 @@ object YouTubeStreamResolver {
     ): ResolvedStream? {
         if (videoId.isBlank()) return null
         val now = System.currentTimeMillis()
-        val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
+        // Calidad atada a Ajustes: en Calidad se pide el Opus
+        // alto, con caída automática al bajo si hubo un
+        // rebuffer real (ventana temporal) o si el medidor de
+        // throughput marca estrangulamiento (<200 kbps); al
+        // recuperarse la red, la siguiente resolución vuelve
+        // al alto. Nunca por encima de lo fijado por el usuario.
+        val meteredKbps = connectionKbps(videoId)
+        val throttled = meteredKbps != null && meteredKbps < 200
+        val effectiveQuality =
+            preferQuality && now >= temporarySaverUntilMs && !throttled
         val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
         val effectiveExclude = excludeUrl ?: lastFailedUrls[videoId]
         if (!forceFresh) {
@@ -1932,14 +1935,14 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            // Motor simple (decisión de Dahel 2026-11-26): NewPipe
-            // resuelve y Media3 reproduce directo en M4A. Sin
-            // escalera InnerTube ni Opus primero: un reintento
-            // fresco excluyendo la URL fallida lo hace
-            // PlaybackManager. Arranque rápido (Dahel
-            // 2026-11-26): la primera candidata se entrega SIN
-            // sonda — sondearla bajaba 512 KB que se botaban y
-            // la primera canción tardaba 10–20 s en sonar; si
+            // Streaming unificado (Dahel 2026-11-27): NewPipe
+            // resuelve el Opus/WebM y Media3 lo baja en flujo
+            // continuo por una sola conexión hacia la caché,
+            // con y sin VPN. Un reintento fresco excluyendo la
+            // URL fallida lo hace PlaybackManager. Arranque
+            // rápido: la primera candidata se entrega SIN
+            // sonda — sondearla bajaba bytes que se botaban y
+            // la primera canción tardaba en sonar; si
             // googlevideo la rechaza (403/410/corte), el
             // refresco existente la invalida y re-resuelve
             // excluyéndola. La sonda corta queda solo para las
@@ -1975,13 +1978,35 @@ object YouTubeStreamResolver {
         }
     }
 
-    /** Clave de caché con modo: el motor simple solo usa
-     *  directo; el sufijo se conserva para que las claves
-     *  viejas con :prog no se mezclen con las directas. */
+    /** Clave de caché con modo: el streaming unificado usa
+     *  flujo continuo (:flow); el sufijo separa sus bytes de
+     *  los de claves viejas (:direct/:prog de motores
+     *  anteriores) para no mezclar rangos de otro método. */
     private fun diskKeyWithMode(diskKey: String, progressive: Boolean): String {
         val base = diskKey.removeSuffix(":direct").removeSuffix(":prog")
-        return base + if (progressive) ":prog" else ":direct"
+            .removeSuffix(":flow")
+        return base + ":flow"
     }
+
+    /** Clave de disco conocida de ese video con esa calidad,
+     *  sin resolver nada: MusicService la usa para servir
+     *  desde la caché una canción ya bajada entera sin tocar
+     *  la red. Null si nunca se resolvió en esta sesión. */
+    fun knownDiskKey(videoId: String, preferQuality: Boolean): String? {
+        val now = System.currentTimeMillis()
+        val meteredKbps = connectionKbps(videoId)
+        val throttled = meteredKbps != null && meteredKbps < 200
+        val effectiveQuality =
+            preferQuality && now >= temporarySaverUntilMs && !throttled
+        val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
+        return cache[cacheKey]?.diskKey
+    }
+
+    /** ¿La última URL de ese video falló y sigue marcada?
+     *  El atajo de caché completa no se usa con una URL
+     *  marcada: el reintento debe re-resolver fresco. */
+    fun hasFailedUrl(videoId: String): Boolean =
+        lastFailedUrls.containsKey(videoId)
 
     /** Prueba corta de una URL de respaldo: misma identidad
      *  HTTP que reproducirá Media3 y solo los primeros bytes
@@ -2069,17 +2094,36 @@ object YouTubeStreamResolver {
 
     private val lastFailedUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    /** Candidatas M4A para streaming (bitrate NewPipe en KBPS:
-     *  ahorro 48, calidad 128). En Calidad: 128, luego 256 y
-     *  48 solo como último recurso — el orden ascendente
-     *  anterior hacía que un fallo de la URL de 128 cayera a
-     *  48 y ahí se quedaba. En Ahorro: 48 primero y
-     *  ascendentes. Las descargas usan su propia selección y
-     *  no se tocan. */
+    /** Candidatas de streaming unificado (Dahel 2026-11-27):
+     *  flujo continuo + Opus, con y sin VPN. Bitrate NewPipe
+     *  en KBPS. En Calidad: el Opus más alto primero (itag
+     *  251, ~160) y descendentes; en Ahorro: el Opus bajo
+     *  (~50) primero y ascendentes — nunca por encima de lo
+     *  fijado en Ajustes. Sin Opus disponible, M4A como
+     *  respaldo con el mismo flujo continuo. Android solo
+     *  trae decodificador Opus desde API 29 y el minSdk es
+     *  26: en API <29 se usa M4A con el mismo método (solo
+     *  cambia el formato) para no romper Android 8/9. Las
+     *  descargas usan su propia selección M4A y no se tocan. */
     private fun candidateStreams(
         streamInfo: StreamInfo,
         preferQuality: Boolean
     ): List<org.schabi.newpipe.extractor.stream.AudioStream> {
+        val opusSupported =
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+        val opus = if (opusSupported) {
+            streamInfo.audioStreams.filter { it.format == MediaFormat.WEBMA_OPUS }
+        } else {
+            emptyList()
+        }
+        if (opus.isNotEmpty()) {
+            val ordered = if (preferQuality) {
+                opus.sortedByDescending { it.averageBitrate }
+            } else {
+                opus.sortedBy { it.averageBitrate }
+            }
+            return ordered.distinctBy { it.content }
+        }
         val m4a = streamInfo.audioStreams
             .filter { it.format == MediaFormat.M4A }
         val ordered = if (preferQuality) {
