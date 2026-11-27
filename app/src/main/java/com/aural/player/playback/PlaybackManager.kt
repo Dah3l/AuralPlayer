@@ -318,19 +318,27 @@ class PlaybackManager(private val context: Context) {
             // fresco excluyendo la URL fallida, conservando la
             // posición. Si aun así falla, aviso corto y salto.
             val c = controller ?: return
-            val current = _state.value.currentSong ?: return
+            val current = currentSongFor(c) ?: return
             if (!current.isOnline) return
             // Error cerca del final: es el cierre de la
             // canción, no un fallo. La posición puede quedar
             // congelada donde se acabó el buffer (10–20 s
             // antes del final), así que la ventana es amplia
             // y también cuenta si casi todo el audio ya estaba
-            // en el teléfono. Avanza sin modal ni mensaje.
-            val endDuration = c.duration
-            val nearEnd = endDuration > 0L &&
-                (c.currentPosition >= endDuration - 15_000L ||
+            // en el teléfono. La duración del reproductor en
+            // online a veces no está disponible: la conocida
+            // de los metadatos respalda el reconocimiento del
+            // final. Avanza sin modal ni mensaje.
+            val durations = listOf(
+                c.duration,
+                current.durationMs,
+                _state.value.durationMs
+            ).filter { it > 0L }
+            val nearEnd = durations.any { endDuration ->
+                c.currentPosition >= endDuration - 15_000L ||
                     (c.bufferedPosition > 0L &&
-                        c.bufferedPosition >= endDuration - 2_000L))
+                        c.bufferedPosition >= endDuration - 2_000L)
+            }
             if (nearEnd) {
                 val endIdx = c.currentMediaItemIndex
                 val afterIdx = if (endIdx >= 0 && c.currentTimeline.windowCount > 0) {
