@@ -42,6 +42,7 @@ en GitHub salen de aquí.
 - **Favoritos sin importar el origen** — el menú de una canción en línea suma «Agregar a Favoritas»: lo que marques favorito, sea del teléfono o en línea, vive en la playlist Favoritas y suena desde ahí.
 - **«Sigue escuchando» por programa** — la lista de episodios empezados se puede filtrar por el podcast al que pertenece cada episodio, con «Todos» para verlos todos.
 - **Portadas con mejor calidad** — las canciones en línea cargan la mejor portada que ofrece la fuente en vez de la miniatura más pequeña: se ven nítidas en las listas, en el detalle y en el reproductor.
+- **Streaming con VPN más rápido** — los pedazos del audio en línea ahora bajan en paralelo por varias conexiones, siempre en rangos fijos de 512 KB: si una conexión viene limitada, las demás suman velocidad y la canción carga por delante sin cambiar la calidad que elegiste.
 
 ## v1.2.0 — 2026-11-24
 
