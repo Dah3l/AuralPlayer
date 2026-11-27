@@ -745,35 +745,6 @@ fun NowPlayingScreen(
                     }
                 }
             }
-            // Estado de espera online: con conexión mala el
-            // reproductor carga (arranque o rebuffer) y sin esto
-            // el Now Playing parecía trabado. Solo pistas online.
-            // El espacio es fijo (26 dp, siempre presente en
-            // online): el texto entra y sale con fade sin mover
-            // ningún otro elemento.
-            if (song.isOnline) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(26.dp)
-                        .padding(top = 6.dp)
-                ) {
-                    // Fade con alpha (AnimatedVisibility dentro
-                    // del Box chocaba con el receiver ColumnScope
-                    // exterior: DSL_SCOPE_VIOLATION).
-                    val waitingAlpha by animateFloatAsState(
-                        targetValue = if (state.isBuffering) 1f else 0f,
-                        animationSpec = tween(160),
-                        label = "waitingAlpha"
-                    )
-                    Text(
-                        text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.alpha(waitingAlpha)
-                    )
-                }
-            }
             Spacer(Modifier.height(8.dp))
 
             // ---- Barra de progreso ----
@@ -829,16 +800,35 @@ fun NowPlayingScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            // Fila de tiempos: transcurrido a la izquierda, total
+            // a la derecha y, en el centro, el estado de espera
+            // online acoplado a esta misma fila (sin fila extra
+            // ni cambio de altura: entra y sale con fade).
+            Box(Modifier.fillMaxWidth()) {
                 Text(formatDuration(state.positionMs),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterStart))
+                if (song.isOnline) {
+                    val waitingAlpha by animateFloatAsState(
+                        targetValue = if (state.isBuffering) 1f else 0f,
+                        animationSpec = tween(160),
+                        label = "waitingAlpha"
+                    )
+                    Text(
+                        text = if (state.positionMs <= 0L) "Cargando…" else "Esperando conexión…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .alpha(waitingAlpha)
+                    )
+                }
                 Text(formatDuration(duration),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterEnd))
             }
             Spacer(Modifier.height(8.dp))
 
