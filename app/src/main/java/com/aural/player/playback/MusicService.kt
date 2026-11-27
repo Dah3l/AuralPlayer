@@ -39,9 +39,14 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.exoplayer.source.TrackGroupArray
+import androidx.media3.exoplayer.trackselection.ExoTrackSelection
+import androidx.media3.exoplayer.upstream.Allocator
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -1869,14 +1874,61 @@ private class ColdStartLoadControl(
         return delegate.shouldStartPlayback(parameters)
     }
 
-    // `by delegate` no cubre los métodos default de la interfaz
-    // Java: el default de getBackBufferDurationUs LANZA
-    // IllegalStateException. Se delega explícitamente.
+    // `by delegate` no reenvía los métodos default de la interfaz
+    // Java, y DefaultLoadControl solo implementa las sobrecargas
+    // con PlayerId (las deprecadas sin PlayerId lanzan). Se delega
+    // explícitamente todo lo que DefaultLoadControl implementa.
+    override fun getAllocator(playerId: PlayerId): Allocator =
+        delegate.getAllocator(playerId)
+
+    override fun getBackBufferDurationUs(playerId: PlayerId): Long =
+        delegate.getBackBufferDurationUs(playerId)
+
+    override fun retainBackBufferFromKeyframe(playerId: PlayerId): Boolean =
+        delegate.retainBackBufferFromKeyframe(playerId)
+
+    override fun onPrepared(playerId: PlayerId) {
+        delegate.onPrepared(playerId)
+    }
+
+    override fun onStopped(playerId: PlayerId) {
+        delegate.onStopped(playerId)
+    }
+
+    override fun onReleased(playerId: PlayerId) {
+        delegate.onReleased(playerId)
+    }
+
+    override fun onTracksSelected(
+        parameters: LoadControl.Parameters,
+        trackGroups: TrackGroupArray,
+        trackSelections: Array<ExoTrackSelection?>
+    ) {
+        delegate.onTracksSelected(parameters, trackGroups, trackSelections)
+    }
+
+    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean =
+        delegate.shouldContinueLoading(parameters)
+
+    override fun shouldContinuePreloading(
+        playerId: PlayerId,
+        timeline: Timeline,
+        mediaPeriodId: MediaSource.MediaPeriodId,
+        bufferedDurationUs: Long
+    ): Boolean = delegate.shouldContinuePreloading(
+        playerId,
+        timeline,
+        mediaPeriodId,
+        bufferedDurationUs
+    )
+
+    // Sobrecargas deprecadas sin PlayerId: nunca deben caer en el
+    // default que lanza IllegalStateException.
     override fun getBackBufferDurationUs(): Long =
-        delegate.getBackBufferDurationUs()
+        delegate.getBackBufferDurationUs(PlayerId.UNSET)
 
     override fun retainBackBufferFromKeyframe(): Boolean =
-        delegate.retainBackBufferFromKeyframe()
+        delegate.retainBackBufferFromKeyframe(PlayerId.UNSET)
 }
 
 private class ChunkedRangeDataSourceFactory(
