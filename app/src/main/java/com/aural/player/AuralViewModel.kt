@@ -10,6 +10,9 @@ import com.aural.player.data.Folder
 import com.aural.player.data.PlayHistoryStore
 import com.aural.player.data.Playlist
 import com.aural.player.data.PodcastClient
+import com.aural.player.data.PodcastContinueItem
+import com.aural.player.data.PodcastDownload
+import com.aural.player.data.PodcastDownloadManager
 import com.aural.player.data.PodcastEpisode
 import com.aural.player.data.PodcastProgress
 import com.aural.player.data.PodcastShow
@@ -53,6 +56,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -129,6 +135,17 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope, SharingStarted.Eagerly, emptyMap()
         )
 
+    /** Descargas de episodios: registro y progreso en curso. */
+    private val podcastDownloadManager = PodcastDownloadManager(app)
+    val podcastDownloads: StateFlow<Map<String, PodcastDownload>> =
+        settings.podcastDownloads.stateIn(
+            viewModelScope, SharingStarted.Eagerly, emptyMap()
+        )
+    val podcastDownloadProgress: StateFlow<Map<String, Float>> =
+        podcastDownloadManager.progress
+    val podcastDownloadingKeys: StateFlow<Set<String>> =
+        podcastDownloadManager.downloadingKeys
+
     /** Descubrimiento en búsqueda: resultados y estado por
      *  chip, con la consulta que los produjo para no mostrar
      *  un vacío adelantado mientras la búsqueda corre. */
@@ -199,6 +216,117 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** «Sonando ahora» (ICY) de una emisora, si lo ofrece. */
     suspend fun radioNowPlaying(station: RadioStation): String? =
         RadioBrowserClient.fetchNowPlaying(station.streamUrl)
+
+    /** Versiones de la misma emisora en Radio Browser (mismo
+     *  nombre normalizado), de mayor a menor bitrate. */
+    suspend fun radioStationVersions(station: RadioStation): List<RadioStation> {
+        fun normalized(name: String): String = name.lowercase()
+            .replace(Regex("[^a-z0-9áéíóúñ ]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        val targetName = normalized(station.name)
+        val versions = RadioBrowserClient.searchByName(station.name, limit = 100)
+            .filter { candidate ->
+                normalized(candidate.name) == targetName &&
+                    (station.country.isBlank() || candidate.country.isBlank() ||
+                        candidate.country.equals(station.country, ignoreCase = true))
+            }
+        return (versions + station)
+            .distinctBy { it.streamUrl }
+            .sortedByDescending { it.bitrateKbps }
+    }
+
+    /** Escoge una versión de emisora: queda guardada en la
+     *  colección sustituyendo a la anterior. */
+    fun selectRadioStationVersion(old: RadioStation, version: RadioStation) {
+        viewModelScope.launch { settings.replaceRadioStation(old.id, version) }
+    }
+
+    /** Episodios empezados de los podcasts guardados, del más
+     *  reciente al más viejo, para «Sigue escuchando». */
+    suspend fun continueListeningEpisodes(): List<PodcastContinueItem> =
+        coroutineScope {
+            val progress = podcastProgress.value
+            podcastShows.value.map { show ->
+                async {
+                    PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
+                        .distinctBy { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
+                        .mapNotNull { episode ->
+                            val saved = progress[
+                                PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+                            ]
+                            if (saved == null || saved.listened ||
+                                saved.positionMs <= 0L
+                            ) {
+                                null
+                            } else {
+                                PodcastContinueItem(show, episode, saved)
+                            }
+                        }
+                }
+            }.awaitAll().flatten()
+                .sortedWith(
+                    compareByDescending<PodcastContinueItem> {
+                        it.progress.updatedAtMs
+                    }.thenByDescending { it.episode.publishedMs }
+                )
+        }
+
+    fun downloadPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
+        podcastDownloadManager.download(show, episode)
+    }
+
+    fun deletePodcastDownload(show: PodcastShow, episode: PodcastEpisode) {
+        val key = PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+        deletePodcastDownloadByKey(key)
+    }
+
+    /** Descarga el episodio que suena (desde el Now Playing). */
+    fun downloadPodcastForSong(song: Song) {
+        val (show, episode) = podcastShowEpisodeForSong(song) ?: return
+        podcastDownloadManager.download(show, episode)
+    }
+
+    /** Elimina la descarga del episodio que suena. */
+    fun deletePodcastDownloadForSong(song: Song) {
+        val feedUrl = song.podcastFeedUrl ?: return
+        val guid = song.podcastGuid ?: return
+        deletePodcastDownloadByKey(PodcastEpisode.progressKey(feedUrl, guid))
+    }
+
+    private fun deletePodcastDownloadByKey(key: String) {
+        viewModelScope.launch {
+            podcastDownloads.value[key]?.let { download ->
+                podcastDownloadManager.deleteDownload(download)
+            }
+            settings.removePodcastDownload(key)
+            playback.showMessage("Descarga eliminada")
+        }
+    }
+
+    private fun podcastShowEpisodeForSong(
+        song: Song
+    ): Pair<PodcastShow, PodcastEpisode>? {
+        val feedUrl = song.podcastFeedUrl ?: return null
+        val guid = song.podcastGuid ?: return null
+        val audioUrl = song.podcastAudioUrl ?: song.uri
+        val show = podcastShows.value.firstOrNull { it.feedUrl == feedUrl }
+            ?: PodcastShow(
+                id = feedUrl,
+                title = song.artist,
+                feedUrl = feedUrl,
+                imageUrl = song.albumArtUri,
+                author = song.album
+            )
+        val episode = PodcastEpisode(
+            guid = guid,
+            title = song.title,
+            durationMs = song.durationMs,
+            audioUrl = audioUrl,
+            imageUrl = song.albumArtUri
+        )
+        return show to episode
+    }
 
     /** Episodio en reproducción (songId -> feedUrl|guid) para
      *  guardar su progreso al pausar y cada pocos segundos. */
@@ -971,27 +1099,31 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      * reanudando en el progreso guardado si lo hay.
      */
     fun playPodcastShow(show: PodcastShow) {
-        withStreamingGate {
-            viewModelScope.launch {
-                val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 20)
-                val episode = episodes.firstOrNull() ?: return@launch
-                startPodcastEpisode(show, episode)
-            }
+        viewModelScope.launch {
+            val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 20)
+            val episode = episodes.firstOrNull() ?: return@launch
+            playPodcastEpisode(show, episode)
         }
     }
 
-    /** Reproduce un episodio desde su ficha, con la puerta
-     *  de streaming (solo Wi-Fi / aviso de datos). */
+    /** Reproduce un episodio desde su ficha: descargado suena
+     *  local sin puerta; en línea pasa la puerta de streaming
+     *  (solo Wi-Fi / aviso de datos). */
     fun playPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
-        withStreamingGate { startPodcastEpisode(show, episode) }
+        val key = PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+        if (podcastDownloads.value.containsKey(key)) {
+            startPodcastEpisode(show, episode)
+        } else {
+            withStreamingGate { startPodcastEpisode(show, episode) }
+        }
     }
 
     private fun startPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
-        val song = episode.toSong(show)
+        val key = PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+        val localUri = podcastDownloads.value[key]?.uri
+        val song = episode.toSong(show, localUri)
         podcastEpisodeKeys[song.id] = show.feedUrl to episode.guid
-        val saved = podcastProgress.value[
-            PodcastEpisode.progressKey(show.feedUrl, episode.guid)
-        ]
+        val saved = podcastProgress.value[key]
         val resumeMs = if (saved != null && !saved.listened) saved.positionMs else 0L
         playback.playQueue(listOf(song), 0, false, startPositionMs = resumeMs)
     }
