@@ -440,45 +440,20 @@ fun LibraryScreen(
     // Sugerencias online sin texto: se calculan desde la
     // escucha del usuario (Top, recientes y favoritos) la
     // primera vez que se entra al lado Online.
-    var onlineSuggestions by remember {
-        mutableStateOf<com.aural.player.youtube.OnlineSearchResults?>(null)
-    }
-    var onlineSuggestionsLoading by remember { mutableStateOf(false) }
-    var onlineSuggestionsSongsUi by remember {
-        mutableStateOf<List<Song>>(emptyList())
-    }
-    LaunchedEffect(onlineSuggestions?.songs) {
-        onlineSuggestionsSongsUi = onlineSuggestions?.songs
-            ?.map { viewModel.registerOnlineSong(it) } ?: emptyList()
-    }
-    LaunchedEffect(searchOnline, library.query, safeSelectedTab) {
-        if (!searchOnline || library.query.isNotBlank()) return@LaunchedEffect
-        val tabKey = tabOrder.getOrNull(safeSelectedTab)
-        if (tabKey !in setOf("songs", "artists", "albums", "playlists")) {
-            return@LaunchedEffect
-        }
-        if (!viewModel.hasInternet()) return@LaunchedEffect
-        if (onlineSuggestions != null || onlineSuggestionsLoading) {
-            return@LaunchedEffect
-        }
-        val seeds = (
-            topArtists.map { it.name } +
-                recentSongs.map { it.artist } +
-                viewModel.favoriteSongs().map { it.artist }
-            ).map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .take(3)
-        if (seeds.isEmpty()) {
-            onlineSuggestions =
-                com.aural.player.youtube.OnlineSearchResults()
-            return@LaunchedEffect
-        }
-        onlineSuggestionsLoading = true
-        onlineSuggestions = youTubeManager?.searchSuggestions(seeds)
-            ?: com.aural.player.youtube.OnlineSearchResults()
-        onlineSuggestionsLoading = false
-    }
+    val onlineSuggestionsState = rememberOnlineSuggestions(
+        viewModel = viewModel,
+        youTubeManager = youTubeManager,
+        searchOnline = searchOnline,
+        query = library.query,
+        tabKey = tabOrder.getOrNull(safeSelectedTab),
+        topArtists = topArtists,
+        recentSongs = recentSongs,
+        favorites = favorites,
+        librarySongs = library.songs
+    )
+    val onlineSuggestions = onlineSuggestionsState.suggestions
+    val onlineSuggestionsLoading = onlineSuggestionsState.loading
+    val onlineSuggestionsSongsUi = onlineSuggestionsState.songsUi
     // Descubrimiento de Emisoras/Podcasts: en Online con texto
     // busca contra Radio Browser / el directorio; en Online
     // sin texto carga sugerencias; en Locales se ve la
