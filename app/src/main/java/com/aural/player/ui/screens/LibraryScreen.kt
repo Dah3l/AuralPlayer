@@ -284,6 +284,14 @@ fun LibraryScreen(
         .collectAsStateWithLifecycle()
     val savedOnlinePlaylists by viewModel.savedOnlinePlaylists
         .collectAsStateWithLifecycle()
+    val podcastDownloads by viewModel.podcastDownloads
+        .collectAsStateWithLifecycle()
+    val podcastNewEpisodeCount by viewModel.podcastNewEpisodeCount
+        .collectAsStateWithLifecycle()
+    val musicSuggestions by viewModel.musicSuggestions
+        .collectAsStateWithLifecycle()
+    val musicSuggestionsSongsUi by viewModel.musicSuggestionsSongsUi
+        .collectAsStateWithLifecycle()
     val searchFocusRequester = remember { FocusRequester() }
     val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
     val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
@@ -408,7 +416,13 @@ fun LibraryScreen(
     var loadingCollection by remember { mutableStateOf(false) }
     // Selector de fuente de búsqueda: Locales por defecto, Online opcional.
     var searchOnline by remember { mutableStateOf(false) }
-    var onlineSongsUi by remember { mutableStateOf<List<Song>>(emptyList()) }
+    // Si los resultados ya estaban registrados (volver de un
+    // detalle), la lista sale al instante sin esqueletos.
+    var onlineSongsUi by remember {
+        mutableStateOf(
+            viewModel.peekOnlineSongs(onlineResults.songs) ?: emptyList()
+        )
+    }
     // La búsqueda online está "pendiente" hasta que los
     // resultados correspondan a la consulta actual y la
     // búsqueda haya terminado: en ese tramo se muestran
@@ -422,20 +436,23 @@ fun LibraryScreen(
         (onlineResults.query == onlineQuery &&
             onlineResults.songs.isNotEmpty() && onlineSongsUi.isEmpty())
     LaunchedEffect(onlineResults.songs) {
-        onlineSongsUi = onlineResults.songs.map { viewModel.registerOnlineSong(it) }
+        onlineSongsUi = viewModel.peekOnlineSongs(onlineResults.songs)
+            ?: viewModel.registerOnlineSongs(onlineResults.songs)
     }
     LaunchedEffect(library.query, searchOnline) {
         val query = library.query.trim()
-        if (query.isBlank() || !searchOnline) {
-            youTubeManager?.clearOnlineResults()
+        // Salir del lado Online o borrar el texto NO borra los
+        // resultados: al volver con el mismo texto salen de la
+        // caché, sin buscar de nuevo.
+        if (query.isBlank() || !searchOnline) return@LaunchedEffect
+        if (!viewModel.hasInternet()) return@LaunchedEffect
+        // Consulta ya cacheada: sale al instante, sin debounce.
+        if (youTubeManager?.hasCachedOnlineResults(query) == true) {
+            youTubeManager.searchUnified(query)
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(450)
-        if (viewModel.hasInternet()) {
-            youTubeManager?.searchUnified(query)
-        } else {
-            youTubeManager?.clearOnlineResults()
-        }
+        youTubeManager?.searchUnified(query)
     }
     // Sugerencias online sin texto: se calculan desde la
     // escucha del usuario (Top, recientes y favoritos) la
@@ -461,14 +478,13 @@ fun LibraryScreen(
     LaunchedEffect(library.query, safeSelectedTab, tabOrder, searchOnline) {
         val query = library.query.trim()
         val tabKey = tabOrder.getOrNull(safeSelectedTab)
+        // Cambiar de pestaña o de lado no borra ni recarga los
+        // resultados: quedan cacheados por consulta y solo un
+        // texto nuevo busca de nuevo.
         if (!searchOnline || (tabKey != "radio" && tabKey != "podcasts")) {
-            viewModel.clearCollectionSearch()
             return@LaunchedEffect
         }
-        if (!viewModel.hasInternet()) {
-            viewModel.clearCollectionSearch()
-            return@LaunchedEffect
-        }
+        if (!viewModel.hasInternet()) return@LaunchedEffect
         if (query.isBlank()) {
             if (tabKey == "radio") viewModel.loadRadioSuggestions()
             else viewModel.loadPodcastSuggestions()
@@ -477,6 +493,31 @@ fun LibraryScreen(
         kotlinx.coroutines.delay(450)
         if (tabKey == "radio") viewModel.searchRadio(query)
         else viewModel.searchPodcasts(query)
+    }
+    // Carga única de la sesión para el Inicio y las
+    // subpestañas Online: sugerencias (música, emisoras,
+    // podcasts) y episodios nuevos. El ViewModel guarda todo
+    // y no recarga al navegar; solo refresca si cambian las
+    // semillas de escucha.
+    val homeSeeds = remember(topArtists, recentSongs, favorites, library.songs) {
+        (
+            topArtists.map { it.name } +
+                recentSongs.map { it.artist } +
+                viewModel.favoriteSongs().map { it.artist }
+            ).map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+    }
+    LaunchedEffect(homeSeeds) {
+        if (!viewModel.hasInternet()) return@LaunchedEffect
+        viewModel.loadMusicSuggestions(youTubeManager, homeSeeds)
+        viewModel.loadRadioSuggestions()
+        viewModel.loadPodcastSuggestions()
+        viewModel.refreshPodcastNewEpisodes()
+    }
+    val homeContinueItem = remember(podcastProgress, podcastShows) {
+        homeContinueItemOf(podcastProgress, viewModel.cachedContinueListening())
     }
     val audioSearchRequest by viewModel.audioSearchRequest.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(audioSearchRequest) {
@@ -853,7 +894,37 @@ fun LibraryScreen(
                             onShuffleAll = { viewModel.playAllShuffled() },
                             onOpenFavorites = { onOpenPlaylist(FAVORITES_ID) },
                             onOpenTop10 = onOpenTop10,
-                            onOpenDownloads = { onTabSelected(tabOrder.indexOf("downloads")) }
+                            onOpenDownloads = { onTabSelected(tabOrder.indexOf("downloads")) },
+                            hasInternet = viewModel.hasInternet(),
+                            onlineSuggestions = musicSuggestions,
+                            onlineSongsUi = musicSuggestionsSongsUi,
+                            moodArtist = homeSeeds.firstOrNull(),
+                            onPlayOnlineSongs = { songs ->
+                                viewModel.playOnlineSongs(songs, 0)
+                            },
+                            onOpenOnlineCollection = onOpenOnlineCollection,
+                            radioStations = radioStations,
+                            radioSuggestions = radioSuggestions,
+                            onPlayRadioStation = { viewModel.playRadioStation(it) },
+                            onOpenRadioTab = {
+                                onTabSelected(tabOrder.indexOf("radio"))
+                            },
+                            podcastContinueItem = homeContinueItem,
+                            podcastContinueDownloaded = homeContinueItem?.let { item ->
+                                podcastDownloads.containsKey(
+                                    com.aural.player.data.PodcastEpisode
+                                        .progressKey(item.show.feedUrl, item.episode.guid)
+                                )
+                            } ?: false,
+                            podcastNewEpisodeCount = podcastNewEpisodeCount,
+                            onPlayPodcastContinue = {
+                                homeContinueItem?.let { item ->
+                                    viewModel.playPodcastEpisode(item.show, item.episode)
+                                }
+                            },
+                            onOpenPodcastsTab = {
+                                onTabSelected(tabOrder.indexOf("podcasts"))
+                            }
                         )
 
                         "songs" -> if (searchOnline) {
@@ -1798,269 +1869,6 @@ private fun BoxCentered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
 
-/** Datos de una playlist para la sección "Para ti". */
-private data class TopPlaylist(
-    val id: String,
-    val name: String,
-    val coverUri: String?,
-    val songCount: Int
-)
-
-/** Sección "Para ti": las 2 playlists que más suenan, con "Ver todas" y título + ▶ dentro de la portada. */
-@Composable
-private fun MostPlayedSection(
-    topPlaylists: List<TopPlaylist>,
-    onOpenPlaylist: (String) -> Unit,
-    onPlayPlaylist: (String) -> Unit,
-    onSeeAll: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Para ti",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onSeeAll) { Text("Ver todas") }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            topPlaylists.forEach { tp ->
-                // Tarjeta definida: fondo propio + borde 1dp + radio 16dp,
-                // título y ▶ dentro de la portada (como la referencia)
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .aspectRatio(1f)
-                        .shadow(4.dp, RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .clickable { onOpenPlaylist(tp.id) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Nota musical si no hay imagen
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(40.dp)
-                    )
-                    if (!tp.coverUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = android.net.Uri.parse(tp.coverUri),
-                            contentDescription = "Portada",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    // Degradado oscuro abajo para que el título blanco se lea siempre
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colorStops = arrayOf(
-                                        0f to Color.Transparent,
-                                        0.55f to Color.Transparent,
-                                        1f to Color.Black.copy(alpha = 0.8f)
-                                    )
-                                )
-                            )
-                    )
-                    // Título + ▶ dentro de la portada, abajo
-                    Row(
-                        Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = tp.name,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "${tp.songCount} ${if (tp.songCount == 1) "canción" else "canciones"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        }
-                        // Separación para que el texto no se pegue al botón
-                        Spacer(Modifier.width(8.dp))
-                        if (tp.songCount > 0) {
-                            IconButton(
-                                onClick = { onPlayPlaylist(tp.id) },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.primary,
-                                        CircleShape
-                                    )
-                            ) {
-                                Icon(
-                                    Icons.Rounded.PlayArrow,
-                                    "Reproducir",
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    }
-                    // Borde 1dp por encima de la portada: la tarjeta no se
-                    // confunde con el fondo ni cuando la foto la llena entera
-                    // (un borde en la cadena de modifiers quedaría tapado
-                    // por la imagen, que se dibuja encima).
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant,
-                                RoundedCornerShape(16.dp)
-                            )
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Tarjeta hero de la Sesión DJ: degradado del color del tema, pill
- * superior, título grande y botón pastilla. Cuando la sesión está
- * activa lo muestra y ofrece detenerla; el botón principal siempre
- * arranca una lista NUEVA (cada toque = lista distinta).
- */
-@Composable
-private fun DjSessionCard(
-    isActive: Boolean,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val primary = MaterialTheme.colorScheme.primary
-    val onPrimary = MaterialTheme.colorScheme.onPrimary
-    Box(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        primary.copy(alpha = 0.32f),
-                        MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                )
-            )
-            .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
-            .padding(20.dp)
-    ) {
-        // Decoración: círculo de color arriba a la derecha, como el mesh.
-        Box(
-            Modifier
-                .size(140.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 48.dp, y = (-48).dp)
-                .background(primary.copy(alpha = 0.18f), CircleShape)
-        )
-        Column {
-            // Pill superior.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(primary.copy(alpha = 0.16f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.QueueMusic,
-                    contentDescription = null,
-                    tint = primary,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "SESIÓN INFINITA",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = primary
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "Sesión DJ",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Que la música no pare",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (isActive) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .background(primary, CircleShape)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Sesión activa",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = primary
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            // Solo el botón arranca o para: la tarjeta ya no es un botón
-            // entero. Inactiva: "Nueva sesión". Activa: SOLO "Detener",
-            // que para la música por completo (Stop).
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(primary)
-                    .clickable { if (isActive) onStop() else onStart() }
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                if (isActive) {
-                    // Cuadrito de stop dibujado (sin depender de un icono).
-                    Box(
-                        Modifier
-                            .size(12.dp)
-                            .background(onPrimary, RoundedCornerShape(2.dp))
-                    )
-                } else {
-                    Icon(
-                        Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        tint = onPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (isActive) "Detener" else "Nueva sesión",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = onPrimary
-                )
-            }
-        }
-    }
-}
-
 // --------------------------- Pestaña: Inicio ---------------------------
 // El inicio de Aural: lo más escuchado, la Sesión DJ y los artistas
 // favoritos. Sin barra A-Z (como Descargas y Playlists): es contenido
@@ -2087,7 +1895,22 @@ private fun HomeTab(
     onShuffleAll: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenTop10: () -> Unit,
-    onOpenDownloads: () -> Unit
+    onOpenDownloads: () -> Unit,
+    hasInternet: Boolean = false,
+    onlineSuggestions: com.aural.player.youtube.OnlineSearchResults? = null,
+    onlineSongsUi: List<Song> = emptyList(),
+    moodArtist: String? = null,
+    onPlayOnlineSongs: (List<Song>) -> Unit = {},
+    onOpenOnlineCollection: (com.aural.player.youtube.OnlineCollectionResult) -> Unit = {},
+    radioStations: List<com.aural.player.data.RadioStation> = emptyList(),
+    radioSuggestions: List<com.aural.player.data.RadioStation> = emptyList(),
+    onPlayRadioStation: (com.aural.player.data.RadioStation) -> Unit = {},
+    onOpenRadioTab: () -> Unit = {},
+    podcastContinueItem: com.aural.player.data.PodcastContinueItem? = null,
+    podcastContinueDownloaded: Boolean = false,
+    podcastNewEpisodeCount: Int = 0,
+    onPlayPodcastContinue: () -> Unit = {},
+    onOpenPodcastsTab: () -> Unit = {}
 ) {
     val homeListState = rememberLazyListState()
     // La animación del odómetro solo corre cuando la tarjeta de la semana
@@ -2112,13 +1935,56 @@ private fun HomeTab(
     ) {
         if (topPlaylists.isNotEmpty()) {
             item(key = "para_ti") {
-                MostPlayedSection(
-                    topPlaylists = topPlaylists,
-                    onOpenPlaylist = onOpenPlaylist,
-                    onPlayPlaylist = onPlayPlaylist,
-                    onSeeAll = onSeeAllPlaylists,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp, end = 16.dp)
-                )
+                Column(
+                    Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp, end = 16.dp)
+                ) {
+                    MostPlayedSection(
+                        topPlaylists = topPlaylists,
+                        onOpenPlaylist = onOpenPlaylist,
+                        onPlayPlaylist = onPlayPlaylist,
+                        onSeeAll = onSeeAllPlaylists
+                    )
+                    // «Para ti» expandido: tarjetas online desde
+                    // la escucha real (sugerencias cacheadas).
+                    // Sin conexión no aparecen.
+                    if (hasInternet && onlineSongsUi.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        val moodCover = onlineSongsUi.firstOrNull()?.albumArtUri
+                        val becauseArtist = moodArtist?.let { artist ->
+                            onlineSuggestions?.artists?.firstOrNull {
+                                it.title.contains(artist, ignoreCase = true)
+                            } ?: onlineSuggestions?.artists?.firstOrNull()
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            HomeOnlineCard(
+                                title = "Tu mood actual",
+                                subtitle = "${onlineSongsUi.size} canciones para ti",
+                                coverUri = moodCover,
+                                onClick = { onPlayOnlineSongs(onlineSongsUi) },
+                                onPlay = { onPlayOnlineSongs(onlineSongsUi) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (moodArtist != null) {
+                                HomeOnlineCard(
+                                    title = "Porque escuchas a $moodArtist",
+                                    subtitle = becauseArtist?.title
+                                        ?: "Artistas similares",
+                                    coverUri = becauseArtist?.thumbnailUrl
+                                        ?: moodCover,
+                                    onClick = {
+                                        if (becauseArtist != null) {
+                                            onOpenOnlineCollection(becauseArtist)
+                                        } else {
+                                            onPlayOnlineSongs(onlineSongsUi)
+                                        }
+                                    },
+                                    onPlay = { onPlayOnlineSongs(onlineSongsUi) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         // Tarjeta Sesión DJ: va DEBAJO de "Para ti", como tarjeta hero.
@@ -2129,6 +1995,39 @@ private fun HomeTab(
                 onStop = onStopDjSession,
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
             )
+        }
+        // Emisoras para ti: mis emisoras + sugerencias. Sin
+        // conexión no aparece (son streams en vivo).
+        if (hasInternet) {
+            val homeStations = (radioStations + radioSuggestions)
+                .distinctBy { it.id }
+                .take(12)
+            if (homeStations.isNotEmpty()) {
+                item(key = "radio_home") {
+                    HomeRadioSection(
+                        stations = homeStations,
+                        onPlay = onPlayRadioStation,
+                        onSeeAll = onOpenRadioTab,
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                    )
+                }
+            }
+        }
+        // Podcasts: «Sigue tu episodio» + badge de nuevos.
+        // Sin conexión solo queda si el episodio está
+        // descargado (suena local).
+        if ((hasInternet || podcastContinueDownloaded) &&
+            (podcastContinueItem != null || podcastNewEpisodeCount > 0)
+        ) {
+            item(key = "podcasts_home") {
+                HomePodcastsSection(
+                    continueItem = podcastContinueItem,
+                    newEpisodeCount = if (hasInternet) podcastNewEpisodeCount else 0,
+                    onPlayContinue = onPlayPodcastContinue,
+                    onSeeAll = onOpenPodcastsTab,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 16.dp)
+                )
+            }
         }
         if (topArtists.isNotEmpty()) {
             item(key = "artists") {
