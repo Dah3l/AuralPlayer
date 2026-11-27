@@ -258,11 +258,16 @@ fun LibraryScreen(
     val albums by viewModel.albumsFlow.collectAsStateWithLifecycle()
     val folders by viewModel.foldersFlow.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val radioStations by viewModel.radioStations.collectAsStateWithLifecycle()
+    val podcastShows by viewModel.podcastShows.collectAsStateWithLifecycle()
+    val podcastProgress by viewModel.podcastProgress.collectAsStateWithLifecycle()
     val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
     val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
     val playlistCovers by viewModel.playlistCovers.collectAsStateWithLifecycle()
     val playCounts by viewModel.playlistPlayCounts.collectAsStateWithLifecycle()
     val downloadsListState = rememberLazyListState()
+    val radioListState = rememberLazyListState()
+    val podcastsListState = rememberLazyListState()
     val pillsListState = rememberLazyListState()
     // v1.0.8: orden de pestañas elegido por el usuario (claves estables).
     val tabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
@@ -973,6 +978,21 @@ fun LibraryScreen(
                             )
                             }
                         }
+                    "radio" -> RadioTab(
+                            stations = radioStations,
+                            onPlay = { viewModel.playRadioStation(it) },
+                            onRemove = { viewModel.removeRadioStation(it) },
+                            onSearch = { onTabSelected(tabOrder.indexOf("songs")) },
+                            listState = radioListState
+                        )
+                    "podcasts" -> PodcastsTab(
+                            shows = podcastShows,
+                            progress = podcastProgress,
+                            onPlay = { viewModel.playPodcastShow(it) },
+                            onRemove = { viewModel.removePodcastShow(it) },
+                            onSearch = { onTabSelected(tabOrder.indexOf("songs")) },
+                            listState = podcastsListState
+                        )
                     "downloads" -> {
                             val ytm = youTubeManager
                             if (ytm != null) {
