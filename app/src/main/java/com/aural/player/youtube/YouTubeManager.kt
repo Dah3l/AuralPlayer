@@ -95,6 +95,12 @@ class YouTubeManager(private val context: Context) {
     private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
 
+    // Detalles por videoId: bytes descargados, total y velocidad.
+    private val _details =
+        MutableStateFlow<Map<String, com.aural.player.data.ActiveDownload>>(emptyMap())
+    val details: StateFlow<Map<String, com.aural.player.data.ActiveDownload>> =
+        _details.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
 
     // v1.0.7: videos descargados en esta sesión (videoId -> nombre de archivo).
@@ -117,10 +123,24 @@ class YouTubeManager(private val context: Context) {
         // Al quitarlo de _downloading, el loop de descarga lo detecta y se detiene
         _downloading.value = _downloading.value - videoId
         _progress.value = _progress.value - videoId
+        _details.value = _details.value - videoId
         DownloadNotifications.cancel(
             context, DownloadNotifications.idFor("youtube:$videoId")
         )
         android.util.Log.d("YouTubeManager", "Descarga cancelada: $videoId")
+    }
+
+    private fun downloadDetailText(downloaded: Long, total: Long): String? {
+        if (total <= 0L) return null
+        fun fmt(bytes: Long): String = when {
+            bytes >= 1024L * 1024L ->
+                String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
+            bytes >= 1024L ->
+                String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+            else -> "$bytes B"
+        }
+        return "${fmt(downloaded)} de ${fmt(total)} · " +
+            "${((downloaded * 100L) / total).toInt().coerceIn(0, 100)}%"
     }
 
     init {
@@ -237,6 +257,50 @@ class YouTubeManager(private val context: Context) {
             }
         }
     }
+
+    /**
+     * Sugerencias online sin texto de búsqueda: busca por los
+     * artistas semilla de la escucha del usuario (favoritos,
+     * recientes, Top) y mezcla los resultados sin duplicados.
+     * No toca los resultados de la búsqueda con texto.
+     */
+    suspend fun searchSuggestions(seeds: List<String>): OnlineSearchResults =
+        withContext(Dispatchers.IO) {
+            val cleanSeeds = seeds.map { it.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .take(3)
+            if (cleanSeeds.isEmpty()) return@withContext OnlineSearchResults()
+            val service: StreamingService = NewPipe.getService("YouTube")
+            val songs = mutableListOf<YTResult>()
+            val albums = mutableListOf<OnlineCollectionResult>()
+            val playlists = mutableListOf<OnlineCollectionResult>()
+            val artists = mutableListOf<OnlineCollectionResult>()
+            for (seed in cleanSeeds) {
+                songs += runCatching {
+                    searchSongsHybrid(service, seed)
+                }.getOrDefault(emptyList())
+                albums += runCatching {
+                    searchAlbumsHybrid(service, seed)
+                }.getOrDefault(emptyList())
+                playlists += runCatching {
+                    searchCollections(
+                        service, seed, "music_playlists",
+                        OnlineCollectionKind.PLAYLIST
+                    )
+                }.getOrDefault(emptyList())
+                artists += runCatching {
+                    searchArtistsHybrid(service, seed)
+                }.getOrDefault(emptyList())
+            }
+            OnlineSearchResults(
+                query = "",
+                songs = songs.distinctBy { it.videoId }.take(40),
+                albums = albums.distinctBy { it.url }.take(30),
+                playlists = playlists.distinctBy { it.url }.take(30),
+                artists = artists.distinctBy { it.url }.take(30)
+            )
+        }
 
     fun clearOnlineResults() {
         onlineSearchGeneration++
@@ -458,10 +522,18 @@ class YouTubeManager(private val context: Context) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
+        _details.value = _details.value + (result.videoId to
+            com.aural.player.data.ActiveDownload(
+                key = result.videoId,
+                title = "${result.artist} - ${result.title}"
+            ))
         _error.value = null
         val notificationId = DownloadNotifications.idFor("youtube:${result.videoId}")
         val notificationTitle = "${result.artist} - ${result.title}"
-        DownloadNotifications.progress(context, notificationId, notificationTitle, 0)
+        DownloadNotifications.progress(
+            context, notificationId, notificationTitle, 0,
+            null, "youtube", result.videoId
+        )
         scope.launch {
             var savedFileName: String? = null
             var savedMediaId = -1L
@@ -507,13 +579,20 @@ class YouTubeManager(private val context: Context) {
                     val ext = if (audioStream.format == MediaFormat.M4A) "m4a" else "webm"
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
                     var lastPercent = -1
-                    val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
-                        _progress.value = _progress.value + (result.videoId to pct)
-                        val percent = (pct * 100).toInt()
-                        if (percent != lastPercent) {
-                            lastPercent = percent
+                    val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { detail ->
+                        _progress.value = _progress.value +
+                            (result.videoId to detail.fraction)
+                        _details.value = _details.value +
+                            (result.videoId to detail)
+                        if (detail.percent != lastPercent) {
+                            lastPercent = detail.percent
                             DownloadNotifications.progress(
-                                context, notificationId, notificationTitle, percent
+                                context, notificationId, notificationTitle,
+                                detail.percent,
+                                downloadDetailText(
+                                    detail.downloadedBytes, detail.totalBytes
+                                ),
+                                "youtube", result.videoId
                             )
                         }
                     }
@@ -535,12 +614,17 @@ class YouTubeManager(private val context: Context) {
                     errorMsg = "Sin audio disponible para este video"
                 }
             } catch (e: Exception) {
-                errorMsg = "Error: ${e.message?.take(100)}"
-                android.util.Log.e("YouTubeManager", "Error descargando: ${e.message}", e)
+                if (_downloading.value.contains(result.videoId)) {
+                    errorMsg = "Error: ${e.message?.take(100)}"
+                    android.util.Log.e("YouTubeManager", "Error descargando: ${e.message}", e)
+                }
+                // Si ya no está en _downloading, fue cancelación
+                // del usuario: sin error ni aviso de fallo.
             }
             withContext(Dispatchers.Main) {
                 _downloading.value = _downloading.value - result.videoId
                 _progress.value = _progress.value - result.videoId
+                _details.value = _details.value - result.videoId
                 _error.value = errorMsg
                 if (savedFileName != null) {
                     DownloadNotifications.complete(
@@ -575,7 +659,7 @@ class YouTubeManager(private val context: Context) {
         fileName: String,
         result: YTResult,
         videoId: String,
-        onProgress: (Float) -> Unit
+        onProgress: (com.aural.player.data.ActiveDownload) -> Unit
     ): Long {
         return try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -608,8 +692,13 @@ class YouTubeManager(private val context: Context) {
                 val auralDir = File(musicDir, "Aural")
                 auralDir.mkdirs()
                 val destFile = File(auralDir, fileName)
-                destFile.outputStream().use { out ->
-                    downloadWithProgress(url, out, videoId, onProgress)
+                try {
+                    destFile.outputStream().use { out ->
+                        downloadWithProgress(url, out, videoId, onProgress)
+                    }
+                } catch (e: Exception) {
+                    runCatching { destFile.delete() }
+                    throw e
                 }
                 // Escanear el archivo y esperar (acotado) a conocer su ID indexado
                 var scannedId = -1L
@@ -652,7 +741,7 @@ class YouTubeManager(private val context: Context) {
         url: String,
         out: java.io.OutputStream,
         videoId: String,
-        onProgress: (Float) -> Unit
+        onProgress: (com.aural.player.data.ActiveDownload) -> Unit
     ) {
         currentDownloadId = videoId
         val connection = URL(url).openConnection() as java.net.HttpURLConnection
@@ -669,25 +758,55 @@ class YouTubeManager(private val context: Context) {
         connection.connect()
         val total = connection.contentLengthLong
         var downloaded = 0L
+        var windowStartMs = System.currentTimeMillis()
+        var windowBytes = 0L
+        var speed = 0L
         val buffer = ByteArray(65536) // 64KB
         var cancelled = false
-        connection.inputStream.use { input ->
-            while (true) {
-                // Chequear cancelación
-                if (!_downloading.value.contains(videoId)) {
-                    cancelled = true
-                    break
+        try {
+            connection.inputStream.use { input ->
+                while (true) {
+                    // Chequear cancelación
+                    if (!_downloading.value.contains(videoId)) {
+                        cancelled = true
+                        break
+                    }
+                    val read = input.read(buffer)
+                    if (read == -1) break
+                    out.write(buffer, 0, read)
+                    downloaded += read
+                    windowBytes += read
+                    val now = System.currentTimeMillis()
+                    if (now - windowStartMs >= 1_000L) {
+                        speed = windowBytes * 1000L / (now - windowStartMs)
+                        windowStartMs = now
+                        windowBytes = 0L
+                    }
+                    onProgress(
+                        com.aural.player.data.ActiveDownload(
+                            key = videoId,
+                            title = _details.value[videoId]?.title ?: "",
+                            downloadedBytes = downloaded,
+                            totalBytes = total,
+                            speedBytesPerSec = speed
+                        )
+                    )
                 }
-                val read = input.read(buffer)
-                if (read == -1) break
-                out.write(buffer, 0, read)
-                downloaded += read
-                if (total > 0) onProgress(downloaded.toFloat() / total)
             }
+        } finally {
+            connection.disconnect()
         }
-        connection.disconnect()
-        if (!cancelled) onProgress(1f)
-        else throw java.io.IOException("Descarga cancelada por el usuario")
+        if (!cancelled) {
+            onProgress(
+                com.aural.player.data.ActiveDownload(
+                    key = videoId,
+                    title = _details.value[videoId]?.title ?: "",
+                    downloadedBytes = downloaded,
+                    totalBytes = if (total > 0L) total else downloaded,
+                    speedBytesPerSec = speed
+                )
+            )
+        } else throw java.io.IOException("Descarga cancelada por el usuario")
     }
 
     /**
