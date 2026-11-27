@@ -139,6 +139,7 @@ class MainActivity : ComponentActivity() {
         handleIslandIntent(intent)
         handleAuralLinkIntent(intent)
         youTubeManager = com.aural.player.youtube.YouTubeManager(this)
+        handleDownloadIntent(intent)
         enableEdgeToEdge()
         requestNeededPermissions()
 
@@ -189,6 +190,7 @@ class MainActivity : ComponentActivity() {
         handleAudioSearchIntent(intent)
         handleIslandIntent(intent)
         handleAuralLinkIntent(intent)
+        handleDownloadIntent(intent)
     }
 
     /** Abre la búsqueda por audio si el intent viene del tile de ajustes rápidos. */
@@ -215,12 +217,31 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIslandIntent(intent: android.content.Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_YOUTUBE_TAB, false) == true) {
-            pendingIslandTab = 4 // pestaña Descargas
+            pendingIslandTab = viewModel.libraryTabOrder.value
+                .indexOf("downloads").takeIf { it >= 0 } ?: 4
             pendingIslandHome = true
         }
         if (intent?.getBooleanExtra(EXTRA_OPEN_HOME, false) == true) {
             pendingIslandHome = true
         }
+    }
+
+    /** Notificaciones de descarga: tocarlas abre Descargas y
+     *  su acción «Cancelar» cancela esa descarga. */
+    private fun handleDownloadIntent(intent: android.content.Intent?) {
+        val kind = intent?.getStringExtra(EXTRA_CANCEL_DOWNLOAD_KIND)
+            ?: return
+        val key = intent.getStringExtra(EXTRA_CANCEL_DOWNLOAD_KEY)
+            ?: return
+        when (kind) {
+            "youtube" -> if (::youTubeManager.isInitialized) {
+                youTubeManager.cancelDownload(key)
+            }
+            "podcast" -> viewModel.cancelPodcastDownload(key)
+        }
+        pendingIslandTab = viewModel.libraryTabOrder.value
+            .indexOf("downloads").takeIf { it >= 0 } ?: 4
+        pendingIslandHome = true
     }
 
     /**
@@ -231,7 +252,8 @@ class MainActivity : ComponentActivity() {
     private fun handleAuralLinkIntent(intent: android.content.Intent?) {
         if (intent?.action != android.content.Intent.ACTION_VIEW) return
         val query = com.aural.player.AuralLink.parseToQuery(intent.data) ?: return
-        pendingIslandTab = 4 // pestaña Descargas
+        pendingIslandTab = viewModel.libraryTabOrder.value
+            .indexOf("downloads").takeIf { it >= 0 } ?: 4
         pendingIslandHome = true
         viewModel.requestYouTubeSearch(query)
     }
@@ -239,6 +261,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Extra para abrir la pestaña de Descargas (isla dinámica → YouTube). */
         const val EXTRA_OPEN_YOUTUBE_TAB = "com.aural.player.EXTRA_OPEN_YOUTUBE_TAB"
+        const val EXTRA_CANCEL_DOWNLOAD_KIND =
+            "com.aural.player.EXTRA_CANCEL_DOWNLOAD_KIND"
+        const val EXTRA_CANCEL_DOWNLOAD_KEY =
+            "com.aural.player.EXTRA_CANCEL_DOWNLOAD_KEY"
         const val EXTRA_OPEN_HOME = "com.aural.player.EXTRA_OPEN_HOME"
     }
 
