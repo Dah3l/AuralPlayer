@@ -90,6 +90,7 @@ class SettingsStore(private val context: Context) {
         val KEY_RADIO_STATIONS = stringPreferencesKey("radio_stations_json")
         val KEY_PODCAST_SHOWS = stringPreferencesKey("podcast_shows_json")
         val KEY_PODCAST_PROGRESS = stringPreferencesKey("podcast_progress_json")
+        val KEY_PODCAST_DOWNLOADS = stringPreferencesKey("podcast_downloads_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
@@ -931,6 +932,16 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Sustituye una emisora guardada por otra versión de la
+     *  misma (la elegida queda en la colección). */
+    suspend fun replaceRadioStation(oldStationId: String, station: RadioStation) {
+        context.dataStore.edit { prefs ->
+            val current = decodeRadioStations(prefs[KEY_RADIO_STATIONS])
+                .filter { it.id != oldStationId && it.id != station.id } + station
+            prefs[KEY_RADIO_STATIONS] = encodeRadioStations(current)
+        }
+    }
+
     private fun decodeRadioStations(json: String?): List<RadioStation> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
@@ -949,7 +960,8 @@ class SettingsStore(private val context: Context) {
                             country = obj.optString("country"),
                             genre = obj.optString("genre"),
                             bitrateKbps = obj.optInt("bitrateKbps", 0),
-                            logoUrl = obj.optString("logoUrl").ifBlank { null }
+                            logoUrl = obj.optString("logoUrl").ifBlank { null },
+                            codec = obj.optString("codec")
                         )
                     )
                 }
@@ -967,6 +979,7 @@ class SettingsStore(private val context: Context) {
                 put("country", station.country)
                 put("genre", station.genre)
                 put("bitrateKbps", station.bitrateKbps)
+                put("codec", station.codec)
                 station.logoUrl?.let { put("logoUrl", it) }
             })
         }
@@ -1049,7 +1062,11 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             val current = decodePodcastProgress(prefs[KEY_PODCAST_PROGRESS]).toMutableMap()
             current[PodcastEpisode.progressKey(feedUrl, guid)] =
-                PodcastProgress(positionMs.coerceAtLeast(0L), listened)
+                PodcastProgress(
+                    positionMs.coerceAtLeast(0L),
+                    listened,
+                    System.currentTimeMillis()
+                )
             prefs[KEY_PODCAST_PROGRESS] = encodePodcastProgress(current)
         }
     }
@@ -1067,7 +1084,8 @@ class SettingsStore(private val context: Context) {
                         key,
                         PodcastProgress(
                             positionMs = value.optLong("positionMs", 0L),
-                            listened = value.optBoolean("listened", false)
+                            listened = value.optBoolean("listened", false),
+                            updatedAtMs = value.optLong("updatedAtMs", 0L)
                         )
                     )
                 }
@@ -1081,6 +1099,70 @@ class SettingsStore(private val context: Context) {
             obj.put(key, JSONObject().apply {
                 put("positionMs", value.positionMs)
                 put("listened", value.listened)
+                put("updatedAtMs", value.updatedAtMs)
+            })
+        }
+        return obj.toString()
+    }
+
+    /** Episodios descargados (feedUrl|guid -> descarga local). */
+    val podcastDownloads: Flow<Map<String, PodcastDownload>> =
+        context.dataStore.data.map { prefs ->
+            decodePodcastDownloads(prefs[KEY_PODCAST_DOWNLOADS])
+        }
+
+    suspend fun setPodcastDownload(key: String, download: PodcastDownload) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastDownloads(prefs[KEY_PODCAST_DOWNLOADS])
+                .toMutableMap()
+            current[key] = download
+            prefs[KEY_PODCAST_DOWNLOADS] = encodePodcastDownloads(current)
+        }
+    }
+
+    suspend fun removePodcastDownload(key: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastDownloads(prefs[KEY_PODCAST_DOWNLOADS])
+                .filterKeys { it != key }
+            prefs[KEY_PODCAST_DOWNLOADS] = encodePodcastDownloads(current)
+        }
+    }
+
+    private fun decodePodcastDownloads(json: String?): Map<String, PodcastDownload> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = obj.optJSONObject(key) ?: continue
+                    val uri = value.optString("uri")
+                    if (uri.isBlank()) continue
+                    put(
+                        key,
+                        PodcastDownload(
+                            uri = uri,
+                            mediaId = value.optLong("mediaId", -1L),
+                            fileName = value.optString("fileName"),
+                            downloadedAtMs = value.optLong("downloadedAtMs", 0L)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun encodePodcastDownloads(
+        downloads: Map<String, PodcastDownload>
+    ): String {
+        val obj = JSONObject()
+        downloads.forEach { (key, value) ->
+            obj.put(key, JSONObject().apply {
+                put("uri", value.uri)
+                put("mediaId", value.mediaId)
+                put("fileName", value.fileName)
+                put("downloadedAtMs", value.downloadedAtMs)
             })
         }
         return obj.toString()
