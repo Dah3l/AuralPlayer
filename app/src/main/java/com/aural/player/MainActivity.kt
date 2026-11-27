@@ -51,6 +51,10 @@ import com.aural.player.ui.screens.DAILY_PLAYLIST_ID
 import com.aural.player.ui.screens.RECENTLY_ADDED_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.OnlineSongMenuSheet
+import com.aural.player.ui.screens.PodcastDetailScreen
+import com.aural.player.ui.screens.RadioStationDetailScreen
+import com.aural.player.data.PodcastShow
+import com.aural.player.data.RadioStation
 import com.aural.player.youtube.OnlineCollectionResult
 import com.aural.player.youtube.YTResult
 import com.aural.player.ui.screens.NowPlayingScreen
@@ -85,6 +89,8 @@ private sealed class Screen {
     data class Artist(val name: String) : Screen()
     data class Playlist(val id: String) : Screen()
     data class OnlineCollection(val collection: OnlineCollectionResult) : Screen()
+    data class RadioStationDetail(val station: RadioStation) : Screen()
+    data class PodcastDetail(val show: PodcastShow) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -519,6 +525,8 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenArtist = { screen = Screen.Artist(it) },
                     onOpenPlaylist = { screen = Screen.Playlist(it) },
                     onOpenOnlineCollection = { screen = Screen.OnlineCollection(it) },
+                    onOpenRadioStation = { screen = Screen.RadioStationDetail(it) },
+                    onOpenPodcastShow = { screen = Screen.PodcastDetail(it) },
                     onOpenThemes = { screen = Screen.Themes },
                     onOpenEqualizer = { showEqualizerScreen = true },
                     onToggleIsland = onToggleIsland,
@@ -731,6 +739,60 @@ private fun AuralApp(viewModel: AuralViewModel,
                             onDismiss = { menuTarget = null }
                         )
                     }
+                }
+
+                is Screen.RadioStationDetail -> {
+                    val stations by viewModel.radioStations.collectAsStateWithLifecycle()
+                    val saved = stations.any { it.id == s.station.id }
+                    var nowPlaying by remember(s.station.id) {
+                        mutableStateOf<String?>(null)
+                    }
+                    LaunchedEffect(s.station.id) {
+                        nowPlaying = viewModel.radioNowPlaying(s.station)
+                    }
+                    RadioStationDetailScreen(
+                        station = s.station,
+                        saved = saved,
+                        nowPlaying = nowPlaying,
+                        onBack = { screen = Screen.Library },
+                        onPlay = { viewModel.playRadioStation(s.station) },
+                        onToggleSaved = {
+                            if (saved) viewModel.removeRadioStation(s.station)
+                            else viewModel.addRadioStation(s.station)
+                        }
+                    )
+                }
+
+                is Screen.PodcastDetail -> {
+                    val shows by viewModel.podcastShows.collectAsStateWithLifecycle()
+                    val progress by viewModel.podcastProgress.collectAsStateWithLifecycle()
+                    val saved = shows.any { it.feedUrl == s.show.feedUrl }
+                    var episodes by remember(s.show.feedUrl) {
+                        mutableStateOf<List<com.aural.player.data.PodcastEpisode>>(emptyList())
+                    }
+                    var loading by remember(s.show.feedUrl) { mutableStateOf(true) }
+                    LaunchedEffect(s.show.feedUrl) {
+                        loading = true
+                        episodes = viewModel.podcastEpisodes(s.show)
+                        loading = false
+                    }
+                    PodcastDetailScreen(
+                        show = s.show,
+                        episodes = episodes,
+                        loading = loading,
+                        progress = progress,
+                        saved = saved,
+                        onBack = { screen = Screen.Library },
+                        onPlayShow = { viewModel.playPodcastShow(s.show) },
+                        onPlayEpisode = { episode ->
+                            viewModel.playPodcastEpisode(s.show, episode)
+                        },
+                        onToggleSaved = {
+                            if (saved) viewModel.removePodcastShow(s.show)
+                            else viewModel.addPodcastShow(s.show)
+                        },
+                        listState = detailListState("podcast:${s.show.feedUrl}")
+                    )
                 }
 
                 Screen.Themes -> {
