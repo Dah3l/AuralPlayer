@@ -11,8 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import com.aural.player.data.DownloadNotifications
 import com.aural.player.data.SettingsStore
 import com.aural.player.data.TagEditor
@@ -128,19 +131,6 @@ class YouTubeManager(private val context: Context) {
             context, DownloadNotifications.idFor("youtube:$videoId")
         )
         android.util.Log.d("YouTubeManager", "Descarga cancelada: $videoId")
-    }
-
-    private fun downloadDetailText(downloaded: Long, total: Long): String? {
-        if (total <= 0L) return null
-        fun fmt(bytes: Long): String = when {
-            bytes >= 1024L * 1024L ->
-                String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
-            bytes >= 1024L ->
-                String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
-            else -> "$bytes B"
-        }
-        return "${fmt(downloaded)} de ${fmt(total)} · " +
-            "${((downloaded * 100L) / total).toInt().coerceIn(0, 100)}%"
     }
 
     init {
@@ -272,33 +262,58 @@ class YouTubeManager(private val context: Context) {
                 .take(3)
             if (cleanSeeds.isEmpty()) return@withContext OnlineSearchResults()
             val service: StreamingService = NewPipe.getService("YouTube")
-            val songs = mutableListOf<YTResult>()
-            val albums = mutableListOf<OnlineCollectionResult>()
-            val playlists = mutableListOf<OnlineCollectionResult>()
-            val artists = mutableListOf<OnlineCollectionResult>()
-            for (seed in cleanSeeds) {
-                songs += runCatching {
-                    searchSongsHybrid(service, seed)
-                }.getOrDefault(emptyList())
-                albums += runCatching {
-                    searchAlbumsHybrid(service, seed)
-                }.getOrDefault(emptyList())
-                playlists += runCatching {
-                    searchCollections(
-                        service, seed, "music_playlists",
-                        OnlineCollectionKind.PLAYLIST
-                    )
-                }.getOrDefault(emptyList())
-                artists += runCatching {
-                    searchArtistsHybrid(service, seed)
-                }.getOrDefault(emptyList())
+            // Las semillas corren en paralelo y con techo de
+            // tiempo: en serie, una red lenta dejaba el lado
+            // Online en esqueleto eterno. Si una semilla no
+            // responde a tiempo, las demás igual aportan.
+            val partials = coroutineScope {
+                cleanSeeds.map { seed ->
+                    async {
+                        withTimeoutOrNull(20_000L) {
+                            OnlineSearchResults(
+                                query = "",
+                                songs = runCatching {
+                                    searchSongsHybrid(service, seed)
+                                }.getOrElse {
+                                        if (it is kotlinx.coroutines.CancellationException) throw it
+                                        emptyList()
+                                    },
+                                albums = runCatching {
+                                    searchAlbumsHybrid(service, seed)
+                                }.getOrElse {
+                                        if (it is kotlinx.coroutines.CancellationException) throw it
+                                        emptyList()
+                                    },
+                                playlists = runCatching {
+                                    searchCollections(
+                                        service, seed, "music_playlists",
+                                        OnlineCollectionKind.PLAYLIST
+                                    )
+                                }.getOrElse {
+                                        if (it is kotlinx.coroutines.CancellationException) throw it
+                                        emptyList()
+                                    },
+                                artists = runCatching {
+                                    searchArtistsHybrid(service, seed)
+                                }.getOrElse {
+                                        if (it is kotlinx.coroutines.CancellationException) throw it
+                                        emptyList()
+                                    }
+                            )
+                        } ?: OnlineSearchResults()
+                    }
+                }.awaitAll()
             }
             OnlineSearchResults(
                 query = "",
-                songs = songs.distinctBy { it.videoId }.take(40),
-                albums = albums.distinctBy { it.url }.take(30),
-                playlists = playlists.distinctBy { it.url }.take(30),
-                artists = artists.distinctBy { it.url }.take(30)
+                songs = partials.flatMap { it.songs }
+                    .distinctBy { it.videoId }.take(40),
+                albums = partials.flatMap { it.albums }
+                    .distinctBy { it.url }.take(30),
+                playlists = partials.flatMap { it.playlists }
+                    .distinctBy { it.url }.take(30),
+                artists = partials.flatMap { it.artists }
+                    .distinctBy { it.url }.take(30)
             )
         }
 
@@ -522,23 +537,24 @@ class YouTubeManager(private val context: Context) {
         if (_downloading.value.contains(result.videoId)) return
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
-        _details.value = _details.value + (result.videoId to
-            com.aural.player.data.ActiveDownload(
-                key = result.videoId,
-                title = "${result.artist} - ${result.title}"
-            ))
+        val initialDetail = com.aural.player.data.ActiveDownload(
+            key = result.videoId,
+            title = "${result.artist} - ${result.title}"
+        )
+        _details.value = _details.value + (result.videoId to initialDetail)
         _error.value = null
         val notificationId = DownloadNotifications.idFor("youtube:${result.videoId}")
         val notificationTitle = "${result.artist} - ${result.title}"
         DownloadNotifications.progress(
-            context, notificationId, notificationTitle, 0,
-            null, "youtube", result.videoId
+            context, notificationId, notificationTitle,
+            initialDetail, "youtube", result.videoId
         )
         scope.launch {
             var savedFileName: String? = null
             var savedMediaId = -1L
             var tagsEmbedded = false
             var errorMsg: String? = null
+            var finalDetail: com.aural.player.data.ActiveDownload = initialDetail
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
                 val streamInfo = StreamInfo.getInfo(
@@ -579,20 +595,25 @@ class YouTubeManager(private val context: Context) {
                     val ext = if (audioStream.format == MediaFormat.M4A) "m4a" else "webm"
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
                     var lastPercent = -1
+                    var lastNotificationMs = 0L
                     val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { detail ->
+                        finalDetail = detail
                         _progress.value = _progress.value +
                             (result.videoId to detail.fraction)
                         _details.value = _details.value +
                             (result.videoId to detail)
-                        if (detail.percent != lastPercent) {
+                        val now = System.currentTimeMillis()
+                        // Sin publicar el 100% como progreso: el
+                        // cierre llega como completada.
+                        if (detail.percent < 100 &&
+                            (detail.percent != lastPercent ||
+                                now - lastNotificationMs >= 1_000L)
+                        ) {
                             lastPercent = detail.percent
+                            lastNotificationMs = now
                             DownloadNotifications.progress(
                                 context, notificationId, notificationTitle,
-                                detail.percent,
-                                downloadDetailText(
-                                    detail.downloadedBytes, detail.totalBytes
-                                ),
-                                "youtube", result.videoId
+                                detail, "youtube", result.videoId
                             )
                         }
                     }
@@ -628,7 +649,8 @@ class YouTubeManager(private val context: Context) {
                 _error.value = errorMsg
                 if (savedFileName != null) {
                     DownloadNotifications.complete(
-                        context, notificationId, notificationTitle
+                        context, notificationId, notificationTitle,
+                        finalDetail
                     )
                 } else if (errorMsg != null) {
                     DownloadNotifications.error(
@@ -1571,6 +1593,23 @@ object YouTubeStreamResolver {
         "Accept-Language" to "en-US,en;q=0.9"
     )
 
+    /** Cliente HTTP compartido del streaming: un solo pool
+     *  con keep-alive para las sondas del resolver y para
+     *  Media3 (OkHttpDataSource). Así los rangos de 512 KB
+     *  reutilizan la conexión en vez de abrir una nueva por
+     *  pedazo, que con la latencia de aquí se sentía como
+     *  conexión súper lenta aunque hubiera ancho de banda. */
+    val sharedHttpClient: okhttp3.OkHttpClient =
+        okhttp3.OkHttpClient.Builder()
+            .connectionPool(
+                okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
+            )
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+
     private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedUrl>()
 
     /** Bitrate real (KBPS) del stream resuelto por video: la
@@ -1807,51 +1846,49 @@ object YouTubeStreamResolver {
      *  hasta el fin del archivo si es menor): ok solo si
      *  llegan todos los bytes pedidos. */
     private fun probeRange(url: String, start: Long, headers: Map<String, String>): ProbeRangeResult {
-        var connection: java.net.HttpURLConnection? = null
+        val requestBuilder = okhttp3.Request.Builder()
+            .url(url)
+            .header("Range", "bytes=$start-${start + PROBE_BYTES - 1}")
+        headers.forEach { (name, value) ->
+            requestBuilder.header(name, value)
+        }
         return try {
-            connection = openProbeConnection(url, "bytes=$start-${start + PROBE_BYTES - 1}", headers)
-            val code = connection.responseCode
-            if (code !in 200..299) {
-                ProbeRangeResult(false, null)
-            } else {
-                val total = connection.getHeaderField("Content-Range")
-                    ?.substringAfterLast("/")
-                    ?.toLongOrNull()
-                val expected = if (total != null) {
-                    minOf(PROBE_BYTES, (total - start).coerceAtLeast(0L))
-                } else {
-                    PROBE_BYTES
-                }
-                var readTotal = 0L
-                connection.inputStream.use { input ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (readTotal < expected) {
-                        val read = input.read(buffer, 0, minOf(buffer.size.toLong(), expected - readTotal).toInt())
-                        if (read < 0) break
-                        readTotal += read
+            sharedHttpClient.newCall(requestBuilder.build())
+                .execute().use { response ->
+                    if (response.code !in 200..299) {
+                        ProbeRangeResult(false, null)
+                    } else {
+                        val total = response.header("Content-Range")
+                            ?.substringAfterLast("/")
+                            ?.toLongOrNull()
+                        val expected = if (total != null) {
+                            minOf(PROBE_BYTES, (total - start).coerceAtLeast(0L))
+                        } else {
+                            PROBE_BYTES
+                        }
+                        var readTotal = 0L
+                        response.body?.byteStream()?.use { input ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (readTotal < expected) {
+                                val read = input.read(
+                                    buffer, 0,
+                                    minOf(
+                                        buffer.size.toLong(),
+                                        expected - readTotal
+                                    ).toInt()
+                                )
+                                if (read < 0) break
+                                readTotal += read
+                            }
+                        }
+                        ProbeRangeResult(
+                            readTotal >= expected && expected > 0L, total
+                        )
                     }
                 }
-                ProbeRangeResult(readTotal >= expected && expected > 0L, total)
-            }
         } catch (_: Exception) {
             ProbeRangeResult(false, null)
-        } finally {
-            connection?.disconnect()
         }
-    }
-
-    private fun openProbeConnection(
-        url: String,
-        range: String,
-        headers: Map<String, String>
-    ): java.net.HttpURLConnection {
-        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 20_000
-        connection.instanceFollowRedirects = true
-        headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
-        connection.setRequestProperty("Range", range)
-        return connection
     }
 
     fun invalidate(videoId: String) {
