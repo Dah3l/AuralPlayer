@@ -1727,29 +1727,14 @@ object YouTubeStreamResolver {
 
     /** Cliente HTTP compartido del streaming: un solo pool
      *  con keep-alive para las sondas del resolver y para
-     *  Media3 (OkHttpDataSource). Así los rangos reutilizan
-     *  conexiones del pool en vez de pagar un handshake por
+     *  Media3 (OkHttpDataSource). Así los rangos de 512 KB
+     *  reutilizan la conexión en vez de abrir una nueva por
      *  pedazo, que con la latencia de aquí se sentía como
      *  conexión súper lenta aunque hubiera ancho de banda. */
     val sharedHttpClient: okhttp3.OkHttpClient =
         okhttp3.OkHttpClient.Builder()
-            // HTTP/1.1 a propósito: con HTTP/2 OkHttp multiplexa
-            // todas las peticiones a googlevideo sobre UNA sola
-            // conexión TCP, y el límite de velocidad por conexión
-            // (marcado con VPN) frena todo el streaming. En 1.1
-            // cada rango paralelo usa su propia conexión del pool
-            // y las velocidades se suman; además se evita el
-            // bloqueo de cabecera de HTTP/2 con pérdida de
-            // paquetes en túneles VPN.
-            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .connectionPool(
-                okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES)
-            )
-            .dispatcher(
-                okhttp3.Dispatcher().apply {
-                    maxRequests = 16
-                    maxRequestsPerHost = 8
-                }
+                okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
             )
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -1932,17 +1917,14 @@ object YouTubeStreamResolver {
                 service,
                 "https://www.youtube.com/watch?v=$videoId"
             )
-            // Rangos paralelos M4A (vuelta decidida por Dahel
-            // 2026-11-27 tras probar el flujo continuo Opus:
-            // googlevideo cortaba la conexión abierta tras
-            // pocos segundos y con VPN ni arrancaba). NewPipe
-            // resuelve y Media3 baja rangos acotados en
-            // paralelo hacia la caché. Un reintento fresco
-            // excluyendo la URL fallida lo hace
-            // PlaybackManager. Arranque rápido: la primera
-            // candidata se entrega SIN sonda — sondearla
-            // bajaba bytes que se botaban y la primera canción
-            // tardaba en sonar; si
+            // Motor simple (decisión de Dahel 2026-11-26): NewPipe
+            // resuelve y Media3 reproduce directo en M4A. Sin
+            // escalera InnerTube ni Opus primero: un reintento
+            // fresco excluyendo la URL fallida lo hace
+            // PlaybackManager. Arranque rápido (Dahel
+            // 2026-11-26): la primera candidata se entrega SIN
+            // sonda — sondearla bajaba 512 KB que se botaban y
+            // la primera canción tardaba 10–20 s en sonar; si
             // googlevideo la rechaza (403/410/corte), el
             // refresco existente la invalida y re-resuelve
             // excluyéndola. La sonda corta queda solo para las
@@ -1978,34 +1960,13 @@ object YouTubeStreamResolver {
         }
     }
 
-    /** Clave de caché con modo: el método de rangos usa
-     *  :direct (o :prog en su respaldo secuencial). El
-     *  sufijo :flow del método continuo retirado se quita
-     *  para no mezclar bytes Opus con los rangos M4A. */
+    /** Clave de caché con modo: el motor simple solo usa
+     *  directo; el sufijo se conserva para que las claves
+     *  viejas con :prog no se mezclen con las directas. */
     private fun diskKeyWithMode(diskKey: String, progressive: Boolean): String {
         val base = diskKey.removeSuffix(":direct").removeSuffix(":prog")
-            .removeSuffix(":flow")
         return base + if (progressive) ":prog" else ":direct"
     }
-
-    /** Clave de disco conocida de ese video con esa calidad,
-     *  sin resolver nada: MusicService la usa para servir
-     *  desde la caché una canción ya bajada entera sin tocar
-     *  la red. Null si nunca se resolvió en esta sesión. */
-    fun knownDiskKey(videoId: String, preferQuality: Boolean): String? {
-        val now = System.currentTimeMillis()
-        val effectiveQuality = preferQuality && now >= temporarySaverUntilMs
-        val cacheKey = "yt:$videoId:${if (effectiveQuality) "quality" else "saver"}"
-        return cache[cacheKey]?.diskKey?.takeIf {
-            it.endsWith(":direct") || it.endsWith(":prog")
-        }
-    }
-
-    /** ¿La última URL de ese video falló y sigue marcada?
-     *  El atajo de caché completa no se usa con una URL
-     *  marcada: el reintento debe re-resolver fresco. */
-    fun hasFailedUrl(videoId: String): Boolean =
-        lastFailedUrls.containsKey(videoId)
 
     /** Prueba corta de una URL de respaldo: misma identidad
      *  HTTP que reproducirá Media3 y solo los primeros bytes
