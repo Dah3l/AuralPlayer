@@ -679,17 +679,25 @@ fun NowPlayingScreen(
                     // Calidad real del stream (bitrate que resolvió
                     // el motor): aparece en cuanto el stream está
                     // resuelto; mientras resuelve no se muestra.
+                    // Verde cuando responde al ajuste del usuario
+                    // (incluido su Ahorro 48); naranja solo cuando
+                    // el ahorro temporal forzó un bitrate menor.
                     val streamKbps = state.streamBitrateKbps
                     if ((isOnlineStream || song.isPodcastEpisode) &&
                         streamKbps != null
                     ) {
+                        val pillColor = if (state.streamSaverForced) {
+                            Color(0xFFFF9800)
+                        } else {
+                            Color(0xFF4CAF50)
+                        }
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .background(pillColor.copy(alpha = 0.14f))
                                 .border(
                                     1.dp,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                    pillColor.copy(alpha = 0.35f),
                                     RoundedCornerShape(12.dp)
                                 )
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -697,7 +705,7 @@ fun NowPlayingScreen(
                             Text(
                                 "$streamKbps kbps",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                color = pillColor
                             )
                         }
                     }
