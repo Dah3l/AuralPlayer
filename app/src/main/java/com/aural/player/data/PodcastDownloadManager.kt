@@ -68,37 +68,47 @@ class PodcastDownloadManager(context: Context) {
         if (key in _downloadingKeys.value) return
         _downloadingKeys.value = _downloadingKeys.value + key
         _progress.value = _progress.value + (key to 0f)
-        _details.value = _details.value + (key to ActiveDownload(
+        val initialDetail = ActiveDownload(
             key = key,
             title = episode.title,
             totalBytes = episode.audioBytes
-        ))
+        )
+        _details.value = _details.value + (key to initialDetail)
         val notificationId = DownloadNotifications.idFor("podcast:$key")
         DownloadNotifications.progress(
-            appContext, notificationId, episode.title, 0,
-            detailText(0L, episode.audioBytes), "podcast", key
+            appContext, notificationId, episode.title,
+            initialDetail, "podcast", key
         )
         scope.launch {
             var lastPercent = -1
+            var lastNotificationMs = 0L
+            var finalDetail: ActiveDownload = initialDetail
+            var completed = false
             try {
                 val download = downloadEpisode(show, episode, key) { detail ->
+                    finalDetail = detail
                     _progress.value = _progress.value + (key to detail.fraction)
                     _details.value = _details.value + (key to detail)
-                    if (detail.percent != lastPercent) {
+                    val now = System.currentTimeMillis()
+                    // El 100% no se publica como progreso: el
+                    // cierre llega justo después como completada
+                    // y así la notificación no se queda en
+                    // «descargando» al 100%.
+                    if (detail.percent < 100 &&
+                        (detail.percent != lastPercent ||
+                            now - lastNotificationMs >= 1_000L)
+                    ) {
                         lastPercent = detail.percent
+                        lastNotificationMs = now
                         DownloadNotifications.progress(
                             appContext, notificationId, episode.title,
-                            detail.percent,
-                            detailText(detail.downloadedBytes, detail.totalBytes),
-                            "podcast", key
+                            detail, "podcast", key
                         )
                     }
                 }
                 if (download != null) {
                     settings.setPodcastDownload(key, download)
-                    DownloadNotifications.complete(
-                        appContext, notificationId, episode.title
-                    )
+                    completed = true
                 } else {
                     DownloadNotifications.error(
                         appContext, notificationId, episode.title
@@ -124,22 +134,14 @@ class PodcastDownloadManager(context: Context) {
                 _downloadingKeys.value = _downloadingKeys.value - key
                 _progress.value = _progress.value - key
                 _details.value = _details.value - key
+                if (completed) {
+                    DownloadNotifications.complete(
+                        appContext, notificationId, episode.title,
+                        finalDetail
+                    )
+                }
             }
         }
-    }
-
-    private fun detailText(downloaded: Long, total: Long): String? {
-        if (total <= 0L) return null
-        return "${formatBytes(downloaded)} de ${formatBytes(total)} · " +
-            "${((downloaded * 100L) / total).toInt().coerceIn(0, 100)}%"
-    }
-
-    private fun formatBytes(bytes: Long): String = when {
-        bytes >= 1024L * 1024L ->
-            String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
-        bytes >= 1024L ->
-            String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
-        else -> "$bytes B"
     }
 
     /** Borra el archivo local de una descarga registrada. */
