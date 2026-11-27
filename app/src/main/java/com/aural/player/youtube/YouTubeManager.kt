@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aural.player.data.DownloadNotifications
 import com.aural.player.data.SettingsStore
 import com.aural.player.data.TagEditor
 import com.aural.player.data.TagWriteResult
@@ -116,6 +117,9 @@ class YouTubeManager(private val context: Context) {
         // Al quitarlo de _downloading, el loop de descarga lo detecta y se detiene
         _downloading.value = _downloading.value - videoId
         _progress.value = _progress.value - videoId
+        DownloadNotifications.cancel(
+            context, DownloadNotifications.idFor("youtube:$videoId")
+        )
         android.util.Log.d("YouTubeManager", "Descarga cancelada: $videoId")
     }
 
@@ -455,6 +459,9 @@ class YouTubeManager(private val context: Context) {
         _downloading.value = _downloading.value + result.videoId
         _progress.value = _progress.value + (result.videoId to 0f)
         _error.value = null
+        val notificationId = DownloadNotifications.idFor("youtube:${result.videoId}")
+        val notificationTitle = "${result.artist} - ${result.title}"
+        DownloadNotifications.progress(context, notificationId, notificationTitle, 0)
         scope.launch {
             var savedFileName: String? = null
             var savedMediaId = -1L
@@ -499,8 +506,16 @@ class YouTubeManager(private val context: Context) {
                 if (audioStream != null) {
                     val ext = if (audioStream.format == MediaFormat.M4A) "m4a" else "webm"
                     val fileName = sanitize("${result.artist} - ${result.title}.$ext")
+                    var lastPercent = -1
                     val mediaId = downloadToMusic(audioStream.content, fileName, result, result.videoId) { pct ->
                         _progress.value = _progress.value + (result.videoId to pct)
+                        val percent = (pct * 100).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            DownloadNotifications.progress(
+                                context, notificationId, notificationTitle, percent
+                            )
+                        }
                     }
                     if (mediaId > 0L) {
                         savedFileName = fileName
@@ -527,6 +542,17 @@ class YouTubeManager(private val context: Context) {
                 _downloading.value = _downloading.value - result.videoId
                 _progress.value = _progress.value - result.videoId
                 _error.value = errorMsg
+                if (savedFileName != null) {
+                    DownloadNotifications.complete(
+                        context, notificationId, notificationTitle
+                    )
+                } else if (errorMsg != null) {
+                    DownloadNotifications.error(
+                        context, notificationId, notificationTitle
+                    )
+                } else {
+                    DownloadNotifications.cancel(context, notificationId)
+                }
                 onComplete(savedFileName, savedMediaId, tagsEmbedded)
             }
         }
