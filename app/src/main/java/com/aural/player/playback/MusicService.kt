@@ -21,6 +21,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlayerId
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
@@ -37,6 +38,9 @@ import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.source.TrackGroupArray
+import androidx.media3.exoplayer.trackselection.ExoTrackSelection
+import androidx.media3.exoplayer.upstream.Allocator
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -2016,20 +2020,25 @@ private class AdaptiveLoadControl(
         started = false
     }
 
-    override fun onPrepared() = delegate.onPrepared()
+    override fun onPrepared(playerId: PlayerId) =
+        delegate.onPrepared(playerId)
 
     override fun onTracksSelected(
-        tracksSelectionResult: LoadControl.TracksSelectionResult
-    ) = delegate.onTracksSelected(tracksSelectionResult)
+        parameters: LoadControl.Parameters,
+        trackGroups: TrackGroupArray,
+        trackSelections: Array<ExoTrackSelection?>?
+    ) = delegate.onTracksSelected(parameters, trackGroups, trackSelections)
 
-    override fun onStopped() {
+    override fun onStopped(playerId: PlayerId) {
         started = false
-        delegate.onStopped()
+        delegate.onStopped(playerId)
     }
 
-    override fun onReleased() = delegate.onReleased()
+    override fun onReleased(playerId: PlayerId) =
+        delegate.onReleased(playerId)
 
-    override fun getAllocator() = delegate.allocator
+    override fun getAllocator(playerId: PlayerId): Allocator =
+        delegate.getAllocator(playerId)
 
     override fun shouldContinueLoading(
         parameters: LoadControl.Parameters
@@ -2046,11 +2055,11 @@ private class AdaptiveLoadControl(
         return ok
     }
 
-    override fun getBackBufferDurationUs(): Long =
-        delegate.backBufferDurationUs
+    override fun getBackBufferDurationUs(playerId: PlayerId): Long =
+        delegate.getBackBufferDurationUs(playerId)
 
-    override fun retainBackBufferFromKeyframe(): Boolean =
-        delegate.retainBackBufferFromKeyframe()
+    override fun retainBackBufferFromKeyframe(playerId: PlayerId): Boolean =
+        delegate.retainBackBufferFromKeyframe(playerId)
 
     private companion object {
         const val START_CUSHION_MS = 1_800L
