@@ -424,16 +424,16 @@ internal fun rememberOnlineSuggestions(
     favorites: Set<Long>,
     librarySongs: List<Song>
 ): OnlineSuggestionsUiState {
-    var suggestions by remember {
-        mutableStateOf<com.aural.player.youtube.OnlineSearchResults?>(null)
-    }
-    var loading by remember { mutableStateOf(false) }
-    var loadedSeedKey by remember { mutableStateOf<String?>(null) }
-    var songsUi by remember { mutableStateOf<List<Song>>(emptyList()) }
-    LaunchedEffect(suggestions?.songs) {
-        songsUi = suggestions?.songs
-            ?.map { viewModel.registerOnlineSong(it) } ?: emptyList()
-    }
+    // El estado vive en el ViewModel: sobrevive a cambiar de
+    // pestaña, de subpestaña y a entrar/salir de detalles.
+    // Aquí solo se dispara la carga una vez por sesión (y
+    // solo se refresca si cambian las semillas de escucha).
+    val suggestions by viewModel.musicSuggestions
+        .collectAsStateWithLifecycle()
+    val loading by viewModel.musicSuggestionsLoading
+        .collectAsStateWithLifecycle()
+    val songsUi by viewModel.musicSuggestionsSongsUi
+        .collectAsStateWithLifecycle()
     val seeds = remember(topArtists, recentSongs, favorites, librarySongs) {
         (
             topArtists.map { it.name } +
@@ -449,38 +449,316 @@ internal fun rememberOnlineSuggestions(
         if (tabKey !in setOf("songs", "artists", "albums", "playlists")) {
             return@LaunchedEffect
         }
-        if (!viewModel.hasInternet()) {
-            loading = false
-            return@LaunchedEffect
-        }
-        val seedKey = seeds.joinToString("|")
-        if (suggestions != null && loadedSeedKey == seedKey) {
-            return@LaunchedEffect
-        }
-        if (seeds.isEmpty()) {
-            suggestions = com.aural.player.youtube.OnlineSearchResults()
-            loadedSeedKey = seedKey
-            loading = false
-            return@LaunchedEffect
-        }
-        loading = true
-        try {
-            val loaded = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
-                youTubeManager?.searchSuggestions(seeds)
-            } ?: com.aural.player.youtube.OnlineSearchResults()
-            suggestions = loaded
-            if (loaded.songs.isNotEmpty() ||
-                loaded.albums.isNotEmpty() ||
-                loaded.playlists.isNotEmpty() ||
-                loaded.artists.isNotEmpty()
-            ) {
-                loadedSeedKey = seedKey
-            }
-        } finally {
-            loading = false
-        }
+        if (!viewModel.hasInternet()) return@LaunchedEffect
+        viewModel.loadMusicSuggestions(youTubeManager, seeds)
     }
     return OnlineSuggestionsUiState(suggestions, loading, songsUi)
+}
+
+/** Tarjeta online del Inicio («Para ti» expandido): mismo
+ *  lenguaje de tarjeta definida del Inicio (fondo propio,
+ *  borde 1dp, radio 16dp, portada con título y ▶ dentro). */
+@Composable
+internal fun HomeOnlineCard(
+    title: String,
+    subtitle: String,
+    coverUri: String?,
+    onClick: () -> Unit,
+    onPlay: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier
+            .aspectRatio(1f)
+            .shadow(4.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(40.dp)
+        )
+        if (!coverUri.isNullOrBlank()) {
+            AsyncImage(
+                model = android.net.Uri.parse(coverUri),
+                contentDescription = "Portada",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.8f)
+                        )
+                    )
+                )
+        )
+        Row(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onPlay,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            ) {
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    "Reproducir",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(16.dp)
+                )
+        )
+    }
+}
+
+/** «Emisoras para ti» del Inicio: mis emisoras primero y
+ *  sugerencias después, en tarjetas; el toque suena. */
+@Composable
+internal fun HomeRadioSection(
+    stations: List<RadioStation>,
+    onPlay: (RadioStation) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (stations.isEmpty()) return
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Emisoras para ti",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onSeeAll) { Text("Ver todas") }
+        }
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 16.dp)
+        ) {
+            items(stations.distinctBy { it.id }, key = { it.id }) { station ->
+                Column(
+                    Modifier
+                        .width(112.dp)
+                        .clickable { onPlay(station) }
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        if (!station.logoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = android.net.Uri.parse(station.logoUrl),
+                                contentDescription = "Logo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "En línea",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        station.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        radioSubtitle(station),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** «Podcasts» del Inicio: «Sigue tu episodio» con su
+ *  progreso y el badge de episodios nuevos. */
+@Composable
+internal fun HomePodcastsSection(
+    continueItem: PodcastContinueItem?,
+    newEpisodeCount: Int,
+    onPlayContinue: () -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (continueItem == null && newEpisodeCount <= 0) return
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Podcasts",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            if (newEpisodeCount > 0) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        "$newEpisodeCount ${if (newEpisodeCount == 1) "nuevo" else "nuevos"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+            }
+            TextButton(onClick = onSeeAll) { Text("Ver todos") }
+        }
+        if (continueItem != null) {
+            val episode = continueItem.episode
+            val progress = continueItem.progress
+            val fraction = if (episode.durationMs > 0L) {
+                (progress.positionMs.toFloat() / episode.durationMs)
+                    .coerceIn(0f, 1f)
+            } else 0f
+            val remainingMs = (episode.durationMs - progress.positionMs)
+                .coerceAtLeast(0L)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onPlayContinue() }
+                    .padding(vertical = 4.dp)
+            ) {
+                CoverArt(
+                    uri = episode.imageUrl ?: continueItem.show.imageUrl,
+                    size = 48.dp
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Text(
+                        "Sigue tu episodio",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        episode.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        continueItem.show.title +
+                            if (remainingMs > 0L) {
+                                " · quedan ${formatDuration(remainingMs)}"
+                            } else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+                IconButton(onClick = onPlayContinue) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        "Reproducir",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        } else {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Tienes episodios nuevos por escuchar",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 /**
