@@ -91,6 +91,48 @@ class YouTubeManager(private val context: Context) {
     @Volatile
     private var onlineSearchGeneration = 0
 
+    /** Caché de navegación: resultados por consulta, en
+     *  memoria de sesión. Cambiar de pestaña o subpestaña, o
+     *  entrar y salir de un detalle, no vuelve a buscar: solo
+     *  un texto nuevo dispara una búsqueda nueva. */
+    private val onlineSearchCache =
+        java.util.Collections.synchronizedMap(
+            object : LinkedHashMap<String, OnlineSearchResults>(16, 0.75f, true) {
+                override fun removeEldestEntry(
+                    eldest: MutableMap.MutableEntry<String, OnlineSearchResults>?
+                ): Boolean = size > 12
+            }
+        )
+
+    /** Consulta con búsqueda en curso, para no relanzarla si
+     *  la UI vuelve a pedirla (cambio de pestaña, recomposición). */
+    @Volatile
+    private var onlineSearchInFlight: String? = null
+
+    /** True si esa consulta ya tiene resultados cacheados. */
+    fun hasCachedOnlineResults(query: String): Boolean =
+        onlineSearchCache.containsKey(query.trim().lowercase())
+
+    /** Pre-resuelve en segundo plano las primeras canciones
+     *  visibles (solo la URL, sin bajar audio): al tocar una,
+     *  el reproductor ya tiene la URL y suena casi al
+     *  instante. Con límite para no gastar datos ni red. */
+    fun prefetchVisibleSongs(songs: List<YTResult>) {
+        val ids = songs.map { it.videoId }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(6)
+        if (ids.isEmpty()) return
+        scope.launch {
+            val preferQuality = try {
+                SettingsStore(context).streamingQuality.first() == "quality"
+            } catch (_: Exception) {
+                false
+            }
+            ids.forEach { YouTubeStreamResolver.prefetch(it, preferQuality) }
+        }
+    }
+
     private val _downloading = MutableStateFlow<Set<String>>(emptySet())
     val downloading: StateFlow<Set<String>> = _downloading.asStateFlow()
 
@@ -191,13 +233,28 @@ class YouTubeManager(private val context: Context) {
      */
     fun searchUnified(query: String) {
         val clean = query.trim()
-        val generation = ++onlineSearchGeneration
         if (clean.isBlank()) {
-            _onlineResults.value = OnlineSearchResults()
             _onlineSearching.value = false
             _onlineError.value = null
             return
         }
+        // Caché de navegación: si la consulta ya se buscó en
+        // esta sesión, los resultados salen al instante, sin
+        // red ni esqueletos, aunque se haya cambiado de
+        // pestaña o entrado a un detalle en el medio.
+        val cacheKey = clean.lowercase()
+        onlineSearchCache[cacheKey]?.let { cached ->
+            onlineSearchGeneration++
+            onlineSearchInFlight = null
+            _onlineResults.value = cached
+            _onlineSearching.value = false
+            _onlineError.value = null
+            prefetchVisibleSongs(cached.songs)
+            return
+        }
+        if (onlineSearchInFlight == cacheKey) return
+        onlineSearchInFlight = cacheKey
+        val generation = ++onlineSearchGeneration
         _onlineSearching.value = true
         _onlineError.value = null
         scope.launch {
@@ -229,14 +286,25 @@ class YouTubeManager(private val context: Context) {
                     playlists = playlistsDeferred.await().distinctBy { it.url },
                     artists = artistsDeferred.await().distinctBy { it.url }
                 )
+                // El resultado queda cacheado aunque la UI ya
+                // haya cambiado de consulta: volver a este texto
+                // no vuelve a buscar.
+                onlineSearchCache[cacheKey] = results
+                if (onlineSearchInFlight == cacheKey) {
+                    onlineSearchInFlight = null
+                }
                 withContext(Dispatchers.Main) {
                     if (generation == onlineSearchGeneration) {
                         _onlineResults.value = results
                         _onlineSearching.value = false
+                        prefetchVisibleSongs(results.songs)
                     }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("YouTubeManager", "Error en búsqueda unificada: ${e.message}")
+                if (onlineSearchInFlight == cacheKey) {
+                    onlineSearchInFlight = null
+                }
                 withContext(Dispatchers.Main) {
                     if (generation == onlineSearchGeneration) {
                         _onlineResults.value = OnlineSearchResults(query = clean)
@@ -318,8 +386,12 @@ class YouTubeManager(private val context: Context) {
         }
 
     fun clearOnlineResults() {
+        // Ya no borra los resultados ni la caché: salir del
+        // lado Online o cambiar de pestaña no debe obligar a
+        // buscar de nuevo al volver. Solo detiene el estado
+        // de «buscando» y descarta publicaciones viejas.
         onlineSearchGeneration++
-        _onlineResults.value = OnlineSearchResults()
+        onlineSearchInFlight = null
         _onlineSearching.value = false
         _onlineError.value = null
     }
@@ -485,7 +557,31 @@ class YouTubeManager(private val context: Context) {
      * la búsqueda). El detalle completo y guardar llegan en el
      * bloque de playlists; aquí solo suena la colección.
      */
-    suspend fun fetchCollectionSongs(result: OnlineCollectionResult): List<YTResult> =
+    /** Caché de detalles online: las canciones de una
+     *  colección ya cargada quedan en memoria; salir y
+     *  volver a entrar no vuelve a pedirlas. */
+    private val collectionSongsCache =
+        java.util.concurrent.ConcurrentHashMap<String, List<YTResult>>()
+
+    private fun collectionCacheKey(result: OnlineCollectionResult): String =
+        "${result.kind}|${result.url}|${result.title}"
+
+    /** Canciones ya cacheadas de esa colección, o null si
+     *  aún no se cargó (para pintar el detalle sin esqueleto). */
+    fun cachedCollectionSongs(result: OnlineCollectionResult): List<YTResult>? =
+        collectionSongsCache[collectionCacheKey(result)]
+
+    suspend fun fetchCollectionSongs(result: OnlineCollectionResult): List<YTResult> {
+        cachedCollectionSongs(result)?.let { return it }
+        val fetched = fetchCollectionSongsFresh(result)
+        if (fetched.isNotEmpty()) {
+            collectionSongsCache[collectionCacheKey(result)] = fetched
+            prefetchVisibleSongs(fetched)
+        }
+        return fetched
+    }
+
+    private suspend fun fetchCollectionSongsFresh(result: OnlineCollectionResult): List<YTResult> =
         withContext(Dispatchers.IO) {
             try {
                 val service: StreamingService = NewPipe.getService("YouTube")
@@ -1681,7 +1777,11 @@ object YouTubeStreamResolver {
 
     private fun lockFor(videoId: String): Any =
         videoLocks.computeIfAbsent(videoId) { Any() }
-    private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+    // Pool pequeño: pre-resolver varias canciones visibles a
+    // la vez (resultados + cola) sin serializarlas en un solo
+    // hilo; los candados por video ya evitan duplicar la
+    // misma canción.
+    private val prefetchExecutor = java.util.concurrent.Executors.newFixedThreadPool(3) { runnable ->
         Thread(runnable, "aural-stream-prefetch").apply { isDaemon = true }
     }
 
