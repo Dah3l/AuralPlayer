@@ -51,6 +51,7 @@ import com.aural.player.ui.screens.DAILY_PLAYLIST_ID
 import com.aural.player.ui.screens.RECENTLY_ADDED_ID
 import com.aural.player.ui.screens.LibraryScreen
 import com.aural.player.ui.screens.OnlineSongMenuSheet
+import com.aural.player.ui.screens.PodcastContinueScreen
 import com.aural.player.ui.screens.PodcastDetailScreen
 import com.aural.player.ui.screens.RadioStationDetailScreen
 import com.aural.player.data.PodcastShow
@@ -91,6 +92,7 @@ private sealed class Screen {
     data class OnlineCollection(val collection: OnlineCollectionResult) : Screen()
     data class RadioStationDetail(val station: RadioStation) : Screen()
     data class PodcastDetail(val show: PodcastShow) : Screen()
+    data object PodcastContinue : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -527,6 +529,7 @@ private fun AuralApp(viewModel: AuralViewModel,
                     onOpenOnlineCollection = { screen = Screen.OnlineCollection(it) },
                     onOpenRadioStation = { screen = Screen.RadioStationDetail(it) },
                     onOpenPodcastShow = { screen = Screen.PodcastDetail(it) },
+                    onOpenPodcastContinue = { screen = Screen.PodcastContinue },
                     onOpenThemes = { screen = Screen.Themes },
                     onOpenEqualizer = { showEqualizerScreen = true },
                     onToggleIsland = onToggleIsland,
@@ -747,8 +750,14 @@ private fun AuralApp(viewModel: AuralViewModel,
                     var nowPlaying by remember(s.station.id) {
                         mutableStateOf<String?>(null)
                     }
+                    var versions by remember(s.station.id) {
+                        mutableStateOf<List<RadioStation>>(emptyList())
+                    }
                     LaunchedEffect(s.station.id) {
                         nowPlaying = viewModel.radioNowPlaying(s.station)
+                    }
+                    LaunchedEffect(s.station.id, s.station.name) {
+                        versions = viewModel.radioStationVersions(s.station)
                     }
                     RadioStationDetailScreen(
                         station = s.station,
@@ -759,6 +768,11 @@ private fun AuralApp(viewModel: AuralViewModel,
                         onToggleSaved = {
                             if (saved) viewModel.removeRadioStation(s.station)
                             else viewModel.addRadioStation(s.station)
+                        },
+                        versions = versions,
+                        onSelectVersion = { version ->
+                            viewModel.selectRadioStationVersion(s.station, version)
+                            screen = Screen.RadioStationDetail(version)
                         }
                     )
                 }
@@ -766,6 +780,10 @@ private fun AuralApp(viewModel: AuralViewModel,
                 is Screen.PodcastDetail -> {
                     val shows by viewModel.podcastShows.collectAsStateWithLifecycle()
                     val progress by viewModel.podcastProgress.collectAsStateWithLifecycle()
+                    val downloads by viewModel.podcastDownloads
+                        .collectAsStateWithLifecycle()
+                    val downloadProgress by viewModel.podcastDownloadProgress
+                        .collectAsStateWithLifecycle()
                     val saved = shows.any { it.feedUrl == s.show.feedUrl }
                     var episodes by remember(s.show.feedUrl) {
                         mutableStateOf<List<com.aural.player.data.PodcastEpisode>>(emptyList())
@@ -791,7 +809,38 @@ private fun AuralApp(viewModel: AuralViewModel,
                             if (saved) viewModel.removePodcastShow(s.show)
                             else viewModel.addPodcastShow(s.show)
                         },
-                        listState = detailListState("podcast:${s.show.feedUrl}")
+                        listState = detailListState("podcast:${s.show.feedUrl}"),
+                        downloads = downloads,
+                        downloadProgress = downloadProgress,
+                        onDownloadEpisode = { episode ->
+                            viewModel.downloadPodcastEpisode(s.show, episode)
+                        },
+                        onDeleteDownload = { episode ->
+                            viewModel.deletePodcastDownload(s.show, episode)
+                        }
+                    )
+                }
+
+                Screen.PodcastContinue -> {
+                    var continueItems by remember {
+                        mutableStateOf<List<com.aural.player.data.PodcastContinueItem>>(
+                            emptyList()
+                        )
+                    }
+                    var continueLoading by remember { mutableStateOf(true) }
+                    LaunchedEffect(Unit) {
+                        continueLoading = true
+                        continueItems = viewModel.continueListeningEpisodes()
+                        continueLoading = false
+                    }
+                    PodcastContinueScreen(
+                        items = continueItems,
+                        loading = continueLoading,
+                        onBack = { screen = Screen.Library },
+                        onPlayEpisode = { show, episode ->
+                            viewModel.playPodcastEpisode(show, episode)
+                        },
+                        listState = detailListState("podcast-continue")
                     )
                 }
 
@@ -874,6 +923,7 @@ private fun AuralApp(viewModel: AuralViewModel,
             onRemoveFromQueue = viewModel.playback::removeFromQueue,
             onMoveQueueItem = viewModel.playback::moveInQueue,
             onOpenEqualizer = { showEqualizerScreen = true },
+            youTubeManager = youTubeManager,
         )
     }
     // ---- v1.0.7: pantalla de Ajustes ----
