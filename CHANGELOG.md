@@ -26,6 +26,8 @@ en GitHub salen de aquí.
 - **Búsqueda en línea pulida** — el selector Locales/Online solo aparece en las pestañas que lo usan; mientras los resultados cargan se ven esqueletos animados a pantalla completa (nunca un «sin resultados» adelantado), y cuando de verdad no hay resultados, un estado vacío con su globo y la nota de región.
 - **Estado de espera acoplado** — el aviso de «Esperando conexión» ya no ocupa su propia fila: vive en el centro de la fila de tiempos, sin mover nada más de la pantalla.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
+- **Emisoras y podcasts más completos** — en el reproductor, una emisora o un episodio muestran «En línea» y su calidad real; si una emisora existe en varias calidades, su ficha deja escoger la versión. «Sigue escuchando» abre la lista de episodios empezados con su progreso y lo que queda por escuchar, y los botones de podcast enseñan los segundos (−15 y +30).
+- **Descarga episodios y canciones en línea** — descarga un episodio desde su ficha o desde el menú del reproductor y escúchalo sin conexión; la canción en línea que suena también se puede descargar desde ese menú. El progreso se ve en el reproductor y en una notificación mientras baja.
 
 ## v1.2.0 — 2026-11-24
 
