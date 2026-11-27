@@ -192,9 +192,12 @@ fun LibraryScreen(
     artistsGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     playlistsListState: androidx.compose.foundation.lazy.LazyListState,
     pagerState: androidx.compose.foundation.pager.PagerState =
-        // v1.0.8: el juego de pestañas es fijo (6 claves); el orden lo elige
-        // el usuario pero la cantidad no cambia.
-        rememberPagerState(pageCount = { 7 }),
+        // Respaldo coherente con el orden por defecto (9 pestañas con
+        // Emisoras y Podcasts); MainActivity pasa el pager real con
+        // pageCount = tamaño del orden elegido por el usuario.
+        rememberPagerState(
+            pageCount = { com.aural.player.data.defaultTabOrder.size }
+        ),
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     youTubeManager: com.aural.player.youtube.YouTubeManager? = null,
@@ -284,6 +287,9 @@ fun LibraryScreen(
     // v1.0.8: orden de pestañas elegido por el usuario (claves estables).
     val tabOrder by viewModel.libraryTabOrder.collectAsStateWithLifecycle()
     val tabs = tabOrder.map { tabLabel(it) }
+    // Pestaña activa acotada al rango válido: pills y pager nunca
+    // reciben un índice fuera del orden actual (p. ej. tras reordenar).
+    val safeSelectedTab = selectedTab.coerceIn(0, tabOrder.lastIndex.coerceAtLeast(0))
     var showTabCustomizer by remember { mutableStateOf(false) }
     // Artistas favoritos del Inicio.
     val topArtists by viewModel.topArtists.collectAsStateWithLifecycle()
@@ -299,15 +305,15 @@ fun LibraryScreen(
     }
 
     // La fila de pills se desplaza sola para mostrar la pestaña activa
-    LaunchedEffect(selectedTab, tabOrder) {
+    LaunchedEffect(safeSelectedTab, tabOrder) {
         val layout = pillsListState.layoutInfo
-        val item = layout.visibleItemsInfo.firstOrNull { it.index == selectedTab }
+        val item = layout.visibleItemsInfo.firstOrNull { it.index == safeSelectedTab }
         val fullyVisible = item != null &&
             item.offset >= layout.viewportStartOffset &&
             item.offset + item.size <= layout.viewportEndOffset
-        if (!fullyVisible) pillsListState.animateScrollToItem(selectedTab)
+        if (!fullyVisible) pillsListState.animateScrollToItem(safeSelectedTab)
         // Al entrar al Inicio, sus secciones se actualizan.
-        if (tabOrder.getOrNull(selectedTab) == "home") {
+        if (tabOrder.getOrNull(safeSelectedTab) == "home") {
             viewModel.refreshTopArtists()
             viewModel.refreshRecentSongs()
             viewModel.refreshWeekStats()
@@ -430,9 +436,9 @@ fun LibraryScreen(
     // Descubrimiento de Emisoras/Podcasts: con texto y su chip
     // activo, la búsqueda corre contra Radio Browser / el
     // directorio; sin texto se ve la colección guardada.
-    LaunchedEffect(library.query, selectedTab, tabOrder) {
+    LaunchedEffect(library.query, safeSelectedTab, tabOrder) {
         val query = library.query.trim()
-        val tabKey = tabOrder.getOrNull(selectedTab)
+        val tabKey = tabOrder.getOrNull(safeSelectedTab)
         if (query.isBlank() || (tabKey != "radio" && tabKey != "podcasts")) {
             viewModel.clearCollectionSearch()
             return@LaunchedEffect
@@ -664,7 +670,7 @@ fun LibraryScreen(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
         ) {
             items(tabs.size) { i ->
-                val selected = selectedTab == i
+                val selected = safeSelectedTab == i
                 Box(
                     Modifier
                         .clip(CircleShape)
@@ -708,7 +714,7 @@ fun LibraryScreen(
         // Selector Locales/Online: solo durante la búsqueda y
         // solo en las pestañas que lo usan (Inicio, Descargas
         // y Carpetas no lo muestran).
-        val currentTabKey = tabOrder.getOrNull(selectedTab)
+        val currentTabKey = tabOrder.getOrNull(safeSelectedTab)
         if (library.query.isNotBlank() &&
             currentTabKey in setOf("songs", "artists", "albums", "playlists")
         ) {
@@ -756,25 +762,25 @@ fun LibraryScreen(
                 LaunchedEffect(pagerState.currentPage) {
                     if (!pagerReady) return@LaunchedEffect
                     if (pagerTarget == null) {
-                        if (selectedTab != pagerState.currentPage) {
+                        if (safeSelectedTab != pagerState.currentPage) {
                             onTabSelected(pagerState.currentPage)
                         }
                     } else if (pagerState.currentPage == pagerTarget) {
                         pagerTarget = null
                     }
                 }
-                LaunchedEffect(selectedTab) {
+                LaunchedEffect(safeSelectedTab) {
                     try {
-                        if (pagerState.currentPage != selectedTab) {
+                        if (pagerState.currentPage != safeSelectedTab) {
                             if (pagerReady) {
-                                pagerTarget = selectedTab
+                                pagerTarget = safeSelectedTab
                                 try {
-                                    pagerState.animateScrollToPage(selectedTab)
+                                    pagerState.animateScrollToPage(safeSelectedTab)
                                 } finally {
                                     pagerTarget = null
                                 }
                             } else {
-                                pagerState.scrollToPage(selectedTab)
+                                pagerState.scrollToPage(safeSelectedTab)
                             }
                         }
                     } finally {
@@ -786,7 +792,7 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     // v1.0.8: las páginas se resuelven por clave, no por índice fijo.
-                    when (tabOrder[page]) {
+                    when (tabOrder.getOrNull(page)) {
                         "home" -> HomeTab(
                             topPlaylists = topPlaylists,
                             onOpenPlaylist = onOpenPlaylist,
