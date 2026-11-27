@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
+import com.aural.player.data.PodcastEpisode
 import com.aural.player.data.PodcastProgress
 import com.aural.player.data.PodcastShow
 import com.aural.player.data.RadioStation
@@ -111,6 +112,7 @@ import com.aural.player.ui.components.NewsModal
 import com.aural.player.ui.components.ProfileFormDialog
 import com.aural.player.ui.theme.HalloweenFontFamily
 import com.aural.player.ui.components.SongRow
+import com.aural.player.ui.components.formatDuration
 import com.aural.player.ui.theme.AppTheme
 import com.aural.player.ui.components.AlphabetFastScroller
 import kotlinx.coroutines.launch
@@ -159,6 +161,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.material3.RadioButton
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.material3.LinearProgressIndicator
 
 
 // --------------------------- Búsqueda por pills (1.3.0) ---------------------------
@@ -218,7 +225,10 @@ internal const val ONLINE_EMPTY_TEXT =
  * cuatro pestañas Online.
  */
 @Composable
-internal fun OnlineEmptyState() {
+internal fun OnlineEmptyState(
+    title: String = "Sin resultados",
+    note: String = "En algunas regiones YouTube limita el catálogo; sin VPN los resultados pueden no ser óptimos."
+) {
     val primary = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier
@@ -265,14 +275,14 @@ internal fun OnlineEmptyState() {
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            text = "Sin resultados",
+            text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "En algunas regiones YouTube limita el catálogo; sin VPN los resultados pueden no ser óptimos.",
+            text = note,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -1439,7 +1449,8 @@ internal fun CollectionGuideEmptyState(text: String, onSearch: () -> Unit) {
 }
 
 /** Fila del molde Playlists: miniatura cuadrada, nombre,
- *  subtítulo, ▶ y ⋮ con Quitar. */
+ *  subtítulo, ▶ y ⋮. El toque en la fila puede abrir el
+ *  detalle; el ▶ siempre reproduce. */
 @Composable
 internal fun CollectionRow(
     title: String,
@@ -1447,13 +1458,16 @@ internal fun CollectionRow(
     coverUri: String?,
     onPlay: () -> Unit,
     onRemove: () -> Unit,
-    showMenu: Boolean = true
+    showMenu: Boolean = true,
+    onClick: () -> Unit = onPlay,
+    menuLabel: String = "Quitar",
+    onMenuAction: () -> Unit = onRemove
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onPlay() }
+            .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1489,10 +1503,10 @@ internal fun CollectionRow(
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Quitar") },
+                    text = { Text(menuLabel) },
                     onClick = {
                         menuOpen = false
-                        onRemove()
+                        onMenuAction()
                     }
                 )
             }
@@ -1507,7 +1521,8 @@ internal fun RadioTab(
     onPlay: (RadioStation) -> Unit,
     onRemove: (RadioStation) -> Unit,
     onSearch: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onOpenDetail: (RadioStation) -> Unit = onPlay
 ) {
     if (stations.isEmpty()) {
         CollectionGuideEmptyState(
@@ -1532,13 +1547,12 @@ internal fun RadioTab(
         items(stations.distinctBy { it.id }, key = { it.id }) { station ->
             CollectionRow(
                 title = station.name,
-                subtitle = listOf(station.country, station.genre)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" · ")
-                    .ifBlank { "En vivo" },
+                subtitle = radioSubtitle(station),
                 coverUri = station.logoUrl,
                 onPlay = { onPlay(station) },
-                onRemove = { onRemove(station) }
+                onRemove = { onRemove(station) },
+                onClick = { onOpenDetail(station) },
+                menuLabel = "Quitar de mis Emisoras"
             )
         }
     }
@@ -1552,7 +1566,8 @@ internal fun PodcastsTab(
     onPlay: (PodcastShow) -> Unit,
     onRemove: (PodcastShow) -> Unit,
     onSearch: () -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onOpenDetail: (PodcastShow) -> Unit = onPlay
 ) {
     if (shows.isEmpty()) {
         CollectionGuideEmptyState(
@@ -1601,8 +1616,485 @@ internal fun PodcastsTab(
                 subtitle = show.author.ifBlank { "Podcast" },
                 coverUri = show.imageUrl,
                 onPlay = { onPlay(show) },
-                onRemove = { onRemove(show) }
+                onRemove = { onRemove(show) },
+                onClick = { onOpenDetail(show) },
+                menuLabel = "Quitar de mis Podcasts"
             )
+        }
+    }
+}
+
+private fun radioSubtitle(station: RadioStation): String {
+    val parts = mutableListOf<String>()
+    if (station.country.isNotBlank()) parts += station.country
+    if (station.genre.isNotBlank()) parts += station.genre
+    if (station.bitrateKbps > 0) parts += "${station.bitrateKbps} kbps"
+    return parts.joinToString(" · ").ifBlank { "En vivo" }
+}
+
+/** Resultados de búsqueda de emisoras (Radio Browser). */
+@Composable
+internal fun RadioSearchTab(
+    stations: List<RadioStation>,
+    savedIds: Set<String>,
+    searching: Boolean,
+    pending: Boolean,
+    hasInternet: Boolean,
+    onPlay: (RadioStation) -> Unit,
+    onToggleSaved: (RadioStation) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    if (!hasInternet) {
+        OnlineEmptyState(
+            title = "Sin conexión",
+            note = "Sin conexión: resultados en línea no disponibles"
+        )
+    } else if ((searching || pending) && stations.isEmpty()) {
+        OnlineSkeletonList()
+    } else if (stations.isEmpty()) {
+        OnlineEmptyState(
+            note = "Prueba con otro nombre, país o género."
+        )
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            items(stations.distinctBy { it.id }, key = { it.id }) { station ->
+                val saved = station.id in savedIds
+                CollectionRow(
+                    title = station.name,
+                    subtitle = radioSubtitle(station),
+                    coverUri = station.logoUrl,
+                    onPlay = { onPlay(station) },
+                    onRemove = { onToggleSaved(station) },
+                    menuLabel = if (saved) "Quitar de mis Emisoras"
+                    else "Agregar a mis Emisoras",
+                    onMenuAction = { onToggleSaved(station) }
+                )
+            }
+        }
+    }
+}
+
+/** Resultados de búsqueda de podcasts (directorio). */
+@Composable
+internal fun PodcastSearchTab(
+    shows: List<PodcastShow>,
+    savedFeedUrls: Set<String>,
+    searching: Boolean,
+    pending: Boolean,
+    hasInternet: Boolean,
+    onOpen: (PodcastShow) -> Unit,
+    onPlay: (PodcastShow) -> Unit,
+    onToggleSaved: (PodcastShow) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    if (!hasInternet) {
+        OnlineEmptyState(
+            title = "Sin conexión",
+            note = "Sin conexión: resultados en línea no disponibles"
+        )
+    } else if ((searching || pending) && shows.isEmpty()) {
+        OnlineSkeletonList()
+    } else if (shows.isEmpty()) {
+        OnlineEmptyState(
+            note = "Prueba con otro título o autor."
+        )
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            items(shows.distinctBy { it.feedUrl }, key = { it.feedUrl }) { show ->
+                val saved = show.feedUrl in savedFeedUrls
+                CollectionRow(
+                    title = show.title,
+                    subtitle = show.author.ifBlank { "Podcast" },
+                    coverUri = show.imageUrl,
+                    onPlay = { onPlay(show) },
+                    onRemove = { onToggleSaved(show) },
+                    onClick = { onOpen(show) },
+                    menuLabel = if (saved) "Quitar de mis Podcasts"
+                    else "Agregar a mis Podcasts",
+                    onMenuAction = { onToggleSaved(show) }
+                )
+            }
+        }
+    }
+}
+
+/** Cabecera hero de las fichas de emisora y podcast. */
+@Composable
+private fun CollectionDetailHeader(
+    coverUri: String?,
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    menuLabel: String,
+    onMenuAction: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val statusBarTop = WindowInsets.statusBars
+        .asPaddingValues()
+        .calculateTopPadding()
+    Column(
+        Modifier
+            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        ) {
+            if (!coverUri.isNullOrBlank()) {
+                AsyncImage(
+                    model = Uri.parse(coverUri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(96.dp)
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.8f)
+                            )
+                        )
+                    )
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(top = statusBarTop + 4.dp, start = 8.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Rounded.ArrowBack,
+                        "Volver",
+                        tint = Color.White
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            "Opciones",
+                            tint = Color.White
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(menuLabel) },
+                            onClick = {
+                                menuOpen = false
+                                onMenuAction()
+                            }
+                        )
+                    }
+                }
+            }
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** Ficha de emisora: hero sin lista, con «Sonando ahora». */
+@Composable
+internal fun RadioStationDetailScreen(
+    station: RadioStation,
+    saved: Boolean,
+    nowPlaying: String?,
+    onBack: () -> Unit,
+    onPlay: () -> Unit,
+    onToggleSaved: () -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+    ) {
+        CollectionDetailHeader(
+            coverUri = station.logoUrl,
+            title = station.name,
+            subtitle = radioSubtitle(station),
+            onBack = onBack,
+            menuLabel = if (saved) "Quitar de mis Emisoras"
+            else "Agregar a mis Emisoras",
+            onMenuAction = onToggleSaved
+        )
+        Row(
+            Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            IconButton(
+                onClick = onPlay,
+                modifier = Modifier
+                    .size(52.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            ) {
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    "Reproducir",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Button(onClick = onToggleSaved) {
+                Text(if (saved) "Agregada" else "Agregar")
+            }
+        }
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "Sonando ahora",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = nowPlaying?.takeIf { it.isNotBlank() } ?: "En vivo",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun formatPodcastDate(publishedMs: Long): String {
+    if (publishedMs <= 0L) return ""
+    return try {
+        java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale("es"))
+            .format(java.util.Date(publishedMs))
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+/** Ficha de podcast: hero, acciones y lista de episodios. */
+@Composable
+internal fun PodcastDetailScreen(
+    show: PodcastShow,
+    episodes: List<PodcastEpisode>,
+    loading: Boolean,
+    progress: Map<String, PodcastProgress>,
+    saved: Boolean,
+    onBack: () -> Unit,
+    onPlayShow: () -> Unit,
+    onPlayEpisode: (PodcastEpisode) -> Unit,
+    onToggleSaved: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    val subtitle = listOf(
+        show.author,
+        if (loading) "Cargando episodios…"
+        else "${episodes.size} ${if (episodes.size == 1) "episodio" else "episodios"}"
+    ).filter { it.isNotBlank() }.joinToString(" · ")
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        item {
+            Column {
+            CollectionDetailHeader(
+                coverUri = show.imageUrl,
+                title = show.title,
+                subtitle = subtitle,
+                onBack = onBack,
+                menuLabel = if (saved) "Quitar de mis Podcasts"
+                else "Agregar a mis Podcasts",
+                onMenuAction = onToggleSaved
+            )
+            Row(
+                Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                IconButton(
+                    onClick = onPlayShow,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                ) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        "Reproducir",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+                Button(onClick = onToggleSaved) {
+                    Text(if (saved) "Agregado" else "Agregar")
+                }
+            }
+            }
+        }
+        if (loading && episodes.isEmpty()) {
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        } else if (episodes.isEmpty()) {
+            item {
+                Text(
+                    text = "Sin episodios disponibles",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                )
+            }
+        }
+        items(
+            episodes.distinctBy {
+                PodcastEpisode.progressKey(show.feedUrl, it.guid)
+            },
+            key = { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
+        ) { episode ->
+            val savedProgress = progress[
+                PodcastEpisode.progressKey(show.feedUrl, episode.guid)
+            ]
+            val metaParts = mutableListOf<String>()
+            formatPodcastDate(episode.publishedMs)
+                .takeIf { it.isNotBlank() }?.let { metaParts += it }
+            if (episode.durationMs > 0L) {
+                metaParts += formatDuration(episode.durationMs)
+            }
+            when {
+                savedProgress?.listened == true -> metaParts += "Escuchado"
+                savedProgress != null && savedProgress.positionMs > 0L ->
+                    metaParts += "Vas en ${formatDuration(savedProgress.positionMs)}"
+            }
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPlayEpisode(episode) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CoverArt(
+                        uri = episode.imageUrl ?: show.imageUrl,
+                        size = 48.dp
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            episode.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            metaParts.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = { onPlayEpisode(episode) }) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            "Reproducir episodio",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                if (savedProgress != null &&
+                    !savedProgress.listened &&
+                    savedProgress.positionMs > 0L &&
+                    episode.durationMs > 0L
+                ) {
+                    LinearProgressIndicator(
+                        progress = {
+                            (savedProgress.positionMs.toFloat() /
+                                episode.durationMs.toFloat()).coerceIn(0f, 1f)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .height(3.dp)
+                    )
+                }
+            }
         }
     }
 }
