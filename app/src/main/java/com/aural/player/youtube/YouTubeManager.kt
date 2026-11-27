@@ -1725,16 +1725,24 @@ object YouTubeStreamResolver {
         "Accept-Language" to "en-US,en;q=0.9"
     )
 
-    /** Cliente HTTP compartido del streaming: un solo pool
-     *  con keep-alive para las sondas del resolver y para
-     *  Media3 (OkHttpDataSource). Así los rangos de 512 KB
-     *  reutilizan la conexión en vez de abrir una nueva por
-     *  pedazo, que con la latencia de aquí se sentía como
-     *  conexión súper lenta aunque hubiera ancho de banda. */
+    /** Cliente HTTP compartido del streaming: sondas del
+     *  resolver y Media3 (OkHttpDataSource) comparten pool.
+     *  HTTP/1.1 con pool y dispatcher amplios para que cada
+     *  rango paralelo de 512 KB use una conexión real: con
+     *  HTTP/2 todo se multiplexa en una sola conexión y el
+     *  límite por conexión de googlevideo con VPN frena la
+     *  canción aunque el enlace dé de sobra. */
     val sharedHttpClient: okhttp3.OkHttpClient =
         okhttp3.OkHttpClient.Builder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 16
+                    maxRequestsPerHost = 10
+                }
+            )
             .connectionPool(
-                okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
+                okhttp3.ConnectionPool(10, 5, java.util.concurrent.TimeUnit.MINUTES)
             )
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
