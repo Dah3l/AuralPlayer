@@ -39,6 +39,9 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -482,7 +485,9 @@ internal fun OnlinePlaylistsTab(
     playlists: List<com.aural.player.youtube.OnlineCollectionResult>,
     onOpen: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
     onPlay: (com.aural.player.youtube.OnlineCollectionResult) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    savedUrls: Set<String> = emptySet(),
+    onToggleSaved: (com.aural.player.youtube.OnlineCollectionResult) -> Unit = {}
 ) {
     if (playlists.isEmpty()) {
         OnlineEmptyState(); return
@@ -521,6 +526,21 @@ internal fun OnlinePlaylistsTab(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+                IconButton(onClick = { onToggleSaved(playlist) }) {
+                    Icon(
+                        if (playlist.url in savedUrls) {
+                            Icons.Rounded.Bookmark
+                        } else {
+                            Icons.Rounded.BookmarkBorder
+                        },
+                        if (playlist.url in savedUrls) {
+                            "Quitar de guardadas"
+                        } else {
+                            "Guardar playlist"
+                        },
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
                 IconButton(onClick = { onPlay(playlist) }) {
                     Icon(
@@ -1105,7 +1125,11 @@ internal fun PlaylistsTab(
     playlistCovers: Map<String, String>,
     firstSongCover: (Playlist) -> String?,
     onRemoveCover: (Playlist) -> Unit,
-    showFixedEntries: Boolean = true
+    showFixedEntries: Boolean = true,
+    savedOnlinePlaylists: List<com.aural.player.data.SavedOnlinePlaylist> = emptyList(),
+    onOpenSavedOnlinePlaylist: (com.aural.player.data.SavedOnlinePlaylist) -> Unit = {},
+    onPlaySavedOnlinePlaylist: (com.aural.player.data.SavedOnlinePlaylist) -> Unit = {},
+    onRemoveSavedOnlinePlaylist: (com.aural.player.data.SavedOnlinePlaylist) -> Unit = {}
 ) {
     LazyColumn(
             state = listState,
@@ -1336,6 +1360,98 @@ internal fun PlaylistsTab(
             }
         }
 
+        }
+        // Playlists online guardadas como referencia (grupo
+        // «De YouTube»): viven aquí, se abren en Aural y su
+        // enlace se puede abrir fuera.
+        if (savedOnlinePlaylists.isNotEmpty()) {
+            item {
+                Text(
+                    text = "De YouTube",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(
+                        start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp
+                    )
+                )
+            }
+            items(
+                savedOnlinePlaylists.distinctBy { it.url },
+                key = { "yt-" + it.url }
+            ) { saved ->
+                val context = androidx.compose.ui.platform.LocalContext.current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSavedOnlinePlaylist(saved) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CoverArt(uri = saved.thumbnailUrl, size = 48.dp)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            saved.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (saved.subtitle.isNotBlank()) {
+                            Text(
+                                saved.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    IconButton(onClick = { onPlaySavedOnlinePlaylist(saved) }) {
+                        Icon(
+                            Icons.Rounded.PlayArrow, "Reproducir",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    var showSavedMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showSavedMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones")
+                        }
+                        DropdownMenu(
+                            expanded = showSavedMenu,
+                            onDismissRequest = { showSavedMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Abrir enlace") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.OpenInNew, null)
+                                },
+                                onClick = {
+                                    showSavedMenu = false
+                                    runCatching {
+                                        context.startActivity(
+                                            android.content.Intent(
+                                                android.content.Intent.ACTION_VIEW,
+                                                android.net.Uri.parse(saved.url)
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Quitar") },
+                                onClick = {
+                                    showSavedMenu = false
+                                    onRemoveSavedOnlinePlaylist(saved)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (playlists.isEmpty()) {
             item { EmptyState("Todavía no has creado playlists") }
