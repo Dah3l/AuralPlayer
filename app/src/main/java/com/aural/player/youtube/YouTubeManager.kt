@@ -1453,11 +1453,10 @@ object YouTubeStreamResolver {
     // del video actual, el indicador no se muestra.
     private val connectionLock = Any()
 
-    @Volatile
-    private var connectionVideoId: String? = null
-
-    @Volatile
-    private var connectionKbpsSmooth: Double = -1.0
+    /** Muestras suavizadas por video: la siguiente canción no
+     *  borra la medición de la que está sonando. */
+    private val connectionSamples =
+        java.util.concurrent.ConcurrentHashMap<String, Double>()
 
     /** Anota una carga completada del stream de ese video.
      *  Cargas muy cortas (lecturas de caché en disco) no
@@ -1466,21 +1465,17 @@ object YouTubeStreamResolver {
         if (videoId.isBlank() || bytesLoaded < 32L * 1024L || loadDurationMs < 150L) return
         val sampleKbps = bytesLoaded * 8.0 / loadDurationMs
         synchronized(connectionLock) {
-            connectionKbpsSmooth =
-                if (connectionVideoId != videoId || connectionKbpsSmooth < 0.0) sampleKbps
-                else connectionKbpsSmooth * 0.7 + sampleKbps * 0.3
-            connectionVideoId = videoId
+            val previous = connectionSamples[videoId]
+            connectionSamples[videoId] =
+                if (previous == null) sampleKbps
+                else previous * 0.7 + sampleKbps * 0.3
         }
     }
 
     /** Velocidad suavizada (kbps) del stream de ese video, o
      *  null si aún no hay muestra de ese video. */
     fun connectionKbps(videoId: String): Int? =
-        if (connectionVideoId == videoId && connectionKbpsSmooth >= 0.0) {
-            connectionKbpsSmooth.toInt()
-        } else {
-            null
-        }
+        connectionSamples[videoId]?.toInt()
 
     /** Candado por video: principal, fundido y precarga solo se
      *  turnan cuando resuelven la MISMA canción; canciones
