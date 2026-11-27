@@ -36,6 +36,7 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
@@ -184,7 +185,18 @@ class MusicService : MediaSessionService() {
      * el de fundido solo necesita el colchón de la siguiente
      * (máx 30 s, tope 4 MB).
      */
-    private fun createLoadControl(fadePlayer: Boolean = false): DefaultLoadControl =
+    // Estado para el colchón de arranque adaptativo: lo
+    // actualizan los listeners del reproductor principal y lo
+    // lee ColdStartLoadControl al decidir si la canción puede
+    // empezar a sonar.
+    @Volatile
+    private var coldGateOnline: Boolean = false
+    @Volatile
+    private var coldGateStarted: Boolean = false
+    @Volatile
+    private var coldGateDurationMs: Long = -1L
+
+    private fun createLoadControl(fadePlayer: Boolean = false): LoadControl =
         if (fadePlayer) {
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
@@ -197,20 +209,31 @@ class MusicService : MediaSessionService() {
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         } else {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    60_000,
-                    180_000,
-                    // Arranque casi instantáneo: con la URL ya
-                    // pre-resuelta, 1.8 s de colchón bastan para
-                    // sonar; la carga sigue detrás hasta ~180 s
-                    // y el rebuffer conserva su colchón de 8 s.
-                    1_800,
-                    8_000
+            ColdStartLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        60_000,
+                        180_000,
+                        // Arranque casi instantáneo: con la URL ya
+                        // pre-resuelta, 1.8 s de colchón bastan para
+                        // sonar; la carga sigue detrás hasta ~180 s
+                        // y el rebuffer conserva su colchón de 8 s.
+                        // En red lenta, ColdStartLoadControl exige
+                        // ~9 s antes del primer sonido.
+                        1_800,
+                        8_000
+                    )
+                    .setTargetBufferBytes(16 * 1024 * 1024)
+                    .setPrioritizeTimeOverSizeThresholds(false)
+            ) {
+                ColdGateState(
+                    online = coldGateOnline,
+                    started = coldGateStarted,
+                    durationMs = coldGateDurationMs,
+                    slowNetwork = YouTubeStreamResolver.networkSlowHint() ||
+                        YouTubeStreamResolver.isSaverForced()
                 )
-                .setTargetBufferBytes(16 * 1024 * 1024)
-                .setPrioritizeTimeOverSizeThresholds(false)
-                .build()
+            }
         }
 
     /**
@@ -231,7 +254,18 @@ class MusicService : MediaSessionService() {
         }
     }
 
-    private fun createMediaSourceFactory(): DefaultMediaSourceFactory {
+    private fun createMediaSourceFactory(): DefaultMediaSourceFactory =
+        DefaultMediaSourceFactory(createStreamingDataSourceFactory())
+
+    /**
+     * Cadena de datos del streaming online (resolución
+     * aural-online + caché compartida de 256 MB + rangos).
+     * La usa la reproducción y también el análisis DJ de
+     * canciones online: los bytes analizados quedan en la
+     * caché con las mismas claves y la reproducción los
+     * sirve de ahí.
+     */
+    private fun createStreamingDataSourceFactory(): DataSource.Factory {
         val resolver = object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                 val uri = dataSpec.uri
@@ -290,11 +324,10 @@ class MusicService : MediaSessionService() {
             .setCache(getStreamCache())
             .setUpstreamDataSourceFactory(networkFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        val dataSourceFactory = ResolvingDataSource.Factory(
+        return ResolvingDataSource.Factory(
             OnlineAwareDataSourceFactory(cacheFactory, DefaultDataSource.Factory(this)),
             resolver
         )
-        return DefaultMediaSourceFactory(dataSourceFactory)
     }
 
     private fun onlineVideoId(item: MediaItem?): String? {
@@ -337,6 +370,7 @@ class MusicService : MediaSessionService() {
     private var abrVideoId: String? = null
     private var abrLastBufferedAheadMs: Long = -1L
     private var abrLowChecks: Int = 0
+    private var abrHealthyChecks: Int = 0
 
     private fun checkAbr(videoId: String) {
         val player = mediaSession?.player ?: return
@@ -345,17 +379,20 @@ class MusicService : MediaSessionService() {
         if (abrVideoId != videoId) {
             abrVideoId = videoId
             abrLowChecks = 0
+            abrHealthyChecks = 0
             abrLastBufferedAheadMs = bufferedAhead
             return
         }
         val bitrate = YouTubeStreamResolver.streamBitrateKbps(videoId)
         val kbps = YouTubeStreamResolver.connectionKbps(videoId)
+        val shrinking = bufferedAhead < abrLastBufferedAheadMs
         val low = bitrate != null && bitrate > 48 &&
             kbps != null && kbps < bitrate * 1.3 &&
-            bufferedAhead < abrLastBufferedAheadMs &&
+            shrinking &&
             bufferedAhead < 45_000L
         abrLastBufferedAheadMs = bufferedAhead
         if (low) {
+            abrHealthyChecks = 0
             abrLowChecks++
             if (abrLowChecks >= 3) {
                 YouTubeStreamResolver.noteRebuffer()
@@ -363,6 +400,21 @@ class MusicService : MediaSessionService() {
             }
         } else {
             abrLowChecks = 0
+            // Rama sana: throughput sostenido por encima del
+            // bitrate y colchón sin encogerse. Con 3 chequeos
+            // seguidos así, el ahorro temporal se levanta
+            // antes de los 10 min (libertad condicional).
+            val healthy = bitrate != null && kbps != null &&
+                kbps >= bitrate * 1.3 && !shrinking
+            if (healthy) {
+                abrHealthyChecks++
+                if (abrHealthyChecks >= 3) {
+                    YouTubeStreamResolver.clearTemporarySaver()
+                    abrHealthyChecks = 0
+                }
+            } else {
+                abrHealthyChecks = 0
+            }
         }
     }
 
@@ -588,7 +640,11 @@ class MusicService : MediaSessionService() {
      */
     private fun makeFadeControlListener(owner: Player) = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (owner !== mediaSession?.player || !crossfadeActive) return
+            if (owner !== mediaSession?.player) return
+            // La canción ya suena: el colchón de arranque
+            // adaptativo deja de aplicar a este ítem.
+            if (isPlaying) coldGateStarted = true
+            if (!crossfadeActive) return
             val fade = fadePlayer ?: return
             if (fade === owner) return
             // Pausa/reanudación durante el fundido: la segunda voz sigue
@@ -598,9 +654,14 @@ class MusicService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (owner !== mediaSession?.player) return
+            if (owner.duration > 0L) coldGateDurationMs = owner.duration
+            // El rebuffer solo cuenta con la canción establecida
+            // (~30 s de posición): el buffering de la fase fría
+            // no activa el ahorro temporal ni castiga la
+            // siguiente canción.
             if (playbackState == Player.STATE_BUFFERING &&
                 owner.playWhenReady &&
-                owner.currentPosition > 3_000L &&
+                owner.currentPosition > 30_000L &&
                 onlineVideoId(owner.currentMediaItem) != null
             ) {
                 YouTubeStreamResolver.noteRebuffer()
@@ -657,6 +718,11 @@ class MusicService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (owner !== mediaSession?.player) return
+            // Ítem nuevo: el colchón de arranque adaptativo
+            // vuelve a aplicar si la red viene lenta.
+            coldGateOnline = onlineVideoId(mediaItem) != null
+            coldGateStarted = false
+            coldGateDurationMs = owner.duration
             prefetchOnlineAround(owner)
             if (crossfadeActive) return
             // La canción cambió sola sin fundido (o el usuario saltó
@@ -1248,12 +1314,19 @@ class MusicService : MediaSessionService() {
         val window = Timeline.Window()
         val currentItem = timeline.getWindow(currentIndex, window).mediaItem
         if (currentItem.mediaId.toLongOrNull() != currentSongId) return
-        val wanted = ArrayList<Pair<Long, android.net.Uri>>()
+        // (id, uri local o null, videoId online o null). Las
+        // online se analizan leyendo por la caché de streaming
+        // compartida: los bytes quedan guardados y la
+        // reproducción los reaprovecha, así el análisis DJ es
+        // precarga útil y la siguiente canción entra caliente.
+        val wanted = ArrayList<Triple<Long, android.net.Uri?, String?>>()
         val currentUri = currentItem.localConfiguration?.uri
-        // Las online no se analizan: su URI es aural-online:// y el
-        // BPM saldría de decodificar el stream (gasto de datos/CPU).
-        if (currentUri != null && currentUri.scheme != "aural-online") {
-            wanted += currentSongId to currentUri
+        if (currentUri != null) {
+            wanted += Triple(
+                currentSongId,
+                if (currentUri.scheme == "aural-online") null else currentUri,
+                onlineVideoId(currentItem)
+            )
         }
         var idx = currentIndex
         var steps = 0
@@ -1263,14 +1336,20 @@ class MusicService : MediaSessionService() {
             val item = timeline.getWindow(next, window).mediaItem
             val id = item.mediaId.toLongOrNull()
             val uri = item.localConfiguration?.uri
-            if (id != null && uri != null && uri.scheme != "aural-online") wanted += id to uri
+            if (id != null && uri != null) {
+                wanted += Triple(
+                    id,
+                    if (uri.scheme == "aural-online") null else uri,
+                    onlineVideoId(item)
+                )
+            }
             idx = next
             steps++
         }
         if (wanted.isEmpty()) return
         analysisJob?.cancel()
         analysisJob = serviceScope.launch(Dispatchers.IO) {
-            for ((id, uri) in wanted) {
+            for ((id, uri, onlineVideoId) in wanted) {
                 if (id in analyzedIds || id in analyzingIds) continue
                 if (bpmCache.containsKey(id)) {
                     analyzedIds += id
@@ -1285,9 +1364,23 @@ class MusicService : MediaSessionService() {
                 // como analizando: si cancelan el trabajo esperando,
                 // la canción se reintenta en el próximo cambio.
                 while (tempoRecoveryJob?.isActive == true) delay(500)
+                // Lo urgente manda también aquí: con el colchón
+                // bajo, el análisis online espera (compite por
+                // la misma conexión que la reproducción).
+                while (onlineVideoId != null &&
+                    YouTubeStreamResolver.speculativePaused()
+                ) delay(500)
                 analyzingIds += id
                 try {
-                    val bpm = BpmAnalysis.analyzeBpm(this@MusicService, uri)
+                    val bpm = if (onlineVideoId != null) {
+                        BpmAnalysis.analyzeBpmOnline(onlineVideoId) {
+                            createStreamingDataSourceFactory().createDataSource()
+                        }
+                    } else if (uri != null) {
+                        BpmAnalysis.analyzeBpm(this@MusicService, uri)
+                    } else {
+                        null
+                    }
                     if (bpm != null) {
                         app.settings.setBpm(id, bpm)
                     }
@@ -1739,6 +1832,43 @@ private class OnlineAwareDataSource(
  * paralelo suman velocidad. La ventana base es de 3 rangos
  * y crece hasta 5 si el throughput por rango sale bajo.
  */
+/** Foto del estado de arranque que lee ColdStartLoadControl. */
+private data class ColdGateState(
+    val online: Boolean,
+    val started: Boolean,
+    val durationMs: Long,
+    val slowNetwork: Boolean
+)
+
+/**
+ * Colchón de arranque adaptativo: en red sana manda el
+ * DefaultLoadControl (1,8 s). Si el medidor sabe que la red
+ * es lenta (o hubo rebuffer reciente) y la pista online aún
+ * no ha empezado a sonar, exige ~9 s de colchón antes del
+ * primer sonido: unos segundos más de espera inicial a
+ * cambio de no trabarse en los primeros 30 s. Una canción
+ * más corta que el colchón no se bloquea. Solo sobrescribe
+ * shouldStartPlayback; el resto del LoadControl es el de
+ * siempre (y respeta playWhenReady: pausar sigue pausando).
+ */
+private class ColdStartLoadControl(
+    builder: DefaultLoadControl.Builder,
+    private val gateState: () -> ColdGateState
+) : DefaultLoadControl(builder) {
+
+    override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
+        val state = gateState()
+        if (state.online && !state.started && state.slowNetwork) {
+            val bufferedMs = parameters.bufferedDurationUs / 1_000L
+            val durationMs = state.durationMs
+            val shortSongReady = durationMs in 1..9_500L &&
+                bufferedMs >= durationMs - 500L
+            if (bufferedMs < 9_000L && !shortSongReady) return false
+        }
+        return super.shouldStartPlayback(parameters)
+    }
+}
+
 private class ChunkedRangeDataSourceFactory(
     private val upstreamFactory: DataSource.Factory,
     private val urlRefresher: (DataSpec) -> DataSpec?
@@ -2288,13 +2418,18 @@ private class ChunkedRangeDataSource(
         servingOffset = 0
         val buffered = synchronized(this) { window.peekFirst() }
         if (buffered != null && buffered.start == position) {
+            var boundaryTimeout = false
             val fetch = try {
-                // Red de seguridad: ningún rango bloquea la
-                // entrega sin fin; al expirar, el mismo fallback
-                // secuencial con refresco de siempre.
-                buffered.future.get(30L, java.util.concurrent.TimeUnit.SECONDS)
+                // Gracia corta en la frontera: si el rango de
+                // cabecera no está listo en ~1,5 s al llegar a
+                // él, la vía secuencial toma el relevo en esta
+                // posición de inmediato, sin esperar al watchdog
+                // de 10 s. El desperdicio queda acotado a un
+                // rango (256 KB).
+                buffered.future.get(1_500L, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (e: java.util.concurrent.TimeoutException) {
                 buffered.future.cancel(true)
+                boundaryTimeout = true
                 null
             } catch (e: Exception) {
                 if (e is InterruptedException) {
@@ -2323,8 +2458,12 @@ private class ChunkedRangeDataSource(
             }
             // El rango paralelo falló o vino incompleto: fuera
             // la ventana y se abre secuencial con el refresco
-            // de siempre en la misma posición.
-            discardParallelWindow()
+            // de siempre en la misma posición. En la gracia de
+            // frontera (timeout) los rangos posteriores se
+            // conservan: siguen alineados tras el rango que
+            // abrirá la vía secuencial y se servirán por el
+            // camino buffered normal.
+            if (!boundaryTimeout) discardParallelWindow()
         } else if (buffered != null) {
             // Ventana desalineada: no se usa ningún rango suyo.
             discardParallelWindow()
