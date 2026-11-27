@@ -24,6 +24,7 @@ en GitHub salen de aquí.
 - **La canción en línea se carga completa** — el reproductor sigue cargando la canción hasta tenerla entera en vez de parar a mitad de camino, el indicador de conexión aparece a los pocos segundos de sonar y los finales con red floja ya no cortan con avisos de fallo.
 - **Calidad de streaming que se respeta y conexión a la vista** — con Calidad puesto, el stream busca 128 kbps y solo baja a 48 como último recurso o si la red flaquea un rato; cambiar la calidad en Ajustes vale desde la siguiente canción. El reproductor muestra además cómo va tu conexión (muy lenta, lenta, regular o buena) según la velocidad real de carga, y el aviso de espera ya no mueve el resto de la pantalla.
 - **Búsqueda en línea pulida** — el selector Locales/Online solo aparece en las pestañas que lo usan; mientras los resultados cargan se ven esqueletos animados a pantalla completa (nunca un «sin resultados» adelantado), y cuando de verdad no hay resultados, un estado vacío con su globo y la nota de región.
+- **Estado de espera acoplado** — el aviso de «Esperando conexión» ya no ocupa su propia fila: vive en el centro de la fila de tiempos, sin mover nada más de la pantalla.
 - **Selección múltiple pulida** — la barra de acciones queda centrada sobre el mini-reproductor sin apretar los textos, y cambiar de pestaña cancela la selección.
 
 ## v1.2.0 — 2026-11-24
