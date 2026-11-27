@@ -222,13 +222,57 @@ data class PodcastEpisode(
     }
 }
 
-/** Progreso guardado de un episodio. */
+/** Progreso guardado de un episodio. Guarda también los datos
+ *  del programa y del episodio para que «Sigue escuchando»
+ *  pueda pintar episodios de podcasts NO agregados como
+ *  «míos» sin tener que volver a pedir el feed. */
 data class PodcastProgress(
     val positionMs: Long = 0L,
     val listened: Boolean = false,
     /** Última vez que se escuchó (ordena «Sigue escuchando»). */
-    val updatedAtMs: Long = 0L
+    val updatedAtMs: Long = 0L,
+    val feedUrl: String = "",
+    val guid: String = "",
+    val showTitle: String = "",
+    val showAuthor: String = "",
+    val showImageUrl: String? = null,
+    val episodeTitle: String = "",
+    val episodeImageUrl: String? = null,
+    val audioUrl: String = "",
+    val durationMs: Long = 0L,
+    val audioBytes: Long = 0L,
+    val audioMimeType: String = "",
+    val publishedMs: Long = 0L
 )
+
+/** Playlist online guardada como referencia (grupo
+ *  «De YouTube» en Playlists). */
+data class SavedOnlinePlaylist(
+    val url: String,
+    val title: String,
+    val subtitle: String = "",
+    val thumbnailUrl: String? = null
+)
+
+/** Detalles de una descarga activa: tamaño total, cuánto va
+ *  y velocidad, para mostrarlos en Now Playing, Descargas y
+ *  la notificación. */
+data class ActiveDownload(
+    val key: String,
+    val title: String,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = 0L,
+    val speedBytesPerSec: Long = 0L
+) {
+    val percent: Int
+        get() = if (totalBytes > 0L) {
+            ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+        } else 0
+    val fraction: Float
+        get() = if (totalBytes > 0L) {
+            (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+        } else 0f
+}
 
 /** Episodio descargado en el teléfono. */
 data class PodcastDownload(
