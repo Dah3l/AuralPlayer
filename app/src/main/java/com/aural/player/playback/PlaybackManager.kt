@@ -121,6 +121,46 @@ class PlaybackManager(private val context: Context) {
      *  cuando la canción suena (READY). */
     private val onlineRetryAttempts = mutableMapOf<String, Int>()
 
+    /** Videos ya bajados a 48 por vía de tiempo en este
+     *  episodio (máximo una vez por canción en curso); el set
+     *  se limpia al cambiar de ítem. */
+    private val saverDowngradedVideoIds = mutableSetOf<String>()
+    private var saverEpisodeVideoId: String? = null
+
+    /** Videos que ya gastaron su único reintento dentro de la
+     *  ventana del final; se limpia cuando la canción suena. */
+    private val endRetryVideoIds = mutableSetOf<String>()
+
+    /** Bajada a 48 dentro de la misma canción, SOLO por vía
+     *  de tiempo: si el ahorro temporal está activo y la
+     *  pista sigue por encima de 48, se re-prepara el ítem
+     *  en su posición actual; la nueva resolución con
+     *  effectiveQuality=false elige 48. Sin markFailed: la
+     *  URL no falló. Nunca en el refresco a nivel byte. */
+    private fun maybeDowngradeToSaver(c: Player) {
+        val current = currentSongFor(c) ?: return
+        if (!current.isOnline) return
+        val videoId = current.onlineVideoId ?: return
+        if (saverEpisodeVideoId != videoId) {
+            saverDowngradedVideoIds.clear()
+            saverEpisodeVideoId = videoId
+        }
+        if (videoId in saverDowngradedVideoIds) return
+        if (!com.aural.player.youtube.YouTubeStreamResolver.isSaverForced()) return
+        val bitrate = com.aural.player.youtube.YouTubeStreamResolver
+            .streamBitrateKbps(videoId) ?: return
+        if (bitrate <= 48) return
+        val pos = c.currentPosition
+        if (pos <= 3_000L) return
+        val curIdx = c.currentMediaItemIndex
+        if (curIdx < 0) return
+        saverDowngradedVideoIds += videoId
+        c.seekTo(curIdx, pos)
+        c.prepare()
+        c.playWhenReady = true
+        publishState()
+    }
+
     private val _endlessDjActive = MutableStateFlow(false)
     /** Si la Sesión DJ infinita está activa (la lleva el servicio). */
     val endlessDjActive: StateFlow<Boolean> = _endlessDjActive.asStateFlow()
@@ -307,8 +347,14 @@ class PlaybackManager(private val context: Context) {
             if (playbackState == Player.STATE_READY) {
                 _state.value.currentSong?.onlineVideoId?.let { videoId ->
                     onlineRetryAttempts.remove(videoId)
+                    endRetryVideoIds.remove(videoId)
                     com.aural.player.youtube.YouTubeStreamResolver.clearFailed(videoId)
                 }
+            }
+            // Traba en curso: si el ahorro temporal está activo,
+            // bajar a 48 por vía de tiempo en esta misma canción.
+            if (playbackState == Player.STATE_BUFFERING) {
+                controller?.let { maybeDowngradeToSaver(it) }
             }
         }
 
@@ -320,26 +366,38 @@ class PlaybackManager(private val context: Context) {
             val c = controller ?: return
             val current = currentSongFor(c) ?: return
             if (!current.isOnline) return
-            // Error cerca del final: es el cierre de la
-            // canción, no un fallo. La posición puede quedar
-            // congelada donde se acabó el buffer (10–20 s
-            // antes del final), así que la ventana es amplia
-            // y también cuenta si casi todo el audio ya estaba
-            // en el teléfono. La duración del reproductor en
+            // Error cerca del final: ventana corta de ~5 s y
+            // gatillo SOLO por playhead (el de bufferedPosition
+            // saltaba canciones con el buffer lleno y el
+            // playhead atrás). La duración del reproductor en
             // online a veces no está disponible: la conocida
             // de los metadatos respalda el reconocimiento del
-            // final. Avanza sin modal ni mensaje.
+            // final. Aun dentro de la ventana se hace UN
+            // reintento conservando posición antes de avanzar.
             val durations = listOf(
                 c.duration,
                 current.durationMs,
                 _state.value.durationMs
             ).filter { it > 0L }
             val nearEnd = durations.any { endDuration ->
-                c.currentPosition >= endDuration - 15_000L ||
-                    (c.bufferedPosition > 0L &&
-                        c.bufferedPosition >= endDuration - 2_000L)
+                c.currentPosition >= endDuration - 5_000L
             }
             if (nearEnd) {
+                val endVideoId = current.onlineVideoId
+                if (endVideoId != null && endVideoId !in endRetryVideoIds) {
+                    endRetryVideoIds += endVideoId
+                    com.aural.player.youtube.YouTubeStreamResolver
+                        .markFailed(endVideoId)
+                    val retryIdx = c.currentMediaItemIndex
+                    val retryPos = c.currentPosition
+                    if (retryIdx >= 0) {
+                        c.seekTo(retryIdx, retryPos)
+                        c.prepare()
+                        c.playWhenReady = true
+                        publishState()
+                        return
+                    }
+                }
                 val endIdx = c.currentMediaItemIndex
                 val afterIdx = if (endIdx >= 0 && c.currentTimeline.windowCount > 0) {
                     c.currentTimeline.getNextWindowIndex(
@@ -994,6 +1052,7 @@ class PlaybackManager(private val context: Context) {
                         else _state.value.durationMs,
                         connectionLevel = connectionLevelFor(it, _state.value.currentSong)
                     )
+                    maybeDowngradeToSaver(it)
                 }
                 // Registro de escucha: 500 ms más para la canción actual.
                 try {
