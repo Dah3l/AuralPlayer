@@ -226,6 +226,37 @@ class PlaybackManager(private val context: Context) {
         }
     }
 
+    /**
+     * Cambia la fuente de la canción actual por otra versión
+     * del mismo Song (p. ej. el episodio recién descargado):
+     * reemplaza el MediaItem conservando posición y estado de
+     * reproducción, sin reiniciar la cola.
+     */
+    fun replaceCurrentSongSource(song: Song) {
+        scope.launch {
+            try {
+                val c = controller ?: return@launch
+                val index = c.currentMediaItemIndex
+                if (index < 0) return@launch
+                if (_state.value.currentSong?.id != song.id) return@launch
+                registerKnownSongs(listOf(song))
+                val position = c.currentPosition.coerceAtLeast(0L)
+                val wasPlaying = c.playWhenReady
+                c.replaceMediaItem(index, song.toMediaItem())
+                c.seekTo(index, position)
+                c.prepare()
+                c.playWhenReady = wasPlaying
+                publishState()
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "PlaybackManager",
+                    "Error cambiando la fuente actual: ${e.message}",
+                    e
+                )
+            }
+        }
+    }
+
     /** Reconstruye el MediaItem actual con los metadatos actualizados. */
     private fun refreshCurrentMediaItem() {
         // MediaController debe usarse en el hilo principal
