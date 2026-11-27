@@ -69,6 +69,8 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -880,9 +882,12 @@ fun NowPlayingScreen(
                         }
                     }
                 }
-                // Anterior
+                // Anterior (en podcast: −15 s)
                 IconButton(onClick = onPrevious) {
-                    Icon(Icons.Rounded.SkipPrevious, "Anterior",
+                    Icon(
+                        if (state.isPodcastEpisode) Icons.Rounded.FastRewind
+                        else Icons.Rounded.SkipPrevious,
+                        if (state.isPodcastEpisode) "Retroceder 15 segundos" else "Anterior",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(38.dp))
                 }
@@ -924,9 +929,12 @@ fun NowPlayingScreen(
                     }
                     }
                 }
-                // Siguiente
+                // Siguiente (en podcast: +30 s)
                 IconButton(onClick = onNext) {
-                    Icon(Icons.Rounded.SkipNext, "Siguiente",
+                    Icon(
+                        if (state.isPodcastEpisode) Icons.Rounded.FastForward
+                        else Icons.Rounded.SkipNext,
+                        if (state.isPodcastEpisode) "Adelantar 30 segundos" else "Siguiente",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(38.dp))
                 }
