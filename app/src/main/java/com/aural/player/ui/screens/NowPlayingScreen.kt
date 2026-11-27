@@ -794,9 +794,21 @@ fun NowPlayingScreen(
 
             // ---- Barra de progreso ----
             val duration = state.durationMs.coerceAtLeast(1L)
+            // Arrastre del slider: la posición se sigue en local
+            // y el seek se hace UNA sola vez al soltar. Buscar en
+            // cada tick reiniciaba el decodificador una y otra
+            // vez y el audio sonaba degradado medio segundo.
+            var scrubMs by remember(song?.id) {
+                mutableStateOf<Long?>(null)
+            }
             Slider(
-                value = state.positionMs.toFloat().coerceIn(0f, duration.toFloat()),
-                onValueChange = { onSeek(it.toLong()) },
+                value = (scrubMs ?: state.positionMs).toFloat()
+                    .coerceIn(0f, duration.toFloat()),
+                onValueChange = { scrubMs = it.toLong() },
+                onValueChangeFinished = {
+                    scrubMs?.let { onSeek(it) }
+                    scrubMs = null
+                },
                 valueRange = 0f..duration.toFloat(),
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
@@ -850,7 +862,7 @@ fun NowPlayingScreen(
             // online acoplado a esta misma fila (sin fila extra
             // ni cambio de altura: entra y sale con fade).
             Box(Modifier.fillMaxWidth()) {
-                Text(formatDuration(state.positionMs),
+                Text(formatDuration(scrubMs ?: state.positionMs),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.CenterStart))
