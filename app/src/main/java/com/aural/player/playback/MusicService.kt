@@ -325,6 +325,44 @@ class MusicService : MediaSessionService() {
             YouTubeStreamResolver.noteConnectionLoad(
                 videoId, loadEventInfo.bytesLoaded, loadEventInfo.loadDurationMs
             )
+            checkAbr(videoId)
+        }
+    }
+
+    // Regla ABR estilo YouTube: si el throughput sostenido cae
+    // por debajo de ~1,3× el bitrate vigente Y el colchón se
+    // está encogiendo, tras 3 chequeos bajos seguidos se marca
+    // la bajada a 48. Tendencia + salud del colchón, nunca un
+    // solo rango malo.
+    private var abrVideoId: String? = null
+    private var abrLastBufferedAheadMs: Long = -1L
+    private var abrLowChecks: Int = 0
+
+    private fun checkAbr(videoId: String) {
+        val player = mediaSession?.player ?: return
+        if (onlineVideoId(player.currentMediaItem) != videoId) return
+        val bufferedAhead = player.bufferedPosition - player.currentPosition
+        if (abrVideoId != videoId) {
+            abrVideoId = videoId
+            abrLowChecks = 0
+            abrLastBufferedAheadMs = bufferedAhead
+            return
+        }
+        val bitrate = YouTubeStreamResolver.streamBitrateKbps(videoId)
+        val kbps = YouTubeStreamResolver.connectionKbps(videoId)
+        val low = bitrate != null && bitrate > 48 &&
+            kbps != null && kbps < bitrate * 1.3 &&
+            bufferedAhead < abrLastBufferedAheadMs &&
+            bufferedAhead < 45_000L
+        abrLastBufferedAheadMs = bufferedAhead
+        if (low) {
+            abrLowChecks++
+            if (abrLowChecks >= 3) {
+                YouTubeStreamResolver.noteRebuffer()
+                abrLowChecks = 0
+            }
+        } else {
+            abrLowChecks = 0
         }
     }
 
@@ -1776,7 +1814,12 @@ private class ChunkedRangeDataSource(
         }
         chunkBytesRead = 0L
         refreshAttempts = 0
-        parallelWindow = BASE_PARALLEL_WINDOW
+        // Ventana caliente: si el medidor ya sabe que la red
+        // es lenta, la fase fría arranca con 5 rangos en vez
+        // de esperar al primer rango lento para crecer.
+        parallelWindow =
+            if (YouTubeStreamResolver.networkSlowHint()) MAX_PARALLEL_WINDOW
+            else BASE_PARALLEL_WINDOW
         nextFetchPosition = C.LENGTH_UNSET.toLong()
         connectionVideoId = videoIdFromKey(dataSpec.key)
         synchronized(connectionLock) {
@@ -1918,12 +1961,21 @@ private class ChunkedRangeDataSource(
         }
     }
 
+    /** Watchdog de rangos: nace junto al pool paralelo y se
+     *  apaga en closeCurrent. Cierra la fuente de un rango
+     *  que pasa ~10 s sin recibir bytes para que su future
+     *  falle y advanceChunk caiga a la vía secuencial. */
+    private var watchdog: java.util.concurrent.ScheduledExecutorService? = null
+
     private fun ensureParallelPool() {
         if (!chunked || progressive || parallelPool != null) return
         parallelPool = java.util.concurrent.Executors.newFixedThreadPool(
             MAX_PARALLEL_WINDOW
         ) { runnable ->
             Thread(runnable, "aural-range-parallel").apply { isDaemon = true }
+        }
+        watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "aural-range-watchdog").apply { isDaemon = true }
         }
     }
 
@@ -1995,8 +2047,23 @@ private class ChunkedRangeDataSource(
         val dataSource = upstreamFactory.createDataSource()
         listeners.forEach { dataSource.addTransferListener(it) }
         activeFetchSources.add(dataSource)
+        // Watchdog: ~10 s sin bytes cierra la fuente; el read()
+        // bloqueado lanza IOException y el future falla.
+        val lastByteNs = java.util.concurrent.atomic.AtomicLong(System.nanoTime())
+        val watch = watchdog?.scheduleAtFixedRate(
+            {
+                if (System.nanoTime() - lastByteNs.get() > 10_000_000_000L) {
+                    try {
+                        dataSource.close()
+                    } catch (_: Exception) {
+                    }
+                }
+            },
+            1L, 1L, java.util.concurrent.TimeUnit.SECONDS
+        )
         try {
             dataSource.open(chunkSpec)
+            lastByteNs.set(System.nanoTime())
             val output = java.io.ByteArrayOutputStream(expectedLength.toInt())
             val buffer = ByteArray(32 * 1024)
             var total = 0L
@@ -2010,6 +2077,7 @@ private class ChunkedRangeDataSource(
                 if (read > 0) {
                     output.write(buffer, 0, read)
                     total += read
+                    lastByteNs.set(System.nanoTime())
                     noteNetworkBytes(read)
                 }
             }
@@ -2022,6 +2090,7 @@ private class ChunkedRangeDataSource(
             onRangeFetched(fetch, gen, specGen)
             return fetch
         } finally {
+            watch?.cancel(false)
             activeFetchSources.remove(dataSource)
             try {
                 dataSource.close()
@@ -2077,7 +2146,13 @@ private class ChunkedRangeDataSource(
         val buffered = synchronized(this) { window.peekFirst() }
         if (buffered != null && buffered.start == position) {
             val fetch = try {
-                buffered.future.get()
+                // Red de seguridad: ningún rango bloquea la
+                // entrega sin fin; al expirar, el mismo fallback
+                // secuencial con refresco de siempre.
+                buffered.future.get(30L, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (e: java.util.concurrent.TimeoutException) {
+                buffered.future.cancel(true)
+                null
             } catch (e: Exception) {
                 if (e is InterruptedException) {
                     Thread.currentThread().interrupt()
@@ -2280,6 +2355,8 @@ private class ChunkedRangeDataSource(
         discardParallelWindow()
         parallelPool?.shutdownNow()
         parallelPool = null
+        watchdog?.shutdownNow()
+        watchdog = null
     }
 
     private companion object {
