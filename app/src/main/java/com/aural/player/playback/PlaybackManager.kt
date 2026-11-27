@@ -53,6 +53,10 @@ data class PlayerUiState(
      *  si aún no se resolvió o la pista es local: alimenta la
      *  pill de calidad junto a «En línea». */
     val streamBitrateKbps: Int? = null,
+    /** El stream vigente salió del ahorro temporal (ajuste en
+     *  Calidad forzado a un bitrate menor): la pill va
+     *  naranja; en cualquier otro caso, verde. */
+    val streamSaverForced: Boolean = false,
     /** Nivel de conexión del stream online actual, o null si
      *  aún no hay medición de esa pista o es local. */
     val connectionLevel: ConnectionLevel? = null,
@@ -130,6 +134,13 @@ class PlaybackManager(private val context: Context) {
     /** Videos que ya gastaron su único reintento dentro de la
      *  ventana del final; se limpia cuando la canción suena. */
     private val endRetryVideoIds = mutableSetOf<String>()
+
+    /** Canción online en curso para la libertad condicional
+     *  del ahorro temporal: si suena limpia de principio a
+     *  fin (sin rebuffer tras los 30 s), el ahorro se levanta
+     *  al terminar. */
+    private var cleanTrackVideoId: String? = null
+    private var cleanTrackLateRebuffer: Boolean = false
 
     /** Bajada a 48 dentro de la misma canción, SOLO por vía
      *  de tiempo: si el ahorro temporal está activo y la
@@ -354,7 +365,49 @@ class PlaybackManager(private val context: Context) {
             // Traba en curso: si el ahorro temporal está activo,
             // bajar a 48 por vía de tiempo en esta misma canción.
             if (playbackState == Player.STATE_BUFFERING) {
-                controller?.let { maybeDowngradeToSaver(it) }
+                controller?.let { c ->
+                    // Rebuffer con la canción establecida: esta
+                    // canción ya no cuenta como limpia para
+                    // levantar el ahorro al terminar.
+                    val current = currentSongFor(c)
+                    if (current?.isOnline == true &&
+                        c.currentPosition > 30_000L &&
+                        cleanTrackVideoId == current.onlineVideoId
+                    ) {
+                        cleanTrackLateRebuffer = true
+                    }
+                    maybeDowngradeToSaver(c)
+                }
+            }
+            // La cola terminó con la última canción limpia:
+            // el ahorro temporal se levanta.
+            if (playbackState == Player.STATE_ENDED) {
+                if (cleanTrackVideoId != null && !cleanTrackLateRebuffer) {
+                    com.aural.player.youtube.YouTubeStreamResolver
+                        .clearTemporarySaver()
+                }
+                cleanTrackVideoId = null
+                cleanTrackLateRebuffer = false
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Transición automática: la canción anterior sonó
+            // hasta el final. Si fue online y limpia (sin
+            // rebuffer tras los 30 s), el ahorro temporal se
+            // levanta antes de los 10 min.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                cleanTrackVideoId != null &&
+                !cleanTrackLateRebuffer
+            ) {
+                com.aural.player.youtube.YouTubeStreamResolver
+                    .clearTemporarySaver()
+            }
+            val newVideoId = mediaItem?.mediaId?.toLongOrNull()
+                ?.let { libraryById[it]?.onlineVideoId }
+            if (newVideoId != cleanTrackVideoId) {
+                cleanTrackVideoId = newVideoId
+                cleanTrackLateRebuffer = false
             }
         }
 
@@ -990,6 +1043,9 @@ class PlaybackManager(private val context: Context) {
             streamBitrateKbps = current?.onlineVideoId?.let { videoId ->
                 com.aural.player.youtube.YouTubeStreamResolver.streamBitrateKbps(videoId)
             } ?: current?.streamBitrateKbps,
+            streamSaverForced = current?.onlineVideoId?.let { videoId ->
+                com.aural.player.youtube.YouTubeStreamResolver.streamSaverForced(videoId)
+            } ?: false,
             connectionLevel = connectionLevelFor(c, current),
             isPodcastEpisode = current?.isPodcastEpisode == true,
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
