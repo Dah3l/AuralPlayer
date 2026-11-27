@@ -1463,7 +1463,19 @@ object YouTubeStreamResolver {
      *  cuentan: no miden la red. */
     fun noteConnectionLoad(videoId: String, bytesLoaded: Long, loadDurationMs: Long) {
         if (videoId.isBlank() || bytesLoaded < 32L * 1024L || loadDurationMs < 150L) return
-        val sampleKbps = bytesLoaded * 8.0 / loadDurationMs
+        noteConnectionSample(videoId, bytesLoaded, loadDurationMs)
+    }
+
+    /** Anota una ventana de lectura de red (~1 s o >=256 KB)
+     *  medida durante la reproducción: la pill aparece a los
+     *  pocos segundos sin esperar a que una carga complete. */
+    fun noteConnectionWindow(videoId: String, bytesLoaded: Long, windowMs: Long) {
+        if (videoId.isBlank() || bytesLoaded < 16L * 1024L || windowMs < 50L) return
+        noteConnectionSample(videoId, bytesLoaded, windowMs)
+    }
+
+    private fun noteConnectionSample(videoId: String, bytesLoaded: Long, durationMs: Long) {
+        val sampleKbps = bytesLoaded * 8.0 / durationMs
         synchronized(connectionLock) {
             val previous = connectionSamples[videoId]
             connectionSamples[videoId] =
