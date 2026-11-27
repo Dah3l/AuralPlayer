@@ -225,6 +225,7 @@ class MusicService : MediaSessionService() {
                     )
                     .setTargetBufferBytes(16 * 1024 * 1024)
                     .setPrioritizeTimeOverSizeThresholds(false)
+                    .build()
             ) {
                 ColdGateState(
                     online = coldGateOnline,
@@ -1852,9 +1853,9 @@ private data class ColdGateState(
  * siempre (y respeta playWhenReady: pausar sigue pausando).
  */
 private class ColdStartLoadControl(
-    builder: DefaultLoadControl.Builder,
+    private val delegate: DefaultLoadControl,
     private val gateState: () -> ColdGateState
-) : DefaultLoadControl(builder) {
+) : LoadControl by delegate {
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
         val state = gateState()
@@ -1865,7 +1866,7 @@ private class ColdStartLoadControl(
                 bufferedMs >= durationMs - 500L
             if (bufferedMs < 9_000L && !shortSongReady) return false
         }
-        return super.shouldStartPlayback(parameters)
+        return delegate.shouldStartPlayback(parameters)
     }
 }
 
