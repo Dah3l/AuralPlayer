@@ -25,7 +25,10 @@ import org.json.JSONObject
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "aural_prefs")
 
 /** Orden por defecto de las pestañas de la biblioteca (claves estables). */
-val defaultTabOrder = listOf("home", "songs", "artists", "albums", "playlists", "downloads", "folders")
+val defaultTabOrder = listOf(
+    "home", "songs", "artists", "albums", "playlists",
+    "radio", "podcasts", "downloads", "folders"
+)
 
 /** Etiqueta visible de cada clave de pestaña. */
 fun tabLabel(key: String): String = when (key) {
@@ -34,6 +37,8 @@ fun tabLabel(key: String): String = when (key) {
     "artists" -> "Artistas"
     "albums" -> "Álbumes"
     "playlists" -> "Playlists"
+    "radio" -> "Emisoras"
+    "podcasts" -> "Podcasts"
     "downloads" -> "Descargas"
     "folders" -> "Carpetas"
     else -> key
@@ -82,6 +87,9 @@ class SettingsStore(private val context: Context) {
         val KEY_STREAMING_DATA_NOTICE_SEEN = booleanPreferencesKey("streaming_data_notice_seen")
         val KEY_ONLINE_VPN_NOTICE_SEEN = booleanPreferencesKey("online_vpn_notice_seen")
         val KEY_ONLINE_SONGS = stringPreferencesKey("online_songs_json")
+        val KEY_RADIO_STATIONS = stringPreferencesKey("radio_stations_json")
+        val KEY_PODCAST_SHOWS = stringPreferencesKey("podcast_shows_json")
+        val KEY_PODCAST_PROGRESS = stringPreferencesKey("podcast_progress_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
         // v1.0.8: orden de pestañas de la biblioteca + aura de la isla.
@@ -900,6 +908,184 @@ class SettingsStore(private val context: Context) {
         return arr.toString()
     }
 
+    // ------------------------- Emisoras y Podcasts -------------------------
+
+    /** Emisoras guardadas por el usuario, en orden de agregado. */
+    val radioStations: Flow<List<RadioStation>> = context.dataStore.data.map { prefs ->
+        decodeRadioStations(prefs[KEY_RADIO_STATIONS])
+    }
+
+    suspend fun addRadioStation(station: RadioStation) {
+        context.dataStore.edit { prefs ->
+            val current = decodeRadioStations(prefs[KEY_RADIO_STATIONS])
+                .filter { it.id != station.id } + station
+            prefs[KEY_RADIO_STATIONS] = encodeRadioStations(current)
+        }
+    }
+
+    suspend fun removeRadioStation(stationId: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodeRadioStations(prefs[KEY_RADIO_STATIONS])
+                .filter { it.id != stationId }
+            prefs[KEY_RADIO_STATIONS] = encodeRadioStations(current)
+        }
+    }
+
+    private fun decodeRadioStations(json: String?): List<RadioStation> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val id = obj.optString("id")
+                    val url = obj.optString("streamUrl")
+                    if (id.isBlank() || url.isBlank()) continue
+                    add(
+                        RadioStation(
+                            id = id,
+                            name = obj.optString("name"),
+                            streamUrl = url,
+                            country = obj.optString("country"),
+                            genre = obj.optString("genre"),
+                            bitrateKbps = obj.optInt("bitrateKbps", 0),
+                            logoUrl = obj.optString("logoUrl").ifBlank { null }
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    private fun encodeRadioStations(stations: List<RadioStation>): String {
+        val arr = JSONArray()
+        stations.forEach { station ->
+            arr.put(JSONObject().apply {
+                put("id", station.id)
+                put("name", station.name)
+                put("streamUrl", station.streamUrl)
+                put("country", station.country)
+                put("genre", station.genre)
+                put("bitrateKbps", station.bitrateKbps)
+                station.logoUrl?.let { put("logoUrl", it) }
+            })
+        }
+        return arr.toString()
+    }
+
+    /** Podcasts guardados por el usuario, en orden de agregado. */
+    val podcastShows: Flow<List<PodcastShow>> = context.dataStore.data.map { prefs ->
+        decodePodcastShows(prefs[KEY_PODCAST_SHOWS])
+    }
+
+    suspend fun addPodcastShow(show: PodcastShow) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastShows(prefs[KEY_PODCAST_SHOWS])
+                .filter { it.feedUrl != show.feedUrl } + show
+            prefs[KEY_PODCAST_SHOWS] = encodePodcastShows(current)
+        }
+    }
+
+    suspend fun removePodcastShow(feedUrl: String) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastShows(prefs[KEY_PODCAST_SHOWS])
+                .filter { it.feedUrl != feedUrl }
+            prefs[KEY_PODCAST_SHOWS] = encodePodcastShows(current)
+            val progress = decodePodcastProgress(prefs[KEY_PODCAST_PROGRESS])
+                .filterKeys { !it.startsWith("$feedUrl|") }
+            prefs[KEY_PODCAST_PROGRESS] = encodePodcastProgress(progress)
+        }
+    }
+
+    private fun decodePodcastShows(json: String?): List<PodcastShow> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val feedUrl = obj.optString("feedUrl")
+                    if (feedUrl.isBlank()) continue
+                    add(
+                        PodcastShow(
+                            id = obj.optString("id").ifBlank { feedUrl },
+                            title = obj.optString("title"),
+                            feedUrl = feedUrl,
+                            imageUrl = obj.optString("imageUrl").ifBlank { null },
+                            author = obj.optString("author")
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    private fun encodePodcastShows(shows: List<PodcastShow>): String {
+        val arr = JSONArray()
+        shows.forEach { show ->
+            arr.put(JSONObject().apply {
+                put("id", show.id)
+                put("title", show.title)
+                put("feedUrl", show.feedUrl)
+                show.imageUrl?.let { put("imageUrl", it) }
+                put("author", show.author)
+            })
+        }
+        return arr.toString()
+    }
+
+    /** Progreso por episodio (feedUrl|guid -> progreso). */
+    val podcastProgress: Flow<Map<String, PodcastProgress>> =
+        context.dataStore.data.map { prefs ->
+            decodePodcastProgress(prefs[KEY_PODCAST_PROGRESS])
+        }
+
+    suspend fun setPodcastProgress(
+        feedUrl: String,
+        guid: String,
+        positionMs: Long,
+        listened: Boolean = false
+    ) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastProgress(prefs[KEY_PODCAST_PROGRESS]).toMutableMap()
+            current[PodcastEpisode.progressKey(feedUrl, guid)] =
+                PodcastProgress(positionMs.coerceAtLeast(0L), listened)
+            prefs[KEY_PODCAST_PROGRESS] = encodePodcastProgress(current)
+        }
+    }
+
+    private fun decodePodcastProgress(json: String?): Map<String, PodcastProgress> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = obj.optJSONObject(key) ?: continue
+                    put(
+                        key,
+                        PodcastProgress(
+                            positionMs = value.optLong("positionMs", 0L),
+                            listened = value.optBoolean("listened", false)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun encodePodcastProgress(progress: Map<String, PodcastProgress>): String {
+        val obj = JSONObject()
+        progress.forEach { (key, value) ->
+            obj.put(key, JSONObject().apply {
+                put("positionMs", value.positionMs)
+                put("listened", value.listened)
+            })
+        }
+        return obj.toString()
+    }
+
     /** BPM por canción (songId -> BPM real, sin plegar): lo analiza la
      *  app una sola vez en segundo plano. Solo entran las analizadas. */
     val bpmMap: Flow<Map<Long, Float>> = context.dataStore.data.map { prefs ->
@@ -980,7 +1166,26 @@ class SettingsStore(private val context: Context) {
             // "home" es la pestaña de inicio: si falta, va primera para todos.
             val valid = list.filter { it in defaultTabOrder }
             val withHome = if ("home" in valid) valid else listOf("home") + valid
-            (withHome + defaultTabOrder.filter { it !in withHome })
+            // Emisoras y Podcasts nacen tras Playlists también
+            // para órdenes guardados antes de que existieran.
+            val normalized = withHome.toMutableList()
+            for (key in listOf("radio", "podcasts")) {
+                if (key !in normalized) {
+                    val anchor = normalized.indexOf("playlists")
+                    val previous = if (key == "podcasts") {
+                        normalized.indexOf("radio")
+                    } else {
+                        -1
+                    }
+                    val insertAt = when {
+                        previous >= 0 -> previous + 1
+                        anchor >= 0 -> anchor + 1
+                        else -> normalized.size
+                    }
+                    normalized.add(insertAt, key)
+                }
+            }
+            (normalized + defaultTabOrder.filter { it !in normalized })
         } catch (e: Exception) {
             defaultTabOrder
         }
