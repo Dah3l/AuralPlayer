@@ -1,6 +1,6 @@
 // Cliente de podcasts: búsqueda en el directorio público de
-// iTunes (sin clave) y parser RSS de feeds. Solo lectura; sin
-// descargas en esta tanda.
+// iTunes (sin clave) y parser RSS de feeds. Solo lectura; las
+// descargas viven en PodcastDownloadManager.
 package com.aural.player.data
 
 import android.util.Xml
@@ -91,6 +91,8 @@ object PodcastClient {
         var publishedMs = 0L
         var durationMs = 0L
         var audioUrl = ""
+        var audioBytes = 0L
+        var audioMimeType = ""
         var imageUrl: String? = null
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT && episodes.size < limit) {
@@ -105,6 +107,8 @@ object PodcastClient {
                             publishedMs = 0L
                             durationMs = 0L
                             audioUrl = ""
+                            audioBytes = 0L
+                            audioMimeType = ""
                             imageUrl = null
                         }
                         inItem && name == "title" -> title = parser.nextText().trim()
@@ -120,6 +124,10 @@ object PodcastClient {
                                 (type.startsWith("audio") || audioUrl.isBlank())
                             ) {
                                 audioUrl = url
+                                audioBytes = parser
+                                    .getAttributeValue(null, "length")
+                                    ?.toLongOrNull() ?: 0L
+                                audioMimeType = type
                             }
                         }
                         inItem && name.endsWith("image") -> {
@@ -137,7 +145,9 @@ object PodcastClient {
                                 publishedMs = publishedMs,
                                 durationMs = durationMs,
                                 audioUrl = audioUrl,
-                                imageUrl = imageUrl
+                                imageUrl = imageUrl,
+                                audioBytes = audioBytes,
+                                audioMimeType = audioMimeType
                             )
                         }
                         inItem = false
