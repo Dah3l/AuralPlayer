@@ -74,7 +74,8 @@ object RadioBrowserClient {
                             ?.trim()
                             .orEmpty(),
                         bitrateKbps = obj.optInt("bitrate", 0),
-                        logoUrl = obj.optString("favicon").ifBlank { null }
+                        logoUrl = obj.optString("favicon").ifBlank { null },
+                        codec = obj.optString("codec").trim()
                     )
                 )
             }
