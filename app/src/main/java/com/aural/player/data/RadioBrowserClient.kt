@@ -15,6 +15,22 @@ object RadioBrowserClient {
     private const val BASE_URL = "https://de1.api.radio-browser.info/json/stations/search"
     private const val USER_AGENT = "AuralPlayer/1.3.0 (Android)"
 
+    /** Búsqueda de descubrimiento: nombre, género y país en
+     *  una sola lista sin duplicados, con Cuba primero. */
+    suspend fun search(query: String, limit: Int = 50): List<RadioStation> {
+        val term = query.trim()
+        if (term.isBlank()) return emptyList()
+        val merged = LinkedHashMap<String, RadioStation>()
+        searchByName(term, limit).forEach { merged[it.id] = it }
+        searchByTag(term, limit).forEach { merged.putIfAbsent(it.id, it) }
+        searchByCountry(term, limit).forEach { merged.putIfAbsent(it.id, it) }
+        return merged.values
+            .sortedWith(compareBy { station ->
+                if (station.country.equals("Cuba", ignoreCase = true)) 0 else 1
+            })
+            .take(limit)
+    }
+
     suspend fun searchByName(name: String, limit: Int = 50): List<RadioStation> =
         search(mapOf("name" to name), limit)
 
@@ -66,6 +82,60 @@ object RadioBrowserClient {
     } catch (e: Exception) {
         emptyList()
     }
+
+    /** «Sonando ahora» del stream (metadatos ICY), o null si
+     *  la emisora no los ofrece. Lectura acotada y con
+     *  timeouts: abre el stream, salta el primer bloque de
+     *  audio y lee el bloque de metadatos. */
+    suspend fun fetchNowPlaying(streamUrl: String): String? =
+        withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = URL(streamUrl).openConnection() as HttpURLConnection
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 15_000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                connection.setRequestProperty("Icy-MetaData", "1")
+                if (connection.responseCode !in 200..299) return@withContext null
+                val metaInt = connection.getHeaderField("icy-metaint")
+                    ?.toIntOrNull() ?: return@withContext null
+                if (metaInt <= 0 || metaInt > 1_000_000) return@withContext null
+                connection.inputStream.use { input ->
+                    var skipped = 0
+                    val buffer = ByteArray(8192)
+                    while (skipped < metaInt) {
+                        val read = input.read(
+                            buffer, 0, minOf(buffer.size, metaInt - skipped)
+                        )
+                        if (read < 0) return@withContext null
+                        skipped += read
+                    }
+                    val lengthByte = input.read()
+                    if (lengthByte <= 0) return@withContext null
+                    val metadata = ByteArray(lengthByte * 16)
+                    var offset = 0
+                    while (offset < metadata.size) {
+                        val read = input.read(metadata, offset, metadata.size - offset)
+                        if (read < 0) break
+                        offset += read
+                    }
+                    val text = String(metadata, 0, offset, Charsets.UTF_8)
+                    val marker = "StreamTitle='"
+                    val start = text.indexOf(marker)
+                    if (start < 0) return@withContext null
+                    val end = text.indexOf("';", start + marker.length)
+                    if (end < 0) return@withContext null
+                    text.substring(start + marker.length, end)
+                        .trim()
+                        .ifBlank { null }
+                }
+            } catch (e: Exception) {
+                null
+            } finally {
+                connection?.disconnect()
+            }
+        }
 
     private fun get(url: String): String? {
         var connection: HttpURLConnection? = null
