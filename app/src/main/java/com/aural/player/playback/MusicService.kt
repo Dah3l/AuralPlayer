@@ -201,7 +201,11 @@ class MusicService : MediaSessionService() {
                 .setBufferDurationsMs(
                     60_000,
                     900_000,
-                    4_000,
+                    // Arranque casi instantáneo: con la URL ya
+                    // pre-resuelta, 1.8 s de colchón bastan para
+                    // sonar; la carga completa sigue detrás y el
+                    // rebuffer conserva su colchón de 8 s.
+                    1_800,
                     8_000
                 )
                 .setTargetBufferBytes(16 * 1024 * 1024)
@@ -1060,16 +1064,30 @@ class MusicService : MediaSessionService() {
      */
     private fun setDjRate(player: Player, rate: Float) {
         val pitch = if (userSpeed > 0f) rate / userSpeed else 1f
-        player.setPlaybackParameters(
-            androidx.media3.common.PlaybackParameters(rate, pitch)
-        )
+        val target = androidx.media3.common.PlaybackParameters(rate, pitch)
+        if (!samePlaybackParameters(player.playbackParameters, target)) {
+            player.setPlaybackParameters(target)
+        }
     }
 
-    /** Deja la velocidad en la que el usuario tiene puesta. */
+    /** True si dos parámetros de reproducción son el mismo a
+     *  efectos prácticos: reaplicar los mismos reinicia el
+     *  procesado de audio y se oye un bajón de calidad de
+     *  medio segundo (p. ej. tras buscar con el slider). */
+    private fun samePlaybackParameters(
+        a: androidx.media3.common.PlaybackParameters,
+        b: androidx.media3.common.PlaybackParameters
+    ): Boolean = abs(a.speed - b.speed) < 0.001f &&
+        abs(a.pitch - b.pitch) < 0.001f
+
+    /** Deja la velocidad en la que el usuario tiene puesta,
+     *  solo si de verdad difiere: en el seek normal ya es la
+     *  suya y reaplicarla degradaba el audio medio segundo. */
     private fun resetSpeedToUser() {
         val main = mediaSession?.player ?: return
-        if (main.playbackParameters.speed != userSpeed) {
-            main.setPlaybackSpeed(userSpeed)
+        val target = androidx.media3.common.PlaybackParameters(userSpeed, 1f)
+        if (!samePlaybackParameters(main.playbackParameters, target)) {
+            main.setPlaybackParameters(target)
         }
     }
 
