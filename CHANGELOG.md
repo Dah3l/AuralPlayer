@@ -30,6 +30,9 @@ en GitHub salen de aquí.
 - **Emisoras y podcasts más completos** — en el reproductor, una emisora o un episodio muestran «En línea» y su calidad real; si una emisora existe en varias calidades, su ficha deja escoger la versión. «Sigue escuchando» abre la lista de episodios empezados con su progreso y lo que queda por escuchar, y los botones de podcast enseñan los segundos (−15 y +30).
 - **Descarga episodios y canciones en línea** — descarga un episodio desde su ficha o desde el menú del reproductor y escúchalo sin conexión; la canción en línea que suena también se puede descargar desde ese menú. El progreso se ve en el reproductor y en una notificación mientras baja.
 - **Todas las pestañas a la vista** — Descargas y Carpetas vuelven a mostrarse: el deslizador de pestañas ahora sigue el número real de pestañas en vez de quedarse en siete.
+- **Descargas ordenadas** — el botón de buscar en YouTube queda como icono junto al buscador y la pestaña se divide en Búsqueda y Completadas: lo terminado (canciones y podcasts) se agrupa de más reciente a más antigua con las mismas tarjetas de siempre. La notificación de descarga muestra el nombre y, en orden, tamaño total, descargado, porcentaje y velocidad, y al terminar pasa a completada sin quedarse en 100%.
+- **Streaming con la conexión reutilizada** — los pedazos del audio en línea comparten la misma conexión en vez de abrir una nueva por pedazo y Aural prepara más canciones de la cola por adelantado: se siente menos como si la conexión fuera lenta cuando no lo es.
+- **Finales y sugerencias que terminan** — una canción en línea que termina en pleno fundido cierra limpio y su final se reconoce también por la duración conocida, sin avisos de fallo; las sugerencias del lado Online cargan con tiempo límite y siempre salen del esqueleto, con contenido relacionado o con su estado guía.
 
 ## v1.2.0 — 2026-11-24
 
