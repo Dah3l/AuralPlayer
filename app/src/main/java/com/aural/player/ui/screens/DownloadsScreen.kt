@@ -178,7 +178,16 @@ fun DownloadsScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("¿Qué quieres escuchar hoy?") },
+                // Una sola línea siempre: con textos largos o la
+                // fuente del sistema enorme, el placeholder no
+                // debe pasar a dos filas ni agrandar la barra.
+                placeholder = {
+                    Text(
+                        "¿Qué quieres escuchar hoy?",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -195,7 +204,9 @@ fun DownloadsScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp)
             )
             Spacer(Modifier.width(8.dp))
             Button(
