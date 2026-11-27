@@ -21,7 +21,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.common.PlayerId
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
@@ -38,9 +37,7 @@ import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.LoadControl
-import androidx.media3.exoplayer.source.TrackGroupArray
-import androidx.media3.exoplayer.trackselection.ExoTrackSelection
-import androidx.media3.exoplayer.upstream.Allocator
+import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -209,18 +206,7 @@ class MusicService : MediaSessionService() {
             // medidor: red lenta reanuda con 28 s acumulados
             // para cortar las trabas en cadena; red regular
             // 15 s; red buena los 8 s de siempre.
-            AdaptiveLoadControl(
-                DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(
-                        60_000,
-                        900_000,
-                        1_800,
-                        8_000
-                    )
-                    .setTargetBufferBytes(16 * 1024 * 1024)
-                    .setPrioritizeTimeOverSizeThresholds(false)
-                    .build()
-            ) {
+            AdaptiveLoadControl {
                 val player = mediaSession?.player
                 val videoId = onlineVideoId(player?.currentMediaItem)
                 val kbps = videoId?.let {
@@ -2007,9 +1993,23 @@ private class ContinuousFlowDataSource(
  * cargar, topes de memoria) sigue en el delegado.
  */
 private class AdaptiveLoadControl(
-    private val delegate: DefaultLoadControl,
     private val rebufferCushionMs: () -> Long
-) : LoadControl {
+) : DefaultLoadControl(
+    DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE),
+    60_000,
+    60_000,
+    900_000,
+    900_000,
+    1_800,
+    1_800,
+    8_000,
+    8_000,
+    16 * 1024 * 1024,
+    false,
+    false,
+    0,
+    false
+) {
 
     @Volatile
     private var started = false
@@ -2019,30 +2019,6 @@ private class AdaptiveLoadControl(
     fun onNewItem() {
         started = false
     }
-
-    override fun onPrepared(playerId: PlayerId) =
-        delegate.onPrepared(playerId)
-
-    override fun onTracksSelected(
-        parameters: LoadControl.Parameters,
-        trackGroups: TrackGroupArray,
-        trackSelections: Array<ExoTrackSelection?>?
-    ) = delegate.onTracksSelected(parameters, trackGroups, trackSelections)
-
-    override fun onStopped(playerId: PlayerId) {
-        started = false
-        delegate.onStopped(playerId)
-    }
-
-    override fun onReleased(playerId: PlayerId) =
-        delegate.onReleased(playerId)
-
-    override fun getAllocator(playerId: PlayerId): Allocator =
-        delegate.getAllocator(playerId)
-
-    override fun shouldContinueLoading(
-        parameters: LoadControl.Parameters
-    ): Boolean = delegate.shouldContinueLoading(parameters)
 
     override fun shouldStartPlayback(
         parameters: LoadControl.Parameters
@@ -2054,12 +2030,6 @@ private class AdaptiveLoadControl(
         if (ok) started = true
         return ok
     }
-
-    override fun getBackBufferDurationUs(playerId: PlayerId): Long =
-        delegate.getBackBufferDurationUs(playerId)
-
-    override fun retainBackBufferFromKeyframe(playerId: PlayerId): Boolean =
-        delegate.retainBackBufferFromKeyframe(playerId)
 
     private companion object {
         const val START_CUSHION_MS = 1_800L
