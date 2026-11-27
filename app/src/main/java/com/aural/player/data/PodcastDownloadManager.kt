@@ -42,23 +42,55 @@ class PodcastDownloadManager(context: Context) {
     private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
 
+    /** Detalles por clave: bytes descargados, total y velocidad. */
+    private val _details = MutableStateFlow<Map<String, ActiveDownload>>(emptyMap())
+    val details: StateFlow<Map<String, ActiveDownload>> = _details.asStateFlow()
+
+    /** Conexiones activas por clave, para cortar al cancelar. */
+    private val activeConnections =
+        java.util.concurrent.ConcurrentHashMap<String, HttpURLConnection>()
+
+    /** Cancela una descarga en curso: el loop lo detecta, se
+     *  corta la conexión y el archivo parcial se limpia. */
+    fun cancel(key: String) {
+        if (key !in _downloadingKeys.value) return
+        _downloadingKeys.value = _downloadingKeys.value - key
+        _progress.value = _progress.value - key
+        _details.value = _details.value - key
+        activeConnections.remove(key)?.disconnect()
+        DownloadNotifications.cancel(
+            appContext, DownloadNotifications.idFor("podcast:$key")
+        )
+    }
+
     fun download(show: PodcastShow, episode: PodcastEpisode) {
         val key = PodcastEpisode.progressKey(show.feedUrl, episode.guid)
         if (key in _downloadingKeys.value) return
         _downloadingKeys.value = _downloadingKeys.value + key
         _progress.value = _progress.value + (key to 0f)
+        _details.value = _details.value + (key to ActiveDownload(
+            key = key,
+            title = episode.title,
+            totalBytes = episode.audioBytes
+        ))
         val notificationId = DownloadNotifications.idFor("podcast:$key")
-        DownloadNotifications.progress(appContext, notificationId, episode.title, 0)
+        DownloadNotifications.progress(
+            appContext, notificationId, episode.title, 0,
+            detailText(0L, episode.audioBytes), "podcast", key
+        )
         scope.launch {
             var lastPercent = -1
             try {
-                val download = downloadEpisode(show, episode, key) { pct ->
-                    _progress.value = _progress.value + (key to pct)
-                    val percent = (pct * 100).toInt()
-                    if (percent != lastPercent) {
-                        lastPercent = percent
+                val download = downloadEpisode(show, episode, key) { detail ->
+                    _progress.value = _progress.value + (key to detail.fraction)
+                    _details.value = _details.value + (key to detail)
+                    if (detail.percent != lastPercent) {
+                        lastPercent = detail.percent
                         DownloadNotifications.progress(
-                            appContext, notificationId, episode.title, percent
+                            appContext, notificationId, episode.title,
+                            detail.percent,
+                            detailText(detail.downloadedBytes, detail.totalBytes),
+                            "podcast", key
                         )
                     }
                 }
@@ -73,19 +105,41 @@ class PodcastDownloadManager(context: Context) {
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e(
-                    "PodcastDownloadManager",
-                    "Error descargando episodio: ${e.message}",
-                    e
-                )
-                DownloadNotifications.error(
-                    appContext, notificationId, episode.title
-                )
+                if (key !in _downloadingKeys.value) {
+                    // Cancelada por el usuario: sin aviso de error
+                    // y el parcial ya se limpió en downloadEpisode.
+                    DownloadNotifications.cancel(appContext, notificationId)
+                } else {
+                    android.util.Log.e(
+                        "PodcastDownloadManager",
+                        "Error descargando episodio: ${e.message}",
+                        e
+                    )
+                    DownloadNotifications.error(
+                        appContext, notificationId, episode.title
+                    )
+                }
             } finally {
+                activeConnections.remove(key)
                 _downloadingKeys.value = _downloadingKeys.value - key
                 _progress.value = _progress.value - key
+                _details.value = _details.value - key
             }
         }
+    }
+
+    private fun detailText(downloaded: Long, total: Long): String? {
+        if (total <= 0L) return null
+        return "${formatBytes(downloaded)} de ${formatBytes(total)} · " +
+            "${((downloaded * 100L) / total).toInt().coerceIn(0, 100)}%"
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L ->
+            String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
+        bytes >= 1024L ->
+            String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
     }
 
     /** Borra el archivo local de una descarga registrada. */
@@ -112,7 +166,7 @@ class PodcastDownloadManager(context: Context) {
         show: PodcastShow,
         episode: PodcastEpisode,
         key: String,
-        onProgress: (Float) -> Unit
+        onProgress: (ActiveDownload) -> Unit
     ): PodcastDownload? {
         val mimeType = mimeTypeFor(episode)
         val fileName = sanitize("${show.title} - ${episode.title}.${extensionFor(episode, mimeType)}")
@@ -155,8 +209,13 @@ class PodcastDownloadManager(context: Context) {
             val auralDir = File(podcastsDir, "Aural")
             auralDir.mkdirs()
             val destFile = File(auralDir, fileName)
-            destFile.outputStream().use { out ->
-                downloadWithProgress(episode, key, out, onProgress)
+            try {
+                destFile.outputStream().use { out ->
+                    downloadWithProgress(episode, key, out, onProgress)
+                }
+            } catch (e: Exception) {
+                runCatching { destFile.delete() }
+                throw e
             }
             var scannedUri: Uri? = null
             val latch = CountDownLatch(1)
@@ -183,9 +242,10 @@ class PodcastDownloadManager(context: Context) {
         episode: PodcastEpisode,
         key: String,
         out: OutputStream,
-        onProgress: (Float) -> Unit
+        onProgress: (ActiveDownload) -> Unit
     ) {
         val connection = URL(episode.audioUrl).openConnection() as HttpURLConnection
+        activeConnections[key] = connection
         connection.connectTimeout = 15_000
         connection.readTimeout = 30_000
         connection.instanceFollowRedirects = true
@@ -200,23 +260,50 @@ class PodcastDownloadManager(context: Context) {
         val total = connection.contentLengthLong.takeIf { it > 0L }
             ?: episode.audioBytes
         var downloaded = 0L
+        var windowStartMs = System.currentTimeMillis()
+        var windowBytes = 0L
+        var speed = 0L
         val buffer = ByteArray(65536)
-        connection.inputStream.use { input ->
-            while (true) {
-                if (key !in _downloadingKeys.value) {
-                    throw IOException("Descarga cancelada")
-                }
-                val read = input.read(buffer)
-                if (read == -1) break
-                out.write(buffer, 0, read)
-                downloaded += read
-                if (total > 0L) {
-                    onProgress((downloaded.toFloat() / total).coerceIn(0f, 1f))
+        try {
+            connection.inputStream.use { input ->
+                while (true) {
+                    if (key !in _downloadingKeys.value) {
+                        throw IOException("Descarga cancelada")
+                    }
+                    val read = input.read(buffer)
+                    if (read == -1) break
+                    out.write(buffer, 0, read)
+                    downloaded += read
+                    windowBytes += read
+                    val now = System.currentTimeMillis()
+                    if (now - windowStartMs >= 1_000L) {
+                        speed = windowBytes * 1000L / (now - windowStartMs)
+                        windowStartMs = now
+                        windowBytes = 0L
+                    }
+                    onProgress(
+                        ActiveDownload(
+                            key = key,
+                            title = episode.title,
+                            downloadedBytes = downloaded,
+                            totalBytes = total,
+                            speedBytesPerSec = speed
+                        )
+                    )
                 }
             }
+        } finally {
+            connection.disconnect()
         }
-        connection.disconnect()
-        onProgress(1f)
+        onProgress(
+            ActiveDownload(
+                key = key,
+                title = episode.title,
+                downloadedBytes = downloaded,
+                totalBytes = if (total > 0L) total else downloaded,
+                speedBytesPerSec = speed
+            )
+        )
     }
 
     private fun mimeTypeFor(episode: PodcastEpisode): String {
