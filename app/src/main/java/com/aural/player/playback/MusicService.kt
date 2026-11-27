@@ -178,8 +178,8 @@ class MusicService : MediaSessionService() {
      */
     /**
      * Buffer con tope de memoria por reproductor: el principal
-     * carga la canción online de forma continua hasta tenerla
-     * completa (ventana amplia de 900 s), acotado por bytes
+     * carga hasta ~180 s por delante (bajar 15 min especulativos
+     * tiraba datos al saltar canciones), acotado por bytes
      * (16 MB) para no disparar la RAM en teléfonos modestos;
      * el de fundido solo necesita el colchón de la siguiente
      * (máx 30 s, tope 4 MB).
@@ -200,11 +200,11 @@ class MusicService : MediaSessionService() {
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
                     60_000,
-                    900_000,
+                    180_000,
                     // Arranque casi instantáneo: con la URL ya
                     // pre-resuelta, 1.8 s de colchón bastan para
-                    // sonar; la carga completa sigue detrás y el
-                    // rebuffer conserva su colchón de 8 s.
+                    // sonar; la carga sigue detrás hasta ~180 s
+                    // y el rebuffer conserva su colchón de 8 s.
                     1_800,
                     8_000
                 )
@@ -251,7 +251,7 @@ class MusicService : MediaSessionService() {
         }
         // Misma petición HTTP que la descarga (headers de navegador)
         // y el mismo cliente OkHttp compartido del resolver, en
-        // HTTP/1.1: cada rango paralelo de 512 KB usa una
+        // HTTP/1.1: cada rango paralelo de 256 KB usa una
         // conexión real y las velocidades se suman con VPN.
         val httpFactory = OkHttpDataSource.Factory(
             YouTubeStreamResolver.sharedHttpClient
@@ -363,6 +363,26 @@ class MusicService : MediaSessionService() {
             }
         } else {
             abrLowChecks = 0
+        }
+    }
+
+    // Lo urgente manda: con el colchón del reproductor bajo
+    // se pausa lo especulativo (ventana paralela más allá del
+    // siguiente rango y precargas) hasta que recupere salud,
+    // con histéresis para no parpadear. Sin pista online, se
+    // reanuda.
+    private fun updateSpeculativePause() {
+        val player = mediaSession?.player
+        if (player == null || onlineVideoId(player.currentMediaItem) == null) {
+            YouTubeStreamResolver.setSpeculativePaused(false)
+            return
+        }
+        val bufferedAhead = player.bufferedPosition - player.currentPosition
+        when {
+            bufferedAhead < 15_000L ->
+                YouTubeStreamResolver.setSpeculativePaused(true)
+            bufferedAhead > 30_000L ->
+                YouTubeStreamResolver.setSpeculativePaused(false)
         }
     }
 
@@ -551,6 +571,7 @@ class MusicService : MediaSessionService() {
             while (true) {
                 delay(250)
                 try {
+                    updateSpeculativePause()
                     fadeWatchTick()
                 } catch (_: Exception) {
                     // La vigilancia nunca debe romper la reproducción
@@ -1709,7 +1730,7 @@ private class OnlineAwareDataSource(
 }
 
 /**
- * Lee googlevideo en rangos acotados de 512 KB fijos: las
+ * Lee googlevideo en rangos acotados de 256 KB fijos: las
  * peticiones abiertas largas reciben 403 a mitad de canción.
  * El rango actual suena en streaming para el arranque de
  * 1.8 s y los siguientes se bajan en paralelo hacia la
@@ -1740,6 +1761,7 @@ private class ChunkedRangeDataSource(
 
     private data class BufferedChunk(
         val start: Long,
+        val expectedLength: Long,
         val future: java.util.concurrent.Future<ChunkFetch>
     )
 
@@ -1781,6 +1803,16 @@ private class ChunkedRangeDataSource(
     /** Próxima posición a programar en la ventana. */
     private var nextFetchPosition = C.LENGTH_UNSET.toLong()
 
+    /** Paralelismo según el tipo de tope: al crecer la
+     *  ventana se guarda la línea base del throughput total
+     *  y tras 3 rangos se decide si el tope es agregado
+     *  (ventana a 2, sin volver a crecer en esta carga) o
+     *  por conexión (ventana a 5). Guardado con
+     *  synchronized(this). */
+    private var capBaselineKbps: Int? = null
+    private var capCheckRangesLeft: Int = 0
+    private var aggregateCapDecided: Boolean = false
+
     /** Medición de internet durante la lectura: bytes de red
      *  por ventana (~1 s o >=256 KB) para el indicador del
      *  Now Playing, sin esperar a que una carga «complete».
@@ -1820,6 +1852,9 @@ private class ChunkedRangeDataSource(
         parallelWindow =
             if (YouTubeStreamResolver.networkSlowHint()) MAX_PARALLEL_WINDOW
             else BASE_PARALLEL_WINDOW
+        capBaselineKbps = null
+        capCheckRangesLeft = 0
+        aggregateCapDecided = false
         nextFetchPosition = C.LENGTH_UNSET.toLong()
         connectionVideoId = videoIdFromKey(dataSpec.key)
         synchronized(connectionLock) {
@@ -1895,7 +1930,7 @@ private class ChunkedRangeDataSource(
     private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
         val base = spec ?: throw IOException("DataSource sin abrir")
         // En progresivo se pide abierto (bytes=posición-), como
-        // la descarga; en directo, rangos acotados de 512 KB
+        // la descarga; en directo, rangos acotados de 256 KB
         // exactos (rangos mayores se sirven un rato y luego se
         // rechazan en clientes sin token).
         val chunkLength = if (chunked && !progressive && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
@@ -1930,14 +1965,69 @@ private class ChunkedRangeDataSource(
             null
         } ?: return false
         refreshAttempts++
+        // La ventana sobrevive al refresco si el formato no
+        // cambia: con el mismo formato:bitrate los rangos ya
+        // bajados son los mismos bytes, venga la URL de donde
+        // venga; tirarlos era la fuga mayor de datos.
+        val sameFormat = !progressive &&
+            refreshed.key?.endsWith(":prog") != true &&
+            formatBitrateOf(base.key) != null &&
+            formatBitrateOf(base.key) == formatBitrateOf(refreshed.key)
         spec = refreshed
         specGeneration++
         connectionVideoId = videoIdFromKey(refreshed.key) ?: connectionVideoId
         progressive = refreshed.key?.endsWith(":prog") == true
         chunkSize = chunkSizeFor(remaining)
-        // Los rangos paralelos usan la URL vieja: fuera.
-        discardParallelWindow()
+        if (sameFormat) {
+            trimParallelWindowAfterRefresh()
+        } else {
+            // Otro formato: los bytes ya no coinciden.
+            discardParallelWindow()
+        }
         return true
+    }
+
+    /** Formato:bitrate de una clave de caché
+     *  (yt:video:modo:formato:bitrate:direct). */
+    private fun formatBitrateOf(key: String?): String? {
+        val parts = key?.split(":") ?: return null
+        return if (parts.size >= 5) parts[3] + ":" + parts[4] else null
+    }
+
+    /** Tras un refresco con el mismo formato: conserva el
+     *  prefijo contiguo de rangos completos y alineados de
+     *  la ventana y cancela solo los que están en vuelo (y
+     *  todo lo que sigue al primer hueco). Los rangos
+     *  futuros se piden con la URL nueva. */
+    private fun trimParallelWindowAfterRefresh() {
+        synchronized(this) {
+            var expected = position + (chunkSize - chunkBytesRead)
+            val kept = java.util.ArrayDeque<BufferedChunk>()
+            var keeping = true
+            for (chunk in window) {
+                val doneOk = keeping &&
+                    chunk.start == expected &&
+                    chunk.future.isDone &&
+                    !chunk.future.isCancelled &&
+                    runCatching { chunk.future.get() }.isSuccess
+                if (doneOk) {
+                    kept.addLast(chunk)
+                    expected += chunk.expectedLength
+                } else {
+                    keeping = false
+                    chunk.future.cancel(true)
+                }
+            }
+            window.clear()
+            window.addAll(kept)
+            nextFetchPosition =
+                if (endPosition != C.LENGTH_UNSET.toLong() && expected < endPosition) {
+                    expected
+                } else {
+                    C.LENGTH_UNSET.toLong()
+                }
+        }
+        closeActiveFetchSources()
     }
 
     private fun openChunkWithRefresh(
@@ -1980,20 +2070,28 @@ private class ChunkedRangeDataSource(
     }
 
     /** Tras abrir el rango actual, el siguiente rango a
-     *  programar es el que sigue a este. */
+     *  programar es el que sigue a este. Si la ventana
+     *  conservó rangos tras un refresco, sale del último
+     *  conservado para no re-pedirlos. */
     private fun resetNextFetchPosition() {
         nextFetchPosition = if (
             chunked && !progressive && endPosition != C.LENGTH_UNSET.toLong()
         ) {
-            val next = position + chunkSize
+            val lastKept = synchronized(this) { window.peekLast() }
+            val next = if (lastKept != null) {
+                lastKept.start + lastKept.expectedLength
+            } else {
+                position + chunkSize
+            }
             if (next < endPosition) next else C.LENGTH_UNSET.toLong()
         } else {
             C.LENGTH_UNSET.toLong()
         }
     }
 
-    /** Programa rangos futuros de 512 KB fijos hasta llenar
-     *  la ventana vigente. */
+    /** Programa rangos futuros de 256 KB fijos hasta llenar
+     *  la ventana vigente. Con el colchón bajo (lo urgente
+     *  manda) programa como máximo el siguiente rango. */
     private fun scheduleParallelRanges() {
         if (!chunked || progressive) return
         val baseSpec = spec ?: return
@@ -2003,9 +2101,15 @@ private class ChunkedRangeDataSource(
         val pool = parallelPool ?: return
         val gen = generation
         val specGen = specGeneration
+        val effectiveWindow =
+            if (YouTubeStreamResolver.speculativePaused()) {
+                minOf(parallelWindow, 1)
+            } else {
+                parallelWindow
+            }
         synchronized(this) {
             while (
-                window.size < parallelWindow &&
+                window.size < effectiveWindow &&
                 nextFetchPosition != C.LENGTH_UNSET.toLong() &&
                 nextFetchPosition < endPosition
             ) {
@@ -2024,12 +2128,12 @@ private class ChunkedRangeDataSource(
                     override fun call(): ChunkFetch =
                         fetchChunk(start, expected, gen, specGen, baseSpec)
                 })
-                window.addLast(BufferedChunk(start, future))
+                window.addLast(BufferedChunk(start, expected, future))
             }
         }
     }
 
-    /** Baja un rango completo de 512 KB a memoria. Un rango
+    /** Baja un rango completo de 256 KB a memoria. Un rango
      *  incompleto se trata como fallo: al avanzar, la vía
      *  secuencial con refresco abre esa posición. */
     private fun fetchChunk(
@@ -2099,16 +2203,55 @@ private class ChunkedRangeDataSource(
         }
     }
 
-    /** Si el rango vino lento (límite por conexión), la
-     *  ventana crece hasta 5 para sumar más conexiones. */
+    /** Si el rango vino lento, la ventana crece hasta 5
+     *  para sumar más conexiones. Al crecer se guarda la
+     *  línea base del throughput total: tras 3 rangos, si
+     *  el total no creció, el tope es agregado (caso VPN)
+     *  y la ventana baja a 2 sin volver a crecer en esta
+     *  carga; si creció, el tope es por conexión y la
+     *  ventana se queda en 5. Sin muestra del medidor no
+     *  se decide todavía. */
     private fun onRangeFetched(fetch: ChunkFetch, gen: Int, specGen: Int) {
         if (gen != generation || specGen != specGeneration) return
         val kbps = fetch.bytes.size.toLong() * 8L / fetch.durationMs
         synchronized(this) {
-            parallelWindow = when {
-                kbps < 150L -> MAX_PARALLEL_WINDOW
-                kbps < 400L -> minOf(MAX_PARALLEL_WINDOW, parallelWindow + 1)
-                else -> parallelWindow
+            if (!aggregateCapDecided) {
+                val previousWindow = parallelWindow
+                parallelWindow = when {
+                    kbps < 150L -> MAX_PARALLEL_WINDOW
+                    kbps < 400L -> minOf(MAX_PARALLEL_WINDOW, parallelWindow + 1)
+                    else -> parallelWindow
+                }
+                if (parallelWindow > previousWindow && capCheckRangesLeft == 0) {
+                    val base = connectionVideoId?.let {
+                        YouTubeStreamResolver.connectionKbps(it)
+                    }
+                    if (base != null) {
+                        capBaselineKbps = base
+                        capCheckRangesLeft = 3
+                    }
+                } else if (capCheckRangesLeft > 0) {
+                    capCheckRangesLeft--
+                    if (capCheckRangesLeft == 0) {
+                        val base = capBaselineKbps
+                        val now = connectionVideoId?.let {
+                            YouTubeStreamResolver.connectionKbps(it)
+                        }
+                        if (base != null && now != null) {
+                            if (now <= base * 1.15) {
+                                parallelWindow = 2
+                                aggregateCapDecided = true
+                            } else {
+                                parallelWindow = MAX_PARALLEL_WINDOW
+                            }
+                            capBaselineKbps = null
+                        } else {
+                            // Sin muestra: se decide en el
+                            // próximo rango.
+                            capCheckRangesLeft = 1
+                        }
+                    }
+                }
             }
         }
         scheduleParallelRanges()
@@ -2360,7 +2503,7 @@ private class ChunkedRangeDataSource(
     }
 
     private companion object {
-        const val CHUNK_BYTES = 512L * 1024L
+        const val CHUNK_BYTES = 256L * 1024L
         const val BASE_PARALLEL_WINDOW = 3
         const val MAX_PARALLEL_WINDOW = 5
     }
