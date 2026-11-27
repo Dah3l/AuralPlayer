@@ -8,9 +8,13 @@ package com.aural.player.playback
 import android.content.Context
 import android.media.AudioFormat
 import android.media.MediaCodec
+import android.media.MediaDataSource
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import androidx.media3.common.C
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import io.github.dlepaux.realtimebpmanalyzer.BpmAnalyzer
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -50,9 +54,32 @@ object BpmAnalysis {
      * Llamar desde Dispatchers.IO: decodifica de forma bloqueante.
      * Nunca tira excepciones: cualquier fallo es null.
      */
-    suspend fun analyzeBpm(context: Context, uri: Uri): Float? {
+    suspend fun analyzeBpm(context: Context, uri: Uri): Float? =
+        analyzeBpmInternal { extractor ->
+            extractor.setDataSource(context, uri, null)
+        }
+
+    /**
+     * BPM de una canción online leyendo a través de la caché
+     * de streaming compartida: [dataSourceFactory] crea la
+     * DataSource de la cadena de reproducción (resolución
+     * aural-online + caché de 256 MB + rangos), así los bytes
+     * analizados quedan guardados con las mismas claves y la
+     * reproducción los sirve de ahí. El análisis se convierte
+     * en precarga útil en vez de bajar bytes por su cuenta.
+     */
+    suspend fun analyzeBpmOnline(
+        videoId: String,
+        dataSourceFactory: () -> DataSource
+    ): Float? = analyzeBpmInternal { extractor ->
+        extractor.setDataSource(CacheMediaDataSource(videoId, dataSourceFactory))
+    }
+
+    private suspend fun analyzeBpmInternal(
+        setSource: (MediaExtractor) -> Unit
+    ): Float? {
         val decoded = withTimeoutOrNull(60_000) {
-            decodeMonoPcm(context, uri, SKIP_SECONDS + WINDOW_SECONDS)
+            decodeMonoPcm(SKIP_SECONDS + WINDOW_SECONDS, setSource)
         } ?: return null
         val (pcm, sampleRate) = decoded
         val skip = SKIP_SECONDS * sampleRate
@@ -78,10 +105,13 @@ object BpmAnalysis {
      * pudo decodificar. El búfer crece según lo decodificado (sin
      * listas de Float que exploten la RAM en una tostadora).
      */
-    private suspend fun decodeMonoPcm(context: Context, uri: Uri, maxSeconds: Int): Pair<FloatArray, Int>? {
+    private suspend fun decodeMonoPcm(
+        maxSeconds: Int,
+        setSource: (MediaExtractor) -> Unit
+    ): Pair<FloatArray, Int>? {
         val extractor = MediaExtractor()
         try {
-            extractor.setDataSource(context, uri, null)
+            setSource(extractor)
             var trackIndex = -1
             var mime: String? = null
             for (i in 0 until extractor.trackCount) {
@@ -384,5 +414,83 @@ object BpmAnalysis {
         "audio/3gpp" -> "3GP"
         "audio/aac" -> "AAC"
         else -> mime.substringAfter("/").uppercase()
+    }
+}
+
+/**
+ * Puente MediaExtractor ← DataSource de Media3: lee la URI
+ * interna aural-online://youtube/<videoId> por la cadena de
+ * streaming de la reproducción (resolución + caché de
+ * 256 MB + rangos), así cada byte analizado queda en la
+ * caché compartida con la misma clave que usa el reproductor.
+ * Las lecturas fuera de secuencia reabren en la posición
+ * pedida; la caché sirve lo ya bajado sin gastar datos.
+ */
+private class CacheMediaDataSource(
+    private val videoId: String,
+    private val dataSourceFactory: () -> DataSource
+) : MediaDataSource() {
+
+    private var dataSource: DataSource? = null
+    private var currentPosition: Long = -1L
+    private var totalSize: Long = -1L
+
+    @Synchronized
+    override fun readAt(
+        position: Long,
+        buffer: ByteArray,
+        offset: Int,
+        size: Int
+    ): Int {
+        if (size <= 0) return 0
+        val source = ensureOpenAt(position)
+        val read = source.read(buffer, offset, size)
+        if (read == C.RESULT_END_OF_INPUT) return -1
+        if (read > 0) currentPosition += read
+        return read
+    }
+
+    @Synchronized
+    override fun getSize(): Long {
+        if (totalSize < 0L) {
+            val source = ensureOpenAt(0L)
+            totalSize = lastOpenLength
+            if (totalSize == C.LENGTH_UNSET.toLong()) totalSize = -1L
+            // La apertura en 0 deja la fuente lista para leer
+            // desde el principio sin reabrir.
+            if (currentPosition != 0L) {
+                runCatching { source.close() }
+                dataSource = null
+                currentPosition = -1L
+            }
+        }
+        return totalSize
+    }
+
+    @Synchronized
+    override fun close() {
+        runCatching { dataSource?.close() }
+        dataSource = null
+        currentPosition = -1L
+    }
+
+    private var lastOpenLength: Long = C.LENGTH_UNSET.toLong()
+
+    private fun ensureOpenAt(position: Long): DataSource {
+        val existing = dataSource
+        if (existing != null && currentPosition == position) return existing
+        runCatching { existing?.close() }
+        val source = dataSourceFactory()
+        val spec = DataSpec.Builder()
+            .setUri(Uri.parse("aural-online://youtube/$videoId"))
+            .setPosition(position)
+            .build()
+        lastOpenLength = source.open(spec)
+        if (position == 0L && lastOpenLength != C.LENGTH_UNSET.toLong()) {
+            totalSize = lastOpenLength
+        }
+        dataSource = source
+        currentPosition = position
+        return source
     }
 }
