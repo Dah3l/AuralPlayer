@@ -734,21 +734,39 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
 
                 is Screen.OnlineCollection -> {
+                    // Detalle cacheado: volver a entrar no vuelve
+                    // a cargar ni muestra esqueleto.
+                    val cachedResults = remember(s.collection.url) {
+                        youTubeManager?.cachedCollectionSongs(s.collection)
+                    }
                     var results by remember(s.collection.url) {
-                        mutableStateOf<List<YTResult>>(emptyList())
+                        mutableStateOf<List<YTResult>>(cachedResults ?: emptyList())
                     }
                     var songs by remember(s.collection.url) {
-                        mutableStateOf<List<Song>>(emptyList())
+                        mutableStateOf<List<Song>>(
+                            cachedResults?.let {
+                                viewModel.peekOnlineSongs(it)
+                            } ?: emptyList()
+                        )
                     }
-                    var loading by remember(s.collection.url) { mutableStateOf(true) }
+                    var loading by remember(s.collection.url) {
+                        mutableStateOf(cachedResults == null)
+                    }
                     var menuTarget by remember(s.collection.url) {
                         mutableStateOf<YTResult?>(null)
                     }
                     LaunchedEffect(s.collection.url) {
+                        if (cachedResults != null) {
+                            if (songs.isEmpty()) {
+                                songs = viewModel.registerOnlineSongs(cachedResults)
+                            }
+                            loading = false
+                            return@LaunchedEffect
+                        }
                         loading = true
                         val fetched = youTubeManager?.fetchCollectionSongs(s.collection) ?: emptyList()
                         results = fetched
-                        songs = fetched.map { viewModel.registerOnlineSong(it) }
+                        songs = viewModel.registerOnlineSongs(fetched)
                         loading = false
                         if (fetched.isEmpty()) {
                             viewModel.playback.showMessage("No se pudo cargar")
@@ -791,12 +809,16 @@ private fun AuralApp(viewModel: AuralViewModel,
                         mutableStateOf<String?>(null)
                     }
                     var versions by remember(s.station.id) {
-                        mutableStateOf<List<RadioStation>>(emptyList())
+                        mutableStateOf<List<RadioStation>>(
+                            viewModel.cachedRadioStationVersions(s.station)
+                                ?: emptyList()
+                        )
                     }
                     LaunchedEffect(s.station.id) {
                         nowPlaying = viewModel.radioNowPlaying(s.station)
                     }
                     LaunchedEffect(s.station.id, s.station.name) {
+                        // Versiones cacheadas: volver no recarga.
                         versions = viewModel.radioStationVersions(s.station)
                     }
                     RadioStationDetailScreen(
@@ -825,11 +847,22 @@ private fun AuralApp(viewModel: AuralViewModel,
                     val downloadProgress by viewModel.podcastDownloadProgress
                         .collectAsStateWithLifecycle()
                     val saved = shows.any { it.feedUrl == s.show.feedUrl }
-                    var episodes by remember(s.show.feedUrl) {
-                        mutableStateOf<List<com.aural.player.data.PodcastEpisode>>(emptyList())
+                    val cachedEpisodes = remember(s.show.feedUrl) {
+                        viewModel.cachedPodcastEpisodes(s.show)
                     }
-                    var loading by remember(s.show.feedUrl) { mutableStateOf(true) }
+                    var episodes by remember(s.show.feedUrl) {
+                        mutableStateOf<List<com.aural.player.data.PodcastEpisode>>(
+                            cachedEpisodes ?: emptyList()
+                        )
+                    }
+                    var loading by remember(s.show.feedUrl) {
+                        mutableStateOf(cachedEpisodes == null)
+                    }
                     LaunchedEffect(s.show.feedUrl) {
+                        if (cachedEpisodes != null) {
+                            loading = false
+                            return@LaunchedEffect
+                        }
                         loading = true
                         episodes = viewModel.podcastEpisodes(s.show)
                         loading = false
@@ -862,13 +895,22 @@ private fun AuralApp(viewModel: AuralViewModel,
                 }
 
                 Screen.PodcastContinue -> {
+                    val cachedContinue = remember {
+                        viewModel.cachedContinueListening()
+                    }
                     var continueItems by remember {
                         mutableStateOf<List<com.aural.player.data.PodcastContinueItem>>(
-                            emptyList()
+                            cachedContinue ?: emptyList()
                         )
                     }
-                    var continueLoading by remember { mutableStateOf(true) }
+                    var continueLoading by remember {
+                        mutableStateOf(cachedContinue == null)
+                    }
                     LaunchedEffect(Unit) {
+                        if (cachedContinue != null) {
+                            continueLoading = false
+                            return@LaunchedEffect
+                        }
                         continueLoading = true
                         continueItems = viewModel.continueListeningEpisodes()
                         continueLoading = false
