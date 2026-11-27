@@ -307,10 +307,18 @@ class MusicService : MediaSessionService() {
             loadEventInfo: LoadEventInfo,
             mediaLoadData: MediaLoadData
         ) {
-            val parts = loadEventInfo.dataSpec.key?.split(":") ?: return
-            if (parts.size < 2 || parts[0] != "yt") return
+            // La carga viaja con la URI interna (la resolución
+            // ocurre dentro de open), así que el video sale de
+            // la URI; la clave de caché es el respaldo.
+            val uri = loadEventInfo.dataSpec.uri
+            val videoId = if (uri.scheme == "aural-online") {
+                uri.lastPathSegment
+            } else {
+                val parts = loadEventInfo.dataSpec.key?.split(":")
+                if (parts != null && parts.size >= 2 && parts[0] == "yt") parts[1] else null
+            } ?: return
             YouTubeStreamResolver.noteConnectionLoad(
-                parts[1], loadEventInfo.bytesLoaded, loadEventInfo.loadDurationMs
+                videoId, loadEventInfo.bytesLoaded, loadEventInfo.loadDurationMs
             )
         }
     }
@@ -784,7 +792,13 @@ class MusicService : MediaSessionService() {
     /** Vigilancia del final de la canción: prepara y dispara el fundido. */
     private fun fadeWatchTick() {
         val main = mediaSession?.player ?: return
-        if (!main.isPlaying || crossfadeActive) return
+        // Con playWhenReady basta: si la principal entra en
+        // BUFFERING justo al final, el fundido igual debe
+        // poder arrancar con el colchón de la siguiente.
+        if (!main.playWhenReady || crossfadeActive) return
+        if (main.playbackState == Player.STATE_IDLE ||
+            main.playbackState == Player.STATE_ENDED
+        ) return
         if (!crossfadeEnabledCache) return
         // Con parada programada no hay fundido: la canción termina y la
         // pausa la gestiona PlaybackManager como siempre.
@@ -1715,7 +1729,8 @@ private class ChunkedRangeDataSource(
             e is HttpDataSource.HttpDataSourceException
 
     /** Sustituye la URL de googlevideo por una fresca (StreamInfo
-     *  nuevo, sin la que falló). Máximo 2 refrescos por apertura. */
+     *  nuevo, sin la que falló). Máximo 2 refrescos por rango:
+     *  el presupuesto se reinicia tras cada avance exitoso. */
     private fun refreshSpec(): Boolean {
         if (!chunked || refreshAttempts >= 2) return false
         val base = spec ?: return false
@@ -1803,6 +1818,9 @@ private class ChunkedRangeDataSource(
         }
         chunkBytesRead = 0L
         chunkSize = chunkSizeFor(remaining)
+        // Rango nuevo abierto: el presupuesto de refresco
+        // vuelve a 2 para este rango.
+        refreshAttempts = 0
         maybePrefetchNext()
         return true
     }
