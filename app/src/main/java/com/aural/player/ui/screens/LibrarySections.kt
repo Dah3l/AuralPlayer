@@ -89,6 +89,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aural.player.AuralViewModel
 import com.aural.player.data.Playlist
+import com.aural.player.data.PodcastProgress
+import com.aural.player.data.PodcastShow
+import com.aural.player.data.RadioStation
 import com.aural.player.data.Song
 import com.aural.player.data.TopArtist
 import com.aural.player.data.WeekStats
@@ -1409,3 +1412,197 @@ internal fun PlaylistsTab(
     }
 }
 
+
+// --------------------------- Emisoras y Podcasts ---------------------------
+
+/** Estado guía de una colección vacía: texto + botón a buscar. */
+@Composable
+internal fun CollectionGuideEmptyState(text: String, onSearch: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onSearch) {
+            Text("Buscar")
+        }
+    }
+}
+
+/** Fila del molde Playlists: miniatura cuadrada, nombre,
+ *  subtítulo, ▶ y ⋮ con Quitar. */
+@Composable
+internal fun CollectionRow(
+    title: String,
+    subtitle: String,
+    coverUri: String?,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit,
+    showMenu: Boolean = true
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlay() }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CoverArt(uri = coverUri, size = 48.dp)
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onPlay) {
+            Icon(
+                Icons.Rounded.PlayArrow, "Reproducir",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        if (showMenu) Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Default.MoreVert, "Opciones")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Quitar") },
+                    onClick = {
+                        menuOpen = false
+                        onRemove()
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Vista general de Emisoras: solo las guardadas por el usuario. */
+@Composable
+internal fun RadioTab(
+    stations: List<RadioStation>,
+    onPlay: (RadioStation) -> Unit,
+    onRemove: (RadioStation) -> Unit,
+    onSearch: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    if (stations.isEmpty()) {
+        CollectionGuideEmptyState(
+            text = "Aquí van tus emisoras. Busca una y agrégala desde su resultado",
+            onSearch = onSearch
+        )
+        return
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        item {
+            Text(
+                text = "Tuyas",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
+        }
+        items(stations.distinctBy { it.id }, key = { it.id }) { station ->
+            CollectionRow(
+                title = station.name,
+                subtitle = listOf(station.country, station.genre)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+                    .ifBlank { "En vivo" },
+                coverUri = station.logoUrl,
+                onPlay = { onPlay(station) },
+                onRemove = { onRemove(station) }
+            )
+        }
+    }
+}
+
+/** Vista general de Podcasts: solo los guardados por el usuario. */
+@Composable
+internal fun PodcastsTab(
+    shows: List<PodcastShow>,
+    progress: Map<String, PodcastProgress>,
+    onPlay: (PodcastShow) -> Unit,
+    onRemove: (PodcastShow) -> Unit,
+    onSearch: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    if (shows.isEmpty()) {
+        CollectionGuideEmptyState(
+            text = "Aquí van tus podcasts. Busca uno y agrégalo desde su ficha",
+            onSearch = onSearch
+        )
+        return
+    }
+    val inProgressCount = progress.values.count { !it.listened && it.positionMs > 0L }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        if (inProgressCount > 0) {
+            item {
+                CollectionRow(
+                    title = "Sigue escuchando",
+                    subtitle = "$inProgressCount ${if (inProgressCount == 1) "episodio" else "episodios"} a medias",
+                    coverUri = null,
+                    onPlay = {
+                        val inProgressShow = shows.firstOrNull { show ->
+                            progress.any { (key, value) ->
+                                key.startsWith(show.feedUrl + "|") &&
+                                    !value.listened && value.positionMs > 0L
+                            }
+                        }
+                        inProgressShow?.let(onPlay)
+                    },
+                    onRemove = {},
+                    showMenu = false
+                )
+            }
+        }
+        item {
+            Text(
+                text = "Tuyos",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
+        }
+        items(shows.distinctBy { it.feedUrl }, key = { it.feedUrl }) { show ->
+            CollectionRow(
+                title = show.title,
+                subtitle = show.author.ifBlank { "Podcast" },
+                coverUri = show.imageUrl,
+                onPlay = { onPlay(show) },
+                onRemove = { onRemove(show) }
+            )
+        }
+    }
+}
