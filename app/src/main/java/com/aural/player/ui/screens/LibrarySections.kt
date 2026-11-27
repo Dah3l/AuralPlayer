@@ -398,6 +398,91 @@ private fun shimmerBrush(): Brush {
     )
 }
 
+/** Estado de las sugerencias Online sin texto. */
+internal data class OnlineSuggestionsUiState(
+    val suggestions: com.aural.player.youtube.OnlineSearchResults?,
+    val loading: Boolean,
+    val songsUi: List<Song>
+)
+
+/**
+ * Sugerencias Online desde la escucha del usuario. Vive en
+ * LibrarySections para que LibraryScreen siga cabiendo en
+ * la subida por conector. La carga siempre termina: con
+ * semillas vivas, techo de tiempo y salida del esqueleto
+ * también si el efecto se cancela.
+ */
+@Composable
+internal fun rememberOnlineSuggestions(
+    viewModel: AuralViewModel,
+    youTubeManager: YouTubeManager?,
+    searchOnline: Boolean,
+    query: String,
+    tabKey: String?,
+    topArtists: List<TopArtist>,
+    recentSongs: List<Song>,
+    favorites: Set<Long>,
+    librarySongs: List<Song>
+): OnlineSuggestionsUiState {
+    var suggestions by remember {
+        mutableStateOf<com.aural.player.youtube.OnlineSearchResults?>(null)
+    }
+    var loading by remember { mutableStateOf(false) }
+    var loadedSeedKey by remember { mutableStateOf<String?>(null) }
+    var songsUi by remember { mutableStateOf<List<Song>>(emptyList()) }
+    LaunchedEffect(suggestions?.songs) {
+        songsUi = suggestions?.songs
+            ?.map { viewModel.registerOnlineSong(it) } ?: emptyList()
+    }
+    val seeds = remember(topArtists, recentSongs, favorites, librarySongs) {
+        (
+            topArtists.map { it.name } +
+                recentSongs.map { it.artist } +
+                viewModel.favoriteSongs().map { it.artist }
+            ).map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+    }
+    LaunchedEffect(searchOnline, query, tabKey, seeds) {
+        if (!searchOnline || query.isNotBlank()) return@LaunchedEffect
+        if (tabKey !in setOf("songs", "artists", "albums", "playlists")) {
+            return@LaunchedEffect
+        }
+        if (!viewModel.hasInternet()) {
+            loading = false
+            return@LaunchedEffect
+        }
+        val seedKey = seeds.joinToString("|")
+        if (suggestions != null && loadedSeedKey == seedKey) {
+            return@LaunchedEffect
+        }
+        if (seeds.isEmpty()) {
+            suggestions = com.aural.player.youtube.OnlineSearchResults()
+            loadedSeedKey = seedKey
+            loading = false
+            return@LaunchedEffect
+        }
+        loading = true
+        try {
+            val loaded = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
+                youTubeManager?.searchSuggestions(seeds)
+            } ?: com.aural.player.youtube.OnlineSearchResults()
+            suggestions = loaded
+            if (loaded.songs.isNotEmpty() ||
+                loaded.albums.isNotEmpty() ||
+                loaded.playlists.isNotEmpty() ||
+                loaded.artists.isNotEmpty()
+            ) {
+                loadedSeedKey = seedKey
+            }
+        } finally {
+            loading = false
+        }
+    }
+    return OnlineSuggestionsUiState(suggestions, loading, songsUi)
+}
+
 /**
  * Artistas online con el mismo diseño de la pestaña local:
  * cuadrícula de tarjetas con portada, nombre y subtítulo.
