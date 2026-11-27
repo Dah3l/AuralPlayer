@@ -1715,6 +1715,17 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.toggleFavorite(songId) }
     }
 
+    /** Favorito de una canción online: se registra primero
+     *  (id negativo estable) y entra en Favoritas igual que
+     *  una local; favoriteSongs() la resuelve desde el
+     *  registro online y suena desde ahí. */
+    fun toggleFavoriteOnline(result: YTResult) {
+        viewModelScope.launch {
+            val song = registerOnlineSong(result)
+            settings.toggleFavorite(song.id)
+        }
+    }
+
     /**
      * Sesión DJ infinita: toda la biblioteca mezclada en una cola que no
      * se acaba nunca — el servicio la reordena sola por tempo a medida que
