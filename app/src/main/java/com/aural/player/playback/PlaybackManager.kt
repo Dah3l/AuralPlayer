@@ -56,6 +56,9 @@ data class PlayerUiState(
     /** Nivel de conexión del stream online actual, o null si
      *  aún no hay medición de esa pista o es local. */
     val connectionLevel: ConnectionLevel? = null,
+    /** La pista actual es un episodio de podcast: anterior y
+     *  siguiente se convierten en −15 s/+30 s. */
+    val isPodcastEpisode: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val queue: List<Song> = emptyList(),
@@ -280,17 +283,24 @@ class PlaybackManager(private val context: Context) {
 
         override fun onPlayerError(error: PlaybackException) {
             // Motor simple: ante un error online —también si ni
-            // empieza— un solo reintento con StreamInfo fresco
-            // excluyendo la URL fallida, conservando la
+            // empieza— hasta dos reintentos con StreamInfo
+            // fresco excluyendo la URL fallida, conservando la
             // posición. Si aun así falla, aviso corto y salto.
             val c = controller ?: return
             val current = _state.value.currentSong ?: return
             if (!current.isOnline) return
-            // Error en los últimos 5 s: es el final de la
-            // canción, no un fallo. Avanza a la siguiente sin
-            // modal ni mensaje, como una transición normal.
+            // Error cerca del final: es el cierre de la
+            // canción, no un fallo. La posición puede quedar
+            // congelada donde se acabó el buffer (10–20 s
+            // antes del final), así que la ventana es amplia
+            // y también cuenta si casi todo el audio ya estaba
+            // en el teléfono. Avanza sin modal ni mensaje.
             val endDuration = c.duration
-            if (endDuration > 0L && c.currentPosition >= endDuration - 5_000L) {
+            val nearEnd = endDuration > 0L &&
+                (c.currentPosition >= endDuration - 15_000L ||
+                    (c.bufferedPosition > 0L &&
+                        c.bufferedPosition >= endDuration - 2_000L))
+            if (nearEnd) {
                 val endIdx = c.currentMediaItemIndex
                 val afterIdx = if (endIdx >= 0 && c.currentTimeline.windowCount > 0) {
                     c.currentTimeline.getNextWindowIndex(
@@ -308,7 +318,7 @@ class PlaybackManager(private val context: Context) {
             val videoId = current.onlineVideoId
             if (videoId != null) {
                 val attempts = (onlineRetryAttempts[videoId] ?: 0) + 1
-                if (attempts <= 1) {
+                if (attempts <= 2) {
                     onlineRetryAttempts[videoId] = attempts
                     com.aural.player.youtube.YouTubeStreamResolver.markFailed(videoId)
                     val curIdx = c.currentMediaItemIndex
@@ -571,8 +581,20 @@ class PlaybackManager(private val context: Context) {
         publishState()
     }
 
+    private fun currentSongFor(c: Player): Song? =
+        c.currentMediaItem?.mediaId?.toLongOrNull()?.let { libraryById[it] }
+            ?: _state.value.currentSong
+
     fun seekToNext() {
         val c = controller ?: return
+        // Podcast: siguiente adelanta 30 s dentro del episodio.
+        if (currentSongFor(c)?.isPodcastEpisode == true) {
+            val duration = c.duration
+            val target = c.currentPosition + 30_000L
+            c.seekTo(if (duration > 0L) minOf(target, duration) else target)
+            publishState()
+            return
+        }
         // Con fundido, el salto lo hace el servicio (segundo reproductor
         // y cruce de volúmenes); si no se pudo, salto normal.
         if (crossfadeEnabledCache) {
@@ -588,6 +610,12 @@ class PlaybackManager(private val context: Context) {
 
     fun seekToPrevious() {
         val c = controller ?: return
+        // Podcast: anterior retrocede 15 s dentro del episodio.
+        if (currentSongFor(c)?.isPodcastEpisode == true) {
+            c.seekTo(maxOf(0L, c.currentPosition - 15_000L))
+            publishState()
+            return
+        }
         // Convención habitual: si lleva más de 3 s, volver al inicio
         if (c.currentPosition > 3_000) {
             c.seekTo(0L)
@@ -866,6 +894,7 @@ class PlaybackManager(private val context: Context) {
                 com.aural.player.youtube.YouTubeStreamResolver.streamBitrateKbps(videoId)
             },
             connectionLevel = connectionLevelFor(c, current),
+            isPodcastEpisode = current?.isPodcastEpisode == true,
             durationMs = if (current != null) current.durationMs.coerceAtLeast(c.duration.coerceAtLeast(0)) else 0L,
             queue = items,
             currentIndex = curIdx,
