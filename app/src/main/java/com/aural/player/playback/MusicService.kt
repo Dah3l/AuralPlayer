@@ -1691,10 +1691,25 @@ private class ChunkedRangeDataSource(
 
     private data class OpenChunk(val dataSource: DataSource, val length: Long)
 
+    /** Rango bajado en paralelo: bytes completos y si el
+     *  servidor cerró ahí (fin real del archivo). */
+    private data class ChunkFetch(val bytes: ByteArray, val eof: Boolean)
+
+    private data class BufferedChunk(
+        val start: Long,
+        val future: java.util.concurrent.Future<ChunkFetch?>
+    )
+
     private val listeners = mutableListOf<TransferListener>()
-    private val prefetchExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "aural-range-prefetch").apply { isDaemon = true }
-    }
+
+    /** Pool de rangos paralelos: 3 hilos bajan los rangos
+     *  siguientes mientras el reproductor consume el actual.
+     *  Con VPN googlevideo limita por conexión: una sola
+     *  conexión secuencial se arrastra aunque el enlace dé
+     *  4 Mbps; varias conexiones en paralelo suman velocidad
+     *  y la reproducción se siente como sin VPN. Se crea en
+     *  open() y se apaga en close() (una instancia por carga). */
+    private var prefetchPool: java.util.concurrent.ExecutorService? = null
 
     private var spec: DataSpec? = null
     private var chunked = false
@@ -1706,14 +1721,27 @@ private class ChunkedRangeDataSource(
     private var remaining = C.LENGTH_UNSET.toLong()
     private var chunkBytesRead = 0L
     private var chunkSize = CHUNK_BYTES
+    /** Tamaño de rango adaptativo: crece si el throughput
+     *  real responde y se reduce si los rangos salen lentos
+     *  o cortados. Base y mínimo 512 KB (rangos exactos que
+     *  googlevideo sirve sin rechazar), máximo 2 MB. */
+    private var adaptiveChunkBytes = CHUNK_BYTES
     private var current: DataSource? = null
-    private var next: OpenChunk? = null
-    private var prefetching = false
+    /** Ventana de rangos en paralelo ya programados, en
+     *  orden de posición. Guardada con synchronized(this). */
+    private val window = ArrayDeque<BufferedChunk>()
+    /** Rango en memoria que se está sirviendo ahora. */
+    private var servingBuffer: ByteArray? = null
+    private var servingOffset = 0
+    /** Próxima posición a programar en la ventana paralela. */
+    private var nextFetchPosition = 0L
     private var generation = 0
     private var refreshAttempts = 0
     /** Medición de internet durante la lectura: bytes de red
      *  por ventana (~1 s o >=256 KB) para el indicador del
-     *  Now Playing, sin esperar a que una carga «complete». */
+     *  Now Playing, sin esperar a que una carga «complete».
+     *  Se anota desde los hilos paralelos: candado propio. */
+    private val connectionLock = Any()
     private var connectionVideoId: String? = null
     private var connectionWindowBytes = 0L
     private var connectionWindowStartNs = 0L
@@ -1721,7 +1749,6 @@ private class ChunkedRangeDataSource(
     override fun addTransferListener(transferListener: TransferListener) {
         listeners += transferListener
         current?.addTransferListener(transferListener)
-        next?.dataSource?.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
@@ -1734,26 +1761,44 @@ private class ChunkedRangeDataSource(
         remaining = dataSpec.length
         chunkBytesRead = 0L
         refreshAttempts = 0
+        adaptiveChunkBytes = CHUNK_BYTES
+        servingBuffer = null
+        servingOffset = 0
         connectionVideoId = videoIdFromKey(dataSpec.key)
-        connectionWindowBytes = 0L
-        connectionWindowStartNs = 0L
+        synchronized(connectionLock) {
+            connectionWindowBytes = 0L
+            connectionWindowStartNs = 0L
+        }
+        if (chunked && !progressive) ensurePool()
+        // El primer rango se abre en streaming (arranque sin
+        // esperar a bajarlo entero); los siguientes se bajan
+        // en paralelo por delante del playhead.
         val opened = openChunkWithRefresh(position, remaining)
         current = opened.dataSource
         if (remaining == C.LENGTH_UNSET.toLong() && opened.length != C.LENGTH_UNSET.toLong()) {
             remaining = opened.length
         }
         chunkSize = chunkSizeFor(remaining)
-        maybePrefetchNext()
+        nextFetchPosition = position + chunkSize
+        schedulePrefetch()
         return if (remaining != C.LENGTH_UNSET.toLong()) remaining else opened.length
+    }
+
+    private fun ensurePool(): java.util.concurrent.ExecutorService {
+        val existing = prefetchPool
+        if (existing != null && !existing.isShutdown) return existing
+        return java.util.concurrent.Executors.newFixedThreadPool(PARALLEL_THREADS) { runnable ->
+            Thread(runnable, "aural-range-parallel").apply { isDaemon = true }
+        }.also { prefetchPool = it }
     }
 
     private fun chunkSizeFor(remainingAtChunk: Long): Long =
         if (progressive) {
             Long.MAX_VALUE
         } else if (chunked && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
-            minOf(CHUNK_BYTES, remainingAtChunk)
+            minOf(adaptiveChunkBytes, remainingAtChunk)
         } else {
-            CHUNK_BYTES
+            adaptiveChunkBytes
         }
 
     private fun videoIdFromKey(key: String?): String? {
@@ -1765,42 +1810,47 @@ private class ChunkedRangeDataSource(
      *  medidor cuando llega a ~1 s o a 256 KB. */
     private fun noteNetworkBytes(read: Int) {
         if (!chunked || read <= 0) return
-        val videoId = connectionVideoId ?: return
-        val now = System.nanoTime()
-        if (connectionWindowStartNs == 0L) connectionWindowStartNs = now
-        connectionWindowBytes += read
-        val elapsedMs = (now - connectionWindowStartNs) / 1_000_000L
-        if (connectionWindowBytes >= 256L * 1024L || elapsedMs >= 1_000L) {
-            YouTubeStreamResolver.noteConnectionWindow(
-                videoId,
-                connectionWindowBytes,
-                elapsedMs.coerceAtLeast(50L)
-            )
-            connectionWindowBytes = 0L
-            connectionWindowStartNs = now
+        synchronized(connectionLock) {
+            val videoId = connectionVideoId ?: return
+            val now = System.nanoTime()
+            if (connectionWindowStartNs == 0L) connectionWindowStartNs = now
+            connectionWindowBytes += read
+            val elapsedMs = (now - connectionWindowStartNs) / 1_000_000L
+            if (connectionWindowBytes >= 256L * 1024L || elapsedMs >= 1_000L) {
+                YouTubeStreamResolver.noteConnectionWindow(
+                    videoId,
+                    connectionWindowBytes,
+                    elapsedMs.coerceAtLeast(50L)
+                )
+                connectionWindowBytes = 0L
+                connectionWindowStartNs = now
+            }
         }
     }
 
     private fun flushConnectionWindow() {
-        val videoId = connectionVideoId ?: return
-        if (connectionWindowBytes < 16L * 1024L || connectionWindowStartNs == 0L) return
-        val elapsedMs = ((System.nanoTime() - connectionWindowStartNs) / 1_000_000L)
-            .coerceAtLeast(50L)
-        YouTubeStreamResolver.noteConnectionWindow(
-            videoId, connectionWindowBytes, elapsedMs
-        )
-        connectionWindowBytes = 0L
-        connectionWindowStartNs = 0L
+        synchronized(connectionLock) {
+            val videoId = connectionVideoId ?: return
+            if (connectionWindowBytes < 16L * 1024L || connectionWindowStartNs == 0L) return
+            val elapsedMs = ((System.nanoTime() - connectionWindowStartNs) / 1_000_000L)
+                .coerceAtLeast(50L)
+            YouTubeStreamResolver.noteConnectionWindow(
+                videoId, connectionWindowBytes, elapsedMs
+            )
+            connectionWindowBytes = 0L
+            connectionWindowStartNs = 0L
+        }
     }
 
     private fun openChunkAt(chunkPosition: Long, remainingAtChunk: Long): OpenChunk {
         val base = spec ?: throw IOException("DataSource sin abrir")
         // En progresivo se pide abierto (bytes=posición-), como
-        // la descarga; en directo, rangos acotados de 512 KB
-        // exactos (rangos mayores se sirven un rato y luego se
-        // rechazan en clientes sin token).
+        // la descarga; en directo, rangos acotados adaptativos
+        // (512 KB base: rangos mayores se sirven un rato y
+        // luego se rechazan en clientes sin token; el tamaño
+        // solo crece cuando el throughput real lo sostiene).
         val chunkLength = if (chunked && !progressive && remainingAtChunk != C.LENGTH_UNSET.toLong()) {
-            minOf(CHUNK_BYTES, remainingAtChunk)
+            minOf(adaptiveChunkBytes, remainingAtChunk)
         } else {
             remainingAtChunk
         }
@@ -1835,11 +1885,8 @@ private class ChunkedRangeDataSource(
         connectionVideoId = videoIdFromKey(refreshed.key) ?: connectionVideoId
         progressive = refreshed.key?.endsWith(":prog") == true
         chunkSize = chunkSizeFor(remaining)
-        // El rango preabierto usa la URL vieja: fuera.
-        synchronized(this) {
-            next?.dataSource?.close()
-            next = null
-        }
+        // La ventana paralela usa la URL vieja: fuera.
+        clearWindow()
         return true
     }
 
@@ -1864,48 +1911,167 @@ private class ChunkedRangeDataSource(
         }
     }
 
-    private fun maybePrefetchNext() {
-        if (!chunked || progressive || prefetching || next != null) return
-        if (remaining == C.LENGTH_UNSET.toLong()) return
-        val chunkLeft = chunkSize - chunkBytesRead
-        if (chunkLeft <= 0L || chunkLeft > PREFETCH_THRESHOLD_BYTES) return
-        val remainingAtNext = remaining - chunkLeft
-        if (remainingAtNext <= 0L) return
-        val nextPosition = position + chunkLeft
-        val gen = generation
-        prefetching = true
-        prefetchExecutor.execute {
-            try {
-                val opened = openChunkAt(nextPosition, remainingAtNext)
-                synchronized(this) {
-                    if (gen == generation && next == null) {
-                        next = opened
-                    } else {
-                        opened.dataSource.close()
-                    }
-                    prefetching = false
+    /** Programa rangos en paralelo hasta llenar la ventana
+     *  (PARALLEL_WINDOW rangos por delante del playhead). El
+     *  relleno se detiene solo al llegar al fin conocido. */
+    private fun schedulePrefetch() {
+        if (!chunked || progressive) return
+        val base = spec ?: return
+        val pool = ensurePool()
+        synchronized(this) {
+            while (window.size < PARALLEL_WINDOW) {
+                val remainingAtNext = if (remaining == C.LENGTH_UNSET.toLong()) {
+                    C.LENGTH_UNSET.toLong()
+                } else {
+                    remaining - (nextFetchPosition - position)
                 }
-            } catch (_: IOException) {
-                synchronized(this) { prefetching = false }
+                if (remainingAtNext != C.LENGTH_UNSET.toLong() && remainingAtNext <= 0L) break
+                val size = if (remainingAtNext == C.LENGTH_UNSET.toLong()) {
+                    adaptiveChunkBytes
+                } else {
+                    minOf(adaptiveChunkBytes, remainingAtNext)
+                }
+                if (size <= 0L) break
+                val start = nextFetchPosition
+                nextFetchPosition += size
+                val gen = generation
+                val future = pool.submit(
+                    java.util.concurrent.Callable<ChunkFetch?> {
+                        fetchChunkBytes(base, start, size, remainingAtNext, gen)
+                    }
+                )
+                window.addLast(BufferedChunk(start, future))
             }
         }
     }
 
-    /** Avanza al siguiente rango. Devuelve false SOLO al fin
-     *  real del archivo (o 416 pasado el último byte); un fallo
-     *  de red/403 se lanza como error para que el reproductor
-     *  reintente la misma canción en vez de darla por terminada
-     *  y saltar a la siguiente. */
+    /** Baja un rango completo en su propia conexión. Devuelve
+     *  null ante fallo/corte (el avance cae al camino
+     *  secuencial con refresco) y marca eof solo en el fin
+     *  real del archivo. Ajusta el tamaño adaptativo según
+     *  el throughput medido de este rango. */
+    private fun fetchChunkBytes(
+        base: DataSpec,
+        start: Long,
+        size: Long,
+        remainingAtStart: Long,
+        gen: Int
+    ): ChunkFetch? {
+        val dataSource = upstreamFactory.createDataSource()
+        listeners.forEach { dataSource.addTransferListener(it) }
+        val startedNs = System.nanoTime()
+        return try {
+            val chunkSpec = base.buildUpon()
+                .setPosition(start)
+                .setLength(size)
+                .build()
+            dataSource.open(chunkSpec)
+            val buffer = ByteArray(size.toInt())
+            var total = 0
+            var ended = false
+            while (total < buffer.size) {
+                val read = dataSource.read(buffer, total, buffer.size - total)
+                if (read == C.RESULT_END_OF_INPUT) {
+                    ended = true
+                    break
+                }
+                if (read > 0) {
+                    total += read
+                    noteNetworkBytes(read)
+                }
+            }
+            val elapsedMs = ((System.nanoTime() - startedNs) / 1_000_000L)
+                .coerceAtLeast(1L)
+            if (gen == generation) adaptChunkSize(total.toLong(), elapsedMs)
+            when {
+                !ended -> ChunkFetch(buffer, eof = false)
+                total == 0 -> ChunkFetch(ByteArray(0), eof = true)
+                remainingAtStart == C.LENGTH_UNSET.toLong() ||
+                    size >= remainingAtStart ->
+                    ChunkFetch(buffer.copyOf(total), eof = true)
+                else -> null // corte sin error HTTP con audio por leer
+            }
+        } catch (e: HttpDataSource.InvalidResponseCodeException) {
+            if (e.responseCode == 416) ChunkFetch(ByteArray(0), eof = true) else null
+        } catch (_: IOException) {
+            null
+        } finally {
+            try {
+                dataSource.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Throughput real del rango: si responde rápido el rango
+     *  crece (menos peticiones); si sale lento se reduce al
+     *  mínimo seguro. Con VPN el límite por conexión mantiene
+     *  el tamaño en 512 KB y el paralelismo suma velocidad. */
+    private fun adaptChunkSize(bytes: Long, elapsedMs: Long) {
+        if (bytes <= 0L) return
+        val bitsPerSecond = bytes * 8_000L / elapsedMs
+        synchronized(this) {
+            adaptiveChunkBytes = when {
+                bitsPerSecond > 2_000_000L ->
+                    minOf(adaptiveChunkBytes * 2, MAX_CHUNK_BYTES)
+                bitsPerSecond < 500_000L ->
+                    maxOf(adaptiveChunkBytes / 2, CHUNK_BYTES)
+                else -> adaptiveChunkBytes
+            }
+        }
+    }
+
+    private fun clearWindow() {
+        synchronized(this) {
+            window.forEach { it.future.cancel(true) }
+            window.clear()
+        }
+    }
+
+    /** Avanza al siguiente rango: primero el bajado en
+     *  paralelo; si la ventana está vacía o ese rango falló,
+     *  camino secuencial con refresco en la misma posición.
+     *  Devuelve false SOLO al fin real del archivo (o 416
+     *  pasado el último byte); un fallo de red/403 se lanza
+     *  como error para que el reproductor reintente la misma
+     *  canción en vez de darla por terminada y saltar. */
     private fun advanceChunk(): Boolean {
         if (remaining != C.LENGTH_UNSET.toLong() && remaining <= 0L) return false
         current?.close()
         current = null
-        val prepared = synchronized(this) {
-            val value = next
-            next = null
-            value
+        servingBuffer = null
+        servingOffset = 0
+        val buffered = synchronized(this) {
+            if (window.isEmpty()) null else window.removeFirst()
         }
-        val opened = prepared ?: try {
+        if (buffered != null) {
+            val fetched = try {
+                buffered.future.get()
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                null
+            } catch (_: Exception) {
+                null
+            }
+            if (fetched != null) {
+                if (fetched.bytes.isEmpty() && fetched.eof) return false
+                if (fetched.bytes.isNotEmpty()) {
+                    servingBuffer = fetched.bytes
+                    servingOffset = 0
+                    chunkBytesRead = 0L
+                    chunkSize = fetched.bytes.size.toLong()
+                    // Rango nuevo listo: el presupuesto de
+                    // refresco vuelve a 2 para este rango.
+                    refreshAttempts = 0
+                    schedulePrefetch()
+                    return true
+                }
+            }
+            // Rango paralelo fallido: fuera la ventana (puede
+            // venir de la misma URL mala) y camino secuencial.
+            clearWindow()
+        }
+        val opened = try {
             openChunkWithRefresh(position, remaining)
         } catch (e: HttpDataSource.InvalidResponseCodeException) {
             if (e.responseCode == 416) return false
@@ -1920,7 +2086,8 @@ private class ChunkedRangeDataSource(
         // Rango nuevo abierto: el presupuesto de refresco
         // vuelve a 2 para este rango.
         refreshAttempts = 0
-        maybePrefetchNext()
+        nextFetchPosition = position + chunkSize
+        schedulePrefetch()
         return true
     }
 
@@ -1934,6 +2101,8 @@ private class ChunkedRangeDataSource(
         }
         current?.close()
         current = null
+        servingBuffer = null
+        servingOffset = 0
         val opened = try {
             openChunkWithRefresh(position, remaining)
         } catch (e: HttpDataSource.InvalidResponseCodeException) {
@@ -1946,15 +2115,16 @@ private class ChunkedRangeDataSource(
         }
         chunkBytesRead = 0L
         chunkSize = chunkSizeFor(remaining)
-        maybePrefetchNext()
+        nextFetchPosition = position + chunkSize
+        schedulePrefetch()
         return true
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
-        val active = current ?: return C.RESULT_END_OF_INPUT
         if (!chunked) {
+            val active = current ?: return C.RESULT_END_OF_INPUT
             val read = active.read(buffer, offset, length)
             if (read > 0) {
                 position += read
@@ -1963,6 +2133,7 @@ private class ChunkedRangeDataSource(
             return read
         }
         if (progressive) {
+            val active = current ?: return C.RESULT_END_OF_INPUT
             val read = try {
                 active.read(buffer, offset, length)
             } catch (e: IOException) {
@@ -1993,7 +2164,22 @@ private class ChunkedRangeDataSource(
             if (!advanceChunk()) return C.RESULT_END_OF_INPUT
             return read(buffer, offset, length)
         }
-        maybePrefetchNext()
+        val serving = servingBuffer
+        if (serving != null) {
+            val available = serving.size - servingOffset
+            if (available <= 0) {
+                if (!advanceChunk()) return C.RESULT_END_OF_INPUT
+                return read(buffer, offset, length)
+            }
+            val toCopy = minOf(length, available)
+            System.arraycopy(serving, servingOffset, buffer, offset, toCopy)
+            servingOffset += toCopy
+            position += toCopy
+            chunkBytesRead += toCopy
+            if (remaining != C.LENGTH_UNSET.toLong()) remaining -= toCopy
+            return toCopy
+        }
+        val active = current ?: return C.RESULT_END_OF_INPUT
         val chunkLeft = (chunkSize - chunkBytesRead).toInt()
         val read = try {
             active.read(buffer, offset, minOf(length, chunkLeft))
@@ -2023,33 +2209,33 @@ private class ChunkedRangeDataSource(
             chunkBytesRead += read
             if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
             noteNetworkBytes(read)
-            maybePrefetchNext()
         }
         return read
     }
 
-    override fun getUri(): android.net.Uri? = current?.uri
+    override fun getUri(): android.net.Uri? = current?.uri ?: spec?.uri
 
     override fun close() {
         flushConnectionWindow()
         generation++
         closeCurrent()
         spec = null
-        prefetchExecutor.shutdownNow()
+        prefetchPool?.shutdownNow()
+        prefetchPool = null
     }
 
     private fun closeCurrent() {
         current?.close()
         current = null
-        synchronized(this) {
-            next?.dataSource?.close()
-            next = null
-            prefetching = false
-        }
+        servingBuffer = null
+        servingOffset = 0
+        clearWindow()
     }
 
     private companion object {
         const val CHUNK_BYTES = 512L * 1024L
-        const val PREFETCH_THRESHOLD_BYTES = 256L * 1024L
+        const val MAX_CHUNK_BYTES = 2L * 1024L * 1024L
+        const val PARALLEL_THREADS = 3
+        const val PARALLEL_WINDOW = 3
     }
 }
