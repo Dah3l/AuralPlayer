@@ -1254,6 +1254,14 @@ internal fun OnlineSongMenuSheet(
 ) {
     val scope = rememberCoroutineScope()
     val appContext = LocalContext.current
+    // Favorito online: el id estable se resuelve al abrir el
+    // menú para pintar Agregar/Quitar según el estado real.
+    var onlineSongId by remember(result.videoId) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(result.videoId) {
+        onlineSongId = viewModel.registerOnlineSong(result).id
+    }
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val isFavorite = onlineSongId?.let { favorites.contains(it) } == true
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
@@ -1264,6 +1272,18 @@ internal fun OnlineSongMenuSheet(
             modifier = Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 4.dp),
             maxLines = 1
         )
+        TextButton(
+            onClick = {
+                onDismiss()
+                viewModel.toggleFavoriteOnline(result)
+            },
+            modifier = Modifier.align(Alignment.Start).padding(start = 12.dp)
+        ) {
+            Text(
+                if (isFavorite) "Quitar de Favoritas"
+                else "Agregar a Favoritas"
+            )
+        }
         TextButton(
             onClick = {
                 onDismiss()
@@ -2984,6 +3004,37 @@ internal fun PodcastDetailScreen(
     }
 }
 
+/** Pill de filtro por programa en «Sigue escuchando»:
+ *  mismo lenguaje que el selector Locales/Online. */
+@Composable
+private fun PodcastShowFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        Modifier
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 /** Detalle de «Sigue escuchando»: todos los episodios
  *  empezados, del más reciente al más viejo. */
 @Composable
@@ -2994,6 +3045,19 @@ internal fun PodcastContinueScreen(
     onPlayEpisode: (PodcastShow, PodcastEpisode) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState
 ) {
+    // Filtro por programa: Todos o un podcast concreto.
+    var selectedFeedUrl by remember { mutableStateOf<String?>(null) }
+    val shows = remember(items) {
+        items.map { it.show }.distinctBy { it.feedUrl }
+            .sortedBy { it.title.lowercase() }
+    }
+    val effectiveFeedUrl = selectedFeedUrl
+        ?.takeIf { url -> shows.any { it.feedUrl == url } }
+    val visibleItems = if (effectiveFeedUrl == null) {
+        items
+    } else {
+        items.filter { it.show.feedUrl == effectiveFeedUrl }
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier
@@ -3018,6 +3082,31 @@ internal fun PodcastContinueScreen(
                 )
             }
         }
+        if (shows.size > 1) {
+            item {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        PodcastShowFilterChip(
+                            label = "Todos",
+                            selected = effectiveFeedUrl == null,
+                            onClick = { selectedFeedUrl = null }
+                        )
+                    }
+                    items(shows, key = { it.feedUrl }) { show ->
+                        PodcastShowFilterChip(
+                            label = show.title,
+                            selected = effectiveFeedUrl == show.feedUrl,
+                            onClick = { selectedFeedUrl = show.feedUrl }
+                        )
+                    }
+                }
+            }
+        }
         if (loading && items.isEmpty()) {
             item {
                 Box(
@@ -3031,7 +3120,7 @@ internal fun PodcastContinueScreen(
                     )
                 }
             }
-        } else if (items.isEmpty()) {
+        } else if (visibleItems.isEmpty()) {
             item {
                 Text(
                     text = "No tienes episodios a medias",
@@ -3042,7 +3131,7 @@ internal fun PodcastContinueScreen(
             }
         }
         items(
-            items.distinctBy {
+            visibleItems.distinctBy {
                 PodcastEpisode.progressKey(it.show.feedUrl, it.episode.guid)
             },
             key = {
