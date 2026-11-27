@@ -1728,7 +1728,7 @@ object YouTubeStreamResolver {
     /** Cliente HTTP compartido del streaming: sondas del
      *  resolver y Media3 (OkHttpDataSource) comparten pool.
      *  HTTP/1.1 con pool y dispatcher amplios para que cada
-     *  rango paralelo de 512 KB use una conexión real: con
+     *  rango paralelo de 256 KB use una conexión real: con
      *  HTTP/2 todo se multiplexa en una sola conexión y el
      *  límite por conexión de googlevideo con VPN frena la
      *  canción aunque el enlace dé de sobra. */
@@ -1862,8 +1862,24 @@ object YouTubeStreamResolver {
     fun isSaverForced(): Boolean =
         System.currentTimeMillis() < temporarySaverUntilMs
 
+    /** Lo urgente manda: con el colchón del reproductor bajo,
+     *  MusicService pausa lo especulativo (precargas y ventana
+     *  paralela más allá del siguiente rango) hasta que el
+     *  colchón recupere salud. La resolución normal al
+     *  reproducir nunca se pausa. */
+    @Volatile
+    private var speculativePausedFlag: Boolean = false
+
+    fun speculativePaused(): Boolean = speculativePausedFlag
+
+    fun setSpeculativePaused(paused: Boolean) {
+        speculativePausedFlag = paused
+    }
+
     fun prefetch(videoId: String, preferQuality: Boolean) {
-        if (videoId.isBlank()) return
+        // Con el colchón bajo, la precarga se descarta: la
+        // conexión es para la canción que suena.
+        if (videoId.isBlank() || speculativePausedFlag) return
         prefetchExecutor.execute {
             try {
                 resolveStream(videoId, preferQuality)
