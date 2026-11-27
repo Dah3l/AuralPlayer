@@ -275,6 +275,15 @@ fun LibraryScreen(
     val podcastSearchResults by viewModel.podcastSearchResults.collectAsStateWithLifecycle()
     val podcastSearching by viewModel.podcastSearching.collectAsStateWithLifecycle()
     val podcastSearchQuery by viewModel.podcastSearchQuery.collectAsStateWithLifecycle()
+    val radioSuggestions by viewModel.radioSuggestions.collectAsStateWithLifecycle()
+    val radioSuggestionsLoading by viewModel.radioSuggestionsLoading
+        .collectAsStateWithLifecycle()
+    val podcastSuggestions by viewModel.podcastSuggestions
+        .collectAsStateWithLifecycle()
+    val podcastSuggestionsLoading by viewModel.podcastSuggestionsLoading
+        .collectAsStateWithLifecycle()
+    val savedOnlinePlaylists by viewModel.savedOnlinePlaylists
+        .collectAsStateWithLifecycle()
     val searchFocusRequester = remember { FocusRequester() }
     val dailyPlaylist by viewModel.dailyPlaylist.collectAsStateWithLifecycle()
     val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
@@ -417,12 +426,7 @@ fun LibraryScreen(
     }
     LaunchedEffect(library.query, searchOnline) {
         val query = library.query.trim()
-        if (query.isBlank()) {
-            searchOnline = false
-            youTubeManager?.clearOnlineResults()
-            return@LaunchedEffect
-        }
-        if (!searchOnline) {
+        if (query.isBlank() || !searchOnline) {
             youTubeManager?.clearOnlineResults()
             return@LaunchedEffect
         }
@@ -433,21 +437,69 @@ fun LibraryScreen(
             youTubeManager?.clearOnlineResults()
         }
     }
-    // Descubrimiento de Emisoras/Podcasts: con texto y su chip
-    // activo, la búsqueda corre contra Radio Browser / el
-    // directorio; sin texto se ve la colección guardada.
-    LaunchedEffect(library.query, safeSelectedTab, tabOrder) {
+    // Sugerencias online sin texto: se calculan desde la
+    // escucha del usuario (Top, recientes y favoritos) la
+    // primera vez que se entra al lado Online.
+    var onlineSuggestions by remember {
+        mutableStateOf<com.aural.player.youtube.OnlineSearchResults?>(null)
+    }
+    var onlineSuggestionsLoading by remember { mutableStateOf(false) }
+    var onlineSuggestionsSongsUi by remember {
+        mutableStateOf<List<Song>>(emptyList())
+    }
+    LaunchedEffect(onlineSuggestions?.songs) {
+        onlineSuggestionsSongsUi = onlineSuggestions?.songs
+            ?.map { viewModel.registerOnlineSong(it) } ?: emptyList()
+    }
+    LaunchedEffect(searchOnline, library.query, safeSelectedTab) {
+        if (!searchOnline || library.query.isNotBlank()) return@LaunchedEffect
+        val tabKey = tabOrder.getOrNull(safeSelectedTab)
+        if (tabKey !in setOf("songs", "artists", "albums", "playlists")) {
+            return@LaunchedEffect
+        }
+        if (!viewModel.hasInternet()) return@LaunchedEffect
+        if (onlineSuggestions != null || onlineSuggestionsLoading) {
+            return@LaunchedEffect
+        }
+        val seeds = (
+            topArtists.map { it.name } +
+                recentSongs.map { it.artist } +
+                viewModel.favoriteSongs().map { it.artist }
+            ).map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+        if (seeds.isEmpty()) {
+            onlineSuggestions =
+                com.aural.player.youtube.OnlineSearchResults()
+            return@LaunchedEffect
+        }
+        onlineSuggestionsLoading = true
+        onlineSuggestions = youTubeManager?.searchSuggestions(seeds)
+            ?: com.aural.player.youtube.OnlineSearchResults()
+        onlineSuggestionsLoading = false
+    }
+    // Descubrimiento de Emisoras/Podcasts: en Online con texto
+    // busca contra Radio Browser / el directorio; en Online
+    // sin texto carga sugerencias; en Locales se ve la
+    // colección guardada (filtrada si hay texto).
+    LaunchedEffect(library.query, safeSelectedTab, tabOrder, searchOnline) {
         val query = library.query.trim()
         val tabKey = tabOrder.getOrNull(safeSelectedTab)
-        if (query.isBlank() || (tabKey != "radio" && tabKey != "podcasts")) {
+        if (!searchOnline || (tabKey != "radio" && tabKey != "podcasts")) {
             viewModel.clearCollectionSearch()
             return@LaunchedEffect
         }
-        kotlinx.coroutines.delay(450)
         if (!viewModel.hasInternet()) {
             viewModel.clearCollectionSearch()
             return@LaunchedEffect
         }
+        if (query.isBlank()) {
+            if (tabKey == "radio") viewModel.loadRadioSuggestions()
+            else viewModel.loadPodcastSuggestions()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(450)
         if (tabKey == "radio") viewModel.searchRadio(query)
         else viewModel.searchPodcasts(query)
     }
@@ -711,12 +763,14 @@ fun LibraryScreen(
         }
         } // Cierra la tira de pestañas agrupada
 
-        // Selector Locales/Online: solo durante la búsqueda y
-        // solo en las pestañas que lo usan (Inicio, Descargas
-        // y Carpetas no lo muestran).
+        // Selector Locales/Online fijo: siempre visible en
+        // Canciones, Artistas, Álbumes, Playlists, Emisoras y
+        // Podcasts, haya o no texto. Inicio, Descargas y
+        // Carpetas no tienen subpestañas.
         val currentTabKey = tabOrder.getOrNull(safeSelectedTab)
-        if (library.query.isNotBlank() &&
-            currentTabKey in setOf("songs", "artists", "albums", "playlists")
+        if (currentTabKey in setOf(
+                "songs", "artists", "albums", "playlists", "radio", "podcasts"
+            )
         ) {
             SearchSourceSelector(
                 online = searchOnline,
@@ -827,36 +881,50 @@ fun LibraryScreen(
                             onOpenDownloads = { onTabSelected(tabOrder.indexOf("downloads")) }
                         )
 
-                        "songs" -> if (searchOnline && library.query.isNotBlank()) {
+                        "songs" -> if (searchOnline) {
+                            val showingSuggestions = library.query.isBlank()
+                            val songsUi = if (showingSuggestions) {
+                                onlineSuggestionsSongsUi
+                            } else {
+                                onlineSongsUi
+                            }
+                            val suggestionsPending = showingSuggestions &&
+                                (onlineSuggestionsLoading ||
+                                    (onlineSuggestions?.songs?.isNotEmpty() == true &&
+                                        onlineSuggestionsSongsUi.isEmpty()))
                             Column(Modifier.fillMaxSize()) {
                                 OnlineSearchNotice(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlineSongsPending || loadingCollection) &&
-                                    onlineSongsUi.isEmpty()
+                                if (((onlineSongsPending || suggestionsPending) ||
+                                        loadingCollection) &&
+                                    songsUi.isEmpty()
                                 ) {
                                     OnlineSkeletonList()
-                                } else if (onlineSongsUi.isEmpty()) {
+                                } else if (songsUi.isEmpty()) {
                                     OnlineEmptyState()
                                 } else {
                                     SongsTab(
-                                        songs = onlineSongsUi,
+                                        songs = songsUi,
                                         favorites = favorites,
                                         currentId = currentSongId,
                                         isPlaying = isPlaying,
                                         onPlay = { song ->
                                             viewModel.playOnlineSongs(
-                                                onlineSongsUi,
-                                                onlineSongsUi.indexOfFirst {
+                                                songsUi,
+                                                songsUi.indexOfFirst {
                                                     it.id == song.id
                                                 }.coerceAtLeast(0)
                                             )
                                         },
                                         onFavorite = viewModel::toggleFavorite,
                                         onMenu = { song ->
-                                            onlineMenuTarget = onlineResults.songs
-                                                .firstOrNull {
+                                            onlineMenuTarget = (
+                                                onlineResults.songs +
+                                                    (onlineSuggestions?.songs
+                                                        ?: emptyList())
+                                                ).firstOrNull {
                                                     it.videoId == song.onlineVideoId
                                                 }
                                         },
@@ -894,19 +962,25 @@ fun LibraryScreen(
                             }
                         )
 
-                        "artists" -> if (searchOnline && library.query.isNotBlank()) {
+                        "artists" -> if (searchOnline) {
+                            val artistsUi = if (library.query.isBlank()) {
+                                onlineSuggestions?.artists ?: emptyList()
+                            } else {
+                                onlineResults.artists
+                            }
                             Column(Modifier.fillMaxSize()) {
                                 OnlineSearchNotice(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlinePending || loadingCollection) &&
-                                    onlineResults.artists.isEmpty()
+                                if (((onlinePending || onlineSuggestionsLoading) ||
+                                        loadingCollection) &&
+                                    artistsUi.isEmpty()
                                 ) {
                                     OnlineSkeletonGrid(110.dp)
                                 } else {
                                     OnlineArtistsTab(
-                                        artists = onlineResults.artists,
+                                        artists = artistsUi,
                                         onOpen = onOpenOnlineCollection,
                                         gridState = artistsGridState
                                     )
@@ -918,19 +992,25 @@ fun LibraryScreen(
                             gridState = artistsGridState
                         )
 
-                        "albums" -> if (searchOnline && library.query.isNotBlank()) {
+                        "albums" -> if (searchOnline) {
+                            val albumsUi = if (library.query.isBlank()) {
+                                onlineSuggestions?.albums ?: emptyList()
+                            } else {
+                                onlineResults.albums
+                            }
                             Column(Modifier.fillMaxSize()) {
                                 OnlineSearchNotice(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlinePending || loadingCollection) &&
-                                    onlineResults.albums.isEmpty()
+                                if (((onlinePending || onlineSuggestionsLoading) ||
+                                        loadingCollection) &&
+                                    albumsUi.isEmpty()
                                 ) {
                                     OnlineSkeletonGrid(150.dp)
                                 } else {
                                     OnlineAlbumsTab(
-                                        albums = onlineResults.albums,
+                                        albums = albumsUi,
                                         onOpen = onOpenOnlineCollection,
                                         gridState = albumsGridState
                                     )
@@ -942,22 +1022,33 @@ fun LibraryScreen(
                             gridState = albumsGridState
                         )
 
-                        "playlists" -> if (searchOnline && library.query.isNotBlank()) {
+                        "playlists" -> if (searchOnline) {
+                            val playlistsUi = if (library.query.isBlank()) {
+                                onlineSuggestions?.playlists ?: emptyList()
+                            } else {
+                                onlineResults.playlists
+                            }
                             Column(Modifier.fillMaxSize()) {
                                 OnlineSearchNotice(
                                     hasInternet = viewModel.hasInternet(),
                                     onlineError = onlineError
                                 )
-                                if ((onlinePending || loadingCollection) &&
-                                    onlineResults.playlists.isEmpty()
+                                if (((onlinePending || onlineSuggestionsLoading) ||
+                                        loadingCollection) &&
+                                    playlistsUi.isEmpty()
                                 ) {
                                     OnlineSkeletonList()
                                 } else {
                                     OnlinePlaylistsTab(
-                                        playlists = onlineResults.playlists,
+                                        playlists = playlistsUi,
                                         onOpen = onOpenOnlineCollection,
                                         onPlay = playOnlineCollection,
-                                        listState = playlistsListState
+                                        listState = playlistsListState,
+                                        savedUrls = savedOnlinePlaylists
+                                            .map { it.url }.toSet(),
+                                        onToggleSaved = {
+                                            viewModel.toggleSavedOnlinePlaylist(it)
+                                        }
                                     )
                                 }
                             }
@@ -1011,16 +1102,62 @@ fun LibraryScreen(
                                     }
                                 },
                                 onRemoveCover = { pl -> viewModel.setPlaylistCover(pl.id, "") },
-                                showFixedEntries = library.query.isBlank()
+                                showFixedEntries = library.query.isBlank(),
+                                savedOnlinePlaylists = if (
+                                    library.query.isBlank()
+                                ) {
+                                    savedOnlinePlaylists
+                                } else {
+                                    savedOnlinePlaylists.filter {
+                                        it.title.contains(library.query, true)
+                                    }
+                                },
+                                onOpenSavedOnlinePlaylist = { saved ->
+                                    onOpenOnlineCollection(
+                                        com.aural.player.youtube.OnlineCollectionResult(
+                                            kind = com.aural.player.youtube
+                                                .OnlineCollectionKind.PLAYLIST,
+                                            url = saved.url,
+                                            title = saved.title,
+                                            subtitle = saved.subtitle,
+                                            thumbnailUrl = saved.thumbnailUrl
+                                        )
+                                    )
+                                },
+                                onPlaySavedOnlinePlaylist = { saved ->
+                                    playOnlineCollection(
+                                        com.aural.player.youtube.OnlineCollectionResult(
+                                            kind = com.aural.player.youtube
+                                                .OnlineCollectionKind.PLAYLIST,
+                                            url = saved.url,
+                                            title = saved.title,
+                                            subtitle = saved.subtitle,
+                                            thumbnailUrl = saved.thumbnailUrl
+                                        )
+                                    )
+                                },
+                                onRemoveSavedOnlinePlaylist = { saved ->
+                                    viewModel.removeSavedOnlinePlaylist(saved.url)
+                                }
                             )
                             }
                         }
-                    "radio" -> if (library.query.isNotBlank()) {
+                    "radio" -> if (searchOnline) {
+                            val showingSuggestions = library.query.isBlank()
                             RadioSearchTab(
-                                stations = radioSearchResults,
+                                stations = if (showingSuggestions) {
+                                    radioSuggestions
+                                } else {
+                                    radioSearchResults
+                                },
                                 savedIds = radioStations.map { it.id }.toSet(),
-                                searching = radioSearching,
-                                pending = radioSearchQuery != library.query.trim(),
+                                searching = if (showingSuggestions) {
+                                    radioSuggestionsLoading
+                                } else {
+                                    radioSearching
+                                },
+                                pending = !showingSuggestions &&
+                                    radioSearchQuery != library.query.trim(),
                                 hasInternet = viewModel.hasInternet(),
                                 onPlay = { viewModel.playRadioStation(it) },
                                 onToggleSaved = { station ->
@@ -1033,7 +1170,15 @@ fun LibraryScreen(
                                 listState = radioListState
                             )
                         } else RadioTab(
-                            stations = radioStations,
+                            stations = if (library.query.isBlank()) {
+                                radioStations
+                            } else {
+                                radioStations.filter {
+                                    it.name.contains(library.query, true) ||
+                                        it.country.contains(library.query, true) ||
+                                        it.genre.contains(library.query, true)
+                                }
+                            },
                             onPlay = { viewModel.playRadioStation(it) },
                             onRemove = { viewModel.removeRadioStation(it) },
                             onSearch = {
@@ -1043,12 +1188,22 @@ fun LibraryScreen(
                             listState = radioListState,
                             onOpenDetail = onOpenRadioStation
                         )
-                    "podcasts" -> if (library.query.isNotBlank()) {
+                    "podcasts" -> if (searchOnline) {
+                            val showingSuggestions = library.query.isBlank()
                             PodcastSearchTab(
-                                shows = podcastSearchResults,
+                                shows = if (showingSuggestions) {
+                                    podcastSuggestions
+                                } else {
+                                    podcastSearchResults
+                                },
                                 savedFeedUrls = podcastShows.map { it.feedUrl }.toSet(),
-                                searching = podcastSearching,
-                                pending = podcastSearchQuery != library.query.trim(),
+                                searching = if (showingSuggestions) {
+                                    podcastSuggestionsLoading
+                                } else {
+                                    podcastSearching
+                                },
+                                pending = !showingSuggestions &&
+                                    podcastSearchQuery != library.query.trim(),
                                 hasInternet = viewModel.hasInternet(),
                                 onOpen = onOpenPodcastShow,
                                 onPlay = { viewModel.playPodcastShow(it) },
@@ -1062,7 +1217,14 @@ fun LibraryScreen(
                                 listState = podcastsListState
                             )
                         } else PodcastsTab(
-                            shows = podcastShows,
+                            shows = if (library.query.isBlank()) {
+                                podcastShows
+                            } else {
+                                podcastShows.filter {
+                                    it.title.contains(library.query, true) ||
+                                        it.author.contains(library.query, true)
+                                }
+                            },
                             progress = podcastProgress,
                             onPlay = { viewModel.playPodcastShow(it) },
                             onRemove = { viewModel.removePodcastShow(it) },
@@ -1079,6 +1241,7 @@ fun LibraryScreen(
                             if (ytm != null) {
                                 DownloadsScreen(
                                     youTubeManager = ytm,
+                                    viewModel = viewModel,
                                     listState = downloadsListState,
                                     onDownloadComplete = { fileName, mediaId, result, tagsEmbedded ->
                                         if (fileName != null) {
