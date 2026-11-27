@@ -211,7 +211,7 @@ class YouTubeManager(private val context: Context) {
                                 title = parsed.title,
                                 artist = parsed.artist,
                                 durationSec = item.duration,
-                                thumbnailUrl = item.thumbnails.firstOrNull()?.url
+                                thumbnailUrl = bestThumbnailUrl(item.thumbnails)
                             )
                         } catch (_: Exception) { null }
                     }
@@ -412,6 +412,17 @@ class YouTubeManager(private val context: Context) {
         return searchInfo.relatedItems
     }
 
+    /** Mejor miniatura que ofrece la fuente: la de mayor área
+     *  (la primera de la lista suele ser la más pequeña y se
+     *  veía pésima). Coil decodifica al tamaño de cada vista,
+     *  así que las listas no pagan el decode grande. */
+    private fun bestThumbnailUrl(
+        thumbnails: List<org.schabi.newpipe.extractor.Image>
+    ): String? = thumbnails
+        .maxByOrNull { it.width.toLong() * it.height.toLong() }
+        ?.url
+        ?: thumbnails.lastOrNull()?.url
+
     private fun mapSongItem(item: StreamInfoItem): YTResult? = try {
         val parsed = YoutubeTitleParser.parse(
             item.name ?: "Sin título",
@@ -422,7 +433,7 @@ class YouTubeManager(private val context: Context) {
             title = parsed.title,
             artist = parsed.artist,
             durationSec = item.duration,
-            thumbnailUrl = item.thumbnails.firstOrNull()?.url
+            thumbnailUrl = bestThumbnailUrl(item.thumbnails)
         ).takeIf { it.videoId.isNotBlank() }
     } catch (_: Exception) { null }
 
@@ -461,7 +472,7 @@ class YouTubeManager(private val context: Context) {
             url = url,
             title = item.name ?: "Sin título",
             subtitle = subtitle,
-            thumbnailUrl = item.thumbnails.firstOrNull()?.url
+            thumbnailUrl = bestThumbnailUrl(item.thumbnails)
         )
     }
 
@@ -522,7 +533,7 @@ class YouTubeManager(private val context: Context) {
                     url = url,
                     title = item.name ?: "Artista misterioso",
                     subtitle = "Artista",
-                    thumbnailUrl = item.thumbnails.firstOrNull()?.url
+                    thumbnailUrl = bestThumbnailUrl(item.thumbnails)
                 )
             }
             .distinctBy { it.url }
@@ -1532,34 +1543,59 @@ object InnerTubeSearch {
     }
 
     private fun findThumbnail(item: org.json.JSONObject): String? {
-        fun walk(node: Any?): String? {
+        // La mejor miniatura de TODO el item (mayor área), no la
+        // del primer arreglo que aparezca: el primer arreglo
+        // puede ser un avatar pequeño y la portada se veía pésima.
+        var bestUrl: String? = null
+        var bestArea = -1L
+        fun consider(url: String?, width: Int, height: Int) {
+            if (url.isNullOrBlank() || !url.startsWith("http")) return
+            val area = width.toLong() * height.toLong()
+            if (area > bestArea) {
+                bestArea = area
+                bestUrl = url
+            }
+        }
+        fun walk(node: Any?) {
             when (node) {
                 is org.json.JSONObject -> {
                     val thumbs = node.optJSONArray("thumbnails")
-                    if (thumbs != null && thumbs.length() > 0) {
-                        val url = thumbs.optJSONObject(thumbs.length() - 1)?.optString("url")
-                        if (!url.isNullOrBlank()) return url
+                    if (thumbs != null) {
+                        for (i in 0 until thumbs.length()) {
+                            val t = thumbs.optJSONObject(i) ?: continue
+                            consider(
+                                t.optString("url"),
+                                t.optInt("width"),
+                                t.optInt("height")
+                            )
+                        }
                     }
                     // lockupViewModel: image.sources[].url
                     val sources = node.optJSONArray("sources")
-                    if (sources != null && sources.length() > 0) {
-                        val url = sources.optJSONObject(sources.length() - 1)?.optString("url")
-                        if (!url.isNullOrBlank() && url.startsWith("http")) return url
+                    if (sources != null) {
+                        for (i in 0 until sources.length()) {
+                            val t = sources.optJSONObject(i) ?: continue
+                            consider(
+                                t.optString("url"),
+                                t.optInt("width"),
+                                t.optInt("height")
+                            )
+                        }
                     }
                     val keys = node.keys()
                     while (keys.hasNext()) {
-                        walk(node.opt(keys.next()))?.let { return it }
+                        walk(node.opt(keys.next()))
                     }
                 }
                 is org.json.JSONArray -> {
                     for (i in 0 until node.length()) {
-                        walk(node.opt(i))?.let { return it }
+                        walk(node.opt(i))
                     }
                 }
             }
-            return null
         }
-        return walk(item)
+        walk(item)
+        return bestUrl
     }
 
     private fun parseDurationSec(runs: List<String>): Long {
@@ -1697,8 +1733,23 @@ object YouTubeStreamResolver {
      *  conexión súper lenta aunque hubiera ancho de banda. */
     val sharedHttpClient: okhttp3.OkHttpClient =
         okhttp3.OkHttpClient.Builder()
+            // HTTP/1.1 a propósito: con HTTP/2 OkHttp multiplexa
+            // todas las peticiones a googlevideo sobre UNA sola
+            // conexión TCP, y el límite de velocidad por conexión
+            // (marcado con VPN) frena todo el streaming. En 1.1
+            // cada rango paralelo usa su propia conexión del pool
+            // y las velocidades se suman; además se evita el
+            // bloqueo de cabecera de HTTP/2 con pérdida de
+            // paquetes en túneles VPN.
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .connectionPool(
-                okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
+                okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES)
+            )
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 16
+                    maxRequestsPerHost = 8
+                }
             )
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
