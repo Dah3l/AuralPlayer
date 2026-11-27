@@ -1868,6 +1868,15 @@ private class ColdStartLoadControl(
         }
         return delegate.shouldStartPlayback(parameters)
     }
+
+    // `by delegate` no cubre los métodos default de la interfaz
+    // Java: el default de getBackBufferDurationUs LANZA
+    // IllegalStateException. Se delega explícitamente.
+    override fun getBackBufferDurationUs(): Long =
+        delegate.getBackBufferDurationUs()
+
+    override fun retainBackBufferFromKeyframe(): Boolean =
+        delegate.retainBackBufferFromKeyframe()
 }
 
 private class ChunkedRangeDataSourceFactory(
