@@ -52,33 +52,125 @@ object PodcastClient {
         emptyList()
     }
 
-    /** Episodios de un feed, del más reciente al más viejo. */
-    suspend fun fetchEpisodes(feedUrl: String, limit: Int = 100): List<PodcastEpisode> =
+    /** Episodios de un feed, del más reciente al más viejo.
+     *  Con [settings], la petición es condicional: si el
+     *  servidor responde 304 a los validadores guardados,
+     *  se sirven los episodios cacheados sin bajar el
+     *  cuerpo del feed. Sin validadores del servidor, el
+     *  comportamiento es el de siempre. */
+    suspend fun fetchEpisodes(
+        feedUrl: String,
+        limit: Int = 100,
+        settings: SettingsStore? = null
+    ): List<PodcastEpisode> =
         withContext(Dispatchers.IO) {
-            var connection: HttpURLConnection? = null
-            try {
-                connection = URL(feedUrl).openConnection() as HttpURLConnection
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 30_000
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("User-Agent", USER_AGENT)
-                connection.setRequestProperty(
-                    "Accept",
-                    "application/rss+xml, application/xml, text/xml, */*"
-                )
-                if (connection.responseCode !in 200..299) {
-                    emptyList()
-                } else {
-                    connection.inputStream.use { input ->
-                        parseFeed(input, limit.coerceIn(1, 200))
-                    }
-                }
-            } catch (e: Exception) {
-                emptyList()
-            } finally {
-                connection?.disconnect()
+            val safeLimit = limit.coerceIn(1, 200)
+            val cached = settings?.let {
+                runCatching { it.podcastFeedCache(feedUrl) }.getOrNull()
             }
+            // La caché sirve si trae episodios y cubre lo
+            // pedido: o es el feed completo, o trae al menos
+            // tantos como el límite de esta petición.
+            fun usable(cache: PodcastFeedCache?): Boolean =
+                cache != null && cache.episodes.isNotEmpty() &&
+                    (cache.complete || cache.episodes.size >= safeLimit)
+            val hasValidators = cached != null &&
+                (!cached.etag.isNullOrBlank() ||
+                    !cached.lastModified.isNullOrBlank())
+            if (hasValidators) {
+                val conditional = fetchFeed(
+                    feedUrl, safeLimit, cached?.etag, cached?.lastModified
+                )
+                if (conditional.notModified) {
+                    if (usable(cached)) {
+                        return@withContext cached!!.episodes.take(safeLimit)
+                    }
+                    // 304 sin caché utilizable: se reintenta
+                    // sin condicionales, como antes.
+                } else if (conditional.episodes.isNotEmpty()) {
+                    saveFeedCache(settings, feedUrl, conditional, safeLimit)
+                    return@withContext conditional.episodes
+                } else {
+                    return@withContext emptyList()
+                }
+            }
+            val fresh = fetchFeed(feedUrl, safeLimit, null, null)
+            if (fresh.episodes.isNotEmpty()) {
+                saveFeedCache(settings, feedUrl, fresh, safeLimit)
+            }
+            fresh.episodes
         }
+
+    private data class FeedFetch(
+        val episodes: List<PodcastEpisode> = emptyList(),
+        val etag: String? = null,
+        val lastModified: String? = null,
+        val notModified: Boolean = false
+    )
+
+    private suspend fun saveFeedCache(
+        settings: SettingsStore?,
+        feedUrl: String,
+        fetch: FeedFetch,
+        safeLimit: Int
+    ) {
+        if (settings == null || fetch.episodes.isEmpty()) return
+        runCatching {
+            settings.savePodcastFeedCache(
+                feedUrl,
+                PodcastFeedCache(
+                    etag = fetch.etag,
+                    lastModified = fetch.lastModified,
+                    // Si el parser paró por el límite, la lista
+                    // puede estar cortada: no es el feed entero.
+                    complete = fetch.episodes.size < safeLimit,
+                    episodes = fetch.episodes
+                )
+            )
+        }
+    }
+
+    private fun fetchFeed(
+        feedUrl: String,
+        safeLimit: Int,
+        etag: String?,
+        lastModified: String?
+    ): FeedFetch {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = URL(feedUrl).openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            connection.setRequestProperty(
+                "Accept",
+                "application/rss+xml, application/xml, text/xml, */*"
+            )
+            if (!etag.isNullOrBlank()) {
+                connection.setRequestProperty("If-None-Match", etag)
+            }
+            if (!lastModified.isNullOrBlank()) {
+                connection.setRequestProperty("If-Modified-Since", lastModified)
+            }
+            when {
+                connection.responseCode == HttpURLConnection.HTTP_NOT_MODIFIED ->
+                    FeedFetch(notModified = true)
+                connection.responseCode !in 200..299 -> FeedFetch()
+                else -> FeedFetch(
+                    episodes = connection.inputStream.use { input ->
+                        parseFeed(input, safeLimit)
+                    },
+                    etag = connection.getHeaderField("ETag"),
+                    lastModified = connection.getHeaderField("Last-Modified")
+                )
+            }
+        } catch (e: Exception) {
+            FeedFetch()
+        } finally {
+            connection?.disconnect()
+        }
+    }
 
     private fun parseFeed(input: java.io.InputStream, limit: Int): List<PodcastEpisode> {
         val parser = Xml.newPullParser()
