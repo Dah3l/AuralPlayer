@@ -498,7 +498,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
     /** Episodios de un podcast para su ficha (cacheados). */
     suspend fun podcastEpisodes(show: PodcastShow): List<PodcastEpisode> {
         podcastEpisodesCache[show.feedUrl]?.let { return it }
-        val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
+        val episodes = PodcastClient.fetchEpisodes(
+            show.feedUrl, limit = 100, settings = settings
+        )
             .distinctBy { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
         if (episodes.isNotEmpty()) {
             podcastEpisodesCache[show.feedUrl] = episodes
@@ -613,7 +615,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
             }.toSet()
             val legacy = podcastShows.value.map { show ->
                 async {
-                    PodcastClient.fetchEpisodes(show.feedUrl, limit = 100)
+                    PodcastClient.fetchEpisodes(
+                        show.feedUrl, limit = 100, settings = settings
+                    )
                         .distinctBy { PodcastEpisode.progressKey(show.feedUrl, it.guid) }
                         .mapNotNull { episode ->
                             val key = PodcastEpisode.progressKey(
@@ -1534,7 +1538,9 @@ class AuralViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun playPodcastShow(show: PodcastShow) {
         viewModelScope.launch {
-            val episodes = PodcastClient.fetchEpisodes(show.feedUrl, limit = 20)
+            val episodes = PodcastClient.fetchEpisodes(
+                show.feedUrl, limit = 20, settings = settings
+            )
             val episode = episodes.firstOrNull() ?: return@launch
             playPodcastEpisode(show, episode)
         }
