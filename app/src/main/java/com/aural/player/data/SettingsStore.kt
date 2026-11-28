@@ -91,6 +91,10 @@ class SettingsStore(private val context: Context) {
         val KEY_PODCAST_SHOWS = stringPreferencesKey("podcast_shows_json")
         val KEY_PODCAST_PROGRESS = stringPreferencesKey("podcast_progress_json")
         val KEY_PODCAST_DOWNLOADS = stringPreferencesKey("podcast_downloads_json")
+        // Caché de feeds RSS (validadores + episodios) para la
+        // descarga condicional: no bajar el feed entero si no
+        // cambió desde la última vez.
+        val KEY_PODCAST_FEED_CACHE = stringPreferencesKey("podcast_feed_cache_json")
         val KEY_SAVED_ONLINE_PLAYLISTS = stringPreferencesKey("saved_online_playlists_json")
         // BPM por canción (songId -> BPM real): análisis en segundo plano.
         val KEY_BPM_MAP = stringPreferencesKey("bpm_map_json")
@@ -1215,6 +1219,101 @@ class SettingsStore(private val context: Context) {
                 put("mediaId", value.mediaId)
                 put("fileName", value.fileName)
                 put("downloadedAtMs", value.downloadedAtMs)
+            })
+        }
+        return obj.toString()
+    }
+
+    /** Caché guardada de un feed RSS, si la hay. */
+    suspend fun podcastFeedCache(feedUrl: String): PodcastFeedCache? =
+        decodePodcastFeedCaches(
+            context.dataStore.data.first()[KEY_PODCAST_FEED_CACHE]
+        )[feedUrl]
+
+    suspend fun savePodcastFeedCache(feedUrl: String, cache: PodcastFeedCache) {
+        context.dataStore.edit { prefs ->
+            val current = decodePodcastFeedCaches(prefs[KEY_PODCAST_FEED_CACHE])
+                .toMutableMap()
+            current[feedUrl] = cache
+            prefs[KEY_PODCAST_FEED_CACHE] = encodePodcastFeedCaches(current)
+        }
+    }
+
+    private fun decodePodcastFeedCaches(
+        json: String?
+    ): Map<String, PodcastFeedCache> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val feedUrl = keys.next()
+                    val value = obj.optJSONObject(feedUrl) ?: continue
+                    val episodesArr = value.optJSONArray("episodes")
+                    val episodes = buildList {
+                        if (episodesArr != null) {
+                            for (i in 0 until episodesArr.length()) {
+                                val ep = episodesArr.optJSONObject(i) ?: continue
+                                val audioUrl = ep.optString("audioUrl")
+                                if (audioUrl.isBlank()) continue
+                                add(
+                                    PodcastEpisode(
+                                        guid = ep.optString("guid")
+                                            .ifBlank { audioUrl },
+                                        title = ep.optString("title")
+                                            .ifBlank { "Episodio" },
+                                        publishedMs = ep.optLong("publishedMs", 0L),
+                                        durationMs = ep.optLong("durationMs", 0L),
+                                        audioUrl = audioUrl,
+                                        imageUrl = ep.optString("imageUrl")
+                                            .takeIf { it.isNotBlank() },
+                                        audioBytes = ep.optLong("audioBytes", 0L),
+                                        audioMimeType = ep.optString("audioMimeType")
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    put(
+                        feedUrl,
+                        PodcastFeedCache(
+                            etag = value.optString("etag")
+                                .takeIf { it.isNotBlank() },
+                            lastModified = value.optString("lastModified")
+                                .takeIf { it.isNotBlank() },
+                            complete = value.optBoolean("complete", false),
+                            episodes = episodes
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun encodePodcastFeedCaches(
+        caches: Map<String, PodcastFeedCache>
+    ): String {
+        val obj = JSONObject()
+        caches.forEach { (feedUrl, cache) ->
+            obj.put(feedUrl, JSONObject().apply {
+                cache.etag?.let { put("etag", it) }
+                cache.lastModified?.let { put("lastModified", it) }
+                put("complete", cache.complete)
+                put("episodes", JSONArray().apply {
+                    cache.episodes.forEach { episode ->
+                        put(JSONObject().apply {
+                            put("guid", episode.guid)
+                            put("title", episode.title)
+                            put("publishedMs", episode.publishedMs)
+                            put("durationMs", episode.durationMs)
+                            put("audioUrl", episode.audioUrl)
+                            episode.imageUrl?.let { put("imageUrl", it) }
+                            put("audioBytes", episode.audioBytes)
+                            put("audioMimeType", episode.audioMimeType)
+                        })
+                    }
+                })
             })
         }
         return obj.toString()
