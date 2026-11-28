@@ -30,6 +30,8 @@ import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.URL
 
@@ -121,7 +123,7 @@ class YouTubeManager(private val context: Context) {
         val ids = songs.map { it.videoId }
             .filter { it.isNotBlank() }
             .distinct()
-            .take(6)
+            .take(3)
         if (ids.isEmpty()) return
         scope.launch {
             val preferQuality = try {
@@ -329,6 +331,33 @@ class YouTubeManager(private val context: Context) {
                 .distinct()
                 .take(3)
             if (cleanSeeds.isEmpty()) return@withContext OnlineSearchResults()
+            // Caché persistente por conjunto de semillas: abrir
+            // la búsqueda vacía 10 veces en un día cuesta como
+            // abrirla 1 vez. Si la caché expiró, se sirve igual
+            // y el refresco corre en segundo plano.
+            val seedKey = suggestionsSeedKey(cleanSeeds)
+            val cached = loadSuggestionsCacheEntry(seedKey)
+            if (cached != null && cached.results.hasContent()) {
+                val fresh = System.currentTimeMillis() - cached.savedAtMs <
+                    suggestionsCacheTtlMs
+                if (!fresh) {
+                    refreshSuggestionsInBackground(seedKey, cleanSeeds)
+                }
+                return@withContext cached.results
+            }
+            val built = buildSuggestions(cleanSeeds)
+            if (built.hasContent()) {
+                saveSuggestionsCacheEntry(seedKey, built)
+            }
+            built
+        }
+
+    /** Construye las sugerencias buscando por cada semilla
+     *  (hasta 3 semillas × 4 búsquedas). Es la parte cara:
+     *  solo corre sin caché o al refrescar una expirada. */
+    private suspend fun buildSuggestions(
+        cleanSeeds: List<String>
+    ): OnlineSearchResults {
             val service: StreamingService = NewPipe.getService("YouTube")
             // Las semillas corren en paralelo y con techo de
             // tiempo: en serie, una red lenta dejaba el lado
@@ -372,7 +401,7 @@ class YouTubeManager(private val context: Context) {
                     }
                 }.awaitAll()
             }
-            OnlineSearchResults(
+            return OnlineSearchResults(
                 query = "",
                 songs = partials.flatMap { it.songs }
                     .distinctBy { it.videoId }.take(40),
@@ -384,6 +413,192 @@ class YouTubeManager(private val context: Context) {
                     .distinctBy { it.url }.take(30)
             )
         }
+
+    // --- Caché persistente de sugerencias (24 h) ---
+
+    private val suggestionsCacheTtlMs = 24L * 60L * 60L * 1000L
+    private val suggestionsCacheLock = Any()
+    private val suggestionsRefreshInFlight = mutableSetOf<String>()
+
+    private data class SuggestionsCacheEntry(
+        val savedAtMs: Long,
+        val results: OnlineSearchResults
+    )
+
+    private fun OnlineSearchResults.hasContent(): Boolean =
+        songs.isNotEmpty() || albums.isNotEmpty() ||
+            playlists.isNotEmpty() || artists.isNotEmpty()
+
+    /** Clave por conjunto de semillas: el orden no importa. */
+    private fun suggestionsSeedKey(cleanSeeds: List<String>): String =
+        cleanSeeds.map { it.lowercase() }.sorted().joinToString("|")
+
+    private fun suggestionsCacheFile(): File =
+        File(context.filesDir, "suggestions_cache.json")
+
+    private fun loadSuggestionsCacheEntry(
+        seedKey: String
+    ): SuggestionsCacheEntry? = synchronized(suggestionsCacheLock) {
+        try {
+            val file = suggestionsCacheFile()
+            if (!file.exists()) return@synchronized null
+            val entry = JSONObject(file.readText()).optJSONObject(seedKey)
+                ?: return@synchronized null
+            SuggestionsCacheEntry(
+                savedAtMs = entry.optLong("savedAtMs", 0L),
+                results = decodeSuggestionsResults(entry)
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun saveSuggestionsCacheEntry(
+        seedKey: String,
+        results: OnlineSearchResults
+    ) {
+        synchronized(suggestionsCacheLock) {
+            try {
+                val file = suggestionsCacheFile()
+                val root = if (file.exists()) {
+                    runCatching { JSONObject(file.readText()) }
+                        .getOrDefault(JSONObject())
+                } else {
+                    JSONObject()
+                }
+                root.put(seedKey, encodeSuggestionsResults(results))
+                // Solo quedan los conjuntos recientes: las
+                // semillas viejas ya no se piden.
+                val keys = mutableListOf<String>()
+                val iterator = root.keys()
+                while (iterator.hasNext()) keys += iterator.next()
+                keys.sortedByDescending {
+                    root.optJSONObject(it)?.optLong("savedAtMs", 0L) ?: 0L
+                }.drop(4).forEach { root.remove(it) }
+                file.writeText(root.toString())
+            } catch (e: Exception) {
+                // La caché es oportunista: si no se puede
+                // guardar, las sugerencias igual salieron.
+            }
+        }
+    }
+
+    private fun refreshSuggestionsInBackground(
+        seedKey: String,
+        cleanSeeds: List<String>
+    ) {
+        synchronized(suggestionsCacheLock) {
+            if (!suggestionsRefreshInFlight.add(seedKey)) return
+        }
+        scope.launch {
+            try {
+                val built = buildSuggestions(cleanSeeds)
+                // Un refresco vacío (red caída) no pisa la
+                // caché buena que ya se está sirviendo.
+                if (built.hasContent()) {
+                    saveSuggestionsCacheEntry(seedKey, built)
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            } finally {
+                synchronized(suggestionsCacheLock) {
+                    suggestionsRefreshInFlight.remove(seedKey)
+                }
+            }
+        }
+    }
+
+    private fun encodeSuggestionsResults(
+        results: OnlineSearchResults
+    ): JSONObject = JSONObject().apply {
+        put("savedAtMs", System.currentTimeMillis())
+        put("query", results.query)
+        put("songs", JSONArray().apply {
+            results.songs.forEach { song ->
+                put(JSONObject().apply {
+                    put("videoId", song.videoId)
+                    put("title", song.title)
+                    put("artist", song.artist)
+                    put("durationSec", song.durationSec)
+                    song.thumbnailUrl?.let { put("thumbnailUrl", it) }
+                })
+            }
+        })
+        put("albums", encodeCollections(results.albums))
+        put("playlists", encodeCollections(results.playlists))
+        put("artists", encodeCollections(results.artists))
+    }
+
+    private fun encodeCollections(
+        collections: List<OnlineCollectionResult>
+    ): JSONArray = JSONArray().apply {
+        collections.forEach { collection ->
+            put(JSONObject().apply {
+                put("kind", collection.kind.name)
+                put("url", collection.url)
+                put("title", collection.title)
+                put("subtitle", collection.subtitle)
+                collection.thumbnailUrl?.let { put("thumbnailUrl", it) }
+            })
+        }
+    }
+
+    private fun decodeSuggestionsResults(
+        entry: JSONObject
+    ): OnlineSearchResults = OnlineSearchResults(
+        query = entry.optString("query"),
+        songs = decodeSongs(entry.optJSONArray("songs")),
+        albums = decodeCollections(entry.optJSONArray("albums")),
+        playlists = decodeCollections(entry.optJSONArray("playlists")),
+        artists = decodeCollections(entry.optJSONArray("artists"))
+    )
+
+    private fun decodeSongs(arr: JSONArray?): List<YTResult> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val videoId = obj.optString("videoId")
+                if (videoId.isBlank()) continue
+                add(
+                    YTResult(
+                        videoId = videoId,
+                        title = obj.optString("title"),
+                        artist = obj.optString("artist"),
+                        durationSec = obj.optLong("durationSec", 0L),
+                        thumbnailUrl = obj.optString("thumbnailUrl")
+                            .takeIf { it.isNotBlank() }
+                    )
+                )
+            }
+        }
+    }
+
+    private fun decodeCollections(
+        arr: JSONArray?
+    ): List<OnlineCollectionResult> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val url = obj.optString("url")
+                if (url.isBlank()) continue
+                val kind = runCatching {
+                    OnlineCollectionKind.valueOf(obj.optString("kind"))
+                }.getOrNull() ?: continue
+                add(
+                    OnlineCollectionResult(
+                        kind = kind,
+                        url = url,
+                        title = obj.optString("title"),
+                        subtitle = obj.optString("subtitle"),
+                        thumbnailUrl = obj.optString("thumbnailUrl")
+                            .takeIf { it.isNotBlank() }
+                    )
+                )
+            }
+        }
+    }
 
     fun clearOnlineResults() {
         // Ya no borra los resultados ni la caché: salir del
