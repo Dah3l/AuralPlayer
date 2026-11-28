@@ -222,6 +222,19 @@ data class PodcastEpisode(
     }
 }
 
+/** Caché de un feed RSS: validadores HTTP (ETag y
+ *  Last-Modified) y los episodios ya bajados, para pedir
+ *  el feed con descarga condicional y no bajar el cuerpo
+ *  entero si el servidor responde 304. */
+data class PodcastFeedCache(
+    val etag: String? = null,
+    val lastModified: String? = null,
+    /** True si la lista guardada es el feed completo (no
+     *  quedó cortada por el límite de la petición). */
+    val complete: Boolean = false,
+    val episodes: List<PodcastEpisode> = emptyList()
+)
+
 /** Progreso guardado de un episodio. Guarda también los datos
  *  del programa y del episodio para que «Sigue escuchando»
  *  pueda pintar episodios de podcasts NO agregados como
